@@ -43,10 +43,12 @@ export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   if (!isLoggedIn && isProtectedPath(pathname)) {
+    // クエリごと覚える（シフト表の ?start= など、無いと戻り先の表示が変わってしまう）
+    const next = `${pathname}${request.nextUrl.search}`
     const loginUrl = request.nextUrl.clone()
     loginUrl.pathname = '/login'
     loginUrl.search = ''
-    loginUrl.searchParams.set('next', pathname)
+    loginUrl.searchParams.set('next', next)
     return NextResponse.redirect(loginUrl)
   }
 

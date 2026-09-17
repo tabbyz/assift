@@ -40,6 +40,18 @@ npm run dev                 # http://localhost:3000
 | `npm run format` / `npm run format:check` | Prettier                        |
 | `npx supabase stop`                       | ローカル Supabase を停止        |
 
+## 認証まわりのローカル確認
+
+- 確認メール・再設定メールは送信されず Mailpit（http://127.0.0.1:54324）に溜まる。リンクを開くとローカルの `/auth/callback` に着地する
+- seed ユーザーは `dev@example.com` / `password`
+- Google ログインを試すには Google Cloud Console で OAuth クライアントを作り、承認済みリダイレクト URI に `http://127.0.0.1:54321/auth/v1/callback` を登録して、`npx supabase start` を実行する shell で次を export する
+
+```bash
+export SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID=...
+export SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET=...
+npx supabase stop && npx supabase start
+```
+
 ## Supabase Studio
 
 ローカル起動中は http://127.0.0.1:54323 で DB を確認できる。スキーマの正は `supabase/schemas/` の SQL なので、Studio 上で直接変更しない（手順は AGENTS.md）。

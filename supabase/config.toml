@@ -181,7 +181,8 @@ enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
 enable_manual_linking = false
 # Passwords shorter than this value will be rejected as weak. Minimum 6, recommended 8 or more.
-minimum_password_length = 6
+# v1 と同じ 8。src/lib/validation/auth.ts の PASSWORD_MIN_LENGTH と揃える（004 §3.3）
+minimum_password_length = 8
 # Passwords that do not meet the following requirements will be rejected as weak. Supported values
 # are: `letters_digits`, `lower_upper_letters_digits`, `lower_upper_letters_digits_symbols`
 password_requirements = ""
@@ -225,7 +226,8 @@ enable_signup = true
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
-enable_confirmations = false
+# サインアップは「メール + パスワード → 確認メール」方式（001 §4.3、004）
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
@@ -245,10 +247,19 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
-# Uncomment to customize email template
-# [auth.email.template.invite]
-# subject = "You have been invited"
-# content_path = "./supabase/templates/invite.html"
+# メールテンプレート。リンクは PKCE の code ではなく token_hash を渡し、/auth/callback で verifyOtp する
+# （別端末でリンクを開いても動くようにするため。004 §3.1）。文言は v1 の Devise メールを移植
+[auth.email.template.confirmation]
+subject = "【assift】メールアドレスの確認"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "【assift】パスワードの再設定について"
+content_path = "./supabase/templates/recovery.html"
+
+[auth.email.template.email_change]
+subject = "【assift】メールアドレス変更の確認"
+content_path = "./supabase/templates/email_change.html"
 
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]
@@ -334,6 +345,18 @@ url = ""
 # If enabled, the nonce check will be skipped. Required for local sign in with Google auth.
 skip_nonce_check = false
 # If enabled, it will allow the user to successfully authenticate when the provider does not return an email address.
+email_optional = false
+
+# Google ログイン（004 §3.8）。資格情報は環境変数で渡す。ローカルで未設定なら「Google ログインは現在利用できません」になるだけ。
+# Google Cloud Console の承認済みリダイレクト URI: http://127.0.0.1:54321/auth/v1/callback（ローカル）
+[auth.external.google]
+enabled = true
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
+redirect_uri = ""
+url = ""
+# ローカルの Google ログインには nonce チェックのスキップが必要（CLI のコメントどおり）
+skip_nonce_check = true
 email_optional = false
 
 # Allow Solana wallet holders to sign in to your project via the Sign in with Solana (SIWS, EIP-4361) standard.

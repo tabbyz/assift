@@ -1,0 +1,26 @@
+<p>{{ .SendingTo }} さん</p>
+
+<p>
+  assiftのログイン用メールアドレスを {{ .Email }} から {{ .NewEmail }}
+  に変更する依頼を受けました。<br />
+  下記のリンクをクリックして、変更を確認してください。
+</p>
+
+<p>
+  <a
+    href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=email_change&next=/account?notice=email_change"
+    >メールアドレスの変更を確認</a
+  >
+</p>
+
+<p>
+  ※安全のため、現在のメールアドレスと新しいメールアドレスの両方に確認メールを送っています。<br />
+  両方のリンクをクリックすると変更が完了します。<br />
+  ※変更を依頼していない場合は、このメールを無視してください。リンクをクリックするまでメールアドレスは変更されません。
+</p>
+
+<p>
+  ---<br />
+  assift（アシフト）<br />
+  <a href="{{ .SiteURL }}">{{ .SiteURL }}</a>
+</p>

@@ -1,0 +1,24 @@
+<p>{{ .Email }} さん</p>
+
+<p>
+  パスワード再設定の依頼を受けたため、メールを送信しています。<br />
+  下記のリンクからパスワードが再設定できます。
+</p>
+
+<p>
+  <a
+    href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=recovery&next=/password/reset"
+    >パスワードを再設定</a
+  >
+</p>
+
+<p>
+  ※パスワード再設定の依頼をしていない場合は、このメールを無視してください。<br />
+  上記のリンクから新しいパスワードを設定するまで、パスワードは変更されません。
+</p>
+
+<p>
+  ---<br />
+  assift（アシフト）<br />
+  <a href="{{ .SiteURL }}">{{ .SiteURL }}</a>
+</p>

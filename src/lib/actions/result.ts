@@ -3,4 +3,5 @@
 
 export type ActionSuccess<T> = { ok: true; data: T }
 export type ActionFailure = { ok: false; error: string }
-export type ActionResult<T = undefined> = ActionSuccess<T> | ActionFailure
+// 戻り値の無い Action は runAction(async () => { ... }) が ActionResult<void> になるので既定は void
+export type ActionResult<T = void> = ActionSuccess<T> | ActionFailure

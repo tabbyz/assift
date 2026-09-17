@@ -143,6 +143,8 @@ startTransition(async () => {
 
 `service_role` は `createPrivilegedClient()` のみ。ユーザー文脈の Action では使わない。用途は公開共有ページの読み取り、ジョブ、管理操作に限る。
 
+唯一の例外は `account/actions.ts` の `deleteAccount()`（`auth.admin.deleteUser` は service_role でしか呼べない）。渡す id は `requireUser()` の戻り値だけにし、入力から受け取らない。例外を足すときはここに追記する。
+
 ## nuqs
 
 一覧の検索・フィルタなど、URL に残す状態があるときだけ使う。そのページに `searchParams.ts` を置き、parser と `createLoader` を Server / Client で共有する。`URLSearchParams` 直操作や `router.replace` での手書き同期はしない。
@@ -226,6 +228,19 @@ PK は uuid（`gen_random_uuid()`）。v1 から移行する行は `uuidv5('<tab
 ### 型
 
 `npx supabase gen types typescript --local > src/types/database.ts` で生成してコミットする。手書きしない。jsonb は生成された `Json` のままにし、ドメイン型はアプリ層で wrap する。
+
+### 認証（Supabase Auth）
+
+- 認証メール（確認 / 再設定 / メール変更）のテンプレートは `supabase/templates/*.html`。`config.toml` の `[auth.email.template.*]` が参照する。文言は v1 の Devise メールを移植したもの
+- メールのリンクは `{{ .ConfirmationURL }}` ではなく **`/auth/callback?token_hash={{ .TokenHash }}&type=...&next=...`** を書く。Route Handler が `verifyOtp` するので、別端末でリンクを開いても動く。Google OAuth の `code` も同じ `/auth/callback` が `exchangeCodeForSession` で受ける
+- `?next=` は必ず `safeNext()`（`src/lib/auth/safeNext.ts`）を通す（open redirect 対策）
+- GoTrue のエラーは `authErrorMessage()`（`src/lib/auth/authErrorMessage.ts`）で日本語にしてから `fail()` する。`error.message` をそのまま出さない
+- 認証系の Action は `redirect()` せず `{ redirectTo }` を返し、クライアントが `router.push` する（`ActionResult` の契約を保つため）
+- 再設定リンクは通常のセッションを張るだけなので、`/password/reset` は `hasRecoverySession()`（`src/lib/auth/recoveryFlow.ts` の短命 cookie）も必須にする。セッションの有無だけで通すと、盗まれた cookie から現在のパスワードなしで変更できる
+- ログイン状態の判定は `getAuthUser()`（JWT）に揃える。`getUser()`（ネットワーク）は `new_email` など claims に無い値が要るときだけ使い、失敗しても `/login` へ送らない（proxy が `/tenants` へ戻すのでログアウトできなくなる）
+- `?error=` / `?notice=` は文言そのものではなくキーを渡し、`lookup()`（`src/utils/record.ts`）でマップを引く。素の `map[key]` は `constructor` などプロトタイプ上の値を返してしまう
+- パスワードの下限は `PASSWORD_MIN_LENGTH`（`lib/validation/auth.ts`）と `config.toml` の `minimum_password_length` の両方で 8
+- `config.toml` を変えたら `npx supabase stop && npx supabase start`。ローカルのメールは Mailpit（http://127.0.0.1:54324）で見る
 
 ## テスト
 

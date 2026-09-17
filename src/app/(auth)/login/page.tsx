@@ -1,13 +1,14 @@
-import { Container, Text, Title } from '@mantine/core'
+import type { Metadata } from 'next'
+import { LOGIN_ERRORS } from '@/lib/auth/notices'
+import { safeNext } from '@/lib/auth/safeNext'
+import { lookup } from '@/utils/record'
+import { firstString } from '@/utils/searchParams'
+import { LoginForm } from './_components/LoginForm'
 
-// 仮ページ。004 で本実装に置き換える
-export default function LoginPage() {
-  return (
-    <Container size="xs" py="xl">
-      <Title order={2}>ログイン</Title>
-      <Text c="dimmed" mt="sm">
-        ログイン画面はマイルストーン 004 で実装します。
-      </Text>
-    </Container>
-  )
+export const metadata: Metadata = { title: 'ログイン' }
+
+export default async function LoginPage({ searchParams }: PageProps<'/login'>) {
+  const params = await searchParams
+  const next = safeNext(firstString(params.next))
+  return <LoginForm next={next} initialError={lookup(LOGIN_ERRORS, firstString(params.error))} />
 }
