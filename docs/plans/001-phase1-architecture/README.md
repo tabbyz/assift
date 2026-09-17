@@ -408,12 +408,14 @@ staffs（在籍・position 順）、patterns（position 順）、staff_patterns�
 | restrictions | `kind` を enum に。pattern FK が壊れている行はログして捨てる |
 | events | `date_notes` へ。`(tenant_id, date)` 重複は最新のみ |
 | shares | そのまま。`end_date - start_date > 31` は end_date を丸める |
+| 文字数超過（全テーブルの text 列） | v1 の上限（店舗名 20 / スタッフ名 10 / パターン名 6 / 説明 10 / メモ 12）は 2019-05-05 に導入されたため、それ以前の行は超過しうる。DB の CHECK と同じ長さに切り詰める（v1 の画面・PDF・共有ページの表示と同じ長さ）。テーブル・列ごとの件数と前後の値をログに出す（003 §3.10 の決定） |
 | usage_records | `plan_change_logs` へ。`id = uuidv5('usage_records:' + id, NS)`、`user_id` は users と同じ式で導出 |
 | staff_groups, invoices | 移行しない。invoices は本番 0 件を確認済み。pg_dump は保管 |
 
 ### 5.3 検証
 
 - 件数突合（v1 件数 − 除外件数 = v2 件数）をテーブルごとに出力
+- 文字数の切り詰めが発生した行の件数と内容を報告し、想定外に多ければ CHECK の緩和を再検討する
 - サンプル店舗 5 件で v1 と v2 のシフト表 CSV を比較
 - 移行済みユーザーで v1 と同じパスワードでログインできること
 - v1 の店舗 URL（22 文字トークン）でアクセスすると新 URL へ 301 されること
