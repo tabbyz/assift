@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Alert, Button, Container, Group, Paper, Stack, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { IconAlertCircle } from '@tabler/icons-react'
-import { logout } from '../actions'
+import { logout } from '@/app/(protected)/actions'
 
 /**
  * ログイン情報を読み出せないとき（他の端末でのアカウント削除・セッション失効など）の表示。

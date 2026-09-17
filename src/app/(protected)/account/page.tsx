@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
+import { SimpleShell } from '@/components/SimpleShell'
 import { ACCOUNT_ERRORS, ACCOUNT_NOTICES } from '@/lib/auth/notices'
 import { getAuthUser } from '@/utils/auth/current'
 import { lookup } from '@/utils/record'
@@ -28,12 +29,14 @@ export default async function AccountPage({ searchParams }: PageProps<'/account'
   const { user } = data
   const providers = (user.app_metadata.providers as string[] | undefined) ?? []
   return (
-    <AccountClient
-      email={user.email ?? ''}
-      newEmail={user.new_email ?? null}
-      hasPassword={providers.includes('email')}
-      notice={lookup(ACCOUNT_NOTICES, firstString(params.notice))}
-      initialError={lookup(ACCOUNT_ERRORS, firstString(params.error))}
-    />
+    <SimpleShell>
+      <AccountClient
+        email={user.email ?? ''}
+        newEmail={user.new_email ?? null}
+        hasPassword={providers.includes('email')}
+        notice={lookup(ACCOUNT_NOTICES, firstString(params.notice))}
+        initialError={lookup(ACCOUNT_ERRORS, firstString(params.error))}
+      />
+    </SimpleShell>
   )
 }

@@ -5,7 +5,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(22);
+select plan(27);
 
 -- ---------------------------------------------------------------------------
 -- 準備（postgres として実行。RLS はテーブル所有者には適用されない）
@@ -17,6 +17,7 @@ select plan(22);
 \set staff_a '''aaaaaaaa-2222-0000-0000-00000000000a'''
 \set staff_b '''bbbbbbbb-2222-0000-0000-00000000000b'''
 \set pattern_a '''aaaaaaaa-3333-0000-0000-00000000000a'''
+\set pattern_b '''bbbbbbbb-3333-0000-0000-00000000000b'''
 
 insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
   raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
@@ -35,8 +36,9 @@ select is(
 );
 
 insert into public.tenants (id, owner_id, name) values (:tenant_a, :user_a, 'A店'), (:tenant_b, :user_b, 'B店');
-insert into public.patterns (id, tenant_id, name) values (:pattern_a, :tenant_a, '早番');
+insert into public.patterns (id, tenant_id, name) values (:pattern_a, :tenant_a, '早番'), (:pattern_b, :tenant_b, 'B番');
 insert into public.staffs (id, tenant_id, name) values (:staff_a, :tenant_a, 'Aの人'), (:staff_b, :tenant_b, 'Bの人');
+insert into public.staff_patterns (tenant_id, staff_id, pattern_id) values (:tenant_b, :staff_b, :pattern_b);
 
 -- ---------------------------------------------------------------------------
 -- ユーザー A になりすます
@@ -78,6 +80,28 @@ select lives_ok(
   '別テナントの DELETE はエラーにならない（対象 0 行）'
 );
 
+-- staff_patterns（005 の createPattern / createStaff が書き込む中間テーブル）
+select is((select count(*) from public.staff_patterns), 0::bigint, 'B の staff_patterns は見えない');
+select lives_ok(
+  format($$insert into public.staff_patterns (tenant_id, staff_id, pattern_id) values (%L, %L, %L)$$,
+    'aaaaaaaa-1111-0000-0000-00000000000a', 'aaaaaaaa-2222-0000-0000-00000000000a', 'aaaaaaaa-3333-0000-0000-00000000000a'),
+  '自テナントの staff × pattern は結び付けられる'
+);
+select throws_ok(
+  format($$insert into public.staff_patterns (tenant_id, staff_id, pattern_id) values (%L, %L, %L)$$,
+    'bbbbbbbb-1111-0000-0000-00000000000b', 'bbbbbbbb-2222-0000-0000-00000000000b', 'bbbbbbbb-3333-0000-0000-00000000000b'),
+  '42501',
+  null,
+  '別テナントの staff_patterns は追加できない'
+);
+select throws_ok(
+  format($$insert into public.staff_patterns (tenant_id, staff_id, pattern_id) values (%L, %L, %L)$$,
+    'aaaaaaaa-1111-0000-0000-00000000000a', 'bbbbbbbb-2222-0000-0000-00000000000b', 'aaaaaaaa-3333-0000-0000-00000000000a'),
+  '23503',
+  null,
+  '自テナント配下に他テナントの staff を混ぜると複合 FK 違反'
+);
+
 -- TRUNCATE は RLS を通らないので、権限の層で止める（003 §3.3）
 select throws_ok('truncate public.staffs', '42501', null, 'authenticated に TRUNCATE 権限はない');
 
@@ -111,6 +135,12 @@ select is(
   (select name from public.staffs where id = :staff_b),
   'Bの人',
   'A の UPDATE / DELETE は B の行に影響しない'
+);
+
+select is(
+  (select count(*) from public.staff_patterns where tenant_id = :tenant_b),
+  1::bigint,
+  'B の staff_patterns は A の操作後も残っている'
 );
 
 select * from finish();

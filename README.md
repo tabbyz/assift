@@ -21,12 +21,12 @@ npm run dev                 # http://localhost:3000
 
 `.env.local` に入れる値
 
-| 変数                                   | `supabase status` の項目                            |
-| -------------------------------------- | --------------------------------------------------- |
-| `NEXT_PUBLIC_SUPABASE_URL`             | API URL                                             |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Publishable key（旧 anon key）                      |
-| `SUPABASE_SECRET_KEY`                  | Secret key（旧 service_role key）                   |
-| `V1_UUID_NAMESPACE`                    | 任意の固定 UUID（v1 データ移行と旧 URL 解決で使用） |
+| 変数                                   | `supabase status` の項目                                            |
+| -------------------------------------- | ------------------------------------------------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`             | API URL                                                             |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Publishable key（旧 anon key）                                      |
+| `SUPABASE_SECRET_KEY`                  | Secret key（旧 service_role key）                                   |
+| `V1_UUID_NAMESPACE`                    | 固定の UUID（v1 データ移行と旧 URL 解決で使用。RFC 準拠の値にする） |
 
 ## スクリプト
 
@@ -50,6 +50,16 @@ npm run dev                 # http://localhost:3000
 export SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID=...
 export SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET=...
 npx supabase stop && npx supabase start
+```
+
+## 旧 URL（v1）の確認
+
+v1 の店舗 URL は 22 文字のトークン。`V1_UUID_NAMESPACE` を設定していると、proxy が uuid v5 で
+新しい URL を導出して 308 でリダイレクトする（`?start_date=` は `?start=` に読み替える）。
+
+```bash
+curl -I "http://localhost:3000/tenants/JuFZPcSXmXOaVvCmbb1JVw/shifts?start_date=2026-10-01"
+# → 308 /tenants/<uuid>/shifts?start=2026-10-01
 ```
 
 ## Supabase Studio

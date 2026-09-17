@@ -52,16 +52,6 @@ export async function updatePassword(input: {
   })
 }
 
-/** ログアウト（この端末のセッションだけ）。遷移はクライアントが行う */
-export async function logout(): Promise<ActionResult<{ redirectTo: string }>> {
-  return runAction(async () => {
-    const supabase = await createClient()
-    const { error } = await supabase.auth.signOut({ scope: 'local' })
-    if (error) fail(authErrorMessage(error))
-    return { redirectTo: '/login' }
-  })
-}
-
 /**
  * アカウント削除。auth.users の削除が profiles → tenants → 全データへ cascade する（001 §4.3）。
  * service_role を使う唯一のユーザー文脈の操作（AGENTS.md の例外。004 §3.6）。

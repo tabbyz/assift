@@ -58,6 +58,8 @@ src/
   components/                     横断 UI
   lib/
     actions/                      result / run / error / guards
+    migration/v1Ids.ts            v1 の ID → uuid v5（旧 URL 解決と 012 が共有）
+    tenants/                      旧 URL の書き換え・直近店舗 cookie の純関数
     queries/                      読み取り（Server から呼ぶ）
     <domain>/                     ドメインロジック（calendar, patterns, pdf, csv ...）
     supabase/createPrivilegedClient.ts   service_role の唯一の入口
@@ -76,6 +78,10 @@ supabase/
 ```
 
 ページ専用は `_components/` / `_lib/`、横断 UI は `src/components/`、読み取りは `lib/queries/`、書き込みは各ルートの `actions.ts`。
+
+例外: チュートリアル（`tutorial/pattern` `tutorial/staff`）は設定画面の `_components/` のフォームと `actions.ts` を import する。v1 も同じフォームを使い回しており、同じものを 2 つ持つほうが壊れやすい。
+
+ルートをまたいで使う Action は、そのグループ直下に置く（`(protected)/actions.ts` の `logout` はヘッダーとアカウント画面の両方から呼ぶ）。
 
 ## コード規約
 
@@ -144,6 +150,25 @@ startTransition(async () => {
 `service_role` は `createPrivilegedClient()` のみ。ユーザー文脈の Action では使わない。用途は公開共有ページの読み取り、ジョブ、管理操作に限る。
 
 唯一の例外は `account/actions.ts` の `deleteAccount()`（`auth.admin.deleteUser` は service_role でしか呼べない）。渡す id は `requireUser()` の戻り値だけにし、入力から受け取らない。例外を足すときはここに追記する。
+
+## uuid の扱い
+
+- **`z.uuid()` と `uuid` パッケージの `validate()` は使わない。** RFC 9562 の version / variant ビットまで検査するため、seed（`22222222-…`）や pgTAP の id を弾く。Postgres の uuid 型はこれらを受けるので、アプリ側の判定も合わせる
+- 形式の判定は `isUuid()`（`src/utils/uuid.ts`）、Zod は `z.guid()`
+- 例外は uuid v5 の**名前空間**だけ。`v5()` は RFC 非準拠の値に例外を投げるので、`getV1UuidNamespace()`（`lib/migration/v1Ids.ts`）が `validate()` で先に弾く
+- v1 の ID からの導出は `v1Uuid(table, id, namespace)` に集約する。旧 URL の解決（005）と移行スクリプト（012）が同じ関数を使う
+
+## proxy（`src/proxy.ts`）
+
+3 段の合成にとどめ、ロジックは `lib/tenants/` の純関数に置く。
+
+1. v1 の店舗 URL（22 文字トークン）を新 URL へ 308
+2. `updateSession()`: Supabase の cookie 更新 + 保護ルートの未ログイン redirect
+3. 開いている `/tenants/<uuid>` を直近店舗の cookie に記録
+
+- **`config.matcher` から prefetch を除外しない。** セッション cookie を書けるのは proxy だけで、除外するとトークン更新が Server Component の描画中に起き、新しい refresh token を保存できずに次の遷移でログアウトする（`enable_refresh_token_rotation = true`）
+- proxy のコード内では RSC / prefetch のヘッダが剥がされていて prefetch を判別できない。先読みで困る導線は、リンク側に `prefetch={false}` を付けて塞ぐ（他店舗を指す `TenantSwitcher`、006 で作るページへのリンク）
+- URL 由来の文字列で定数マップを引くときは `lookup()`（`src/utils/record.ts`）。素の添字はプロトタイプ上の値を返す
 
 ## nuqs
 

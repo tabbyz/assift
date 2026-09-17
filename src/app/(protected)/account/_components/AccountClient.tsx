@@ -17,9 +17,10 @@ import {
 import { modals } from '@mantine/modals'
 import { notifications } from '@mantine/notifications'
 import { IconInfoCircle } from '@tabler/icons-react'
+import { logout } from '@/app/(protected)/actions'
 import { FormErrorAlert } from '@/components/FormErrorAlert'
 import { PASSWORD_MIN_LENGTH } from '@/lib/validation/auth'
-import { deleteAccount, logout, updateEmail, updatePassword } from '../actions'
+import { deleteAccount, updateEmail, updatePassword } from '../actions'
 
 type Props = {
   email: string
