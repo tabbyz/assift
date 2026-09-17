@@ -33,7 +33,7 @@ Phase 1 全体設計（`docs/plans/001-phase1-architecture/README.md` §3）を 
 | `config.toml` | `declarative_schema_path` の既定は `./schemas`。`[db.migrations] schema_paths` は使わない。`[db.seed] sql_paths = ["./seed.sql"]` |
 | `auth.users` | `id uuid, email, encrypted_password, email_confirmed_at, raw_app_meta_data jsonb, raw_user_meta_data jsonb, aud, role, instance_id` を確認。`confirmation_token` / `recovery_token` / `email_change` / `email_change_token_new` は **nullable かつ default なし**（他の token 列は default `''`） |
 | `auth.identities` | `provider_id, provider, identity_data, user_id, email` |
-| RLS 式の評価（実測） | `(select private.fn(tenant_id))` のように行の列を引数に取ると **SubPlan として行ごとに評価**される。`tenant_id in (select private.fn())` のように引数なしの集合関数なら **Hash Join で文ごとに 1 回**の評価になる（§5.1） |
+| RLS 式の評価（実測） | `(select private.fn(tenant_id))` のように行の列を引数に取ると **SubPlan として行ごとに評価**される。`tenant_id in (select private.fn())` のように引数なしの集合関数なら **文ごとに 1 回**の評価になる（§5.1）。※実装後の plan は Hash Join ではなく `hashed SubPlan`。狙いどおり行ごとの再評価にはならない（§10.2 で修正） |
 | private スキーマの USAGE | ポリシー式は CREATE POLICY 時に関数 OID まで解決されるため、`authenticated` に `private` の USAGE がなくてもポリシーは評価できる（実測）。必要なのは関数の EXECUTE（既定で PUBLIC に付く） |
 
 ---
@@ -69,6 +69,12 @@ tenant_id in (select private.owned_tenant_ids())
 `owned_tenant_ids()` は引数なしで「ログインユーザーがオーナーのテナント id の集合」を返す。プランナはこれを 1 回だけ評価して Hash Join する。テンプレートの「ヘルパは `(SELECT private.fn())` で initPlan 化」の意図（文ごとに 1 回）を、引数ありの関数でも守る形。
 
 ### 3.3 `anon` からの権限を明示的に外す
+
+> **§10.3 で変更**: 本節の「各テーブルで `revoke all ... from anon` を明示する」は**実装では機能しなかった**。
+> pg-delta は権限を 1 つも持たせないロールの REVOKE を生成しないため、`schemas/` に書いても migration に落ちない。
+> 実際の手順は `supabase/unmanaged/restrict_anon_grants.sql` を sync 後に生成 migration へ追記する形。
+> また `authenticated` からも一度 `revoke all` する必要があった（既定で付く TRUNCATE は RLS を通らない）。
+> 手順の正は AGENTS.md の Supabase 節。
 
 Supabase は新規テーブルに `anon` / `authenticated` へ既定で全権限を付ける。テンプレートの「GRANT は最小」に従い、各テーブルで `revoke all on public.<table> from anon` を明示する。RLS だけでも `anon` は何も読めないが、権限の層でも閉じる。
 
@@ -230,7 +236,7 @@ create policy profiles_select_own on public.profiles
 
 -- tenants: owner_id で絞る
 alter table public.tenants enable row level security;
-revoke all on public.tenants from anon;
+revoke all on public.tenants from anon, authenticated;  -- §10.3: authenticated も一度外す
 grant select, insert, update, delete on public.tenants to authenticated;
 
 create policy tenants_owner_all on public.tenants
@@ -243,7 +249,9 @@ create policy tenants_owner_all on public.tenants
 
 ```sql
 alter table public.staffs enable row level security;
-revoke all on public.staffs from anon;
+-- §10.3: 既定で付く TRUNCATE（RLS を通らない）を外すため authenticated も revoke 対象に含める。
+-- anon はこの revoke が migration に落ちないため supabase/unmanaged/ 側で外す
+revoke all on public.staffs from anon, authenticated;
 grant select, insert, update, delete on public.staffs to authenticated;
 
 -- 境界: RESTRICTIVE 1 本。集合は文ごとに 1 回評価される（3.2）
