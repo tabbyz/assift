@@ -23,19 +23,34 @@ alwaysApply: false
 
 ```sql
 alter table public.<table> enable row level security;
-grant select, insert, update, delete on public.<table> to authenticated;  -- anon には付けない
+
+-- Supabase の既定権限は CREATE TABLE 時に anon / authenticated へ全権限（TRUNCATE 含む）を付ける。
+-- TRUNCATE は RLS を通らないので、一度すべて外してから必要な DML だけ付け直す
+revoke all on public.<table> from anon, authenticated;
+grant select, insert, update, delete on public.<table> to authenticated;
 
 -- テナント境界（RESTRICTIVE 1 本）
 create policy <table>_restrict_same_tenant on public.<table>
   as restrictive for all to authenticated
-  using ((select private.is_tenant_owner(tenant_id)))
-  with check ((select private.is_tenant_owner(tenant_id)));
+  using (tenant_id in (select private.owned_tenant_ids()))
+  with check (tenant_id in (select private.owned_tenant_ids()));
 
 -- 権限（PERMISSIVE）。tenant_id の条件は書かない
-create policy <table>_owner_all on public.<table>
+create policy <table>_member_all on public.<table>
   for all to authenticated using (true) with check (true);
 ```
 
-- ヘルパ呼び出しは `(select private.fn(...))` で包み initPlan 化する
+- 認可ヘルパは**引数なしの集合関数 + `IN`** にする。`(select private.fn(tenant_id))` のように行の列を
+  引数に渡すと SubPlan として行ごとに評価される。`tenant_id in (select private.fn())` なら
+  hashed SubPlan になり文ごとに 1 回で済む（`explain` で確認済み）
+- `authenticated` に `private` スキーマの USAGE は要らない。ポリシー式は CREATE POLICY 時に関数 OID まで
+  解決されるので、USAGE なしでも評価できる。関数の EXECUTE だけ PUBLIC から外して `authenticated` に付ける
 - `anon` ロールにポリシーを書かない。公開ページはサーバー側の `createPrivilegedClient()` で読む
 - テナントに属さないテーブル（`profiles`, `plan_change_logs`）は `user_id = (select auth.uid())` で自分の行だけに絞る
+- `anon` の権限は `supabase/unmanaged/restrict_anon_grants.sql` で外す。pg-delta は権限を 1 つも持たない
+  ロールの REVOKE を生成しないため、sync のたびに生成 migration の末尾へ追記する（AGENTS.md 参照）
+
+## テスト
+
+RLS は唯一の認可境界なので、`supabase/tests/*.sql` に pgTAP で固定して `npx supabase test db` で回す。
+pgtap 拡張はテストのトランザクション内で `create extension` し、宣言的スキーマには入れない。

@@ -218,9 +218,12 @@ create index plan_change_logs_user_created_idx on public.plan_change_logs (user_
 
 ### 3.3 private スキーマ
 
+> **003 で変更**: `is_tenant_owner(tenant_id)` は行の列を引数に取るため行ごとに評価される。
+> 引数なしの集合関数 `owned_tenant_ids()` に変更した。実装は `docs/plans/003-schema/README.md` §3.2 / §5.1 を参照。
+
 | 関数 / トリガ | 役割 |
 | --- | --- |
-| `private.is_tenant_owner(tenant_id uuid)` | `tenants.owner_id = auth.uid()` を security definer で判定。RLS の initPlan 用 |
+| `private.owned_tenant_ids()` | ログインユーザーがオーナーのテナント id の集合を security definer で返す。RLS から `tenant_id in (select ...)` で使う |
 | `private.handle_new_user()` | `auth.users` INSERT 時に `profiles` を作成（email をコピー） |
 | `private.sync_profile_email()` | `auth.users.email` 更新時に `profiles.email` を同期 |
 | `private.set_updated_at()` | `updated_at` の自動更新 |
@@ -231,13 +234,16 @@ create index plan_change_logs_user_created_idx on public.plan_change_logs (user_
 
 マルチテナントなのでテンプレートの二層構成。
 
-- **RESTRICTIVE** `{table}_restrict_same_tenant`（`FOR ALL TO authenticated`）: `(select private.is_tenant_owner(tenant_id))` を USING / WITH CHECK 両方に
-- **PERMISSIVE** `{table}_owner_all`（`FOR ALL TO authenticated USING (true) WITH CHECK (true)`）: 現状オーナーだけがメンバーなので権限は全許可。将来「スタッフ本人のログイン」等を足すときにここでロール分岐する
+- **RESTRICTIVE** `{table}_restrict_same_tenant`（`FOR ALL TO authenticated`）: `tenant_id in (select private.owned_tenant_ids())` を USING / WITH CHECK 両方に
+- **PERMISSIVE** `{table}_member_all`（`FOR ALL TO authenticated USING (true) WITH CHECK (true)`）: 現状オーナーだけがメンバーなので権限は全許可。将来「スタッフ本人のログイン」等を足すときにここでロール分岐する
 - `tenants`: `owner_id = (select auth.uid())` で SELECT / UPDATE / DELETE、INSERT は WITH CHECK 同条件
-- `profiles`: 自分の行のみ SELECT / UPDATE
+- `profiles`: 自分の行のみ SELECT（003 §3.5 で UPDATE は付けないことに変更）
 - `plan_change_logs`: `user_id = (select auth.uid())` で SELECT のみ。書き込みはサブスクリプション Phase の Server Action で行う
-- GRANT は `authenticated` のみ。`anon` にポリシーは書かない
+- GRANT は `authenticated` のみ。`anon` にポリシーは書かない（003 §3.3 で `anon` からの REVOKE を明示）
 - クライアント側クエリでも `.eq('tenant_id', tenantId)` を重ねる
+
+> **003 で変更**: ポリシー名・ヘルパ・GRANT の詳細は `docs/plans/003-schema/README.md` が正。
+> テーブル定義の差分（複合 FK、インデックス、`shares.code` の CHECK など）は同 §5.6 / §3.9 にまとめている。
 
 **共有ページ（`/share/[code]`）** は未ログインで閲覧するため、Server Component から `createPrivilegedClient()`（service_role）で `code` を条件に読む。有効期限（`end_date + 6 日 >= 今日(JST)`）判定もサーバー側で行い、無効なら 404 ページを返す。anon ポリシーは作らない。
 

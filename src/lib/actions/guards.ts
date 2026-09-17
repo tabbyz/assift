@@ -1,5 +1,5 @@
 import 'server-only'
-import { getAuthUser } from '@/utils/auth/current'
+import { currentUser, getAuthUser } from '@/utils/auth/current'
 import { ActionError } from './error'
 
 /** ログイン必須。未ログインなら ActionError を投げる */
@@ -9,4 +9,9 @@ export async function requireUser() {
   return user
 }
 
-// requireAdmin は profiles テーブル（003）を作ってから追加する
+/** 管理者必須。auth.users.user_metadata ではなく profiles.is_admin を信頼する */
+export async function requireAdmin() {
+  const user = await currentUser()
+  if (!user?.isAdmin) throw new ActionError('権限がありません')
+  return user
+}

@@ -26,7 +26,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 | URL 状態       | nuqs                                                                                         |
 | バリデーション | Zod 4                                                                                        |
 | 日付           | dayjs（`Asia/Tokyo`。カレンダー日付は `YYYY-MM-DD` 文字列で扱う）                            |
-| テスト         | Vitest（純関数のユニットテスト）                                                             |
+| テスト         | Vitest（純関数のユニットテスト）/ pgTAP（RLS）                                               |
 | 品質           | ESLint (`eslint-config-next`) / Prettier                                                     |
 
 ### Next 16 の読み替え
@@ -70,7 +70,9 @@ supabase/
   config.toml
   schemas/                        宣言的スキーマ（正）
   migrations/                     sync の出力
-  seed.sql
+  unmanaged/                      pg-delta が生成できない SQL。sync 後に migration へ追記する
+  tests/                          RLS の pgTAP（npx supabase test db）
+  seed.sql                        ローカル専用。dev@example.com / password
 ```
 
 ページ専用は `_components/` / `_lib/`、横断 UI は `src/components/`、読み取りは `lib/queries/`、書き込みは各ルートの `actions.ts`。
@@ -180,15 +182,24 @@ CLI は `devDependencies` の `supabase` を `npx supabase` で使う（未ピ�
 ```bash
 npx supabase start
 # schemas/ に SQL を書く
-npx supabase db schema declarative sync --no-apply --name <name>
+rm -f supabase/migrations/*.sql   # 本番へ push するまでは init_schema 1 本を作り直す（下記）
+npx supabase db schema declarative sync --no-apply --name init_schema --strict-coverage
 # 生成物を確認（欠けた GRANT / storage ポリシーは生成ファイルに追記してよい）
-npx supabase migration up
+cat supabase/unmanaged/restrict_anon_grants.sql >> supabase/migrations/*_init_schema.sql
+npx supabase db reset             # migration → seed を空から通す
+npx supabase test db              # RLS の pgTAP
+npx supabase gen types typescript --local --schema public > src/types/database.ts
 ```
 
 - `db diff` は「起動中のローカル DB 対 migrations」であり `schemas/` は見ない。宣言的スキーマの差分には使わない
 - `config.toml` の `schema_paths` は使わない（適用順は依存関係から決まる）
 - `migrations/` は sync の出力を正にする。ゼロから手書きしない。適用済みの migration は書き換えない
 - 空から作り直すときだけ `npx supabase db reset`（未コミットのローカルデータは消える）
+- **本番に初回 push（マイルストーン 013）するまでは migration を `init_schema` 1 本に保つ。**
+  スキーマを変えたら差分を積むのではなく `migrations/` を空にして sync をやり直し、`db reset` で検証する。
+  push 以降は通常どおり差分 migration を追加し、適用済みは書き換えない
+- `supabase/unmanaged/` は pg-delta が生成できない SQL の置き場。sync のたびに生成 migration の末尾へ追記する。
+  現在は `anon` からの REVOKE のみ（理由はファイル冒頭のコメント）。追記漏れは `npx supabase test db` で落ちる
 
 PK は uuid（`gen_random_uuid()`）。v1 から移行する行は `uuidv5('<table>:<v1 id>', V1_UUID_NAMESPACE)` で決定的に導出する。
 
@@ -196,16 +207,21 @@ PK は uuid（`gen_random_uuid()`）。v1 から移行する行は `uuidv5('<tab
 
 常に:
 
-1. GRANT は最小（通常 `TO authenticated` のみ。`anon` にポリシーを書かない）
+1. GRANT は最小。`revoke all ... from anon, authenticated` してから `authenticated` に必要な DML だけ付ける
+   （既定権限は TRUNCATE まで付けてしまう。TRUNCATE は RLS を通らない）。`anon` にポリシーを書かない
 2. `ENABLE ROW LEVEL SECURITY`
-3. ヘルパは `(SELECT private.fn())` で initPlan 化
-4. 認可ヘルパ・内部トリガは `private` スキーマ。`[api] schemas` に `private` を出さない
+3. 認可ヘルパは**引数なしの集合関数 + `IN`**（`tenant_id in (select private.owned_tenant_ids())`）。
+   行の列を引数に渡すと行ごとに評価される
+4. 認可ヘルパ・内部トリガは `private` スキーマ。`[api] schemas` に `private` を出さない。
+   `authenticated` に `private` の USAGE は不要（ポリシー式は関数 OID まで解決済み）
 
 マルチテナントなので二層にする:
 
 5. **RESTRICTIVE** 1 本でテナント境界（`{table}_restrict_same_tenant`、`FOR ALL`）
 6. **PERMISSIVE** には権限だけ。`tenant_id = ...` は書かない
 7. クライアント側でも `.eq('tenant_id', ...)` を重ねる
+
+テナント境界は `supabase/tests/rls_tenant_isolation.sql`（pgTAP）で固定する。テーブルを足したらここにも足す。
 
 ### 型
 
@@ -215,6 +231,7 @@ PK は uuid（`gen_random_uuid()`）。v1 から移行する行は `uuidv5('<tab
 
 - 純関数（期間計算、ペア処理、コピー、CSV 生成、Zod スキーマ）は同じディレクトリに `*.test.ts`
 - `server-only` は `vitest.config.ts` で Next 同梱の空モジュールに alias 済み
+- RLS は `supabase/tests/*.sql`（pgTAP）で `npx supabase test db`
 - コンポーネントテスト / E2E は必要になってから足す
 
 ## スクリプト

@@ -442,4 +442,124 @@ npm run format && npm run lint && npm run typecheck && npm test && npm run build
 
 ## 10. 実装ログ
 
-（実装後に追記）
+実装日: 2026-09-17。ローカル Postgres 17.6 / Supabase CLI 2.117.0。
+
+### 10.1 成果物
+
+| パス | 内容 |
+| --- | --- |
+| `supabase/schemas/private/{schema,functions}.sql` | `private` スキーマと 4 関数（§5.1 のまま） |
+| `supabase/schemas/public/types.sql` | enum 3 種 |
+| `supabase/schemas/public/tables/*.sql` | 12 テーブル（§4 の構成のまま） |
+| `supabase/schemas/_custom/auth_triggers.sql` | `auth.users` の 2 トリガ |
+| `supabase/unmanaged/restrict_anon_grants.sql` | **プランにない追加**。`anon` からの REVOKE（10.3） |
+| `supabase/migrations/20260917082838_init_schema.sql` | sync の出力 + 上記 REVOKE を末尾に追記 |
+| `supabase/seed.sql` | dev ユーザー + v1 `db/seeds.rb` 相当（店舗 1 / パターン 6 / スタッフ 8 / staff_patterns 48 / 制約 4） |
+| `supabase/tests/rls_tenant_isolation.sql` | pgTAP 22 アサーション |
+| `src/types/database.ts` | `gen types --local --schema public` の出力（674 行） |
+| `src/lib/queries/profiles.ts` | `getProfile(userId)` |
+| `src/utils/auth/current.ts` | `currentUser()` を追加（profiles 行が無くても `isAdmin: false` で返す） |
+| `src/lib/actions/guards.ts` | `requireAdmin()` を追加 |
+
+### 10.2 プランどおり確認できたこと
+
+- **複合 FK と `on delete set null (pair_pattern_id)` は pg-delta がそのまま扱えた**。生成 migration に
+  `FOREIGN KEY (pair_pattern_id, tenant_id) REFERENCES public.patterns(id, tenant_id) ON DELETE SET NULL (pair_pattern_id)`
+  がそのまま出た。§3.1 のトリガ・フォールバックは不要。事前に psql で「参照先を削除しても `tenant_id` は残り
+  `pair_pattern_id` だけ null になる」ことも確認した
+- `--strict-coverage` は一度も失敗しなかった。`_custom/auth_triggers.sql` の `auth.users` トリガも
+  pg-delta が管理オブジェクトとして取り込み、migration に出力した（`create or replace trigger` は
+  `CREATE TRIGGER` に正規化される）。Step 2 で想定していた「migration 末尾への追記」は不要だった
+- `authenticated` に `private` の USAGE を付けなくてもポリシーは評価できる（§2 の実測どおり）
+- RLS の評価回数: `explain` の出力は `Filter: (ANY (tenant_id = (hashed SubPlan 1).col1))`。
+  **hashed SubPlan** なので文ごとに 1 回評価してハッシュ化される（プランの記述は Hash Join だったが、
+  狙いどおり行ごとの再評価にはならない）
+- seed の `auth.users` 直接 INSERT で `dev@example.com` / `password` のログインが通る
+  （`/auth/v1/token?grant_type=password` で access_token を取得して確認）。`profiles` は
+  `private.handle_new_user()` トリガが作り、`tenants.owner_id` も seed ユーザーになっている
+
+### 10.3 プランからの変更: `anon` の権限を宣言的スキーマで閉じられなかった
+
+§3.3 は「各テーブルで `revoke all on public.<table> from anon` を明示する」としていたが、
+**この revoke は生成 migration に落ちない**。理由:
+
+- Supabase は `CREATE TABLE` 時に `anon` / `authenticated` / `service_role` へ全権限を付ける
+  （`config.toml` の `auto_expose_new_tables`。クラウドの既定）
+- pg-delta は「宣言側の ACL に現れるロール」だけを差分に出す。`authenticated` は SELECT 等を
+  付けているので `REVOKE ALL` + `GRANT ...` が出るが、権限を 1 つも持たせない `anon` は差分に現れない
+- `_custom/` に裸の `REVOKE` を置いても同じ理由で消える（passthrough ではなくモデル化される）
+
+実測: 最初の `db reset` 後、`anon` は全 12 テーブルに
+`DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE` を持っていた。
+**TRUNCATE は RLS を通らない**ため、これは行レベルの防御では埋まらない穴になる。
+
+検討して却下した案: `auto_expose_new_tables = false`。実測すると
+`service_role` からも DML が外れて `createPrivilegedClient()`（公開共有ページの読み取り）が使えなくなる一方、
+`anon` には `REFERENCES,TRIGGER,TRUNCATE` が残った。狙いと逆方向なので採らず、既定（クラウドと同じ挙動）に戻した。
+
+採った方針: `supabase/unmanaged/restrict_anon_grants.sql` に `REVOKE ALL ON ALL TABLES/SEQUENCES/FUNCTIONS
+IN SCHEMA public FROM anon` を置き、**sync のたびに生成 migration の末尾へ追記する**。
+
+```bash
+cat supabase/unmanaged/restrict_anon_grants.sql >> supabase/migrations/*_init_schema.sql
+```
+
+追記を忘れても pgTAP の「anon は tenants / staffs / profiles を読めない」が落ちるので気づける。
+手順は AGENTS.md の Supabase 節と `.cursor/rules/supabase-sql.mdc` に書いた。
+
+あわせて、各テーブルの revoke を `from anon, authenticated` に変更した（`authenticated` から
+TRUNCATE などを外すため）。最終状態:
+
+| ロール | 権限 |
+| --- | --- |
+| `anon` | `public` に何もなし（0 行） |
+| `authenticated` | `select, insert, update, delete`。`profiles` / `plan_change_logs` は `select` のみ |
+| `service_role` | 全権限（`createPrivilegedClient()` 用） |
+
+### 10.4 その他の差分
+
+- pg-delta は enum 列を `CREATE TYPE` の後に `ALTER TABLE ... ADD COLUMN` で足すため、
+  DB 上の列順が宣言と異なる（`patterns.kind` などが末尾）。挙動には影響しないのでそのままにした
+- §3.7 の anon テストは「0 行」ではなく `42501 permission denied` を期待する形にした（10.3 で権限を
+  revoke したため、SELECT 自体が拒否される）。より強い保証になっている
+- pgTAP は 22 アサーション。テナント分離・複合 FK 違反・`TRUNCATE` 拒否・`profiles` の UPDATE 拒否・
+  `plan_change_logs` の INSERT 拒否・anon の全面拒否・「A の UPDATE/DELETE が B の行を変えない」を含む
+- `supabase/migrations/.gitkeep` を削除（CLI が毎回 `Skipping migration .gitkeep` を出すため）
+- `src/utils/auth/current.ts` は `getProfile()` が「行なし」を返したときだけ fail-safe に倒す。
+  クエリ自体のエラーは throw してそのまま見えるようにした
+
+### 10.5 検証結果
+
+```
+npx supabase db reset      → migration → seed が空から成功
+npx supabase test db       → Files=1, Tests=22, Result: PASS
+npm run format             → 差分なし
+npm run lint               → エラーなし
+npm run typecheck          → エラーなし
+npm test                   → 1 file / 4 tests passed
+npm run build              → 成功（/ , /login, /tenants）
+```
+
+PostgREST 経由の最終確認（アプリと同じ経路）:
+
+| 経路 | 結果 |
+| --- | --- |
+| `authenticated` で `profiles` | 自分の 1 行のみ |
+| `authenticated` で `staffs` | 8 行（自テナントのみ） |
+| `anon` で `staffs` / `tenants` | `42501 permission denied` |
+
+### 10.6 013（本番初回 push）への申し送り
+
+- push 後に auth トリガの存在を必ず確認する:
+
+  ```sql
+  select tgname from pg_trigger where tgrelid = 'auth.users'::regclass and tgname like 'on_auth_user_%';
+  ```
+
+- push 後に `anon` の権限が 0 件であることを確認する（10.3 の REVOKE がクラウドでも効いているか）:
+
+  ```sql
+  select count(*) from information_schema.role_table_grants where table_schema = 'public' and grantee = 'anon';
+  ```
+
+- §3.6 の「本番の `postgres` で `auth.users` に INSERT できるか」は 012 のプラン時点で確認する（未着手）
