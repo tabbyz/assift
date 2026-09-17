@@ -1,0 +1,12 @@
+node_modules
+.next
+out
+build
+coverage
+package-lock.json
+next-env.d.ts
+supabase/.temp
+supabase/migrations
+src/types/database.ts
+docs
+.tmp

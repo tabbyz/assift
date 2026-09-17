@@ -1,0 +1,41 @@
+---
+description: Supabase 宣言的スキーマ（supabase/schemas/**/*.sql）の規約
+globs: supabase/**/*.sql
+alwaysApply: false
+---
+
+# Supabase SQL の規約
+
+## 置き場所
+
+- 正は `supabase/schemas/`。`supabase/migrations/` は `npx supabase db schema declarative sync` の出力であり手書きしない
+- 適用済みの migration は書き換えない。生成が落とした GRANT や `storage.objects` の RLS だけ、その生成ファイルに追記してよい
+
+## スキーマ
+
+- 認可ヘルパ・内部トリガ関数は `private` スキーマに置く。`public` に置かない。`config.toml` の `[api] schemas` に `private` を出さない
+- 関数は `security definer` + `set search_path = ''` を付け、テーブルは `public.` 付きで完全修飾する
+- PK は `uuid primary key default gen_random_uuid()`
+- `created_at` / `updated_at` は `timestamptz not null default now()`。`updated_at` は `private.set_updated_at()` トリガで更新する
+- 日付は `date` 型。文字数制限は `check (char_length(col) between 1 and N)`
+
+## RLS（必須）
+
+```sql
+alter table public.<table> enable row level security;
+grant select, insert, update, delete on public.<table> to authenticated;  -- anon には付けない
+
+-- テナント境界（RESTRICTIVE 1 本）
+create policy <table>_restrict_same_tenant on public.<table>
+  as restrictive for all to authenticated
+  using ((select private.is_tenant_owner(tenant_id)))
+  with check ((select private.is_tenant_owner(tenant_id)));
+
+-- 権限（PERMISSIVE）。tenant_id の条件は書かない
+create policy <table>_owner_all on public.<table>
+  for all to authenticated using (true) with check (true);
+```
+
+- ヘルパ呼び出しは `(select private.fn(...))` で包み initPlan 化する
+- `anon` ロールにポリシーを書かない。公開ページはサーバー側の `createPrivilegedClient()` で読む
+- テナントに属さないテーブル（`profiles`, `plan_change_logs`）は `user_id = (select auth.uid())` で自分の行だけに絞る
