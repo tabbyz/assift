@@ -523,7 +523,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      reorder_positions: {
+        Args: { p_ids: string[]; p_table: string; p_tenant_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       pattern_kind: "workday" | "dayoff"

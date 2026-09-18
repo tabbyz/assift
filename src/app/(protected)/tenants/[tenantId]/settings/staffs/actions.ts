@@ -1,26 +1,134 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { fail } from '@/lib/actions/error'
 import { requireUser } from '@/lib/actions/guards'
+import { reorderRows } from '@/lib/actions/reorder'
 import type { ActionResult } from '@/lib/actions/result'
 import { runAction } from '@/lib/actions/run'
+import type { DayKey } from '@/lib/calendar/weekdays'
 import { nextPosition } from '@/lib/queries/positions'
-import { createStaffSchema } from '@/lib/validation/staffs'
+import { createStaffSchema, staffRefSchema, updateStaffSchema } from '@/lib/validation/staffs'
+import type { Database } from '@/types/database'
 import { createClient } from '@/utils/supabase/server'
 
+type SupabaseClient = Awaited<ReturnType<typeof createClient>>
+type DefaultPatternRow = Database['public']['Tables']['staff_default_patterns']['Insert']
+
+const NOT_FOUND_MESSAGE = 'スタッフが見つかりません'
+
 /**
- * スタッフを作成する（005 は名前だけ。勤務曜日・週上限などは 006 で足す）。
- *
- * v1 の新規スタッフフォームは全パターンにチェックが入った状態なので、
- * 作成と同時に店舗の全勤務パターンを「選択可能」にする（005 §3.4）。
- * `available_wdays` / `max_work_week` は DB の default（全曜日 / 5）に任せる。
+ * フォームから届く未検証の入力。
+ * `maxWorkWeek` に `''` が入りうるのは NumberInput の空欄がそのまま来るため（Zod が日本語で弾く）。
+ * 型を `number` に狭めると呼び出し側で嘘の as が要るので、送れる形をそのまま書く。
  */
-export async function createStaff(input: {
+export type StaffInput = {
   tenantId: string
   name: string
-}): Promise<ActionResult<{ name: string }>> {
+  availableWdays: number[]
+  maxWorkWeek: number | ''
+  availablePatternIds: string[]
+  defaultPatterns: Partial<Record<DayKey, string>>
+}
+
+function toColumns(parsed: { name: string; availableWdays: number[]; maxWorkWeek: number }) {
+  return {
+    name: parsed.name,
+    // 画面のチェック順に依存させない（カレンダーの曜日判定は集合として使う）
+    available_wdays: [...parsed.availableWdays].sort((a, b) => a - b),
+    max_work_week: parsed.maxWorkWeek,
+  }
+}
+
+function toDefaultPatternRows(
+  tenantId: string,
+  staffId: string,
+  defaultPatterns: Partial<Record<DayKey, string>>
+): DefaultPatternRow[] {
+  return Object.entries(defaultPatterns)
+    .filter((entry): entry is [DayKey, string] => Boolean(entry[1]))
+    .map(([dayKey, patternId]) => ({
+      tenant_id: tenantId,
+      staff_id: staffId,
+      day_key: dayKey,
+      pattern_id: patternId,
+    }))
+}
+
+/**
+ * スタッフの関連（選択可能パターン / デフォルト）を入力に合わせる。
+ *
+ * 差分で書くので、変わっていない行は触らない。トランザクションではないが、途中で失敗しても
+ * 同じフォームをもう一度保存すれば収束する（006 §3.4 / §5.2）。
+ */
+async function syncStaffRelations(
+  supabase: SupabaseClient,
+  args: {
+    tenantId: string
+    staffId: string
+    currentPatternIds: string[]
+    currentDayKeys: string[]
+    availablePatternIds: string[]
+    defaultPatterns: Partial<Record<DayKey, string>>
+  }
+) {
+  const { tenantId, staffId } = args
+
+  const nextPatternIds = new Set(args.availablePatternIds)
+  const currentPatternIds = new Set(args.currentPatternIds)
+
+  const removedPatternIds = args.currentPatternIds.filter((id) => !nextPatternIds.has(id))
+  const addedPatternIds = args.availablePatternIds.filter((id) => !currentPatternIds.has(id))
+
+  if (removedPatternIds.length > 0) {
+    const { error } = await supabase
+      .from('staff_patterns')
+      .delete()
+      .eq('tenant_id', tenantId)
+      .eq('staff_id', staffId)
+      .in('pattern_id', removedPatternIds)
+    if (error) throw error
+  }
+  if (addedPatternIds.length > 0) {
+    const { error } = await supabase.from('staff_patterns').insert(
+      addedPatternIds.map((patternId) => ({
+        tenant_id: tenantId,
+        staff_id: staffId,
+        pattern_id: patternId,
+      }))
+    )
+    if (error) throw error
+  }
+
+  const rows = toDefaultPatternRows(tenantId, staffId, args.defaultPatterns)
+  const nextDayKeys = new Set(rows.map((row) => row.day_key))
+  const removedDayKeys = args.currentDayKeys.filter((key) => !nextDayKeys.has(key))
+
+  if (removedDayKeys.length > 0) {
+    const { error } = await supabase
+      .from('staff_default_patterns')
+      .delete()
+      .eq('tenant_id', tenantId)
+      .eq('staff_id', staffId)
+      .in('day_key', removedDayKeys)
+    if (error) throw error
+  }
+  if (rows.length > 0) {
+    const { error } = await supabase
+      .from('staff_default_patterns')
+      .upsert(rows, { onConflict: 'staff_id,day_key' })
+    if (error) throw error
+  }
+}
+
+/**
+ * スタッフを作成する。v1 の新規フォームは全パターンにチェックが入った状態なので、
+ * 画面から渡ってくる `availablePatternIds` をそのまま結び付ける。
+ */
+export async function createStaff(input: StaffInput): Promise<ActionResult<{ name: string }>> {
   return runAction(async () => {
-    const { tenantId, name } = createStaffSchema.parse(input)
+    const parsed = createStaffSchema.parse(input)
+    const { tenantId } = parsed
     await requireUser()
 
     const supabase = await createClient()
@@ -28,29 +136,126 @@ export async function createStaff(input: {
 
     const { data: staff, error } = await supabase
       .from('staffs')
-      .insert({ tenant_id: tenantId, name, position })
+      .insert({ tenant_id: tenantId, position, ...toColumns(parsed) })
       .select('id')
       .single()
     if (error) throw error
 
-    const { data: patterns, error: patternsError } = await supabase
-      .from('patterns')
-      .select('id')
-      .eq('tenant_id', tenantId)
-    if (patternsError) throw patternsError
-
-    if (patterns.length > 0) {
-      const { error: linkError } = await supabase.from('staff_patterns').insert(
-        patterns.map((pattern) => ({
-          tenant_id: tenantId,
-          staff_id: staff.id,
-          pattern_id: pattern.id,
-        }))
-      )
-      if (linkError) throw linkError
-    }
+    await syncStaffRelations(supabase, {
+      tenantId,
+      staffId: staff.id,
+      currentPatternIds: [],
+      currentDayKeys: [],
+      availablePatternIds: parsed.availablePatternIds,
+      defaultPatterns: parsed.defaultPatterns,
+    })
 
     revalidatePath(`/tenants/${tenantId}`, 'layout')
-    return { name }
+    return { name: parsed.name }
   })
+}
+
+export async function updateStaff(input: StaffInput & { staffId: string }): Promise<ActionResult> {
+  return runAction(async () => {
+    const parsed = updateStaffSchema.parse(input)
+    const { tenantId, staffId } = parsed
+    await requireUser()
+
+    const supabase = await createClient()
+    // 現在の関連を読む。存在確認も兼ねる（他店舗・存在しない id はここで null になる）
+    const { data: current, error: currentError } = await supabase
+      .from('staffs')
+      .select('id, staff_patterns(pattern_id), staff_default_patterns(day_key)')
+      .eq('id', staffId)
+      .eq('tenant_id', tenantId)
+      .maybeSingle()
+    if (currentError) throw currentError
+    if (!current) fail(NOT_FOUND_MESSAGE)
+
+    const { data, error } = await supabase
+      .from('staffs')
+      .update(toColumns(parsed))
+      .eq('id', staffId)
+      .eq('tenant_id', tenantId)
+      .select('id')
+      .maybeSingle()
+    if (error) throw error
+    if (!data) fail(NOT_FOUND_MESSAGE)
+
+    await syncStaffRelations(supabase, {
+      tenantId,
+      staffId,
+      currentPatternIds: current.staff_patterns.map((row) => row.pattern_id),
+      currentDayKeys: current.staff_default_patterns.map((row) => row.day_key),
+      availablePatternIds: parsed.availablePatternIds,
+      defaultPatterns: parsed.defaultPatterns,
+    })
+
+    revalidatePath(`/tenants/${tenantId}`, 'layout')
+  })
+}
+
+/** 退職 / 復帰は `retired_at` の切り替えだけ（v1 の disabled）。データは消さない */
+async function setRetiredAt(input: { tenantId: string; staffId: string }, value: string | null) {
+  const { tenantId, staffId } = staffRefSchema.parse(input)
+  await requireUser()
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('staffs')
+    .update({ retired_at: value })
+    .eq('id', staffId)
+    .eq('tenant_id', tenantId)
+    .select('id')
+    .maybeSingle()
+  if (error) throw error
+  if (!data) fail(NOT_FOUND_MESSAGE)
+
+  revalidatePath(`/tenants/${tenantId}`, 'layout')
+}
+
+export async function retireStaff(input: {
+  tenantId: string
+  staffId: string
+}): Promise<ActionResult> {
+  return runAction(() => setRetiredAt(input, new Date().toISOString()))
+}
+
+export async function restoreStaff(input: {
+  tenantId: string
+  staffId: string
+}): Promise<ActionResult> {
+  return runAction(() => setRetiredAt(input, null))
+}
+
+/** 削除。このスタッフのシフトと関連は FK の cascade で消える */
+export async function deleteStaff(input: {
+  tenantId: string
+  staffId: string
+}): Promise<ActionResult<{ redirectTo: string }>> {
+  return runAction(async () => {
+    const { tenantId, staffId } = staffRefSchema.parse(input)
+    await requireUser()
+
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from('staffs')
+      .delete()
+      .eq('id', staffId)
+      .eq('tenant_id', tenantId)
+      .select('id')
+      .maybeSingle()
+    if (error) throw error
+    if (!data) fail(NOT_FOUND_MESSAGE)
+
+    revalidatePath(`/tenants/${tenantId}`, 'layout')
+    return { redirectTo: `/tenants/${tenantId}/settings/staffs` }
+  })
+}
+
+export async function reorderStaffs(input: {
+  tenantId: string
+  ids: string[]
+}): Promise<ActionResult> {
+  return runAction(() => reorderRows('staffs', input))
 }

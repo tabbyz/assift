@@ -88,7 +88,7 @@ CREATE TABLE "public"."restrictions" (
   "position"    integer                  NOT NULL DEFAULT 0,
   "created_at"  timestamp with time zone NOT NULL DEFAULT now(),
   "updated_at"  timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT "restrictions_days_check" CHECK (((days >= 1) AND (days <= 31))),
+  CONSTRAINT "restrictions_days_check" CHECK (((days >= 1) AND (days <= 7))),
   CONSTRAINT "restrictions_pkey" PRIMARY KEY (id)
 );
 
@@ -159,6 +159,8 @@ CREATE TABLE "public"."staffs" (
   "max_work_week"   smallint                 NOT NULL DEFAULT 5,
   "created_at"      timestamp with time zone NOT NULL DEFAULT now(),
   "updated_at"      timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT "staffs_available_wdays_check"
+    CHECK ((available_wdays <@ ARRAY[(0)::smallint, (1)::smallint, (2)::smallint, (3)::smallint, (4)::smallint, (5)::smallint, (6)::smallint])),
   CONSTRAINT "staffs_id_tenant_id_key" UNIQUE (id, tenant_id),
   CONSTRAINT "staffs_max_work_week_check" CHECK (((max_work_week >= 0) AND (max_work_week <= 7))),
   CONSTRAINT "staffs_name_check" CHECK (((char_length(name) >= 1) AND (char_length(name) <= 10))),
@@ -254,6 +256,44 @@ CREATE OR REPLACE FUNCTION private.sync_profile_email()
 begin
   update public.profiles set email = new.email where id = new.id;
   return new;
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.reorder_positions (
+  p_table     text,
+  p_tenant_id uuid,
+  p_ids       uuid[]
+)
+  RETURNS void
+  LANGUAGE plpgsql
+  SET search_path TO ''
+  AS $function$
+declare
+  expected integer := coalesce(array_length(p_ids, 1), 0);
+  updated  integer;
+begin
+  if p_table not in ('staffs', 'patterns', 'restrictions') then
+    raise exception 'reorder_positions: unsupported table %', p_table;
+  end if;
+
+  if expected = 0 then
+    raise exception 'reorder_positions: empty id list';
+  end if;
+
+  execute format(
+    'update public.%I t
+        set "position" = o.ord - 1
+       from unnest($1) with ordinality as o(id, ord)
+      where t.id = o.id and t.tenant_id = $2',
+    p_table
+  ) using p_ids, p_tenant_id;
+
+  get diagnostics updated = row_count;
+
+  -- 別テナントの id が混ざった / 別タブで削除された / 重複した id を渡した
+  if updated <> expected then
+    raise exception 'reorder_positions: % of % rows updated', updated, expected;
+  end if;
 end;
 $function$;
 
@@ -535,6 +575,10 @@ GRANT EXECUTE ON FUNCTION "private"."owned_tenant_ids"() TO "authenticated", "po
 GRANT EXECUTE ON FUNCTION "private"."set_updated_at"() TO "postgres";
 
 GRANT EXECUTE ON FUNCTION "private"."sync_profile_email"() TO "postgres";
+
+REVOKE ALL ON FUNCTION "public"."reorder_positions"(text, uuid, uuid[]) FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION "public"."reorder_positions"(text, uuid, uuid[]) TO "anon", "authenticated", "postgres", "service_role";
 
 GRANT CREATE, USAGE ON SCHEMA "private" TO "postgres";
 

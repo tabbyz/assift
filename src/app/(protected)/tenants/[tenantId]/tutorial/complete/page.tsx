@@ -1,12 +1,16 @@
-import { redirect } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { Paper, Stack, Text, Title } from '@mantine/core'
 import { LinkButton } from '@/components/LinkButton'
 import { getTutorialStatus } from '@/lib/queries/tenants'
+import { isUuid } from '@/utils/uuid'
 
 export default async function TutorialCompletePage({
   params,
 }: PageProps<'/tenants/[tenantId]/tutorial/complete'>) {
   const { tenantId } = await params
+  // layout と page は並行に描画されるので、layout の notFound() は page のクエリを止めない。
+  // uuid でない tenantId をそのまま投げると Postgres が 22P02 を throw する（006 §3.11）
+  if (!isUuid(tenantId)) notFound()
 
   // URL を直接開かれても、条件を満たしていなければ足りないステップへ戻す
   const { hasPattern, hasActiveStaff } = await getTutorialStatus(tenantId)

@@ -55,13 +55,14 @@ src/
           _components/            このルート専用 Client UI
           _lib/                   このルート専用ロジック（Vitest 対象）
     api/                          Route Handler（PDF / CSV など）
-  components/                     横断 UI
+  components/                     横断 UI（SortableList = 上下ボタンの並べ替え一覧 など）
   lib/
     actions/                      result / run / error / guards
     migration/v1Ids.ts            v1 の ID → uuid v5（旧 URL 解決と 012 が共有）
     tenants/                      旧 URL の書き換え・直近店舗 cookie の純関数
     queries/                      読み取り（Server から呼ぶ）
     <domain>/                     ドメインロジック（calendar, patterns, pdf, csv ...）
+    actions/reorder.ts              reorder_positions RPC の共通ラッパ（staffs / patterns / restrictions）
     supabase/createPrivilegedClient.ts   service_role の唯一の入口
     validation/                   Zod スキーマ
   types/database.ts               CLI 生成。手書きしない
@@ -70,7 +71,7 @@ src/
     supabase/{server,client,proxy,env}.ts
 supabase/
   config.toml
-  schemas/                        宣言的スキーマ（正）
+  schemas/                        宣言的スキーマ（正）。RPC は schemas/public/functions.sql
   migrations/                     sync の出力
   unmanaged/                      pg-delta が生成できない SQL。sync 後に migration へ追記する
   tests/                          RLS の pgTAP（npx supabase test db）
@@ -89,7 +90,10 @@ supabase/
 - import は 1 行。props はできるだけ 1 行
 - 日付は `YYYY-MM-DD` の文字列で持ち回り、Date 型への変換は表示・計算の直前だけ
 - 文字数上限などのドメイン定数は `lib/validation/` の Zod スキーマに集約し、UI とサーバーで共有する
-- Zod のエラーメッセージは日本語で各スキーマに書く（`toActionError` が先頭 issue をそのまま表示する）
+- Zod のエラーメッセージは日本語で各スキーマに書く（`toActionError` が先頭 issue をそのまま表示する）。
+  **`NumberInput` の空欄（`''`）や `Select` の未選択（`null`）が届く leaf には必ず `{ error }` を付ける。**
+  付け忘れると Zod 既定の英語（`Invalid input: expected number, received string`）が画面に出る。
+  保険として `toActionError` は「日本語を含まないメッセージ」を `入力内容が正しくありません` に丸める
 
 ## UI 規約
 
@@ -249,6 +253,19 @@ PK は uuid（`gen_random_uuid()`）。v1 から移行する行は `uuidv5('<tab
 7. クライアント側でも `.eq('tenant_id', ...)` を重ねる
 
 テナント境界は `supabase/tests/rls_tenant_isolation.sql`（pgTAP）で固定する。テーブルを足したらここにも足す。
+
+### RPC（`supabase/schemas/public/functions.sql`）
+
+複数行を 1 文で書き換える必要があるときだけ足す（現在は並べ替えの `reorder_positions` のみ）。単純な CRUD は PostgREST のまま。
+
+- **`security invoker`** にする。テーブルの RLS がそのまま効き、他テナントの行は更新対象から外れる
+- 「何行更新したか」を `get diagnostics` で数え、期待と違えば `raise exception`（= ロールバック）。
+  RLS は権限違反ではなく「0 行」になるので、これが無いと黙って一部だけ書き換わる
+- 動的 SQL のテーブル名は **アプリからは受け取らない**。Server Action が定数で渡し、SQL 側でもホワイトリストする
+- `public` の関数は Supabase の既定権限で `anon` にも EXECUTE が付く。
+  `revoke ... from public` を書いても生成 migration には `GRANT ... TO anon` が残るので、
+  `unmanaged/restrict_anon_grants.sql` の `REVOKE ALL ON ALL FUNCTIONS` で外す（sync のたびに追記する）
+- pgTAP に「自テナントは通る / 他テナントは例外 / anon は 42501」を足す
 
 ### 型
 

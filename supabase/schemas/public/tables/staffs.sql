@@ -5,7 +5,10 @@ create table public.staffs (
   name            text        not null check (char_length(name) between 1 and 10),
   position        integer     not null default 0,
   retired_at      timestamptz,
-  available_wdays smallint[]  not null default '{0,1,2,3,4,5,6}',
+  -- 0（日）〜6（土）だけ。範囲外が入ると編集画面はチェックボックスに出せず、
+  -- 「画面は正常に見えるのに保存だけ失敗する」状態になる（006 §10.12）
+  available_wdays smallint[]  not null default '{0,1,2,3,4,5,6}'
+                  check (available_wdays <@ array[0, 1, 2, 3, 4, 5, 6]::smallint[]),
   max_work_week   smallint    not null default 5 check (max_work_week between 0 and 7),
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now(),

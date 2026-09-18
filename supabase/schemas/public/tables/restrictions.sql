@@ -4,7 +4,10 @@ create table public.restrictions (
   id          uuid        primary key default gen_random_uuid(),
   tenant_id   uuid        not null references public.tenants (id) on delete cascade,
   kind        public.restriction_kind not null,
-  days        smallint    check (days between 1 and 31),
+  -- 1..7。001 の素案は 1..31 だったが、それは v1 の `max_work_month`（v2 の enum に無い残骸）を
+  -- 想定した値だった。残る 2 種別（max_work_week / max_work_consecutive）は v1 の画面も 1..7 で、
+  -- アプリの Zod も 1..7。DB だけ緩いと、範囲外の行が「画面には出るが保存できない」状態を作る（006 §10.12）
+  days        smallint    check (days between 1 and 7),
   pattern1_id uuid,
   pattern2_id uuid,
   position    integer     not null default 0,

@@ -5,7 +5,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(27);
+select plan(38);
 
 -- ---------------------------------------------------------------------------
 -- 準備（postgres として実行。RLS はテーブル所有者には適用されない）
@@ -15,6 +15,7 @@ select plan(27);
 \set tenant_a '''aaaaaaaa-1111-0000-0000-00000000000a'''
 \set tenant_b '''bbbbbbbb-1111-0000-0000-00000000000b'''
 \set staff_a '''aaaaaaaa-2222-0000-0000-00000000000a'''
+\set staff_a2 '''aaaaaaaa-2222-0000-0000-00000000002a'''
 \set staff_b '''bbbbbbbb-2222-0000-0000-00000000000b'''
 \set pattern_a '''aaaaaaaa-3333-0000-0000-00000000000a'''
 \set pattern_b '''bbbbbbbb-3333-0000-0000-00000000000b'''
@@ -37,7 +38,8 @@ select is(
 
 insert into public.tenants (id, owner_id, name) values (:tenant_a, :user_a, 'A店'), (:tenant_b, :user_b, 'B店');
 insert into public.patterns (id, tenant_id, name) values (:pattern_a, :tenant_a, '早番'), (:pattern_b, :tenant_b, 'B番');
-insert into public.staffs (id, tenant_id, name) values (:staff_a, :tenant_a, 'Aの人'), (:staff_b, :tenant_b, 'Bの人');
+insert into public.staffs (id, tenant_id, name, position)
+values (:staff_a, :tenant_a, 'Aの人', 0), (:staff_a2, :tenant_a, 'Aの人2', 1), (:staff_b, :tenant_b, 'Bの人', 0);
 insert into public.staff_patterns (tenant_id, staff_id, pattern_id) values (:tenant_b, :staff_b, :pattern_b);
 
 -- ---------------------------------------------------------------------------
@@ -46,8 +48,8 @@ insert into public.staff_patterns (tenant_id, staff_id, pattern_id) values (:ten
 set local role authenticated;
 select set_config('request.jwt.claims', format('{"sub":"%s","role":"authenticated"}', 'aaaaaaaa-0000-0000-0000-00000000000a'), true);
 
-select is((select count(*) from public.staffs), 1::bigint, 'A には自テナントの staffs だけ見える');
-select is((select name from public.staffs), 'Aの人', '見えているのは A の staffs');
+select is((select count(*) from public.staffs), 2::bigint, 'A には自テナントの staffs だけ見える');
+select is((select name from public.staffs where id = :staff_a), 'Aの人', '見えているのは A の staffs');
 select is((select count(*) from public.staffs where tenant_id = :tenant_b), 0::bigint, 'B の tenant_id で絞っても 0 行');
 select is((select count(*) from public.tenants), 1::bigint, 'tenants も自分がオーナーの 1 件だけ');
 select is((select count(*) from public.patterns), 1::bigint, 'patterns も自テナントだけ');
@@ -102,6 +104,67 @@ select throws_ok(
   '自テナント配下に他テナントの staff を混ぜると複合 FK 違反'
 );
 
+-- ---------------------------------------------------------------------------
+-- reorder_positions（006 §5.1）: security invoker なので RLS がそのまま効く
+-- ---------------------------------------------------------------------------
+select lives_ok(
+  format($$select public.reorder_positions('staffs', %L, array[%L, %L]::uuid[])$$,
+    'aaaaaaaa-1111-0000-0000-00000000000a',
+    'aaaaaaaa-2222-0000-0000-00000000002a',
+    'aaaaaaaa-2222-0000-0000-00000000000a'),
+  '自テナントの並べ替えは通る'
+);
+-- 先行テストが同じ tenant に '新人'（position 既定 0）を入れているので、渡した 2 件に絞って見る
+select is(
+  (select array_agg(name order by position) from public.staffs where id in (:staff_a, :staff_a2)),
+  array['Aの人2', 'Aの人'],
+  '渡した順で position が 0..n-1 に振り直される'
+);
+select throws_ok(
+  format($$select public.reorder_positions('staffs', %L, array[%L]::uuid[])$$,
+    'bbbbbbbb-1111-0000-0000-00000000000b',
+    'bbbbbbbb-2222-0000-0000-00000000000b'),
+  'P0001',
+  'reorder_positions: 0 of 1 rows updated',
+  '別テナントの tenant_id / id で呼ぶと件数不一致で例外'
+);
+select throws_ok(
+  format($$select public.reorder_positions('profiles', %L, array[%L]::uuid[])$$,
+    'aaaaaaaa-1111-0000-0000-00000000000a',
+    'aaaaaaaa-2222-0000-0000-00000000000a'),
+  'P0001',
+  'reorder_positions: unsupported table profiles',
+  'ホワイトリスト外のテーブル名は例外'
+);
+
+-- 設計の肝: 自テナントの id に他テナントの id を混ぜたとき、通った分もロールバックされる
+select throws_ok(
+  format($$select public.reorder_positions('staffs', %L, array[%L, %L]::uuid[])$$,
+    'aaaaaaaa-1111-0000-0000-00000000000a',
+    'aaaaaaaa-2222-0000-0000-00000000000a',
+    'bbbbbbbb-2222-0000-0000-00000000000b'),
+  'P0001',
+  'reorder_positions: 1 of 2 rows updated',
+  '自テナント id に他テナント id を混ぜると例外（件数不一致）'
+);
+-- name の並びで見ると、ロールバックされなかった場合（両方 position=0）と区別できない。
+-- position の値そのものを見る: 正常なら {1, 0}、部分更新が残っていれば {0, 0}
+select is(
+  (select array_agg(position order by name) from public.staffs where id in (:staff_a, :staff_a2)),
+  array[1, 0],
+  '混在で失敗したあとも自テナントの position は変わっていない（ロールバック）'
+);
+-- 重複 id は Zod でも弾くが、DB 側だけでも止まることを固定する
+select throws_ok(
+  format($$select public.reorder_positions('staffs', %L, array[%L, %L]::uuid[])$$,
+    'aaaaaaaa-1111-0000-0000-00000000000a',
+    'aaaaaaaa-2222-0000-0000-00000000000a',
+    'aaaaaaaa-2222-0000-0000-00000000000a'),
+  'P0001',
+  'reorder_positions: 1 of 2 rows updated',
+  '重複した id は例外（unnest で 2 回当たるが更新は 1 行）'
+);
+
 -- TRUNCATE は RLS を通らないので、権限の層で止める（003 §3.3）
 select throws_ok('truncate public.staffs', '42501', null, 'authenticated に TRUNCATE 権限はない');
 
@@ -126,6 +189,50 @@ select throws_ok('select count(*) from public.tenants', '42501', null, 'anon は
 select throws_ok('select count(*) from public.staffs', '42501', null, 'anon は staffs を読めない');
 select throws_ok('select count(*) from public.profiles', '42501', null, 'anon は profiles を読めない');
 select throws_ok('select private.owned_tenant_ids()', '42501', null, 'anon は private スキーマを使えない');
+select throws_ok(
+  $$select public.reorder_positions('staffs', 'aaaaaaaa-1111-0000-0000-00000000000a', array['aaaaaaaa-2222-0000-0000-00000000000a']::uuid[])$$,
+  '42501', null, 'anon は reorder_positions を実行できない'
+);
+
+-- Supabase の ALTER DEFAULT PRIVILEGES は新しい public の関数にも anon の EXECUTE を付ける。
+-- unmanaged/restrict_anon_grants.sql の追記を忘れた RPC がここで落ちるよう、関数ごとではなく全体を見る
+select is(
+  (select coalesce(string_agg(p.proname, ', ' order by p.proname), '')
+     from pg_proc p
+     join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and has_function_privilege('anon', p.oid, 'EXECUTE')),
+  '',
+  'anon が EXECUTE できる public の関数は 1 つも無い'
+);
+
+-- unmanaged/restrict_anon_grants.sql は TABLES と SEQUENCES も revoke している。
+-- テーブルを足したときの追記漏れも、名前を並べずにここで捕まえる
+-- （RLS があるので読めはしないが、TRUNCATE は RLS を通らないので権限の層で閉じる）
+-- `information_schema.role_table_grants` は grantee が PUBLIC の付与を anon の行として出さないが、
+-- PUBLIC への付与は anon にも効く。関数・シーケンスと同じく has_*_privilege で見る
+select is(
+  (select coalesce(string_agg(c.relname, ', ' order by c.relname), '')
+     from pg_class c
+     join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relkind in ('r', 'p', 'v', 'm', 'f')
+      and has_table_privilege(
+            'anon', c.oid,
+            'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER')),
+  '',
+  'anon が権限を持つ public のテーブルは 1 つも無い'
+);
+select is(
+  (select coalesce(string_agg(c.relname, ', ' order by c.relname), '')
+     from pg_class c
+     join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relkind = 'S'
+      and (has_sequence_privilege('anon', c.oid, 'USAGE')
+        or has_sequence_privilege('anon', c.oid, 'SELECT')
+        or has_sequence_privilege('anon', c.oid, 'UPDATE'))),
+  '',
+  'anon が権限を持つ public のシーケンスは 1 つも無い'
+);
 
 -- ---------------------------------------------------------------------------
 -- 後片付け: B の行が A の操作で変わっていないことを postgres として確認

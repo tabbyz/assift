@@ -1,12 +1,17 @@
+import { notFound } from 'next/navigation'
 import { Alert, Stack, Text } from '@mantine/core'
 import { LinkButton } from '@/components/LinkButton'
 import { listPatterns } from '@/lib/queries/patterns'
+import { isUuid } from '@/utils/uuid'
 import { PatternForm } from '../../settings/patterns/_components/PatternForm'
 
 export default async function TutorialPatternPage({
   params,
 }: PageProps<'/tenants/[tenantId]/tutorial/pattern'>) {
   const { tenantId } = await params
+  // layout と page は並行に描画されるので、layout の notFound() は page のクエリを止めない。
+  // uuid でない tenantId をそのまま投げると Postgres が 22P02 を throw する（006 §3.11）
+  if (!isUuid(tenantId)) notFound()
   const patterns = await listPatterns(tenantId)
 
   return (
@@ -32,7 +37,12 @@ export default async function TutorialPatternPage({
         )}
       </Alert>
 
-      <PatternForm tenantId={tenantId} />
+      {/* 設定画面と同じフォーム（v1 もチュートリアルで settings の _form を使い回していた。006 §3.5） */}
+      <PatternForm
+        tenantId={tenantId}
+        pairOptions={patterns.map((pattern) => ({ value: pattern.id, label: pattern.name }))}
+        afterCreate="reset"
+      />
     </Stack>
   )
 }

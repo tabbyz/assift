@@ -1,0 +1,49 @@
+import type { Metadata } from 'next'
+import { notFound } from 'next/navigation'
+import { Group, Stack, Text, Title } from '@mantine/core'
+import { IconPlus } from '@tabler/icons-react'
+import { LinkButton } from '@/components/LinkButton'
+import { listActiveStaffs, listRetiredStaffs } from '@/lib/queries/staffs'
+import { isUuid } from '@/utils/uuid'
+import { StaffListClient } from './_components/StaffListClient'
+
+export const metadata: Metadata = { title: 'スタッフ' }
+
+export default async function StaffsPage({
+  params,
+}: PageProps<'/tenants/[tenantId]/settings/staffs'>) {
+  const { tenantId } = await params
+  // layout と page は並行に描画されるので、layout の notFound() は page のクエリを止めない。
+  // uuid でない tenantId をそのまま投げると Postgres が 22P02 を出してログが汚れる（006 §3.11）
+  if (!isUuid(tenantId)) notFound()
+  // 両タブとも Server で読み、切替は shallow にする（006 §3.2）
+  const [activeStaffs, retiredStaffs] = await Promise.all([
+    listActiveStaffs(tenantId),
+    listRetiredStaffs(tenantId),
+  ])
+
+  return (
+    <Stack gap="md">
+      <Group justify="space-between">
+        <Title order={2}>スタッフ</Title>
+        <LinkButton
+          href={`/tenants/${tenantId}/settings/staffs/new`}
+          size="sm"
+          leftSection={<IconPlus size={16} />}
+        >
+          追加
+        </LinkButton>
+      </Group>
+
+      <StaffListClient
+        tenantId={tenantId}
+        activeStaffs={activeStaffs}
+        retiredStaffs={retiredStaffs}
+      />
+
+      <Text size="xs" c="dimmed" ta="right">
+        アイコンで並べ替え
+      </Text>
+    </Stack>
+  )
+}

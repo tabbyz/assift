@@ -87,24 +87,14 @@ export function TenantShell({ tenant, tenants, email, children }: Props) {
               <MenuDropdown>
                 <MenuLabel>基本設定</MenuLabel>
                 {settings.map((link) => (
-                  <MenuItem
-                    key={link.href}
-                    component={Link}
-                    href={link.href}
-                    prefetch={link.pending ? false : undefined}
-                  >
+                  <MenuItem key={link.href} component={Link} href={link.href}>
                     {link.label}
                   </MenuItem>
                 ))}
                 <MenuDivider />
                 <MenuLabel>アサイン設定</MenuLabel>
                 {assign.map((link) => (
-                  <MenuItem
-                    key={link.href}
-                    component={Link}
-                    href={link.href}
-                    prefetch={link.pending ? false : undefined}
-                  >
+                  <MenuItem key={link.href} component={Link} href={link.href}>
                     {link.label}
                   </MenuItem>
                 ))}
@@ -146,7 +136,6 @@ export function TenantShell({ tenant, tenants, email, children }: Props) {
                 key={link.href}
                 component={Link}
                 href={link.href}
-                prefetch={link.pending ? false : undefined}
                 label={link.label}
                 active={pathname === link.href}
               />
@@ -160,7 +149,6 @@ export function TenantShell({ tenant, tenants, email, children }: Props) {
                 key={link.href}
                 component={Link}
                 href={link.href}
-                prefetch={link.pending ? false : undefined}
                 label={link.label}
                 active={pathname === link.href}
               />

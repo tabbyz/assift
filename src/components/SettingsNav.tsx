@@ -30,7 +30,6 @@ export function SettingsNav({ tenantId }: { tenantId: string }) {
           key={link.href}
           component={Link}
           href={link.href}
-          prefetch={link.pending ? false : undefined}
           label={link.label}
           active={pathname === link.href}
         />
@@ -44,7 +43,6 @@ export function SettingsNav({ tenantId }: { tenantId: string }) {
           key={link.href}
           component={Link}
           href={link.href}
-          prefetch={link.pending ? false : undefined}
           label={link.label}
           active={pathname === link.href}
         />
