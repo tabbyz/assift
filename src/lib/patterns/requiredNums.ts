@@ -40,3 +40,11 @@ export const requiredNumsSchema = z.partialRecord(
       error: `必要人数は${REQUIRED_NUM_MIN}〜${REQUIRED_NUM_MAX}で入力してください`,
     })
 )
+
+/**
+ * その曜日 / 祝日のデフォルト必要人数。設定が無ければ 0（v1 の `nums[key] || 0`）。
+ * シフト表の「デフォルト人数をセット」（007 §3.6）と日別モーダルが使う。
+ */
+export function defaultRequiredNum(value: RequiredNumsByDay, key: DayKey): number {
+  return value[key] ?? 0
+}

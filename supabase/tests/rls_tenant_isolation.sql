@@ -5,7 +5,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(38);
+select plan(68);
 
 -- ---------------------------------------------------------------------------
 -- 準備（postgres として実行。RLS はテーブル所有者には適用されない）
@@ -19,6 +19,9 @@ select plan(38);
 \set staff_b '''bbbbbbbb-2222-0000-0000-00000000000b'''
 \set pattern_a '''aaaaaaaa-3333-0000-0000-00000000000a'''
 \set pattern_b '''bbbbbbbb-3333-0000-0000-00000000000b'''
+-- assign_shift（007 §5.2）用。A の「夜勤 → 明け」のペア
+\set pattern_a_night '''aaaaaaaa-3333-0000-0000-00000000001a'''
+\set pattern_a_after '''aaaaaaaa-3333-0000-0000-00000000002a'''
 
 insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
   raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
@@ -41,6 +44,16 @@ insert into public.patterns (id, tenant_id, name) values (:pattern_a, :tenant_a,
 insert into public.staffs (id, tenant_id, name, position)
 values (:staff_a, :tenant_a, 'Aの人', 0), (:staff_a2, :tenant_a, 'Aの人2', 1), (:staff_b, :tenant_b, 'Bの人', 0);
 insert into public.staff_patterns (tenant_id, staff_id, pattern_id) values (:tenant_b, :staff_b, :pattern_b);
+
+-- B のシフト表のデータ（A から見えないことを確認するため。007 §5.2）
+-- 日付は 2026-10-01。既存の「複合 FK 違反」テストが staff_b の 2026-09-17 に INSERT するので、
+-- 同じ日にすると unique (staff_id, date) が先に出て 23503 を隠してしまう
+insert into public.shifts (tenant_id, staff_id, pattern_id, date)
+values (:tenant_b, :staff_b, :pattern_b, '2026-10-01');
+insert into public.required_nums (tenant_id, pattern_id, date, num)
+values (:tenant_b, :pattern_b, '2026-09-17', 2);
+insert into public.date_notes (tenant_id, date, note)
+values (:tenant_b, '2026-09-17', 'B の予定');
 
 -- ---------------------------------------------------------------------------
 -- ユーザー A になりすます
@@ -104,6 +117,36 @@ select throws_ok(
   '自テナント配下に他テナントの staff を混ぜると複合 FK 違反'
 );
 
+-- シフト表の 3 テーブル（007）。B の行は 1 件も見えない
+select is((select count(*) from public.shifts), 0::bigint, 'B の shifts は見えない');
+select is((select count(*) from public.required_nums), 0::bigint, 'B の required_nums は見えない');
+select is((select count(*) from public.date_notes), 0::bigint, 'B の date_notes は見えない');
+
+-- 007 で初めて書き込むテーブルなので、INSERT 側の境界も固定する
+select throws_ok(
+  format($$insert into public.required_nums (tenant_id, pattern_id, date, num) values (%L, %L, '2026-09-17', 1)$$,
+    'bbbbbbbb-1111-0000-0000-00000000000b', 'bbbbbbbb-3333-0000-0000-00000000000b'),
+  '42501',
+  null,
+  '別テナントの required_nums は追加できない'
+);
+select throws_ok(
+  format($$insert into public.date_notes (tenant_id, date, note) values (%L, '2026-09-18', 'のっとり')$$,
+    'bbbbbbbb-1111-0000-0000-00000000000b'),
+  '42501',
+  null,
+  '別テナントの date_notes は追加できない'
+);
+-- 自テナントの tenant_id に他テナントの pattern を混ぜると複合 FK で落ちる（007 §3.6）。
+-- 日付は B の fixture（2026-09-17）と別にする。同じ日だと unique (pattern_id, date) が先に出る
+select throws_ok(
+  format($$insert into public.required_nums (tenant_id, pattern_id, date, num) values (%L, %L, '2026-11-03', 1)$$,
+    'aaaaaaaa-1111-0000-0000-00000000000a', 'bbbbbbbb-3333-0000-0000-00000000000b'),
+  '23503',
+  null,
+  'required_nums に他テナントの pattern を混ぜると複合 FK 違反'
+);
+
 -- ---------------------------------------------------------------------------
 -- reorder_positions（006 §5.1）: security invoker なので RLS がそのまま効く
 -- ---------------------------------------------------------------------------
@@ -165,6 +208,182 @@ select throws_ok(
   '重複した id は例外（unnest で 2 回当たるが更新は 1 行）'
 );
 
+-- ---------------------------------------------------------------------------
+-- assign_shift（007 §3.2 / §5.2）: 1 トランザクションで既存削除 → ペア処理 → 作成
+--
+-- ペアのパターンは A 自身が作る（pair_pattern_id は複合 FK なので INSERT 後に UPDATE で張る）。
+-- ---------------------------------------------------------------------------
+insert into public.patterns (id, tenant_id, name)
+values (:pattern_a_night, :tenant_a, '夜勤'), (:pattern_a_after, :tenant_a, '明け');
+update public.patterns set pair_pattern_id = :pattern_a_after where id = :pattern_a_night;
+
+-- 1. 空のセルにアサインする
+select lives_ok(
+  format($$select public.assign_shift(%L, %L, '2026-09-17', false, %L)$$,
+    'aaaaaaaa-1111-0000-0000-00000000000a',
+    'aaaaaaaa-2222-0000-0000-00000000000a',
+    'aaaaaaaa-3333-0000-0000-00000000000a'),
+  'assign_shift: 空のセルにアサインできる'
+);
+select is(
+  (select pattern_id from public.shifts where staff_id = :staff_a and date = '2026-09-17'),
+  :pattern_a::uuid,
+  'assign_shift: 渡したパターンで 1 行できる'
+);
+
+-- 2. ペアを持つパターン（夜勤）をセットすると翌日に明けが入る。fixed も引き継ぐ
+select lives_ok(
+  format($$select public.assign_shift(%L, %L, '2026-09-17', true, %L)$$,
+    'aaaaaaaa-1111-0000-0000-00000000000a',
+    'aaaaaaaa-2222-0000-0000-00000000000a',
+    'aaaaaaaa-3333-0000-0000-00000000001a'),
+  'assign_shift: ペアを持つパターンをセットできる'
+);
+select is(
+  (select array_agg(p.name order by s.date)
+     from public.shifts s join public.patterns p on p.id = s.pattern_id
+    where s.staff_id = :staff_a and s.date in ('2026-09-17', '2026-09-18')),
+  array['夜勤', '明け'],
+  'assign_shift: 翌日にペアのパターンが入る'
+);
+select is(
+  (select bool_and(fixed) from public.shifts
+    where staff_id = :staff_a and date in ('2026-09-17', '2026-09-18')),
+  true,
+  'assign_shift: ペアの fixed も同じ値になる'
+);
+
+-- 3. 翌日を手で別のパターンにしてから夜勤を外す → 翌日は残る（v1 からの改善。001 §4.4）
+select lives_ok(
+  format($$select public.assign_shift(%L, %L, '2026-09-18', false, %L)$$,
+    'aaaaaaaa-1111-0000-0000-00000000000a',
+    'aaaaaaaa-2222-0000-0000-00000000000a',
+    'aaaaaaaa-3333-0000-0000-00000000000a'),
+  'assign_shift: 翌日を別のパターンで上書きできる'
+);
+select lives_ok(
+  format($$select public.assign_shift(%L, %L, '2026-09-17', false)$$,
+    'aaaaaaaa-1111-0000-0000-00000000000a',
+    'aaaaaaaa-2222-0000-0000-00000000000a'),
+  'assign_shift: p_pattern_id を省くとアサインを外せる'
+);
+select is(
+  (select pattern_id from public.shifts where staff_id = :staff_a and date = '2026-09-18'),
+  :pattern_a::uuid,
+  'assign_shift: 翌日がペア以外のパターンなら残る'
+);
+select is(
+  (select count(*) from public.shifts where staff_id = :staff_a and date = '2026-09-17'),
+  0::bigint,
+  'assign_shift: 外した当日は消える'
+);
+
+-- 4. 翌日がペアのパターンのまま外す → 翌日も消える（v1 と同じ）
+select lives_ok(
+  format($$select public.assign_shift(%L, %L, '2026-09-17', false, %L)$$,
+    'aaaaaaaa-1111-0000-0000-00000000000a',
+    'aaaaaaaa-2222-0000-0000-00000000000a',
+    'aaaaaaaa-3333-0000-0000-00000000001a'),
+  'assign_shift: 夜勤を入れ直す（翌日は明けで上書きされる）'
+);
+select lives_ok(
+  format($$select public.assign_shift(%L, %L, '2026-09-17', false)$$,
+    'aaaaaaaa-1111-0000-0000-00000000000a',
+    'aaaaaaaa-2222-0000-0000-00000000000a'),
+  'assign_shift: 夜勤を外す'
+);
+select is(
+  (select count(*) from public.shifts
+    where staff_id = :staff_a and date in ('2026-09-17', '2026-09-18')),
+  0::bigint,
+  'assign_shift: 翌日がペアのパターンなら一緒に消える'
+);
+
+-- 4b / 4c. 「空」ではなく別のパターンで置き換える経路（applyAssign.test.ts の 4b / 4c と対応）。
+-- ペアの後片付けは非 null の分岐でも同じように働く
+select lives_ok(
+  format($$select public.assign_shift(%L, %L, '2026-09-17', false, %L)$$,
+    'aaaaaaaa-1111-0000-0000-00000000000a',
+    'aaaaaaaa-2222-0000-0000-00000000000a',
+    'aaaaaaaa-3333-0000-0000-00000000001a'),
+  'assign_shift: 夜勤を入れ直す（4b の準備）'
+);
+select lives_ok(
+  format($$select public.assign_shift(%L, %L, '2026-09-17', false, %L)$$,
+    'aaaaaaaa-1111-0000-0000-00000000000a',
+    'aaaaaaaa-2222-0000-0000-00000000000a',
+    'aaaaaaaa-3333-0000-0000-00000000000a'),
+  'assign_shift: 夜勤を早番で置き換えられる'
+);
+select is(
+  (select array_agg(p.name order by s.date)
+     from public.shifts s join public.patterns p on p.id = s.pattern_id
+    where s.staff_id = :staff_a and s.date in ('2026-09-17', '2026-09-18')),
+  array['早番'],
+  'assign_shift: 別のパターンで置き換えても翌日のペアは消える'
+);
+-- 翌日がペア以外なら残る（置き換えの場合も）
+select lives_ok(
+  format($$select public.assign_shift(%L, %L, '2026-09-18', false, %L)$$,
+    'aaaaaaaa-1111-0000-0000-00000000000a',
+    'aaaaaaaa-2222-0000-0000-00000000000a',
+    'aaaaaaaa-3333-0000-0000-00000000000a'),
+  'assign_shift: 翌日に早番を置く（4c の準備）'
+);
+select lives_ok(
+  format($$select public.assign_shift(%L, %L, '2026-09-17', false, %L)$$,
+    'aaaaaaaa-1111-0000-0000-00000000000a',
+    'aaaaaaaa-2222-0000-0000-00000000000a',
+    'aaaaaaaa-3333-0000-0000-00000000001a'),
+  'assign_shift: 当日を夜勤にする（翌日の早番はペアではない）'
+);
+select is(
+  (select array_agg(p.name order by s.date)
+     from public.shifts s join public.patterns p on p.id = s.pattern_id
+    where s.staff_id = :staff_a and s.date in ('2026-09-17', '2026-09-18')),
+  array['夜勤', '明け'],
+  'assign_shift: ペアのセットは翌日を上書きする（早番 → 明け）'
+);
+select lives_ok(
+  format($$select public.assign_shift(%L, %L, '2026-09-17', false)$$,
+    'aaaaaaaa-1111-0000-0000-00000000000a',
+    'aaaaaaaa-2222-0000-0000-00000000000a'),
+  'assign_shift: 片付ける（次のテストのため）'
+);
+
+-- 5. 何も無いセルを外しても例外にならない
+select lives_ok(
+  format($$select public.assign_shift(%L, %L, '2026-12-31', false)$$,
+    'aaaaaaaa-1111-0000-0000-00000000000a',
+    'aaaaaaaa-2222-0000-0000-00000000000a'),
+  'assign_shift: 何も無いセルを外しても例外にならない'
+);
+
+-- 6 / 7. 他テナントの id は RLS で見えないので not found（存在を漏らさない）
+select throws_ok(
+  format($$select public.assign_shift(%L, %L, '2026-09-17', false, %L)$$,
+    'aaaaaaaa-1111-0000-0000-00000000000a',
+    'bbbbbbbb-2222-0000-0000-00000000000b',
+    'aaaaaaaa-3333-0000-0000-00000000000a'),
+  'P0001',
+  'assign_shift: staff not found',
+  'assign_shift: 他テナントの staff_id は not found'
+);
+select throws_ok(
+  format($$select public.assign_shift(%L, %L, '2026-09-17', false, %L)$$,
+    'aaaaaaaa-1111-0000-0000-00000000000a',
+    'aaaaaaaa-2222-0000-0000-00000000000a',
+    'bbbbbbbb-3333-0000-0000-00000000000b'),
+  'P0001',
+  'assign_shift: pattern not found',
+  'assign_shift: 他テナントの pattern_id は not found'
+);
+select is(
+  (select count(*) from public.shifts where staff_id = :staff_a and date = '2026-09-17'),
+  0::bigint,
+  'assign_shift: not found で失敗した呼び出しは 1 行も作らない'
+);
+
 -- TRUNCATE は RLS を通らないので、権限の層で止める（003 §3.3）
 select throws_ok('truncate public.staffs', '42501', null, 'authenticated に TRUNCATE 権限はない');
 
@@ -192,6 +411,10 @@ select throws_ok('select private.owned_tenant_ids()', '42501', null, 'anon は p
 select throws_ok(
   $$select public.reorder_positions('staffs', 'aaaaaaaa-1111-0000-0000-00000000000a', array['aaaaaaaa-2222-0000-0000-00000000000a']::uuid[])$$,
   '42501', null, 'anon は reorder_positions を実行できない'
+);
+select throws_ok(
+  $$select public.assign_shift('aaaaaaaa-1111-0000-0000-00000000000a', 'aaaaaaaa-2222-0000-0000-00000000000a', '2026-09-17', false)$$,
+  '42501', null, 'anon は assign_shift を実行できない'
 );
 
 -- Supabase の ALTER DEFAULT PRIVILEGES は新しい public の関数にも anon の EXECUTE を付ける。

@@ -1,0 +1,32 @@
+/* パターン選択ボタン（v1 `ul.pattern-list li .pattern-button`）。40px 角の枠線ボタン */
+.patternButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 40px;
+  height: 2.5rem;
+  padding: 2px;
+  overflow: hidden;
+  font-size: var(--mantine-font-size-xs);
+  line-height: 1.1;
+  word-break: break-all;
+  border: 2px solid var(--mantine-color-default-border);
+  border-radius: 2px;
+  background-color: var(--mantine-color-body);
+}
+
+.patternButton:hover {
+  background-color: var(--mantine-color-default-hover);
+}
+
+/* 「空」ボタン（v1 は Bulma の is-light）。名前が無いので、薄い塗りでボタンだと分かるようにする */
+.emptyButton {
+  /* --mantine-color-default はライトテーマだと白なので、セルの「担当可」と同じ変数を使う */
+  background-color: var(--mantine-color-default-hover);
+  border-color: var(--mantine-color-default-border);
+}
+
+.emptyButton:hover {
+  background-color: var(--mantine-color-gray-3);
+}

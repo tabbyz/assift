@@ -28,3 +28,11 @@ export type PatternColorHex = (typeof PATTERN_COLORS)[number]['hex']
 
 /** 色未設定のパターンはこの色で描く */
 export const DEFAULT_PATTERN_COLOR: PatternColorHex = '#FFFFFF'
+
+/**
+ * 確定シフトの文字色（v1 の `style_shift_text_color`）。
+ * パターン色で塗った上に白文字を載せるが、白いパターンだけは既定の文字色のままにする。
+ */
+export function fixedTextColor(colorHex: string): string | undefined {
+  return colorHex.toUpperCase() === '#FFFFFF' ? undefined : '#FFFFFF'
+}

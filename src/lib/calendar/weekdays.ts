@@ -1,3 +1,5 @@
+import { wday } from './dateString'
+
 /** 曜日。0 = 日曜（v1 の `start_of_week` と `available_wdays` の値に合わせる） */
 export const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'] as const
 
@@ -34,4 +36,18 @@ export function dayKeyColor(key: DayKey): string | undefined {
   if (key === '0' || key === 'holiday') return 'red'
   if (key === '6') return 'blue'
   return undefined
+}
+
+/**
+ * その日に使う曜日別設定のキー。祝日は曜日より優先する（v1 の
+ * `date.holiday? ? "holiday" : date.wday.to_s`）。
+ *
+ * 勤務パターンのデフォルト必要人数とスタッフのデフォルト勤務パターンが共有する。
+ * 祝日かどうかの判定は呼び出し側から渡す（祝日データは Server だけが持つ。007 §3.8）。
+ */
+export function dayKeyFor(date: string, isHoliday: boolean): DayKey {
+  if (isHoliday) return 'holiday'
+  const key = String(wday(date))
+  // wday() は 0..6 しか返さないが、型の上で DayKey に絞る
+  return (DAY_KEYS as readonly string[]).includes(key) ? (key as DayKey) : '0'
 }

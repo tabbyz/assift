@@ -61,7 +61,9 @@ src/
     migration/v1Ids.ts            v1 の ID → uuid v5（旧 URL 解決と 012 が共有）
     tenants/                      旧 URL の書き換え・直近店舗 cookie の純関数
     queries/                      読み取り（Server から呼ぶ）
-    <domain>/                     ドメインロジック（calendar, patterns, pdf, csv ...）
+    <domain>/                     ドメインロジック（calendar, patterns, shifts, pdf, csv ...）
+    calendar/                     dateString（YYYY-MM-DD の道具。dayjs はここだけ）/ dateRange / today / weekdays / holidays（server-only）
+    shifts/                       key（セルの Map）/ applyAssign（楽観更新。assign_shift と同じ規則）/ satisfaction（必要人数の充足）
     actions/reorder.ts              reorder_positions RPC の共通ラッパ（staffs / patterns / restrictions）
     supabase/createPrivilegedClient.ts   service_role の唯一の入口
     validation/                   Zod スキーマ
@@ -149,7 +151,16 @@ startTransition(async () => {
 })
 ```
 
-流れ: `runAction` → guard → Zod → `createClient()`（anon + RLS）→ `revalidatePath`。
+流れ: `runAction` → guard → Zod → `createClient()`（anon + RLS）→ `revalidatePath` / `refresh`。
+
+書き込み後の再描画は 2 通りに分ける（007 §3.5）。
+
+| 使うもの                                    | 対象                                                           | 理由                                                                                                                                           |
+| ------------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `revalidatePath('/tenants/<id>', 'layout')` | 設定・店舗・アカウント                                         | その変更はシフト表など他のページの描画にも影響する                                                                                             |
+| `refresh()`（`next/cache`）                 | シフト表の中で完結する書き込み（アサイン・必要人数・日付メモ） | 現在のルートだけ再描画する。`revalidatePath` は訪問済みの全ページを次回訪問時に refresh する副作用があり、1 画面で何十回も呼ぶアサインには重い |
+
+`refresh()` を呼んだ Action の応答は「戻り値 + 現在ルートの RSC」を 1 本のストリームで返すので、`useOptimistic` の transition はその描画で終わる。
 
 `service_role` は `createPrivilegedClient()` のみ。ユーザー文脈の Action では使わない。用途は公開共有ページの読み取り、ジョブ、管理操作に限る。
 
@@ -256,7 +267,11 @@ PK は uuid（`gen_random_uuid()`）。v1 から移行する行は `uuidv5('<tab
 
 ### RPC（`supabase/schemas/public/functions.sql`）
 
-複数行を 1 文で書き換える必要があるときだけ足す（現在は並べ替えの `reorder_positions` のみ）。単純な CRUD は PostgREST のまま。
+複数行を 1 文で書き換える必要があるときだけ足す（現在は並べ替えの `reorder_positions` と、シフトのアサインの `assign_shift`）。単純な CRUD は PostgREST のまま。
+
+`assign_shift` は「既存削除 → ペアの翌日を処理 → 作成 → ペアを翌日に上書き」を 1 トランザクションで行う（007 §3.2）。
+分けると「本体は消えたがペアは残る」が起きる。**引数に null を渡す必要があるものは `default null` にする**:
+`supabase gen types` は既定値の無い引数を必須の非 null（`p_x: string`）で出すので、省略可能にしないと null を渡せない。
 
 - **`security invoker`** にする。テーブルの RLS がそのまま効き、他テナントの行は更新対象から外れる
 - 「何行更新したか」を `get diagnostics` で数え、期待と違えば `raise exception`（= ロールバック）。
@@ -287,6 +302,8 @@ PK は uuid（`gen_random_uuid()`）。v1 から移行する行は `uuidv5('<tab
 ## テスト
 
 - 純関数（期間計算、ペア処理、コピー、CSV 生成、Zod スキーマ）は同じディレクトリに `*.test.ts`
+- **日付の検証は `isDateString()`（`lib/calendar/dateString.ts`）を使う。** dayjs は存在しない日付を黙って繰り上げる（`2026-02-30` → 3/2、`2026-13-01` → 2027/1/1）ので、`dayjs(v).isValid()` では弾けない
+- 祝日（`@holiday-jp/holiday_jp`）は **`lib/calendar/holidays.ts`（`server-only`）だけ**で使う。データが 1.4MB あるのでクライアントに送らず、Server が期間分の日付配列にして渡す
 - `server-only` は `vitest.config.ts` で Next 同梱の空モジュールに alias 済み
 - RLS は `supabase/tests/*.sql`（pgTAP）で `npx supabase test db`
 - コンポーネントテスト / E2E は必要になってから足す

@@ -71,3 +71,28 @@ export async function getStaffWithRelations(
     defaultPatterns,
   }
 }
+
+/** シフト表が使う在籍スタッフ（選択可能なパターン付き）。ポップオーバーの絞り込みに使う */
+export type StaffWithPatternIds = Staff & { patternIds: string[] }
+
+/**
+ * 在籍スタッフ + 選択可能な勤務パターンの id（表示順）。
+ * 複合 FK でも PostgREST の埋め込みが解決できるので 1 往復（006 §5.3 と同じ）。
+ */
+export async function listActiveStaffsWithPatternIds(
+  tenantId: string
+): Promise<StaffWithPatternIds[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('staffs')
+    .select('*, staff_patterns(pattern_id)')
+    .eq('tenant_id', tenantId)
+    .is('retired_at', null)
+    .order('position', { ascending: true })
+  if (error) throw error
+
+  return data.map(({ staff_patterns, ...staff }) => ({
+    ...staff,
+    patternIds: staff_patterns.map((row) => row.pattern_id),
+  }))
+}

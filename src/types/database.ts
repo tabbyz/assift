@@ -523,6 +523,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      assign_shift: {
+        Args: {
+          p_date: string
+          p_fixed: boolean
+          p_pattern_id?: string
+          p_staff_id: string
+          p_tenant_id: string
+        }
+        Returns: undefined
+      }
       reorder_positions: {
         Args: { p_ids: string[]; p_table: string; p_tenant_id: string }
         Returns: undefined
