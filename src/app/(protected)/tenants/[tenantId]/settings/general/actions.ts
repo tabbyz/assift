@@ -8,10 +8,12 @@ import type { ActionResult } from '@/lib/actions/result'
 import { runAction } from '@/lib/actions/run'
 import type { ShiftCycle } from '@/lib/calendar/shiftCycle'
 import { CURRENT_TENANT_COOKIE } from '@/lib/tenants/currentTenant'
-import { deleteTenantSchema, updateTenantSchema } from '@/lib/validation/tenants'
+import {
+  deleteTenantSchema,
+  updateTenantSchema,
+  TENANT_NOT_FOUND_MESSAGE,
+} from '@/lib/validation/tenants'
 import { createClient } from '@/utils/supabase/server'
-
-const NOT_FOUND_MESSAGE = '店舗が見つかりません'
 
 /** 店舗情報を更新する。ヘッダーの店舗名も変わるので layout ごと再検証する */
 export async function updateTenant(input: {
@@ -34,7 +36,7 @@ export async function updateTenant(input: {
       .maybeSingle()
     if (error) throw error
     // RLS で見えない行の UPDATE はエラーにならず 0 行で終わる。成功と区別する
-    if (!data) fail(NOT_FOUND_MESSAGE)
+    if (!data) fail(TENANT_NOT_FOUND_MESSAGE)
 
     revalidatePath(`/tenants/${tenantId}`, 'layout')
   })
@@ -57,7 +59,7 @@ export async function deleteTenant(input: {
       .select('id')
       .maybeSingle()
     if (error) throw error
-    if (!data) fail(NOT_FOUND_MESSAGE)
+    if (!data) fail(TENANT_NOT_FOUND_MESSAGE)
 
     // 消した店舗を「直近」に残さない（残っても /tenants が一覧と突き合わせて落とす）
     const cookieStore = await cookies()

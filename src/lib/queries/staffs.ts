@@ -1,6 +1,6 @@
 import 'server-only'
-import type { DayKey } from '@/lib/calendar/weekdays'
-import { DAY_KEYS } from '@/lib/calendar/weekdays'
+import { isDayKey, type DayKey } from '@/lib/calendar/weekdays'
+import type { StaffDefaults } from '@/lib/shifts/planDefaultPatterns'
 import type { Tables } from '@/types/database'
 import { createClient } from '@/utils/supabase/server'
 
@@ -38,7 +38,16 @@ export async function listRetiredStaffs(tenantId: string): Promise<Staff[]> {
   return data
 }
 
-const isDayKey = (value: string): value is DayKey => (DAY_KEYS as readonly string[]).includes(value)
+/** `staff_default_patterns` の行を `{ day_key → pattern_id }` に畳む。知らないキーは捨てる */
+function toDefaultPatterns(
+  rows: { day_key: string; pattern_id: string }[]
+): Partial<Record<DayKey, string>> {
+  const defaults: Partial<Record<DayKey, string>> = {}
+  for (const row of rows) {
+    if (isDayKey(row.day_key)) defaults[row.day_key] = row.pattern_id
+  }
+  return defaults
+}
 
 /**
  * 編集フォーム用に 1 件 + 関連を読む。複合 FK でも PostgREST の埋め込みが解決できるので 1 往復（006 §5.3）。
@@ -59,16 +68,10 @@ export async function getStaffWithRelations(
   if (!data) return null
 
   const { staff_patterns, staff_default_patterns, ...staff } = data
-
-  const defaultPatterns: Partial<Record<DayKey, string>> = {}
-  for (const row of staff_default_patterns) {
-    if (isDayKey(row.day_key)) defaultPatterns[row.day_key] = row.pattern_id
-  }
-
   return {
     ...staff,
     patternIds: staff_patterns.map((row) => row.pattern_id),
-    defaultPatterns,
+    defaultPatterns: toDefaultPatterns(staff_default_patterns),
   }
 }
 
@@ -94,5 +97,44 @@ export async function listActiveStaffsWithPatternIds(
   return data.map(({ staff_patterns, ...staff }) => ({
     ...staff,
     patternIds: staff_patterns.map((row) => row.pattern_id),
+  }))
+}
+
+/**
+ * 在籍スタッフの id だけ。順序は保証しない（パターン作成時の紐付けなど、集合として使う）。
+ * 名前や勤務曜日は要らないので `select('*')` にしない。
+ */
+export async function listActiveStaffIds(tenantId: string): Promise<string[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('staffs')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .is('retired_at', null)
+  if (error) throw error
+  return data.map((staff) => staff.id)
+}
+
+/**
+ * デフォルト勤務パターンを 1 つ以上持つ在籍スタッフ（008 §5.1）。
+ *
+ * `!inner` で「設定のあるスタッフだけ」を DB 側で絞る（100 人の店舗で設定が数人なら、空の配列 90 個を運ばない）。
+ * `planDefaultPatterns()` が使う列だけを読む。複合 FK でも PostgREST の埋め込みが解決できるので 1 往復（006 §5.3 と同じ）。
+ */
+export async function listActiveStaffsWithDefaultPatterns(
+  tenantId: string
+): Promise<StaffDefaults[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('staffs')
+    .select('id, staff_default_patterns!inner(day_key, pattern_id)')
+    .eq('tenant_id', tenantId)
+    .is('retired_at', null)
+    .order('position', { ascending: true })
+  if (error) throw error
+
+  return data.map((staff) => ({
+    id: staff.id,
+    defaults: toDefaultPatterns(staff.staff_default_patterns),
   }))
 }

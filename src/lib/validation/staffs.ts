@@ -9,7 +9,9 @@ export const STAFF_NAME_MAX_LENGTH = 10
 export const MAX_WORK_WEEK_MIN = 0
 export const MAX_WORK_WEEK_MAX = 7
 
-export const staffIdSchema = z.guid({ error: 'スタッフが見つかりません' })
+export const STAFF_NOT_FOUND_MESSAGE = 'スタッフが見つかりません'
+
+export const staffIdSchema = z.guid({ error: STAFF_NOT_FOUND_MESSAGE })
 
 export const staffNameSchema = z
   .string({ error: 'スタッフ名を入力してください' })

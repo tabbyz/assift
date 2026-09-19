@@ -13,10 +13,10 @@ import {
   createPatternSchema,
   deletePatternSchema,
   updatePatternSchema,
+  PATTERN_NOT_FOUND_MESSAGE,
 } from '@/lib/validation/patterns'
+import { listActiveStaffIds } from '@/lib/queries/staffs'
 import { createClient } from '@/utils/supabase/server'
-
-const NOT_FOUND_MESSAGE = '勤務パターンが見つかりません'
 
 export type PatternInput = {
   tenantId: string
@@ -61,7 +61,10 @@ export async function createPattern(input: PatternInput): Promise<ActionResult<{
     await requireUser()
 
     const supabase = await createClient()
-    const position = await nextPosition(supabase, 'patterns', tenantId)
+    const [position, staffIds] = await Promise.all([
+      nextPosition(supabase, 'patterns', tenantId),
+      listActiveStaffIds(tenantId),
+    ])
 
     const { data: pattern, error } = await supabase
       .from('patterns')
@@ -70,18 +73,11 @@ export async function createPattern(input: PatternInput): Promise<ActionResult<{
       .single()
     if (error) throw error
 
-    const { data: staffs, error: staffsError } = await supabase
-      .from('staffs')
-      .select('id')
-      .eq('tenant_id', tenantId)
-      .is('retired_at', null)
-    if (staffsError) throw staffsError
-
-    if (staffs.length > 0) {
+    if (staffIds.length > 0) {
       const { error: linkError } = await supabase.from('staff_patterns').insert(
-        staffs.map((staff) => ({
+        staffIds.map((staffId) => ({
           tenant_id: tenantId,
-          staff_id: staff.id,
+          staff_id: staffId,
           pattern_id: pattern.id,
         }))
       )
@@ -111,7 +107,7 @@ export async function updatePattern(
       .maybeSingle()
     if (error) throw error
     // RLS で見えない行の UPDATE はエラーにならず 0 行で終わる。成功と区別する
-    if (!data) fail(NOT_FOUND_MESSAGE)
+    if (!data) fail(PATTERN_NOT_FOUND_MESSAGE)
 
     revalidatePath(`/tenants/${tenantId}`, 'layout')
   })
@@ -135,7 +131,7 @@ export async function deletePattern(input: {
       .select('id')
       .maybeSingle()
     if (error) throw error
-    if (!data) fail(NOT_FOUND_MESSAGE)
+    if (!data) fail(PATTERN_NOT_FOUND_MESSAGE)
 
     revalidatePath(`/tenants/${tenantId}`, 'layout')
     return { redirectTo: `/tenants/${tenantId}/settings/patterns` }

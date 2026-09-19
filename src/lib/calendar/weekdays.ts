@@ -49,5 +49,10 @@ export function dayKeyFor(date: string, isHoliday: boolean): DayKey {
   if (isHoliday) return 'holiday'
   const key = String(wday(date))
   // wday() は 0..6 しか返さないが、型の上で DayKey に絞る
-  return (DAY_KEYS as readonly string[]).includes(key) ? (key as DayKey) : '0'
+  return isDayKey(key) ? key : '0'
+}
+
+/** `day_key` 列など、外から来た文字列を DayKey に絞る */
+export function isDayKey(value: string): value is DayKey {
+  return (DAY_KEYS as readonly string[]).includes(value)
 }

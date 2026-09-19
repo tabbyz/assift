@@ -63,7 +63,7 @@ src/
     queries/                      読み取り（Server から呼ぶ）
     <domain>/                     ドメインロジック（calendar, patterns, shifts, pdf, csv ...）
     calendar/                     dateString（YYYY-MM-DD の道具。dayjs はここだけ）/ dateRange / today / weekdays / holidays（server-only）
-    shifts/                       key（セルの Map）/ applyAssign（楽観更新。assign_shift と同じ規則）/ satisfaction（必要人数の充足）
+    shifts/                       key（セルの Map）/ applyAssign（楽観更新。assign_shift と同じ規則）/ satisfaction（必要人数の充足）/ count（集計）/ planDefaultPatterns（デフォルト勤務パターンの行を組む純関数）
     actions/reorder.ts              reorder_positions RPC の共通ラッパ（staffs / patterns / restrictions）
     supabase/createPrivilegedClient.ts   service_role の唯一の入口
     validation/                   Zod スキーマ
@@ -267,7 +267,29 @@ PK は uuid（`gen_random_uuid()`）。v1 から移行する行は `uuidv5('<tab
 
 ### RPC（`supabase/schemas/public/functions.sql`）
 
-複数行を 1 文で書き換える必要があるときだけ足す（現在は並べ替えの `reorder_positions` と、シフトのアサインの `assign_shift`）。単純な CRUD は PostgREST のまま。
+複数行を 1 文で書き換える必要があるときだけ足す（現在は並べ替えの `reorder_positions`、シフトのアサインの `assign_shift`、
+一括操作の `set_shifts_fixed` / `clear_draft_shifts`、コピーの `copy_shifts`）。単純な CRUD は PostgREST のまま。
+
+一括の書き込みでも、1 文で書けるなら RPC にしない。ただし **PostgREST の UPDATE / DELETE は別テーブルの条件で絞れない**
+（「在籍スタッフの行だけ」は `staffs` との join）。そこで id を URL に並べて分割するのは回避策の積み重ねになるので、RPC にする（008 §10.13）。
+「既にある行は触らない」INSERT は **`upsert(rows, { onConflict: '…', ignoreDuplicates: true })`**（= `on conflict do nothing`）で足りる。
+行の組み立てに app だけが持つ知識（祝日など）が要るものは TS の純関数（`lib/shifts/planDefaultPatterns`）に置いて Vitest で固定し、
+DB の行から DB の行を作るだけのもの（コピー）は `insert ... select` の RPC にする。
+
+**UPDATE / DELETE の RLS 違反は例外ではなく「0 行」**になる。書き込んだあとに 0 行の理由を切り分けるのではなく、
+テナント配下の Action は先に `requireTenant()` で店舗を確かめ、以降の 0 行は「対象が無かった」の一意味にする（下記）。
+
+**読み取りは `max_rows`（`config.toml` で 1000。Supabase クラウドの既定も同じ）で黙って切られる。**
+行数が「スタッフ数 × 日数」のように増えうるクエリは **`pageAll()`（`lib/queries/pageAll.ts`）を通す**（例: `listShifts`）。
+1 ページ目だけ `count: 'exact'` で総件数を受け取り、残りを `.range()` で並行に読む。呼び出し側は `.order()` を付けてページの境界を安定させる。
+切られても例外は出ないので、**気付けるのは件数を数えたときだけ**（シフト表が歯抜けになって初めて分かる、という壊れ方をする）。
+
+`.in('…', ids)` のような絞り込みは URL に載る。100 件で約 3.8KB、200 件を超えるとゲートウェイの上限に触れる。
+勤務パターン id のように高々 20 件程度のものは載せてよいが、スタッフ id のように増えるものは載せず、RPC で SQL 側に絞り込みを置く。
+
+テナント配下の Action は `requireUser()` の直後に **`requireTenant(tenantId)`**（`lib/actions/guards.ts`）を呼ぶ。
+先に店舗の可視性を確かめておけば、以降の「0 行」は「対象が無かった」の一意味になり、書き込んだあとに理由を切り分ける分岐が要らない。
+**RPC が先頭で `tenant not found` を投げる場合はそちらに任せ、TS 側では呼ばない**（`set_shifts_fixed` / `clear_draft_shifts` / `copy_shifts`。往復を 1 回にする）。
 
 `assign_shift` は「既存削除 → ペアの翌日を処理 → 作成 → ペアを翌日に上書き」を 1 トランザクションで行う（007 §3.2）。
 分けると「本体は消えたがペアは残る」が起きる。**引数に null を渡す必要があるものは `default null` にする**:

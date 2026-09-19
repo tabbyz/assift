@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   addDays,
   addMonths,
+  copyEnd,
   datesBetween,
   daysBetween,
   dayOfMonth,
+  diffDays,
   endOfMonth,
   formatJapaneseMonthDay,
   formatMonthDay,
@@ -82,6 +84,39 @@ describe('datesBetween / daysBetween', () => {
 
   it('end が start より前なら空', () => {
     expect(datesBetween('2026-09-18', '2026-09-17')).toEqual([])
+  })
+})
+
+describe('diffDays', () => {
+  it('符号付きの差。daysBetween（両端を含む）とは 1 ずれる', () => {
+    expect(diffDays('2026-09-01', '2026-09-01')).toBe(0)
+    expect(diffDays('2026-09-01', '2026-09-05')).toBe(4)
+    expect(daysBetween('2026-09-01', '2026-09-05')).toBe(5)
+  })
+
+  it('過去方向は負になる（コピーのオフセットで使う）', () => {
+    expect(diffDays('2026-09-01', '2026-08-30')).toBe(-2)
+  })
+
+  it('月・年をまたいでも日数で数える', () => {
+    expect(diffDays('2026-09-01', '2026-10-01')).toBe(30)
+    expect(diffDays('2026-12-31', '2027-01-01')).toBe(1)
+  })
+})
+
+describe('copyEnd', () => {
+  it('From の長さを To の開始日から伸ばす', () => {
+    expect(copyEnd('2026-09-01', '2026-09-30', '2026-10-01')).toBe('2026-10-30')
+  })
+  it('From が 1 日なら To の終了日は開始日と同じ', () => {
+    expect(copyEnd('2026-09-18', '2026-09-18', '2026-10-05')).toBe('2026-10-05')
+  })
+  it('日数で伸ばすので、月の長さが違っても From と同じ日数になる', () => {
+    // From は 10/1〜10/31 の 31 日間。11 月は 30 日しかないので To の終了日は 12/1 に伸びる
+    expect(copyEnd('2026-10-01', '2026-10-31', '2026-11-01')).toBe('2026-12-01')
+  })
+  it('過去へのコピーでも長さを保つ', () => {
+    expect(copyEnd('2026-09-01', '2026-09-30', '2026-08-01')).toBe('2026-08-30')
   })
 })
 

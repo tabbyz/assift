@@ -4,7 +4,14 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { ActionIcon, Anchor, Button, Group, Popover, Stack, Text, Tooltip } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
-import { IconCalendar, IconChevronLeft, IconChevronRight } from '@tabler/icons-react'
+import {
+  IconCalculator,
+  IconCalendar,
+  IconChevronLeft,
+  IconChevronRight,
+} from '@tabler/icons-react'
+import type { BulkKind } from '../_lib/bulkOperations'
+import { ToolsMenu } from './ToolsMenu'
 import { SHIFT_CYCLE_LABELS, type ShiftCycle } from '@/lib/calendar/shiftCycle'
 import { WEEKDAY_LABELS } from '@/lib/calendar/weekdays'
 import { formatMonthDay } from '@/lib/calendar/dateString'
@@ -18,12 +25,16 @@ type Props = {
   onPrev: () => void
   onNext: () => void
   onPickStart: (start: string) => void
+  onOpenCount: () => void
+  onBulk: (kind: BulkKind) => void
+  onSetDefaultPatterns: () => void
+  onOpenCopy: () => void
   disabled: boolean
 }
 
 /**
- * 期間ナビ（v1 `_select_term.html.slim`）。
- * 集計 / 共有 / ツールのボタンは 008〜010 で右側に足す（007 §3.4）。
+ * ツールバー（v1 `_toolbar.html.slim`）。
+ * 左が期間ナビ（007）、右が 集計 / ツール（008）。共有と PDF / CSV は 009 / 010 が間に足す。
  */
 export function Toolbar({
   tenantId,
@@ -33,6 +44,10 @@ export function Toolbar({
   onPrev,
   onNext,
   onPickStart,
+  onOpenCount,
+  onBulk,
+  onSetDefaultPatterns,
+  onOpenCopy,
   disabled,
 }: Props) {
   const [opened, setOpened] = useState(false)
@@ -110,7 +125,6 @@ export function Toolbar({
                   label="開始日"
                   value={draft}
                   onChange={setDraft}
-                  valueFormat="YYYY/MM/DD"
                   popoverProps={{ withinPortal: false }}
                   clearable={false}
                   flex={1}
@@ -136,8 +150,28 @@ export function Toolbar({
         </Tooltip>
       </Group>
 
-      {/* 008 以降でここに 集計 / 共有 / ツール を足す */}
-      <Group gap={4} wrap="nowrap" />
+      <Group gap={4} wrap="nowrap">
+        <Tooltip label="集計">
+          <ActionIcon
+            variant="default"
+            size="lg"
+            aria-label="集計"
+            onClick={onOpenCount}
+            disabled={disabled}
+          >
+            <IconCalculator size={18} />
+          </ActionIcon>
+        </Tooltip>
+
+        {/* 009 の共有 / 010 の PDF・CSV はここ（集計とツールの間）に入る */}
+
+        <ToolsMenu
+          onBulk={onBulk}
+          onSetDefaultPatterns={onSetDefaultPatterns}
+          onOpenCopy={onOpenCopy}
+          disabled={disabled}
+        />
+      </Group>
     </Group>
   )
 }

@@ -13,7 +13,8 @@ create table public.shifts (
   foreign key (pattern_id, tenant_id) references public.patterns (id, tenant_id) on delete cascade
 );
 
-create index shifts_tenant_date_idx on public.shifts (tenant_id, date);
+-- (tenant_id, date) の範囲読みに加え、listShifts のページング順 (date, staff_id) と count をこの索引だけで賄う（008 §10.15）
+create index shifts_tenant_date_staff_idx on public.shifts (tenant_id, date, staff_id);
 create index shifts_pattern_id_idx on public.shifts (pattern_id);
 
 alter table public.shifts enable row level security;

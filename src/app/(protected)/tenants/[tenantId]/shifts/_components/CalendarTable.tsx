@@ -17,6 +17,7 @@ import type { DateRange } from '@/lib/calendar/dateRange'
 import { cellKey, type ShiftMap } from '@/lib/shifts/key'
 import { DateHeaderCell } from './DateHeaderCell'
 import { DateNoteCell } from './DateNoteCell'
+import type { BulkKind } from '../_lib/bulkOperations'
 import { PatternPopover, type PopoverPattern } from './PatternPopover'
 import { RequiredNumCell } from './RequiredNumCell'
 import { ShiftCell } from './ShiftCell'
@@ -51,6 +52,10 @@ type Props = {
   onOpenNote: (date: string) => void
   onOpenRequiredNum: (date: string) => void
   onSetDefaultRequiredNums: () => void
+  /** スタッフ単位の一括操作（008）。行の staff をそのまま渡す */
+  onStaffBulk: (kind: BulkKind, staff: CalendarStaff) => void
+  /** 一括操作の実行中はメニューを押せなくする（008 §3.3） */
+  bulkDisabled: boolean
   /** ポップオーバーに出す候補（選択可能なパターン + 現在アサイン中。007 §3.7） */
   popoverPatterns: (cell: ActiveCell) => PopoverPattern[]
 }
@@ -74,6 +79,8 @@ export function CalendarTable({
   onOpenNote,
   onOpenRequiredNum,
   onSetDefaultRequiredNums,
+  onStaffBulk,
+  bulkDisabled,
   popoverPatterns,
 }: Props) {
   return (
@@ -139,7 +146,13 @@ export function CalendarTable({
         {staffs.map((staff) => (
           <tr key={staff.id}>
             <th scope="row">
-              <StaffNameCell tenantId={tenantId} staffId={staff.id} name={staff.name} />
+              <StaffNameCell
+                tenantId={tenantId}
+                staffId={staff.id}
+                name={staff.name}
+                onBulk={(kind) => onStaffBulk(kind, staff)}
+                disabled={bulkDisabled}
+              />
             </th>
             {range.dates.map((date) => {
               const shift = shifts.get(cellKey(staff.id, date))

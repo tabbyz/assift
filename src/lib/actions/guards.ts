@@ -1,6 +1,8 @@
 import 'server-only'
 import { authErrorMessage } from '@/lib/auth/authErrorMessage'
 import { GOOGLE_ONLY_MESSAGE } from '@/lib/auth/notices'
+import { getTenant } from '@/lib/queries/tenants'
+import { TENANT_NOT_FOUND_MESSAGE } from '@/lib/validation/tenants'
 import { currentUser, getAuthUser } from '@/utils/auth/current'
 import { createClient } from '@/utils/supabase/server'
 import { ActionError } from './error'
@@ -10,6 +12,19 @@ export async function requireUser() {
   const user = await getAuthUser()
   if (!user) throw new ActionError('ログインが必要です')
   return user
+}
+
+/**
+ * 店舗が見えることを要求する（008 §10.11）。RLS で見えない店舗も存在しない店舗も同じ文言にする（存在を漏らさない）。
+ *
+ * UPDATE / DELETE の RLS 違反は例外ではなく「0 行」になるので、書き込んだ**あと**に 0 行の理由を
+ * 切り分けようとすると分岐が呼び出し側ごとに増える。先にここで弾いておけば、以降の 0 行は
+ * 「対象が無かった」の一意味になる。`getTenant` は `cache()` 済みなので同じリクエスト内では 1 回しか読まない。
+ */
+export async function requireTenant(tenantId: string) {
+  const tenant = await getTenant(tenantId)
+  if (!tenant) throw new ActionError(TENANT_NOT_FOUND_MESSAGE)
+  return tenant
 }
 
 /** 管理者必須。auth.users.user_metadata ではなく profiles.is_admin を信頼する */

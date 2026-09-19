@@ -11,26 +11,44 @@ import {
   UnstyledButton,
 } from '@mantine/core'
 import { IconDotsVertical, IconSettings } from '@tabler/icons-react'
+import type { BulkKind } from '../_lib/bulkOperations'
+import { BulkMenuItems } from './BulkMenuItems'
 import classes from './CalendarTable.module.css'
 
-type Props = { tenantId: string; staffId: string; name: string }
+type Props = {
+  tenantId: string
+  staffId: string
+  name: string
+  onBulk: (kind: BulkKind) => void
+  /** 一括操作の実行中だけ。期間移動中は「スタッフ情報を編集」へ行けるように開けたままにする（008 §10.11） */
+  disabled: boolean
+}
 
 /**
  * スタッフ名のセル（v1 `_staff.html.slim` の dropdown）。
- * 一括操作（すべて確定 / 下書きに戻す / 下書きクリア）は 008 でこのメニューに足す。
+ * 一括操作はこのスタッフの分だけに効く（008）。
  */
-export function StaffNameCell({ tenantId, staffId, name }: Props) {
+export function StaffNameCell({ tenantId, staffId, name, onBulk, disabled }: Props) {
   return (
     <Menu position="bottom-start" withinPortal>
       <MenuTarget>
-        <UnstyledButton className={classes.menuButton} aria-label={`${name} のメニュー`}>
+        <UnstyledButton
+          className={classes.menuButton}
+          aria-label={`${name} のメニュー`}
+          disabled={disabled}
+        >
           <span>{name}</span>
           <IconDotsVertical size={14} className={classes.menuIcon} />
         </UnstyledButton>
       </MenuTarget>
       <MenuDropdown>
+        {/* 何十行もある表で Portal に開くので、誰のメニューかを見出しに残す（007 と同じ） */}
         <MenuLabel>{name}</MenuLabel>
+        <MenuLabel>一括操作</MenuLabel>
+        <BulkMenuItems onBulk={onBulk} />
+
         <MenuDivider />
+
         <MenuItem
           component={Link}
           href={`/tenants/${tenantId}/settings/staffs/${staffId}`}

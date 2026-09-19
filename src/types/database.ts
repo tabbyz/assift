@@ -533,9 +533,38 @@ export type Database = {
         }
         Returns: undefined
       }
+      clear_draft_shifts: {
+        Args: {
+          p_end: string
+          p_staff_id?: string
+          p_start: string
+          p_tenant_id: string
+        }
+        Returns: number
+      }
+      copy_shifts: {
+        Args: {
+          p_from_end: string
+          p_from_start: string
+          p_pattern_ids: string[]
+          p_tenant_id: string
+          p_to_start: string
+        }
+        Returns: number
+      }
       reorder_positions: {
         Args: { p_ids: string[]; p_table: string; p_tenant_id: string }
         Returns: undefined
+      }
+      set_shifts_fixed: {
+        Args: {
+          p_end: string
+          p_fixed: boolean
+          p_staff_id?: string
+          p_start: string
+          p_tenant_id: string
+        }
+        Returns: number
       }
     }
     Enums: {

@@ -330,6 +330,96 @@ begin
 end;
 $function$;
 
+CREATE OR REPLACE FUNCTION public.clear_draft_shifts (
+  p_tenant_id uuid,
+  p_start     date,
+  p_end       date,
+  p_staff_id  uuid DEFAULT NULL::uuid
+)
+  RETURNS integer
+  LANGUAGE plpgsql
+  SET search_path TO ''
+  AS $function$
+declare
+  v_count integer;
+begin
+  -- 他テナント / 存在しない店舗は RLS で見えない。0 行で返すと「対象なし」と区別できないので例外にする
+  if not exists (select 1 from public.tenants where id = p_tenant_id) then
+    raise exception 'clear_draft_shifts: tenant not found';
+  end if;
+
+  -- スタッフ指定は在籍者に限る。退職者（画面に出ない）を指す古いタブからの呼び出しは not found にして読み直させる
+  if p_staff_id is not null and not exists (
+    select 1 from public.staffs
+     where id = p_staff_id and tenant_id = p_tenant_id and retired_at is null
+  ) then
+    raise exception 'clear_draft_shifts: staff not found';
+  end if;
+
+  delete from public.shifts s
+   where s.tenant_id = p_tenant_id
+     and s.fixed = false
+     and s.date between p_start and p_end
+     and (p_staff_id is null or s.staff_id = p_staff_id)
+     and s.staff_id in (
+       select st.id from public.staffs st
+        where st.tenant_id = p_tenant_id and st.retired_at is null
+     );
+
+  get diagnostics v_count = row_count;
+  return v_count;
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.copy_shifts (
+  p_tenant_id   uuid,
+  p_from_start  date,
+  p_from_end    date,
+  p_to_start    date,
+  p_pattern_ids uuid[]
+)
+  RETURNS integer
+  LANGUAGE plpgsql
+  SET search_path TO ''
+  AS $function$
+declare
+  v_offset integer := p_to_start - p_from_start;
+  v_count  integer;
+begin
+  if not exists (select 1 from public.tenants where id = p_tenant_id) then
+    raise exception 'copy_shifts: tenant not found';
+  end if;
+
+  if not exists (
+    select 1 from public.shifts s
+     where s.tenant_id = p_tenant_id
+       and s.date between p_from_start and p_from_end
+       and s.pattern_id = any(p_pattern_ids)
+       and s.staff_id in (
+         select st.id from public.staffs st
+          where st.tenant_id = p_tenant_id and st.retired_at is null
+       )
+  ) then
+    raise exception 'copy_shifts: no source';
+  end if;
+
+  insert into public.shifts (tenant_id, staff_id, pattern_id, date, fixed)
+  select s.tenant_id, s.staff_id, s.pattern_id, s.date + v_offset, false
+    from public.shifts s
+   where s.tenant_id = p_tenant_id
+     and s.date between p_from_start and p_from_end
+     and s.pattern_id = any(p_pattern_ids)
+     and s.staff_id in (
+       select st.id from public.staffs st
+        where st.tenant_id = p_tenant_id and st.retired_at is null
+     )
+  on conflict (staff_id, date) do nothing;
+
+  get diagnostics v_count = row_count;
+  return v_count;
+end;
+$function$;
+
 CREATE OR REPLACE FUNCTION public.reorder_positions (
   p_table     text,
   p_tenant_id uuid,
@@ -365,6 +455,51 @@ begin
   if updated <> expected then
     raise exception 'reorder_positions: % of % rows updated', updated, expected;
   end if;
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.set_shifts_fixed (
+  p_tenant_id uuid,
+  p_start     date,
+  p_end       date,
+  p_fixed     boolean,
+  p_staff_id  uuid    DEFAULT NULL::uuid
+)
+  RETURNS integer
+  LANGUAGE plpgsql
+  SET search_path TO ''
+  AS $function$
+declare
+  v_count integer;
+begin
+  -- 他テナント / 存在しない店舗は RLS で見えない。0 行で返すと「対象なし」と区別できないので例外にする
+  if not exists (select 1 from public.tenants where id = p_tenant_id) then
+    raise exception 'set_shifts_fixed: tenant not found';
+  end if;
+
+  -- スタッフ指定は在籍者に限る。退職者（画面に出ない）を指す古いタブからの呼び出しは not found にして読み直させる
+  if p_staff_id is not null and not exists (
+    select 1 from public.staffs
+     where id = p_staff_id and tenant_id = p_tenant_id and retired_at is null
+  ) then
+    raise exception 'set_shifts_fixed: staff not found';
+  end if;
+
+  -- 値が変わる行だけ書く。既に確定の行に「確定」を当てても触らず、件数にも入れない
+  -- （呼び出し側は 0 件を「対象なし」として灰色で伝える。updated_at も動かさない）
+  update public.shifts s
+     set fixed = p_fixed
+   where s.tenant_id = p_tenant_id
+     and s.fixed is distinct from p_fixed
+     and s.date between p_start and p_end
+     and (p_staff_id is null or s.staff_id = p_staff_id)
+     and s.staff_id in (
+       select st.id from public.staffs st
+        where st.tenant_id = p_tenant_id and st.retired_at is null
+     );
+
+  get diagnostics v_count = row_count;
+  return v_count;
 end;
 $function$;
 
@@ -449,7 +584,7 @@ CREATE INDEX shares_tenant_created_idx ON public.shares USING btree (tenant_id, 
 
 CREATE INDEX shifts_pattern_id_idx ON public.shifts USING btree (pattern_id);
 
-CREATE INDEX shifts_tenant_date_idx ON public.shifts USING btree (tenant_id, date);
+CREATE INDEX shifts_tenant_date_staff_idx ON public.shifts USING btree (tenant_id, date, staff_id);
 
 CREATE INDEX staff_default_patterns_pattern_id_idx ON public.staff_default_patterns USING btree (pattern_id);
 
@@ -651,9 +786,21 @@ REVOKE ALL ON FUNCTION "public"."assign_shift"(uuid, uuid, date, boolean, uuid) 
 
 GRANT EXECUTE ON FUNCTION "public"."assign_shift"(uuid, uuid, date, boolean, uuid) TO "anon", "authenticated", "postgres", "service_role";
 
+REVOKE ALL ON FUNCTION "public"."clear_draft_shifts"(uuid, date, date, uuid) FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION "public"."clear_draft_shifts"(uuid, date, date, uuid) TO "anon", "authenticated", "postgres", "service_role";
+
+REVOKE ALL ON FUNCTION "public"."copy_shifts"(uuid, date, date, date, uuid[]) FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION "public"."copy_shifts"(uuid, date, date, date, uuid[]) TO "anon", "authenticated", "postgres", "service_role";
+
 REVOKE ALL ON FUNCTION "public"."reorder_positions"(text, uuid, uuid[]) FROM PUBLIC;
 
 GRANT EXECUTE ON FUNCTION "public"."reorder_positions"(text, uuid, uuid[]) TO "anon", "authenticated", "postgres", "service_role";
+
+REVOKE ALL ON FUNCTION "public"."set_shifts_fixed"(uuid, date, date, boolean, uuid) FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION "public"."set_shifts_fixed"(uuid, date, date, boolean, uuid) TO "anon", "authenticated", "postgres", "service_role";
 
 GRANT CREATE, USAGE ON SCHEMA "private" TO "postgres";
 

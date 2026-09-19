@@ -1,7 +1,6 @@
 import { z } from 'zod'
-import { daysBetween } from '@/lib/calendar/dateString'
 import { REQUIRED_NUM_MAX, REQUIRED_NUM_MIN } from '@/lib/patterns/requiredNums'
-import { dateStringSchema } from './date'
+import { dateStringSchema, dateTermShape, refineTerm } from './date'
 import { patternIdSchema } from './patterns'
 import { tenantIdSchema } from './tenants'
 
@@ -28,17 +27,10 @@ export const saveRequiredNumsSchema = z.object({
   nums: z.record(patternIdSchema, numSchema),
 })
 
-/** v1 の共有・コピーと同じ上限（001 §7.4）。表示期間は最長 31 日 */
-export const MAX_TERM_DAYS = 31
-
-const TERM_ERROR = { error: '期間が正しくありません' }
-
-/** 表示期間に一括でデフォルト人数をセットする（007 §3.6） */
-export const setDefaultRequiredNumsSchema = z
-  .object({
-    tenantId: tenantIdSchema,
-    start: dateStringSchema,
-    end: dateStringSchema,
-  })
-  // `YYYY-MM-DD` は辞書順 = 日付順
-  .refine((v) => v.end >= v.start && daysBetween(v.start, v.end) <= MAX_TERM_DAYS, TERM_ERROR)
+/**
+ * 表示期間に一括でデフォルト人数をセットする（007 §3.6）。
+ * 期間の規則（両端を含めて 31 日以内）は `refineTerm` が持つ（008 §3.8）。
+ */
+export const setDefaultRequiredNumsSchema = refineTerm(
+  z.object({ tenantId: tenantIdSchema, ...dateTermShape })
+)

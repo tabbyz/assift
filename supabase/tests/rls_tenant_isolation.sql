@@ -5,7 +5,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(68);
+select plan(97);
 
 -- ---------------------------------------------------------------------------
 -- 準備（postgres として実行。RLS はテーブル所有者には適用されない）
@@ -384,6 +384,115 @@ select is(
   'assign_shift: not found で失敗した呼び出しは 1 行も作らない'
 );
 
+-- ---------------------------------------------------------------------------
+-- 一括操作（008）
+--
+-- 本番の一括操作は RPC（set_shifts_fixed / clear_draft_shifts。§10.13）と、デフォルト勤務パターン /
+-- コピーの `INSERT ... ON CONFLICT DO NOTHING`。どちらも security invoker / 通常の INSERT なので、
+-- 境界はテーブルの RLS が守る。下の生の UPDATE / DELETE は、その RLS が「例外ではなく 0 行」で
+-- 効くことを固定するもの（RPC はこれに乗る）。店舗の可視性は RPC の中で確かめて not found にする。
+--
+-- データ変更の CTE は文のトップレベルにしか置けないので、WITH を先頭に出して is() を SELECT する
+-- （スカラー副問い合わせに入れると `WITH clause containing a data-modifying statement must be at the top level`）。
+-- ---------------------------------------------------------------------------
+with u as (
+  update public.shifts set fixed = true
+   where tenant_id = 'bbbbbbbb-1111-0000-0000-00000000000b'
+     and date between '2026-10-01' and '2026-10-31'
+   returning 1
+)
+select is((select count(*) from u), 0::bigint, '一括確定: 別テナントの shifts は範囲 UPDATE で 0 行');
+
+with d as (
+  delete from public.shifts
+   where tenant_id = 'bbbbbbbb-1111-0000-0000-00000000000b'
+     and fixed = false
+     and date between '2026-10-01' and '2026-10-31'
+   returning 1
+)
+select is((select count(*) from d), 0::bigint, '下書きクリア: 別テナントの shifts は DELETE で 0 行');
+
+-- RPC 版の一括操作（008 §10.13）。在籍スタッフの行だけを対象にし、件数を返す
+select lives_ok(
+  format($$insert into public.shifts (tenant_id, staff_id, pattern_id, date)
+           values (%L, %L, %L, '2026-11-10'), (%L, %L, %L, '2026-11-11')$$,
+    :tenant_a, :staff_a, :pattern_a, :tenant_a, :staff_a2, :pattern_a),
+  '一括操作: 11 月に A の下書きを 2 行置く（準備）'
+);
+select is(public.set_shifts_fixed(:tenant_a, '2026-11-01', '2026-11-30', true), 2,
+  'set_shifts_fixed: 期間の 2 行を確定し、件数を返す');
+select is(
+  (select count(*) from public.shifts where tenant_id = :tenant_a and date between '2026-11-01' and '2026-11-30' and fixed),
+  2::bigint, 'set_shifts_fixed: DB でも 2 行が確定');
+select is(public.clear_draft_shifts(:tenant_a, '2026-11-01', '2026-11-30'), 0,
+  'clear_draft_shifts: 確定は消さない（0 行）');
+select is(public.set_shifts_fixed(:tenant_a, '2026-11-01', '2026-11-30', true), 0,
+  'set_shifts_fixed: すでに確定の行は触らず、件数にも入れない（2 回目は 0）');
+select is(public.set_shifts_fixed(:tenant_a, '2026-11-01', '2026-11-30', false, :staff_a), 1,
+  'set_shifts_fixed: スタッフ指定は本人の 1 行だけ');
+-- 退職者の行は対象外（画面に出ない行を黙って書き換えない。008 §10.7）
+select lives_ok(format($$update public.staffs set retired_at = now() where id = %L$$, :staff_a2),
+  '一括操作: a2 を退職させる（準備）');
+-- この時点で在籍 a の行は下書き、退職 a2 の行は確定。全体を「下書きに戻す」と、値が変わりうるのは a2 の行だけ。
+-- join で退職者を外していれば 0 件。外していなければ a2 の行が動いて 1 件になる
+select is(public.set_shifts_fixed(:tenant_a, '2026-11-01', '2026-11-30', false), 0,
+  'set_shifts_fixed: 退職者の行は対象外（変わりうるのが退職者の行だけなら 0 件）');
+select is((select fixed from public.shifts where staff_id = :staff_a2 and date = '2026-11-11'), true,
+  'set_shifts_fixed: 退職者の行は確定のまま残る');
+select throws_ok(
+  format($$select public.set_shifts_fixed(%L, '2026-11-01', '2026-11-30', true, %L)$$, :tenant_a, :staff_a2),
+  'P0001', 'set_shifts_fixed: staff not found',
+  'set_shifts_fixed: 退職者を指定すると not found（古いタブからの呼び出しを読み直させる）');
+-- copy_shifts（008 §10.15）: 在籍 a の 11/10 だけが 12 月へ写る（退職 a2 の 11/11 は写らない）
+select is(public.copy_shifts(:tenant_a, '2026-11-01', '2026-11-30', '2026-12-01', array[:pattern_a]::uuid[]), 1,
+  'copy_shifts: 在籍スタッフの行だけが写り、件数を返す');
+select is(
+  (select count(*) from public.shifts where staff_id = :staff_a and date = '2026-12-10' and fixed = false),
+  1::bigint, 'copy_shifts: 同じ日数ずらして下書きで入る');
+select is(public.copy_shifts(:tenant_a, '2026-11-01', '2026-11-30', '2026-12-01', array[:pattern_a]::uuid[]), 0,
+  'copy_shifts: 2 回目は既にあるセルを上書きせず 0 件');
+select throws_ok(
+  format($$select public.copy_shifts(%L, '2026-11-01', '2026-11-30', '2026-12-01', array[%L]::uuid[])$$, :tenant_a, :pattern_a_after),
+  'P0001', 'copy_shifts: no source',
+  'copy_shifts: 選んだ勤務パターンの行が無ければ no source');
+select throws_ok(
+  format($$select public.copy_shifts(%L, '2026-10-01', '2026-10-31', '2026-12-01', array[%L]::uuid[])$$, :tenant_b, :pattern_b),
+  'P0001', 'copy_shifts: tenant not found',
+  'copy_shifts: 他テナントの店舗は not found');
+select lives_ok(format($$update public.staffs set retired_at = null where id = %L$$, :staff_a2),
+  '一括操作: a2 を復帰させる（後片付け）');
+select is(public.clear_draft_shifts(:tenant_a, '2026-11-01', '2026-11-30'), 1,
+  'clear_draft_shifts: 下書きの 1 行だけ消す');
+-- 他テナント: RLS で 0 行。staff を指定したときは not found（存在を漏らさない）
+select throws_ok(
+  format($$select public.set_shifts_fixed(%L, '2026-10-01', '2026-10-31', true)$$, :tenant_b),
+  'P0001', 'set_shifts_fixed: tenant not found', 'set_shifts_fixed: 他テナントの店舗は not found（0 行と区別する）');
+select throws_ok(
+  format($$select public.clear_draft_shifts(%L, '2026-10-01', '2026-10-31')$$, :tenant_b),
+  'P0001', 'clear_draft_shifts: tenant not found', 'clear_draft_shifts: 他テナントの店舗は not found');
+select throws_ok(
+  format($$select public.set_shifts_fixed(%L, '2026-11-01', '2026-11-30', true, %L)$$, :tenant_a, :staff_b),
+  'P0001', 'set_shifts_fixed: staff not found', 'set_shifts_fixed: 他テナントの staff_id は not found');
+select throws_ok(
+  format($$select public.clear_draft_shifts(%L, '2026-11-01', '2026-11-30', %L)$$, :tenant_a, :staff_b),
+  'P0001', 'clear_draft_shifts: staff not found', 'clear_draft_shifts: 他テナントの staff_id は not found');
+select lives_ok(
+  format($$delete from public.shifts where tenant_id = %L and date between '2026-11-01' and '2026-12-31'$$, :tenant_a),
+  '一括操作: 片付ける');
+
+-- デフォルト勤務パターン / コピーの INSERT。**衝突する行**（B の 2026-10-01）で試して、
+-- DO NOTHING が黙って飲み込むのではなく WITH CHECK が先に評価されることを固定する
+select throws_ok(
+  format($$insert into public.shifts (tenant_id, staff_id, pattern_id, date) values (%L, %L, %L, '2026-10-01')
+             on conflict (staff_id, date) do nothing$$,
+    'bbbbbbbb-1111-0000-0000-00000000000b',
+    'bbbbbbbb-2222-0000-0000-00000000000b',
+    'bbbbbbbb-3333-0000-0000-00000000000b'),
+  '42501',
+  null,
+  '一括 INSERT: 別テナントへの ON CONFLICT DO NOTHING は衝突する行でも拒否'
+);
+
 -- TRUNCATE は RLS を通らないので、権限の層で止める（003 §3.3）
 select throws_ok('truncate public.staffs', '42501', null, 'authenticated に TRUNCATE 権限はない');
 
@@ -416,6 +525,15 @@ select throws_ok(
   $$select public.assign_shift('aaaaaaaa-1111-0000-0000-00000000000a', 'aaaaaaaa-2222-0000-0000-00000000000a', '2026-09-17', false)$$,
   '42501', null, 'anon は assign_shift を実行できない'
 );
+select throws_ok(
+  $$select public.set_shifts_fixed('aaaaaaaa-1111-0000-0000-00000000000a', '2026-09-01', '2026-09-30', true)$$,
+  '42501', null, 'anon は set_shifts_fixed を実行できない');
+select throws_ok(
+  $$select public.clear_draft_shifts('aaaaaaaa-1111-0000-0000-00000000000a', '2026-09-01', '2026-09-30')$$,
+  '42501', null, 'anon は clear_draft_shifts を実行できない');
+select throws_ok(
+  $$select public.copy_shifts('aaaaaaaa-1111-0000-0000-00000000000a', '2026-09-01', '2026-09-30', '2026-10-01', array['aaaaaaaa-3333-0000-0000-00000000000a']::uuid[])$$,
+  '42501', null, 'anon は copy_shifts を実行できない');
 
 -- Supabase の ALTER DEFAULT PRIVILEGES は新しい public の関数にも anon の EXECUTE を付ける。
 -- unmanaged/restrict_anon_grants.sql の追記を忘れた RPC がここで落ちるよう、関数ごとではなく全体を見る
@@ -471,6 +589,14 @@ select is(
   (select count(*) from public.staff_patterns where tenant_id = :tenant_b),
   1::bigint,
   'B の staff_patterns は A の操作後も残っている'
+);
+
+-- 008 の一括操作（範囲 UPDATE / DELETE）が B の行を触っていないことを確かめる。
+-- 0 行だったことは A 側で見たが、行そのものが無事かは postgres でしか見えない
+select is(
+  (select count(*) from public.shifts where tenant_id = :tenant_b and fixed = false),
+  1::bigint,
+  'B の shifts は A の一括操作後も下書きのまま残っている'
 );
 
 select * from finish();

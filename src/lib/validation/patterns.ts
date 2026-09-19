@@ -7,7 +7,9 @@ import { tenantIdSchema } from './tenants'
 export const PATTERN_NAME_MAX_LENGTH = 6
 export const PATTERN_DESCRIPTION_MAX_LENGTH = 10
 
-export const patternIdSchema = z.guid({ error: '勤務パターンが見つかりません' })
+export const PATTERN_NOT_FOUND_MESSAGE = '勤務パターンが見つかりません'
+
+export const patternIdSchema = z.guid({ error: PATTERN_NOT_FOUND_MESSAGE })
 
 export const patternNameSchema = z
   .string({ error: '勤務パターン名を入力してください' })

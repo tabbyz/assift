@@ -73,6 +73,24 @@ export function daysBetween(start: string, end: string): number {
   return dayjs(end).diff(dayjs(start), 'day') + 1
 }
 
+/**
+ * 日付の差（符号付き）。`diffDays('2026-09-01', '2026-09-05')` = 4、逆順は −2 のように負になる。
+ *
+ * **`daysBetween()` と混同しない**: あちらは両端を含む「日数」なので 1 大きく、負にもならない。
+ * コピーのオフセット（008 §5.3）のように「何日ずらすか」が要るときはこちらを使う。
+ */
+export function diffDays(from: string, to: string): number {
+  return dayjs(to).diff(dayjs(from), 'day')
+}
+
+/**
+ * `fromStart..fromEnd` と同じ日数の期間を `toStart` から始めたときの終了日（シフトコピーのコピー先の終了日）。
+ * `daysBetween()`（両端を含む日数）を足すと 1 日ずれるので `diffDays()` を使う。From が 1 日なら `toStart` そのもの。
+ */
+export function copyEnd(fromStart: string, fromEnd: string, toStart: string): string {
+  return addDays(toStart, diffDays(fromStart, fromEnd))
+}
+
 /** `9/18`（v1 の `%-m/%-d`） */
 export function formatMonthDay(date: string): string {
   const d = dayjs(date)

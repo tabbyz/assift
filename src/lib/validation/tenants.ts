@@ -9,7 +9,9 @@ export const TENANT_NAME_MAX_LENGTH = 20
  * `z.uuid()` は RFC 9562 の version / variant ビットまで検査するため、seed の
  * `22222222-…` のような id を弾いてしまう（005 §3.2）。
  */
-export const tenantIdSchema = z.guid({ error: '店舗が見つかりません' })
+export const TENANT_NOT_FOUND_MESSAGE = '店舗が見つかりません'
+
+export const tenantIdSchema = z.guid({ error: TENANT_NOT_FOUND_MESSAGE })
 
 const nameSchema = z
   .string()

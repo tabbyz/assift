@@ -8,14 +8,17 @@ import type { ActionResult } from '@/lib/actions/result'
 import { runAction } from '@/lib/actions/run'
 import type { DayKey } from '@/lib/calendar/weekdays'
 import { nextPosition } from '@/lib/queries/positions'
-import { createStaffSchema, staffRefSchema, updateStaffSchema } from '@/lib/validation/staffs'
+import {
+  createStaffSchema,
+  staffRefSchema,
+  updateStaffSchema,
+  STAFF_NOT_FOUND_MESSAGE,
+} from '@/lib/validation/staffs'
 import type { Database } from '@/types/database'
 import { createClient } from '@/utils/supabase/server'
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>
 type DefaultPatternRow = Database['public']['Tables']['staff_default_patterns']['Insert']
-
-const NOT_FOUND_MESSAGE = 'スタッフが見つかりません'
 
 /**
  * フォームから届く未検証の入力。
@@ -170,7 +173,7 @@ export async function updateStaff(input: StaffInput & { staffId: string }): Prom
       .eq('tenant_id', tenantId)
       .maybeSingle()
     if (currentError) throw currentError
-    if (!current) fail(NOT_FOUND_MESSAGE)
+    if (!current) fail(STAFF_NOT_FOUND_MESSAGE)
 
     const { data, error } = await supabase
       .from('staffs')
@@ -180,7 +183,7 @@ export async function updateStaff(input: StaffInput & { staffId: string }): Prom
       .select('id')
       .maybeSingle()
     if (error) throw error
-    if (!data) fail(NOT_FOUND_MESSAGE)
+    if (!data) fail(STAFF_NOT_FOUND_MESSAGE)
 
     await syncStaffRelations(supabase, {
       tenantId,
@@ -209,7 +212,7 @@ async function setRetiredAt(input: { tenantId: string; staffId: string }, value:
     .select('id')
     .maybeSingle()
   if (error) throw error
-  if (!data) fail(NOT_FOUND_MESSAGE)
+  if (!data) fail(STAFF_NOT_FOUND_MESSAGE)
 
   revalidatePath(`/tenants/${tenantId}`, 'layout')
 }
@@ -246,7 +249,7 @@ export async function deleteStaff(input: {
       .select('id')
       .maybeSingle()
     if (error) throw error
-    if (!data) fail(NOT_FOUND_MESSAGE)
+    if (!data) fail(STAFF_NOT_FOUND_MESSAGE)
 
     revalidatePath(`/tenants/${tenantId}`, 'layout')
     return { redirectTo: `/tenants/${tenantId}/settings/staffs` }
