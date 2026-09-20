@@ -48,3 +48,20 @@ export const requiredNumsSchema = z.partialRecord(
 export function defaultRequiredNum(value: RequiredNumsByDay, key: DayKey): number {
   return value[key] ?? 0
 }
+
+/**
+ * ある曜日の人数を、表の右にある曜日へコピーする。
+ * 空欄なら右も空欄にする。祝日列には右が無いので、渡しても変えない。
+ */
+export function fillRequiredNumsForward(value: RequiredNumsByDay, key: DayKey): RequiredNumsByDay {
+  const index = DAY_KEYS.indexOf(key)
+  if (index < 0 || index >= DAY_KEYS.length - 1) return value
+
+  const next: RequiredNumsByDay = { ...value }
+  const source = value[key]
+  for (const later of DAY_KEYS.slice(index + 1)) {
+    if (source === undefined) delete next[later]
+    else next[later] = source
+  }
+  return next
+}

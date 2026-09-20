@@ -125,7 +125,8 @@ export function PatternForm({ tenantId, pairOptions, initial, afterCreate }: Pro
             maxLength={PATTERN_DESCRIPTION_MAX_LENGTH}
             value={values.description}
             onChange={(event) => set('description', event.currentTarget.value)}
-            maw={360}
+            // 説明文はフォーム幅のまま。狭いのは入力欄だけ
+            styles={{ wrapper: { maxWidth: 360 } }}
           />
 
           <ColorSwatchPicker value={values.colorHex} onChange={(hex) => set('colorHex', hex)} />
@@ -160,11 +161,11 @@ export function PatternForm({ tenantId, pairOptions, initial, afterCreate }: Pro
               onChange={(value) => set('pairPatternId', value)}
               placeholder="未指定"
               clearable
-              maw={240}
+              styles={{ wrapper: { maxWidth: 240 } }}
             />
           )}
 
-          <Group justify="flex-end">
+          <Group justify="flex-end" gap="xs">
             {/* チュートリアルでは出さない（v1 の `unless @tutorial_step`） */}
             {afterCreate === 'list' && (
               <LinkButton

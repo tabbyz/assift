@@ -1,25 +1,14 @@
 'use client'
 
-import {
-  Menu,
-  MenuDivider,
-  MenuDropdown,
-  MenuItem,
-  MenuLabel,
-  MenuTarget,
-  Popover,
-  Text,
-  UnstyledButton,
-} from '@mantine/core'
-import { IconDotsVertical, IconUsersGroup } from '@tabler/icons-react'
+import { Button, Popover, UnstyledButton } from '@mantine/core'
 import { wday } from '@/lib/calendar/dateString'
 import type { DateRange } from '@/lib/calendar/dateRange'
+import type { DateCoverage } from '@/lib/shifts/satisfaction'
 import { cellKey, type ShiftMap } from '@/lib/shifts/key'
-import { DateHeaderCell } from '@/components/shiftTable/DateHeaderCell'
+import { DateHeaderCell, dateToneClass } from '@/components/shiftTable/DateHeaderCell'
 import { DateNoteCell } from './DateNoteCell'
 import type { BulkKind } from '../_lib/bulkOperations'
 import { PatternPopover, type PopoverPattern } from './PatternPopover'
-import { RequiredNumCell } from './RequiredNumCell'
 import { ShiftCell } from './ShiftCell'
 import { StaffNameCell } from './StaffNameCell'
 import classes from '@/components/shiftTable/ShiftTable.module.css'
@@ -37,12 +26,14 @@ export type ActiveCell = { staffId: string; date: string }
 type Props = {
   tenantId: string
   range: DateRange
+  today: string
   holidays: Set<string>
   staffs: CalendarStaff[]
   patternsById: Map<string, CalendarPattern>
   shifts: ShiftMap
   notesByDate: Map<string, string>
-  satisfiedByDate: Map<string, boolean>
+  coverageByDate: Map<string, DateCoverage>
+  workdaysByStaffId: Map<string, number>
   activeCell: ActiveCell | null
   draftFixed: boolean
   onOpenCell: (cell: ActiveCell) => void
@@ -51,25 +42,40 @@ type Props = {
   onDraftFixedChange: (cell: ActiveCell, fixed: boolean) => void
   onOpenNote: (date: string) => void
   onOpenRequiredNum: (date: string) => void
-  onSetDefaultRequiredNums: () => void
-  /** スタッフ単位の一括操作（008）。行の staff をそのまま渡す */
+  onOpenCount: () => void
   onStaffBulk: (kind: BulkKind, staff: CalendarStaff) => void
-  /** 一括操作の実行中はメニューを押せなくする（008 §3.3） */
   bulkDisabled: boolean
-  /** ポップオーバーに出す候補（選択可能なパターン + 現在アサイン中。007 §3.7） */
   popoverPatterns: (cell: ActiveCell) => PopoverPattern[]
 }
 
-/** シフト表本体（v1 `shifts/index.html.slim` の table.calendar） */
+/** 0/0（必要人数も配置も無い日）は数字を出さない。全列に出すと指標として読まれなくなる */
+function hasCoverage(coverage: DateCoverage | undefined): coverage is DateCoverage {
+  return coverage !== undefined && (coverage.required > 0 || coverage.assigned > 0)
+}
+
+function coverageLabel(date: string, coverage: DateCoverage | undefined): string {
+  if (!hasCoverage(coverage)) return `${date} の必要人数`
+  const state = coverage.satisfied ? '充足' : '未充足'
+  return `${date} の必要人数（${coverage.assigned}/${coverage.required} ${state}）`
+}
+
+/**
+ * シフト表本体。
+ *
+ * 日付ヘッダーは「見出し」に徹して 曜日・日・メモ だけを持ち、押すと日付メモが開く。
+ * **配置 / 必要人数は列の集計なので表の下のフッター**に置き、必要人数もそこから開く（011）。
+ */
 export function CalendarTable({
   tenantId,
   range,
+  today,
   holidays,
   staffs,
   patternsById,
   shifts,
   notesByDate,
-  satisfiedByDate,
+  coverageByDate,
+  workdaysByStaffId,
   activeCell,
   draftFixed,
   onOpenCell,
@@ -78,7 +84,7 @@ export function CalendarTable({
   onDraftFixedChange,
   onOpenNote,
   onOpenRequiredNum,
-  onSetDefaultRequiredNums,
+  onOpenCount,
   onStaffBulk,
   bulkDisabled,
   popoverPatterns,
@@ -87,58 +93,35 @@ export function CalendarTable({
     <table className={classes.table}>
       <thead>
         <tr className={classes.dateRow}>
-          <th />
-          {range.dates.map((date) => (
-            // scope: 930 セルのグリッドなので、支援技術がセルと日付・スタッフ名を結べるようにする
-            <th key={date} scope="col">
-              <DateHeaderCell date={date} isHoliday={holidays.has(date)} />
-            </th>
-          ))}
-        </tr>
-
-        <tr className={classes.noteRow}>
-          <th />
-          {range.dates.map((date) => (
-            <th key={date} scope="col">
-              <DateNoteCell
-                date={date}
-                note={notesByDate.get(date)}
-                onClick={() => onOpenNote(date)}
-              />
-            </th>
-          ))}
-        </tr>
-
-        <tr className={classes.countRow}>
-          <th>
-            <Menu position="bottom-start" withinPortal>
-              <MenuTarget>
-                <UnstyledButton className={classes.menuButton} aria-label="必要人数のメニュー">
-                  <Text size="sm">人数</Text>
-                  <IconDotsVertical size={14} className={classes.menuIcon} />
-                </UnstyledButton>
-              </MenuTarget>
-              <MenuDropdown>
-                <MenuLabel>一括操作</MenuLabel>
-                <MenuDivider />
-                <MenuItem
-                  leftSection={<IconUsersGroup size={16} />}
-                  onClick={onSetDefaultRequiredNums}
-                >
-                  デフォルト人数をセット
-                </MenuItem>
-              </MenuDropdown>
-            </Menu>
+          <th className={classes.staffHeader} scope="col" aria-label="スタッフ">
+            <Button variant="default" size="compact-sm" onClick={onOpenCount}>
+              集計
+            </Button>
           </th>
-          {range.dates.map((date) => (
-            <th key={date} scope="col">
-              <RequiredNumCell
-                date={date}
-                satisfied={satisfiedByDate.get(date) ?? true}
-                onClick={() => onOpenRequiredNum(date)}
-              />
-            </th>
-          ))}
+          {range.dates.map((date) => {
+            const note = notesByDate.get(date)
+            return (
+              <th key={date} scope="col">
+                {/*
+                  ヘッダーは日付メモだけの入口。必要人数はフッター（数字のある場所）から開く。
+                  セル全体が 1 つのボタンなので、曜日・日付・メモのどこを押しても同じ動作になる
+                */}
+                <UnstyledButton
+                  className={[classes.dateHead, dateToneClass(date, holidays.has(date))]
+                    .filter(Boolean)
+                    .join(' ')}
+                  data-today={date === today || undefined}
+                  onClick={() => onOpenNote(date)}
+                  aria-label={note ? `${date} のメモ: ${note}` : `${date} のメモを追加`}
+                >
+                  <div className={classes.dateMain}>
+                    <DateHeaderCell date={date} />
+                  </div>
+                  <DateNoteCell note={note} />
+                </UnstyledButton>
+              </th>
+            )
+          })}
         </tr>
       </thead>
 
@@ -150,6 +133,7 @@ export function CalendarTable({
                 tenantId={tenantId}
                 staffId={staff.id}
                 name={staff.name}
+                workdays={workdaysByStaffId.get(staff.id) ?? 0}
                 onBulk={(kind) => onStaffBulk(kind, staff)}
                 disabled={bulkDisabled}
               />
@@ -159,7 +143,8 @@ export function CalendarTable({
               const pattern = shift ? patternsById.get(shift.patternId) : undefined
               const enabled = staff.availableWdays.includes(wday(date))
               const isActive = activeCell?.staffId === staff.id && activeCell.date === date
-              const label = `${staff.name} ${date}${pattern ? ` ${pattern.name}` : ''}`
+              const fixedLabel = pattern ? (shift?.fixed ? '確定' : '下書き') : ''
+              const label = [staff.name, date, pattern?.name, fixedLabel].filter(Boolean).join(' ')
 
               const cell = (
                 <ShiftCell
@@ -168,26 +153,23 @@ export function CalendarTable({
                   enabled={enabled}
                   label={label}
                   onClick={() => onOpenCell({ staffId: staff.id, date })}
+                  holdKey={cellKey(staff.id, date)}
+                  onToggleFixed={
+                    pattern && shift
+                      ? () => onAssign({ staffId: staff.id, date }, shift.patternId, !shift.fixed)
+                      : undefined
+                  }
                 />
               )
 
               return (
                 <td key={date}>
-                  {/*
-                    Popover は開いているセルだけ mount する（007 §3.9）。
-                    31 日 × 在籍スタッフ分すべてを包むと floating-ui のフックがその数だけ動く
-                  */}
                   {isActive ? (
                     <Popover
                       opened
                       position="bottom-end"
                       shadow="md"
                       withinPortal
-                      /*
-                       * trapFocus: ドロップダウンにフォーカスを移す。これが無いとフォーカスが
-                       * セルに残り、Mantine の Escape 処理（ドロップダウンの keydown）が働かない
-                       * （v1 の tippy は Escape で閉じていた）。returnFocus で元のセルに戻す。
-                       */
                       trapFocus
                       returnFocus
                       onDismiss={onCloseCell}
@@ -196,6 +178,7 @@ export function CalendarTable({
                       <Popover.Dropdown p="xs">
                         <PatternPopover
                           patterns={popoverPatterns({ staffId: staff.id, date })}
+                          selectedPatternId={shift?.patternId ?? null}
                           fixed={draftFixed}
                           onFixedChange={(fixed) =>
                             onDraftFixedChange({ staffId: staff.id, date }, fixed)
@@ -216,6 +199,30 @@ export function CalendarTable({
           </tr>
         ))}
       </tbody>
+
+      {/* 充足。縦スクロールしても下端に残る（CSS の `.footRow`） */}
+      <tfoot>
+        <tr className={classes.footRow}>
+          <th className={classes.footLabel} scope="row">
+            配置 / 必要人数
+          </th>
+          {range.dates.map((date) => {
+            const coverage = coverageByDate.get(date)
+            return (
+              <td key={date}>
+                <UnstyledButton
+                  className={classes.footCell}
+                  data-short={hasCoverage(coverage) && !coverage.satisfied ? true : undefined}
+                  onClick={() => onOpenRequiredNum(date)}
+                  aria-label={coverageLabel(date, coverage)}
+                >
+                  {hasCoverage(coverage) ? `${coverage.assigned}/${coverage.required}` : ' '}
+                </UnstyledButton>
+              </td>
+            )
+          })}
+        </tr>
+      </tfoot>
     </table>
   )
 }

@@ -47,12 +47,14 @@ export function PatternEditClient({
     <Paper withBorder p="lg">
       <Stack gap="md">
         <Title order={4}>勤務パターンを削除</Title>
-        <Text size="sm" c="dimmed">
-          削除すると、この勤務パターンに関連するすべてのデータが削除されます。
-        </Text>
-        <Text size="sm" c="red">
-          この操作は元には戻せません。
-        </Text>
+        <Stack gap={4}>
+          <Text size="sm" c="dimmed">
+            削除すると、この勤務パターンに関連するすべてのデータが削除されます。
+          </Text>
+          <Text size="sm" c="red">
+            この操作は元には戻せません。
+          </Text>
+        </Stack>
         <Group>
           <Button color="red" variant="outline" onClick={confirmDelete} loading={isPending}>
             削除する

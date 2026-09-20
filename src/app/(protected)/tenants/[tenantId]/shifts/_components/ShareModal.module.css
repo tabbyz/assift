@@ -1,0 +1,229 @@
+/*
+  共有モーダル（011 §7 案 A-3）。
+  焦点は常に 1 つ: 発行前は幅いっぱいの発行ボタン、発行後は URL 欄のコピー。
+  面の塗りは使わず、区切りは線だけにする（塗りが並ぶとどれが上か読めなくなる）。
+*/
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* タイトルの年。月（周期の言葉）を立てるために一段薄くする */
+.titleYear {
+  color: var(--mantine-color-dimmed);
+}
+
+/* ---- 発行前の注意 3 行 ---- */
+.facts {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.facts li {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.facts b {
+  font-weight: 650;
+}
+
+.factIcon {
+  margin-top: 2px;
+  color: var(--mantine-color-gray-6);
+}
+
+/* ---- 発行後の URL 欄 ---- */
+.urlField {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding-inline: 12px 6px;
+  border: calc(0.0625rem * var(--mantine-scale)) solid var(--mantine-color-gray-4);
+  border-radius: var(--mantine-radius-sm);
+}
+
+/*
+  1 回のクリックで URL 全体を選ぶ。rtl にすると溢れたときに先頭（オリジン側）が省略され、
+  コードは右端に残る。収まるときは左に寄せる
+*/
+.url {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--mantine-color-gray-6);
+  font-size: 15px;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: left;
+  direction: rtl;
+  cursor: text;
+  -webkit-user-select: all;
+  user-select: all;
+}
+
+/* 省略記号（…）も薄い側の色になるように、既定を前半の色にしてコードだけ濃くする */
+.urlCode {
+  color: var(--mantine-color-text);
+  font-weight: 500;
+}
+
+/* 公開状態。緑の点 + 日付。残り 3 日以下は橙 */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: var(--mantine-color-green-9);
+  font-size: var(--mantine-font-size-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.statusSoon {
+  color: var(--mantine-color-orange-9);
+}
+
+.dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.daysLeft {
+  color: var(--mantine-color-dimmed);
+  font-weight: 400;
+}
+
+/* ---- ほかの共有中 / 期限切れ ---- */
+/* 2 つのまとまり（共有中 / 期限切れ）の間は、行の区切りより広く空ける */
+.lists {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: calc(0.0625rem * var(--mantine-scale)) solid var(--mantine-color-gray-2);
+}
+
+.sectionLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  color: var(--mantine-color-gray-6);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+
+/* 勤務日数バッジと同じ層（gray-1 の面・5px）。件数は状態ではないので色は付けない */
+.count {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding-inline: 4px;
+  border-radius: 5px;
+  background-color: var(--mantine-color-gray-1);
+  color: var(--mantine-color-gray-7);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 44px;
+  padding-block: 4px;
+}
+
+.row + .row {
+  border-top: calc(0.0625rem * var(--mantine-scale)) solid var(--mantine-color-gray-1);
+}
+
+.rowText {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.period {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.meta {
+  color: var(--mantine-color-gray-6);
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+
+.soon {
+  color: var(--mantine-color-orange-9);
+  font-weight: 650;
+}
+
+/* 字は .sectionLabel。ここでは押せることだけを足す */
+.expiredToggle {
+  gap: 6px;
+  width: 100%;
+  border-radius: var(--mantine-radius-sm);
+  text-align: left;
+}
+
+.expiredToggle:hover {
+  color: var(--mantine-color-gray-8);
+}
+
+.expiredToggle:focus-visible {
+  outline: 2px solid var(--mantine-color-gray-7);
+  outline-offset: 2px;
+}
+
+.chev,
+.chevOpen {
+  flex-shrink: 0;
+  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.chevOpen {
+  transform: rotate(90deg);
+}
+
+/* 期限切れの行。組みは .row と同じで、色だけ一段薄くする（下書き = 淡く、確定 = 濃く と同じ考え） */
+.endedPeriod {
+  color: var(--mantine-color-gray-6);
+  font-weight: 500;
+}
+
+.endedMeta {
+  color: var(--mantine-color-gray-5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chev,
+  .chevOpen {
+    transition: none;
+  }
+}

@@ -1,7 +1,7 @@
 'use client'
 
 import { type FormEvent, useState, useTransition } from 'react'
-import { Alert, Button, Group, Modal, Stack, TextInput } from '@mantine/core'
+import { Button, Group, Modal, Stack, TextInput } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { formatJapaneseMonthDay } from '@/lib/calendar/dateString'
 import { DATE_NOTE_MAX_LENGTH } from '@/lib/validation/dateNotes'
@@ -30,20 +30,20 @@ export function DateNoteModal({ tenantId, date, note, onClose }: Props) {
     <Modal opened onClose={onClose} title={formatJapaneseMonthDay(date)} size="sm">
       <form onSubmit={submit}>
         <Stack gap="md">
-          <Alert variant="light" color="teal" p="xs">
-            イベントなどの情報をメモできます。
-          </Alert>
-
           <TextInput
-            label="メモ"
+            label="日付メモ"
             description={`最大${DATE_NOTE_MAX_LENGTH}文字まで`}
+            placeholder="例）休業、研修、棚卸"
             maxLength={DATE_NOTE_MAX_LENGTH}
             value={value}
             onChange={(event) => setValue(event.currentTarget.value)}
             data-autofocus
           />
 
-          <Group justify="flex-end">
+          <Group justify="flex-end" gap="xs">
+            <Button variant="subtle" color="gray" onClick={onClose} disabled={isPending}>
+              キャンセル
+            </Button>
             <Button type="submit" loading={isPending}>
               保存
             </Button>

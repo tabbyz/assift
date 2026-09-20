@@ -25,7 +25,7 @@ export default async function NewPatternPage({
       />
       <Title order={2}>勤務パターンの登録</Title>
 
-      <Alert color="teal" variant="light">
+      <Alert color="gray" variant="light">
         「日勤」や「夜勤」などの勤務日だけでなく、「休み」や「有給」などの休暇日もすべて勤務パターンとして登録できます。
       </Alert>
 

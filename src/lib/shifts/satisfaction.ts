@@ -53,3 +53,25 @@ export function isSatisfied(
     (patternId) => countAt(required, date, patternId) === countAt(assigned, date, patternId)
   )
 }
+
+/** 日付ヘッダーに出す必要人数。出勤日パターンの合計。`assigned/required` で不足も過剰も読める */
+export type DateCoverage = { assigned: number; required: number; satisfied: boolean }
+
+export function coverageAt(
+  date: string,
+  workdayPatternIds: string[],
+  required: CountsByDate,
+  assigned: CountsByDate
+): DateCoverage {
+  let assignedTotal = 0
+  let requiredTotal = 0
+  for (const patternId of workdayPatternIds) {
+    assignedTotal += countAt(assigned, date, patternId)
+    requiredTotal += countAt(required, date, patternId)
+  }
+  return {
+    assigned: assignedTotal,
+    required: requiredTotal,
+    satisfied: isSatisfied(date, workdayPatternIds, required, assigned),
+  }
+}

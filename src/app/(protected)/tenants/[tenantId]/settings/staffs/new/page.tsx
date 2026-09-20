@@ -6,7 +6,7 @@ import { listPatterns } from '@/lib/queries/patterns'
 import { isUuid } from '@/utils/uuid'
 import { StaffForm } from '../_components/StaffForm'
 
-export const metadata: Metadata = { title: 'スタッフの登録' }
+export const metadata: Metadata = { title: 'スタッフの追加' }
 
 export default async function NewStaffPage({
   params,
@@ -21,9 +21,9 @@ export default async function NewStaffPage({
     <Stack gap="md">
       <SettingsBreadcrumbs
         parent={{ href: `/tenants/${tenantId}/settings/staffs`, label: 'スタッフ一覧' }}
-        current="スタッフの登録"
+        current="スタッフの追加"
       />
-      <Title order={2}>スタッフの登録</Title>
+      <Title order={2}>スタッフの追加</Title>
 
       <StaffForm
         tenantId={tenantId}

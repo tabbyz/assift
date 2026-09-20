@@ -1,4 +1,4 @@
-import { addDays, isDateString } from '@/lib/calendar/dateString'
+import { addDays, diffDays, isDateString } from '@/lib/calendar/dateString'
 
 /**
  * 公開期限の規則（v1 `Share::DATE_LIMIT = 6`）。終了日の 6 日後まで有効で、7 日後に無効になる。
@@ -11,6 +11,19 @@ import { addDays, isDateString } from '@/lib/calendar/dateString'
  */
 export const SHARE_GRACE_DAYS = 6
 
+/** 残りがこの日数以下なら「まもなく終了」として文字を橙にする（共有モーダル。011 §6.2） */
+export const SHARE_ENDING_SOON_DAYS = 3
+
+/** 公開される最後の日（終了日 + 猶予）。発行後の「◯/◯ まで」に出す。発行前は日付を出さず、終了の 7 日後に無効になる規則を書く */
+export function shareLastDay(endDate: string): string {
+  return addDays(endDate, SHARE_GRACE_DAYS)
+}
+
+/** 公開の残り日数。最後の日は 0、過ぎると負 */
+export function shareDaysLeft(endDate: string, today: string): number {
+  return diffDays(today, shareLastDay(endDate))
+}
+
 /**
  * その共有がまだ公開されているか（`YYYY-MM-DD` は辞書順 = 日付順）。
  *
@@ -20,7 +33,7 @@ export const SHARE_GRACE_DAYS = 6
  */
 export function isShareEnabled(endDate: string, today: string): boolean {
   if (!isDateString(endDate) || !isDateString(today)) return false
-  return addDays(endDate, SHARE_GRACE_DAYS) >= today
+  return shareLastDay(endDate) >= today
 }
 
 /** SQL の絞り込み用。`end_date >= minEnabledEndDate(today)` が有効な共有 */

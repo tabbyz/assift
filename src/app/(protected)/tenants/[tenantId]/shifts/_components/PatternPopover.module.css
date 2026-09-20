@@ -1,32 +1,56 @@
-/* パターン選択ボタン（v1 `ul.pattern-list li .pattern-button`）。40px 角の枠線ボタン */
+/*
+ * パターン選択ボタン。縦横比はシフトセル（53×35）と同じ。
+ * 文字はセルの 13px に対して 11px なので、ボタンも 11/13 に縮める。
+ */
 .patternButton {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
-  min-width: 40px;
-  height: 2.5rem;
+  min-width: calc(53px * 11 / 13);
+  aspect-ratio: 53 / 35;
   padding: 2px;
   overflow: hidden;
-  font-size: var(--mantine-font-size-xs);
+  font-size: 11px;
   line-height: 1.1;
   word-break: break-all;
   border: 2px solid var(--mantine-color-default-border);
-  border-radius: 2px;
+  border-radius: 3px;
   background-color: var(--mantine-color-body);
 }
 
+/* 塗りは `choiceStyle()` が inline で当てるので、background では上書きしない（セルと同じ理屈） */
 .patternButton:hover {
-  background-color: var(--mantine-color-default-hover);
+  filter: brightness(0.95);
+}
+
+/* 確定で押すときはセルと同じ太字。塗りは `choiceStyle(..., true)` */
+.patternButton[data-fixed] {
+  font-weight: 700;
+}
+
+/*
+ * 今入っているパターン。輪はボタンの外、ポップオーバーの紙の上に置く。
+ * パターン色の上に線を足すと黒や白で消える。
+ * 色は表の罫線（gray-5）より一段濃い gray-6。今日のバー（text の黒）は使わない。
+ * 隙間は 4px なので、offset 1 + 線 2 で隣に重ならない。
+ */
+.patternButton[aria-pressed='true'],
+.patternButton:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid var(--mantine-color-gray-6);
+  outline-offset: 1px;
 }
 
 /* 「空」ボタン（v1 は Bulma の is-light）。名前が無いので、薄い塗りでボタンだと分かるようにする */
 .emptyButton {
-  /* --mantine-color-default はライトテーマだと白なので、セルの「担当可」と同じ変数を使う */
+  /* --mantine-color-default はライトテーマだと白なので、薄い hover 面を使う */
   background-color: var(--mantine-color-default-hover);
   border-color: var(--mantine-color-default-border);
 }
 
 .emptyButton:hover {
   background-color: var(--mantine-color-gray-3);
+  filter: none;
 }

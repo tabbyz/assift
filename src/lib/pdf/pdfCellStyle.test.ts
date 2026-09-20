@@ -11,7 +11,7 @@ describe('pdfCellStyle', () => {
     expect(pdfCellStyle({ colorHex: '#FF5722' }, false)).toBeUndefined()
   })
 
-  it('確定はパターン色で塗って白文字 + 太字', () => {
+  it('確定はパターン色で塗ってコントラストの取れる文字 + 太字', () => {
     expect(pdfCellStyle({ colorHex: '#FF5722' }, true)).toEqual({
       backgroundColor: '#FF5722',
       color: '#FFFFFF',

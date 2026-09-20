@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseRequiredNums } from './requiredNums'
+import { fillRequiredNumsForward, parseRequiredNums } from './requiredNums'
 
 describe('parseRequiredNums', () => {
   it('曜日キーと祝日キーを読む', () => {
@@ -34,5 +34,36 @@ describe('parseRequiredNums', () => {
 
   it('0 は未設定と区別して保持する', () => {
     expect(parseRequiredNums({ '0': 0 })).toEqual({ '0': 0 })
+  })
+})
+
+describe('fillRequiredNumsForward', () => {
+  it('その曜日より右へ同じ人数をコピーする', () => {
+    expect(fillRequiredNumsForward({ '2': 3, '0': 1 }, '2')).toEqual({
+      '0': 1,
+      '2': 3,
+      '3': 3,
+      '4': 3,
+      '5': 3,
+      '6': 3,
+      holiday: 3,
+    })
+  })
+
+  it('0 もコピーする', () => {
+    expect(fillRequiredNumsForward({ '5': 0, '6': 4 }, '5')).toEqual({
+      '5': 0,
+      '6': 0,
+      holiday: 0,
+    })
+  })
+
+  it('空欄なら右の入力を消し、左はそのまま残す', () => {
+    expect(fillRequiredNumsForward({ '0': 5, '4': 9, holiday: 1 }, '1')).toEqual({ '0': 5 })
+  })
+
+  it('祝日列は変えない', () => {
+    const value = { holiday: 2, '0': 1 }
+    expect(fillRequiredNumsForward(value, 'holiday')).toBe(value)
   })
 })

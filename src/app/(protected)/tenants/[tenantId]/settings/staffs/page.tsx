@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { Group, Stack, Text, Title } from '@mantine/core'
+import { Group, Stack, Title } from '@mantine/core'
 import { IconPlus } from '@tabler/icons-react'
 import { LinkButton } from '@/components/LinkButton'
 import { listActiveStaffs, listRetiredStaffs } from '@/lib/queries/staffs'
@@ -40,10 +40,6 @@ export default async function StaffsPage({
         activeStaffs={activeStaffs}
         retiredStaffs={retiredStaffs}
       />
-
-      <Text size="xs" c="dimmed" ta="right">
-        アイコンで並べ替え
-      </Text>
     </Stack>
   )
 }

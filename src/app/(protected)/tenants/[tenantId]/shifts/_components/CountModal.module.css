@@ -1,16 +1,165 @@
 /*
-  集計の表。スタッフ名の列だけ横スクロールで固定する。
-  シフト表本体（components/shiftTable/ShiftTable.module.css）は 3 行のヘッダも固定するので、そちらとは別に書く。
+  集計の表。シフト表本体とは別に書く。
+
+  縦: スタッフが多いときはこの領域だけスクロールし、見出し行は stickyHeader で残す。
+  横: パターン列だけ流れ、名前・勤務日・休み（3 列目）までを固定する。
+  left は列幅の合計。幅を max までロックしないと、表が広がったとき left がずれる。
 */
-.table {
-  min-width: max-content;
+.scroller {
+  max-height: calc(100dvh - var(--modal-y-offset, 5dvh) * 2 - 8rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+  /* オーバーレイのスクロールバーだと最終行に重なる。幅を指定するとレイアウトを取る */
+  scrollbar-color: var(--mantine-color-gray-4) transparent;
+  scrollbar-width: thin;
 }
 
-.nameCell {
-  position: sticky;
-  left: 0;
-  z-index: 1;
-  width: 100px;
-  min-width: 100px;
+.scroller::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.scroller::-webkit-scrollbar-thumb {
+  background-color: var(--mantine-color-gray-4);
+  border-radius: 999px;
+}
+
+.scroller::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.table {
+  --count-name-width: 100px;
+  --count-day-width: 4.5rem;
+
+  width: max-content;
+  min-width: 100%;
+  /*
+    collapse のままだと sticky の背景が塗られず、スクロールした行が見出しに透ける。
+    罫線はセルの右と下に 1 本ずつ引く。上と左の外枠は表に付けるとスクロールで流れるので、
+    固定する見出しと名前列に載せる。
+  */
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+/* 表の上・左の枠は中身と一緒に動く。右と下は表の端に残す */
+.scroller .table[data-with-table-border] {
+  border-top: none;
+  border-inline-start: none;
+}
+
+.table :is(th, td) {
+  border-inline-start: none;
+  border-inline-end: 1px solid var(--table-border-color);
+  border-bottom: 1px solid var(--table-border-color);
+}
+
+.table :is(th, td):last-child {
+  border-inline-end: none;
+}
+
+.table tbody tr:last-child :is(th, td) {
+  border-bottom: none;
+}
+
+/*
+  thead ごと sticky にすると、見出しの背景が塗られずスクロールした行が透ける。
+  固定するのは th だけにする（Mantine が top: 0 を付けている）。
+*/
+.table thead[data-sticky] {
+  position: static;
+  z-index: auto;
+}
+
+/* Mantine が thead に重ねる上枠。見出しセルの枠と二重になる */
+.table thead[data-sticky]::before {
+  content: none;
+}
+
+.table thead th {
+  z-index: 4;
+  padding: 0;
+  box-shadow: none;
+  /* 固定範囲の右端と同じ 2px。1px の下罫の上に重ねない */
+  border-bottom: 2px solid var(--mantine-color-gray-3);
   background-color: var(--mantine-color-body);
+  /* background-color だけだと sticky の下の行が透ける */
+  background-image: linear-gradient(var(--mantine-color-body), var(--mantine-color-body));
+}
+
+/* z-index を負にすると表の行より後ろに回り、文字が透ける */
+.table thead th::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background-color: inherit;
+  background-image: inherit;
+}
+
+.face {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 36px;
+  padding: 6px 8px;
+  background-color: inherit;
+  background-image: inherit;
+  /* セルの border はスクロール端で欠ける。面の内側に上枠を描く */
+  box-shadow: inset 0 1px 0 var(--table-border-color);
+}
+
+.table thead .nameCell .face {
+  box-shadow:
+    inset 1px 0 0 var(--table-border-color),
+    inset 0 1px 0 var(--table-border-color);
+}
+
+.nameCell,
+.workdayCell,
+.offCell {
+  position: sticky;
+  z-index: 2;
+  background-color: var(--mantine-color-body);
+  background-image: linear-gradient(var(--mantine-color-body), var(--mantine-color-body));
+}
+
+/* 見出し行の中でも、流れるパターン名より手前に置く。面は日付ヘッダーと同じ gray-0 */
+.table thead .nameCell,
+.table thead .workdayCell,
+.table thead .offCell {
+  z-index: 5;
+  background-color: var(--mantine-color-gray-0);
+  background-image: linear-gradient(var(--mantine-color-gray-0), var(--mantine-color-gray-0));
+}
+
+.table .nameCell {
+  left: 0;
+  width: var(--count-name-width);
+  min-width: var(--count-name-width);
+  max-width: var(--count-name-width);
+}
+
+.table tbody .nameCell {
+  box-shadow: inset 1px 0 0 var(--table-border-color);
+}
+
+.workdayCell {
+  left: var(--count-name-width);
+  width: var(--count-day-width);
+  min-width: var(--count-day-width);
+  max-width: var(--count-day-width);
+}
+
+.table .offCell {
+  left: calc(var(--count-name-width) + var(--count-day-width));
+  width: var(--count-day-width);
+  min-width: var(--count-day-width);
+  max-width: var(--count-day-width);
+  /* 固定範囲の右端。見出しの下線と同じ 2px */
+  border-inline-end: 2px solid var(--mantine-color-gray-3);
 }

@@ -27,14 +27,14 @@ export function SetupNotice({ tenantId, hasPattern, hasStaff }: Props) {
   ]
 
   return (
-    <Stack gap="xs" pb="sm">
+    <Stack gap="xs" px={8} pb="sm">
       <Alert variant="light" color="gray" icon={<IconExclamationCircle size={16} />} p="xs">
         <Text size="sm">初期設定を完了してください。</Text>
       </Alert>
 
       {steps.map((step) => (
         <UnstyledButton key={step.step} component={Link} href={step.href}>
-          <Paper withBorder p="sm" bg="var(--mantine-color-teal-light)">
+          <Paper withBorder p="sm" bg="var(--mantine-color-gray-light)">
             <Group justify="space-between">
               <Text size="sm">
                 <b>{step.step}</b> クリックして<b>{step.label}</b>を登録

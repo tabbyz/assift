@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { datesBetween } from '@/lib/calendar/dateString'
-import { isShareEnabled, minEnabledEndDate, SHARE_GRACE_DAYS } from './expiry'
+import {
+  isShareEnabled,
+  minEnabledEndDate,
+  SHARE_GRACE_DAYS,
+  shareDaysLeft,
+  shareLastDay,
+} from './expiry'
 
 describe('isShareEnabled', () => {
   it('終了日が今日なら有効', () => {
@@ -61,5 +67,32 @@ describe('minEnabledEndDate', () => {
 
   it('猶予の日数は v1 の DATE_LIMIT と同じ', () => {
     expect(SHARE_GRACE_DAYS).toBe(6)
+  })
+})
+
+describe('shareLastDay', () => {
+  it('終了日の 6 日後（月をまたぐ）', () => {
+    expect(shareLastDay('2026-09-30')).toBe('2026-10-06')
+    expect(shareLastDay('2026-10-31')).toBe('2026-11-06')
+  })
+
+  // 画面に出す日付と実際の期限判定がずれないことを固定する
+  it('その日までは isShareEnabled が真で、翌日から偽', () => {
+    const last = shareLastDay('2026-09-20')
+    expect(isShareEnabled('2026-09-20', last)).toBe(true)
+    expect(isShareEnabled('2026-09-20', '2026-09-27')).toBe(false)
+    expect(last).toBe('2026-09-26')
+  })
+})
+
+describe('shareDaysLeft', () => {
+  it('最後の日までの日数', () => {
+    expect(shareDaysLeft('2026-10-31', '2026-09-23')).toBe(44)
+    expect(shareDaysLeft('2026-09-30', '2026-09-23')).toBe(13)
+  })
+
+  it('最後の日は 0、過ぎると負', () => {
+    expect(shareDaysLeft('2026-09-30', '2026-10-06')).toBe(0)
+    expect(shareDaysLeft('2026-09-30', '2026-10-07')).toBe(-1)
   })
 })

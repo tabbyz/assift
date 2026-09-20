@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatJstDateTime } from './datetime'
+import { formatJstDateTime, formatJstMonthDayTime, formatJstYear } from './datetime'
 
 describe('formatJstDateTime', () => {
   it('UTC の timestamptz を JST で整形する', () => {
@@ -23,5 +23,20 @@ describe('formatJstDateTime', () => {
     expect(formatJstDateTime(new Date('2026-09-01T01:30:00Z'))).toBe(
       formatJstDateTime('2026-09-01T01:30:00Z')
     )
+  })
+})
+
+describe('formatJstMonthDayTime', () => {
+  it('月日と時は詰めず、分だけ 2 桁にする', () => {
+    expect(formatJstMonthDayTime('2026-09-01T01:30:00Z')).toBe('9/1 10:30')
+    expect(formatJstMonthDayTime('2026-01-02T00:05:00Z')).toBe('1/2 9:05')
+  })
+
+  it('UTC 深夜は JST の翌日で、0 時は 0 と書く', () => {
+    expect(formatJstMonthDayTime('2026-09-01T15:00:00Z')).toBe('9/2 0:00')
+  })
+
+  it('年は formatJstYear が別に返す', () => {
+    expect(formatJstYear('2026-01-02T00:05:00Z')).toBe('2026')
   })
 })

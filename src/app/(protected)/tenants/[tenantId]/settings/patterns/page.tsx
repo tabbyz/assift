@@ -1,8 +1,9 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { Group, Stack, Text, Title } from '@mantine/core'
+import { Group, Stack, Title } from '@mantine/core'
 import { IconPlus } from '@tabler/icons-react'
 import { LinkButton } from '@/components/LinkButton'
+import { ReorderHint } from '@/components/ReorderHint'
 import { listPatterns } from '@/lib/queries/patterns'
 import { isUuid } from '@/utils/uuid'
 import { PatternListClient } from './_components/PatternListClient'
@@ -33,9 +34,7 @@ export default async function PatternsPage({
 
       <PatternListClient tenantId={tenantId} patterns={patterns} />
 
-      <Text size="xs" c="dimmed" ta="right">
-        アイコンで並べ替え
-      </Text>
+      <ReorderHint />
     </Stack>
   )
 }

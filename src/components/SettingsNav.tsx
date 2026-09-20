@@ -2,49 +2,45 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { NavLink, Stack, Text } from '@mantine/core'
+import { Divider, NavLink, Stack, Text, UnstyledButton } from '@mantine/core'
 import { IconArrowLeft } from '@tabler/icons-react'
-import { assignLinks, settingsLinks, shiftsHref } from '@/lib/tenants/navigation'
+import { configLinks, isLinkActive, masterLinks, shiftsHref } from '@/lib/tenants/navigation'
+import classes from './SettingsNav.module.css'
 
 /**
- * 設定ページのナビ。デスクトップは左カラム、モバイルは本文の上に積む（親の Flex が向きを変える）。
- * 見た目を 1 種類に保つため、モバイル専用の UI は作らない。
+ * 設定ページのナビ。頻度順。店舗情報は末尾。
+ * 「シフト表へ」は戻り。「設定」が見出しで項目を束ねる。
+ * デスクトップは左カラム、モバイルは本文の上に積む（親の Flex が向きを変える）。
  */
 export function SettingsNav({ tenantId }: { tenantId: string }) {
   const pathname = usePathname()
 
   return (
     <Stack gap={4} miw={200}>
-      <NavLink
-        component={Link}
-        href={shiftsHref(tenantId)}
-        label="シフト表へ"
-        leftSection={<IconArrowLeft size={18} />}
-      />
-
-      <Text size="xs" c="dimmed" px="sm" pt="sm">
-        基本設定
+      <UnstyledButton component={Link} href={shiftsHref(tenantId)} className={classes.back}>
+        <IconArrowLeft size={16} />
+        シフト表へ
+      </UnstyledButton>
+      <Text size="xs" c="dimmed" px="sm">
+        設定
       </Text>
-      {settingsLinks(tenantId).map((link) => (
+      {masterLinks(tenantId).map((link) => (
         <NavLink
           key={link.href}
           component={Link}
           href={link.href}
           label={link.label}
-          active={pathname === link.href}
+          active={isLinkActive(link.href, pathname)}
         />
       ))}
-
-      <Text size="xs" c="dimmed" px="sm" pt="sm">
-        アサイン設定
-      </Text>
-      {assignLinks(tenantId).map((link) => (
+      <Divider />
+      {configLinks(tenantId).map((link) => (
         <NavLink
           key={link.href}
           component={Link}
           href={link.href}
           label={link.label}
-          active={pathname === link.href}
+          active={isLinkActive(link.href, pathname)}
         />
       ))}
     </Stack>

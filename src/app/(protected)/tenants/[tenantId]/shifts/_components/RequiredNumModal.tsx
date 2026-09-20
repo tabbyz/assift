@@ -100,7 +100,7 @@ export function RequiredNumModal({ tenantId, date, rows, onClose }: Props) {
 
         {rows.length === 0 ? (
           <Text c="dimmed" size="sm">
-            出勤日の勤務パターンが登録されていません
+            勤務日のパターンが登録されていません
           </Text>
         ) : (
           <Table withTableBorder withColumnBorders>
@@ -146,7 +146,7 @@ export function RequiredNumModal({ tenantId, date, rows, onClose }: Props) {
           </Table>
         )}
 
-        <Group justify="space-between">
+        <Group justify="flex-end" gap="xs">
           <Button variant="subtle" color="gray" onClick={onClose} disabled={isPending}>
             キャンセル
           </Button>

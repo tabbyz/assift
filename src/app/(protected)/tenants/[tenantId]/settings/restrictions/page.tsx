@@ -1,8 +1,9 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { Group, Stack, Text, Title } from '@mantine/core'
+import { Group, Stack, Title } from '@mantine/core'
 import { IconPlus } from '@tabler/icons-react'
 import { LinkButton } from '@/components/LinkButton'
+import { ReorderHint } from '@/components/ReorderHint'
 import { listPatterns } from '@/lib/queries/patterns'
 import { listRestrictions } from '@/lib/queries/restrictions'
 import { isUuid } from '@/utils/uuid'
@@ -41,9 +42,7 @@ export default async function RestrictionsPage({
         patternNames={patterns.map((pattern) => [pattern.id, pattern.name])}
       />
 
-      <Text size="xs" c="dimmed" ta="right">
-        アイコンで並べ替え（処理結果には影響しません）
-      </Text>
+      <ReorderHint note="処理結果には影響しません" />
     </Stack>
   )
 }

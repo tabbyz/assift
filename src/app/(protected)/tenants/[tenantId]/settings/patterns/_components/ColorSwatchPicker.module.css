@@ -1,0 +1,24 @@
+/* シフトセルと同じ 3px。円だと表のマスと形が違う */
+.swatch {
+  --cs-radius: 3px;
+  position: relative;
+  transition: transform 120ms ease;
+}
+
+@media (hover: hover) {
+  .swatch:hover {
+    z-index: 1;
+    transform: scale(1.12);
+  }
+}
+
+.swatch:focus-visible {
+  z-index: 1;
+  transform: scale(1.12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .swatch {
+    transition: none;
+  }
+}

@@ -6,6 +6,7 @@ import { SortableList } from '@/components/SortableList'
 import { PATTERN_KIND_LABELS } from '@/lib/patterns/kinds'
 import type { Pattern } from '@/lib/queries/patterns'
 import { reorderPatterns } from '../actions'
+import styles from './PatternListClient.module.css'
 
 export function PatternListClient({
   tenantId,
@@ -22,10 +23,10 @@ export function PatternListClient({
       onReorder={(ids) => reorderPatterns({ tenantId, ids })}
       renderItem={(pattern) => (
         <Group gap="sm" wrap="nowrap">
-          <Badge variant="light" color={pattern.kind === 'workday' ? 'teal' : 'gray'} w={64}>
+          <Badge variant="light" color="gray" w={64}>
             {PATTERN_KIND_LABELS[pattern.kind]}
           </Badge>
-          <ColorSwatch color={pattern.color_hex} size={16} withShadow />
+          <ColorSwatch className={styles.swatch} color={pattern.color_hex} size={16} withShadow />
           <Stack gap={0} miw={0}>
             <Text fw={500} truncate>
               {pattern.name}

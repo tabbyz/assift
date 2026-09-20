@@ -1,0 +1,14 @@
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 8px;
+  margin-bottom: 4px;
+  font-size: 13px;
+  color: var(--mantine-color-dimmed);
+}
+
+.back:hover {
+  color: var(--mantine-color-text);
+}

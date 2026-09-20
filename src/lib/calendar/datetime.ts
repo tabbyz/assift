@@ -15,10 +15,36 @@ const JST_FORMATTER = new Intl.DateTimeFormat('sv-SE', {
   hourCycle: 'h23',
 })
 
-/** `2026/09/01 10:30`（v1 の共有一覧の「◯◯に取得」）。UTC 深夜は JST の翌日になる */
+function jstParts(value: string | Date): Intl.DateTimeFormatPart[] {
+  return JST_FORMATTER.formatToParts(new Date(value))
+}
+
+function part(parts: Intl.DateTimeFormatPart[], type: Intl.DateTimeFormatPartTypes): string {
+  return parts.find((item) => item.type === type)?.value ?? ''
+}
+
+/** `2026/09/01 10:30`。UTC 深夜は JST の翌日になる */
 export function formatJstDateTime(value: string | Date): string {
-  const parts = JST_FORMATTER.formatToParts(new Date(value))
-  const at = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((part) => part.type === type)?.value ?? ''
-  return `${at('year')}/${at('month')}/${at('day')} ${at('hour')}:${at('minute')}`
+  const parts = jstParts(value)
+  const year = part(parts, 'year')
+  const month = part(parts, 'month')
+  const day = part(parts, 'day')
+  const hour = part(parts, 'hour')
+  const minute = part(parts, 'minute')
+  return `${year}/${month}/${day} ${hour}:${minute}`
+}
+
+/** `9/16 9:41`。月日と時は詰めない。分は 2 桁。年は含めない（共有一覧の発行時刻） */
+export function formatJstMonthDayTime(value: string | Date): string {
+  const parts = jstParts(value)
+  const month = Number(part(parts, 'month'))
+  const day = Number(part(parts, 'day'))
+  const hour = Number(part(parts, 'hour'))
+  const minute = part(parts, 'minute')
+  return `${month}/${day} ${hour}:${minute}`
+}
+
+/** JST の年。`2026` */
+export function formatJstYear(value: string | Date): string {
+  return part(jstParts(value), 'year')
 }

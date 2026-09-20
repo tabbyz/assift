@@ -1,0 +1,267 @@
+/*
+  シフトコピーのモーダル（011 §8 案 A「期間で選ぶ」）。
+  コピー元 → コピー先を 1 つの枠に 2 行で並べ、区切り線の上に下向きの矢印を載せる。
+  面の塗りは使わず、区切りは線だけ（共有モーダルと同じ）。
+*/
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.sat {
+  color: var(--mantine-color-blue-8);
+}
+
+.sun {
+  color: var(--mantine-color-red-8);
+}
+
+/* ---- コピー元 → コピー先 ---- */
+.route {
+  border: calc(0.0625rem * var(--mantine-scale)) solid var(--mantine-color-gray-3);
+  border-radius: var(--mantine-radius-sm);
+}
+
+.leg {
+  position: relative;
+  display: grid;
+  grid-template-columns: 60px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
+  min-height: 64px;
+  padding: 10px 8px 10px 12px;
+}
+
+.leg + .leg {
+  border-top: calc(0.0625rem * var(--mantine-scale)) solid var(--mantine-color-gray-2);
+}
+
+.legLabel {
+  color: var(--mantine-color-gray-6);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.legBody {
+  min-width: 0;
+}
+
+.legTitle {
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.legDates {
+  margin-top: 2px;
+  color: var(--mantine-color-gray-6);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.dateLabel {
+  white-space: nowrap;
+}
+
+/* コピー先の行の上端（= 区切り線）に中心を置く */
+.hop {
+  position: absolute;
+  top: 0;
+  left: 30px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: calc(0.0625rem * var(--mantine-scale)) solid var(--mantine-color-gray-3);
+  border-radius: 50%;
+  background-color: var(--mantine-color-body);
+  color: var(--mantine-color-gray-7);
+  transform: translate(-50%, -50%);
+}
+
+.days {
+  color: var(--mantine-color-gray-6);
+  font-size: 12px;
+}
+
+.toEnd {
+  flex: none;
+  color: var(--mantine-color-gray-7);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* 枠の下の 1 行（曜日のずれ / 前回のコピー元）。右に切り替えの文字ボタン */
+.metaRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+  margin-top: 6px;
+}
+
+.metaNote {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--mantine-color-gray-7);
+  font-size: 12px;
+}
+
+.metaIcon {
+  flex: none;
+  color: var(--mantine-color-gray-6);
+}
+
+.metaError {
+  color: var(--mantine-color-red-8);
+  font-weight: 600;
+}
+
+/* ---- 勤務パターン ---- */
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 28px;
+}
+
+/* 共有モーダルの見出しと同じ字 */
+.sectionLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--mantine-color-gray-6);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+
+.count {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding-inline: 5px;
+  border-radius: 5px;
+  background-color: var(--mantine-color-gray-1);
+  color: var(--mantine-color-gray-7);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.group {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  margin-top: 6px;
+}
+
+.groupLabel {
+  color: var(--mantine-color-gray-6);
+  font-size: 12px;
+  line-height: 32px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/*
+  表の凡例と同じ札（セルと同じ 3px）。選択中の塗りと文字色は `chipStyle()` が inline で当てる。
+  外したものは白地に色の四角を残し、何のパターンかは色でも読めるようにする
+*/
+.chip {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px 0 8px;
+  border: calc(0.0625rem * var(--mantine-scale)) solid var(--mantine-color-gray-3);
+  border-radius: 3px;
+  background-color: var(--mantine-color-body);
+  color: var(--mantine-color-gray-6);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* 白いパターンは `chipStyle()` が文字色を当てないので、選択中は本文色に戻す */
+.chip[data-selected] {
+  color: var(--mantine-color-text);
+  font-weight: 650;
+}
+
+.chip:hover {
+  filter: brightness(0.97);
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--mantine-color-gray-7);
+  outline-offset: 2px;
+}
+
+/* チェック（14px）と色の四角（10px）を同じ枠に収める。入れ替えると札が広がって隣がずれる */
+.mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+}
+
+.swatch {
+  box-sizing: border-box;
+  width: 10px;
+  height: 10px;
+  border: calc(0.0625rem * var(--mantine-scale)) solid;
+  border-radius: 2px;
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px;
+  border: calc(0.0625rem * var(--mantine-scale)) dashed var(--mantine-color-gray-4);
+  border-radius: var(--mantine-radius-sm);
+}
+
+/* ---- 押す前の規則（共有モーダルの .facts と同じ組み） ---- */
+.facts {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 12px 0 0;
+  border-top: calc(0.0625rem * var(--mantine-scale)) solid var(--mantine-color-gray-2);
+  list-style: none;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.facts li {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.facts b {
+  font-weight: 650;
+}
+
+.factIcon {
+  margin-top: 2px;
+  color: var(--mantine-color-gray-6);
+}

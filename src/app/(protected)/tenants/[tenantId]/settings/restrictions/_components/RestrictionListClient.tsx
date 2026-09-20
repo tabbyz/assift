@@ -26,7 +26,9 @@ export function RestrictionListClient({ tenantId, restrictions, patternNames }: 
       onReorder={(ids) => reorderRestrictions({ tenantId, ids })}
       renderItem={(restriction) => (
         <Stack gap={0}>
-          <Text fw={700}>{describeRestriction(restriction, names)}</Text>
+          <Text size="sm" fw={500}>
+            {describeRestriction(restriction, names)}
+          </Text>
           <Text size="xs" c="dimmed">
             {RESTRICTION_KIND_LABELS[restriction.kind]}
           </Text>

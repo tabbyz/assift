@@ -197,7 +197,8 @@ export function StaffForm({ tenantId, patterns, initial, afterCreate }: Props) {
             allowDecimal={false}
             allowNegative={false}
             required
-            maw={120}
+            // ラベルと説明文はフォーム幅のまま。狭いのは入力欄だけ
+            styles={{ wrapper: { maxWidth: 120 } }}
           />
 
           <CheckboxGroup
@@ -218,7 +219,7 @@ export function StaffForm({ tenantId, patterns, initial, afterCreate }: Props) {
             )}
           </CheckboxGroup>
 
-          <Group justify="flex-end">
+          <Group justify="flex-end" gap="xs">
             {/* チュートリアルでは出さない（v1 の `unless @tutorial_step`） */}
             {afterCreate === 'list' && (
               <LinkButton
@@ -232,7 +233,7 @@ export function StaffForm({ tenantId, patterns, initial, afterCreate }: Props) {
               </LinkButton>
             )}
             <Button type="submit" loading={isPending}>
-              {isEdit ? '更新する' : '登録する'}
+              {isEdit ? '保存' : '追加'}
             </Button>
           </Group>
         </Stack>

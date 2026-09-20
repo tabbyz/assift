@@ -20,11 +20,11 @@ export function TenantSwitcher({ tenant, tenants }: Props) {
         <Button
           variant="subtle"
           color="gray"
-          size="compact-md"
+          size="compact-sm"
           px="xs"
-          rightSection={<IconChevronDown size={16} />}
+          rightSection={<IconChevronDown size={14} />}
         >
-          <Text fw={700} size="lg" lh={1}>
+          <Text fw={650} size="sm" lh={1}>
             {truncate(tenant.name)}
           </Text>
         </Button>

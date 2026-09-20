@@ -1,12 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import { Anchor, Tabs, TabsList, TabsPanel, TabsTab, Text } from '@mantine/core'
+import { Anchor, Stack, Tabs, TabsList, TabsPanel, TabsTab, Text } from '@mantine/core'
 import { useQueryStates } from 'nuqs'
+import { ReorderHint } from '@/components/ReorderHint'
 import { SortableList } from '@/components/SortableList'
 import type { Staff } from '@/lib/queries/staffs'
 import { reorderStaffs } from '../actions'
 import { STAFF_TABS, type StaffTab, staffsParsers } from '../searchParams'
+import styles from './StaffListClient.module.css'
 
 type Props = {
   tenantId: string
@@ -32,20 +34,23 @@ export function StaffListClient({ tenantId, activeStaffs, retiredStaffs }: Props
 
   return (
     <Tabs value={tab} onChange={(value) => isStaffTab(value) && setQuery({ tab: value })}>
-      <TabsList>
+      <TabsList className={styles.list}>
         <TabsTab value="active">在籍中 ({activeStaffs.length}人)</TabsTab>
         <TabsTab value="retired">退職</TabsTab>
       </TabsList>
 
       <TabsPanel value="active" pt="md">
-        <SortableList
-          items={activeStaffs}
-          getId={(staff) => staff.id}
-          emptyMessage="スタッフが登録されていません"
-          onReorder={(ids) => reorderStaffs({ tenantId, ids })}
-          renderItem={name}
-          renderActions={editLink}
-        />
+        <Stack gap="md">
+          <SortableList
+            items={activeStaffs}
+            getId={(staff) => staff.id}
+            emptyMessage="スタッフが登録されていません"
+            onReorder={(ids) => reorderStaffs({ tenantId, ids })}
+            renderItem={name}
+            renderActions={editLink}
+          />
+          <ReorderHint />
+        </Stack>
       </TabsPanel>
 
       <TabsPanel value="retired" pt="md">

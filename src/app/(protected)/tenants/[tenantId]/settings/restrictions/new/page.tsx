@@ -9,7 +9,7 @@ import { KindSelector } from '../_components/KindSelector'
 import { RestrictionForm } from '../_components/RestrictionForm'
 import { loadNewRestrictionSearchParams } from './searchParams'
 
-export const metadata: Metadata = { title: '制約の登録' }
+export const metadata: Metadata = { title: '制約を追加' }
 
 export default async function NewRestrictionPage({
   params,
@@ -31,9 +31,9 @@ export default async function NewRestrictionPage({
     <Stack gap="md">
       <SettingsBreadcrumbs
         parent={{ href: listHref, label: '制約一覧' }}
-        current={kind ? '制約の登録' : '制約タイプを選択'}
+        current={kind ? '制約を追加' : '制約タイプを選択'}
       />
-      <Title order={2}>{kind ? '制約の登録' : '制約タイプを選択'}</Title>
+      <Title order={2}>{kind ? '制約を追加' : '制約タイプを選択'}</Title>
 
       {kind ? (
         <RestrictionForm

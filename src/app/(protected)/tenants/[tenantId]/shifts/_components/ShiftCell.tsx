@@ -1,10 +1,17 @@
 'use client'
 
-import type { Ref } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type Ref } from 'react'
 import { UnstyledButton, type ElementProps } from '@mantine/core'
 import { IconPlus } from '@tabler/icons-react'
 import { cellStyle, type CellPattern } from '@/components/shiftTable/cellStyle'
 import classes from '@/components/shiftTable/ShiftTable.module.css'
+import {
+  HOLD_FEEDBACK_DELAY_MS,
+  HOLD_TO_TOGGLE_MS,
+  consumeHoldClick,
+  markHoldToggle,
+  movedPastHold,
+} from '../_lib/holdToToggle'
 
 type Props = ElementProps<'button', 'onClick'> & {
   /** アサイン済みのパターン。無ければ空のセル */
@@ -14,6 +21,10 @@ type Props = ElementProps<'button', 'onClick'> & {
   enabled: boolean
   label: string
   onClick: () => void
+  /** アサイン済みのときだけ。長押しで下書きと確定を入れ替える */
+  onToggleFixed?: () => void
+  /** 長押し直後の click を、このセルだけ捨てるためのキー（`staffId:date`） */
+  holdKey: string
   ref?: Ref<HTMLButtonElement>
 }
 
@@ -26,8 +37,12 @@ type Props = ElementProps<'button', 'onClick'> & {
 /**
  * シフト表の 1 セル（v1 の `_staff.html.slim` + `shifts/pattern.scss`）。
  *
- * 担当可（薄いグレー + 「+」）/ 担当不可（背景なし）/ 下書き（白地 + 上辺の色帯）/
- * 確定（パターン色で塗り + 太字 + 白文字）の 4 通り。色の規則は `cellStyle()` に置いて公開ページと共有する。
+ * 担当可（白。空はホバー / フォーカスで「+」）/ 担当不可（斜線）/
+ * 下書き（淡塗り）/ 確定（ベタ塗り + 太字）の 4 通り。
+ * 色の規則は `cellStyle()` に置いて公開ページと共有する。
+ *
+ * タップはパターンのポップオーバー。アサイン済みを長押しすると、ポップオーバーを開かずに
+ * 下書きと確定を入れ替える。空のセルに長押しは無く、離したときにポップオーバーが開く。
  */
 export function ShiftCell({
   pattern,
@@ -35,11 +50,26 @@ export function ShiftCell({
   enabled,
   label,
   onClick,
+  onToggleFixed,
+  holdKey,
   ref,
   className,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onPointerCancel,
+  onContextMenu,
   ...rest
 }: Props) {
   const assigned = Boolean(pattern)
+  const { holding, pointerProps } = useHoldToggle(holdKey, onToggleFixed)
+  const paint = cellStyle(pattern, fixed)
+  const holdStyle: CSSProperties | undefined = holding
+    ? ({
+        ...paint,
+        '--hold-ms': `${HOLD_TO_TOGGLE_MS - HOLD_FEEDBACK_DELAY_MS}ms`,
+      } as CSSProperties)
+    : paint
 
   return (
     <UnstyledButton
@@ -50,13 +80,119 @@ export function ShiftCell({
       ref={ref}
       className={className ? `${classes.cell} ${className}` : classes.cell}
       data-assigned={assigned}
-      data-enabled={enabled}
+      data-enabled={enabled ? 'true' : 'false'}
       data-fixed={fixed}
-      onClick={onClick}
+      data-holding={holding || undefined}
+      onClick={(event) => {
+        if (consumeHoldClick(holdKey)) {
+          event.preventDefault()
+          event.stopPropagation()
+          return
+        }
+        onClick()
+      }}
+      onPointerDown={(event) => {
+        onPointerDown?.(event)
+        pointerProps.onPointerDown(event)
+      }}
+      onPointerMove={(event) => {
+        onPointerMove?.(event)
+        pointerProps.onPointerMove(event)
+      }}
+      onPointerUp={(event) => {
+        onPointerUp?.(event)
+        pointerProps.onPointerUp()
+      }}
+      onPointerCancel={(event) => {
+        onPointerCancel?.(event)
+        pointerProps.onPointerCancel()
+      }}
+      onPointerLeave={pointerProps.onPointerLeave}
+      onContextMenu={(event) => {
+        onContextMenu?.(event)
+        // 長押しの途中でブラウザのメニューが出ると、切替より先に指が取られる
+        if (onToggleFixed) event.preventDefault()
+      }}
       aria-label={label}
-      style={cellStyle(pattern, fixed)}
+      style={holdStyle}
     >
-      {pattern ? pattern.name : enabled && <IconPlus size={14} className={classes.cellPlus} />}
+      {pattern ? pattern.name : enabled && <IconPlus size={18} className={classes.cellPlus} />}
     </UnstyledButton>
   )
+}
+
+/**
+ * アサイン済みセルの長押し。
+ * 指が動いた・離れた・スクロールで pointer がキャンセルされたら、切替はしない。
+ */
+function useHoldToggle(key: string, onToggle: (() => void) | undefined) {
+  const onToggleRef = useRef(onToggle)
+  const keyRef = useRef(key)
+  useEffect(() => {
+    onToggleRef.current = onToggle
+    keyRef.current = key
+  })
+  const timer = useRef<number | null>(null)
+  const feedback = useRef<number | null>(null)
+  const origin = useRef<{ x: number; y: number } | null>(null)
+  const [holding, setHolding] = useState(false)
+
+  const clearTimers = () => {
+    if (timer.current !== null) window.clearTimeout(timer.current)
+    if (feedback.current !== null) window.clearTimeout(feedback.current)
+    timer.current = null
+    feedback.current = null
+  }
+
+  const stop = () => {
+    clearTimers()
+    origin.current = null
+    setHolding(false)
+  }
+
+  useEffect(() => {
+    return () => {
+      if (timer.current !== null) window.clearTimeout(timer.current)
+      if (feedback.current !== null) window.clearTimeout(feedback.current)
+    }
+  }, [])
+
+  const onPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
+    if (!onToggleRef.current || event.button !== 0) return
+    clearTimers()
+    origin.current = { x: event.clientX, y: event.clientY }
+    feedback.current = window.setTimeout(() => {
+      feedback.current = null
+      setHolding(true)
+    }, HOLD_FEEDBACK_DELAY_MS)
+    timer.current = window.setTimeout(() => {
+      timer.current = null
+      if (feedback.current !== null) {
+        window.clearTimeout(feedback.current)
+        feedback.current = null
+      }
+      origin.current = null
+      setHolding(false)
+      if (!onToggleRef.current) return
+      markHoldToggle(keyRef.current)
+      onToggleRef.current()
+    }, HOLD_TO_TOGGLE_MS)
+  }
+
+  const onPointerMove = (event: PointerEvent<HTMLButtonElement>) => {
+    if (!origin.current) return
+    if (movedPastHold(origin.current, { x: event.clientX, y: event.clientY })) stop()
+  }
+
+  return {
+    holding,
+    pointerProps: {
+      onPointerDown,
+      onPointerMove,
+      onPointerUp: stop,
+      onPointerCancel: stop,
+      // 端を押したままセルの外へ出たときは、10px に届く前でもやめる
+      onPointerLeave: stop,
+    },
+  }
 }

@@ -112,7 +112,7 @@ export function AccountClient({ email, newEmail, hasPassword, notice, initialErr
         <FormErrorAlert message={initialError} />
 
         {notice && (
-          <Alert color="teal" variant="light" icon={<IconInfoCircle size={16} />}>
+          <Alert color="gray" variant="light" icon={<IconInfoCircle size={16} />}>
             {notice}
             {newEmail && ' もう一方のメールアドレスに届いたリンクも開くと切り替わります。'}
           </Alert>

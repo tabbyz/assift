@@ -16,7 +16,7 @@ export default async function TutorialPatternPage({
 
   return (
     <Stack gap="lg">
-      <Alert color="teal" variant="light">
+      <Alert color="gray" variant="light">
         {patterns.length === 0 ? (
           <Stack gap="xs">
             <Text>はじめにあなたの店舗の勤務パターンを登録しましょう。</Text>
@@ -30,7 +30,7 @@ export default async function TutorialPatternPage({
             <Text size="sm">登録済みのパターン（あとで編集できます）</Text>
             <Text fw={700}>{patterns.map((pattern) => pattern.name).join('、')}</Text>
             <Text size="sm">ひと通り追加したら次へ進みましょう。</Text>
-            <LinkButton href={`/tenants/${tenantId}/tutorial/staff`} color="teal" mt="xs">
+            <LinkButton href={`/tenants/${tenantId}/tutorial/staff`} mt="xs">
               次のSTEPへ
             </LinkButton>
           </Stack>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { toShiftMap } from './key'
-import { assignedCounts, countAt, isSatisfied, requiredCounts } from './satisfaction'
+import { assignedCounts, countAt, coverageAt, isSatisfied, requiredCounts } from './satisfaction'
 
 const EARLY = 'ptn-early'
 const LATE = 'ptn-late'
@@ -73,5 +73,44 @@ describe('isSatisfied', () => {
   it('出勤日パターンが 0 件なら常に満たす', () => {
     const required = requiredCounts([{ patternId: EARLY, date: '2026-09-17', num: 9 }])
     expect(isSatisfied('2026-09-17', [], required, assignedCounts(shifts))).toBe(true)
+  })
+})
+
+describe('coverageAt', () => {
+  it('出勤日パターンの合計を assigned/required で返す', () => {
+    const required = requiredCounts([
+      { patternId: EARLY, date: '2026-09-17', num: 3 },
+      { patternId: LATE, date: '2026-09-17', num: 1 },
+    ])
+    expect(coverageAt('2026-09-17', WORKDAYS, required, assignedCounts(shifts))).toEqual({
+      assigned: 3,
+      required: 4,
+      satisfied: false,
+    })
+  })
+
+  it('満たしていれば satisfied', () => {
+    const required = requiredCounts([
+      { patternId: EARLY, date: '2026-09-17', num: 2 },
+      { patternId: LATE, date: '2026-09-17', num: 1 },
+    ])
+    expect(coverageAt('2026-09-17', WORKDAYS, required, assignedCounts(shifts))).toEqual({
+      assigned: 3,
+      required: 3,
+      satisfied: true,
+    })
+  })
+
+  it('休みパターンは合計に入れない', () => {
+    const required = requiredCounts([
+      { patternId: EARLY, date: '2026-09-18', num: 0 },
+      { patternId: LATE, date: '2026-09-18', num: 0 },
+      { patternId: DAYOFF, date: '2026-09-18', num: 5 },
+    ])
+    expect(coverageAt('2026-09-18', WORKDAYS, required, assignedCounts(shifts))).toEqual({
+      assigned: 0,
+      required: 0,
+      satisfied: true,
+    })
   })
 })

@@ -22,7 +22,7 @@ export function KindSelector({ tenantId, workdayPatternCount }: Props) {
     <Stack gap="md">
       {!hasWorkdayPattern && (
         <Alert color="yellow" variant="light">
-          出勤日の勤務パターンを先に登録してください。
+          勤務日のパターンを先に登録してください。
         </Alert>
       )}
 

@@ -6,9 +6,9 @@ export type PatternKind = Enums<'pattern_kind'>
 
 export const PATTERN_KINDS = Constants.public.Enums.pattern_kind
 
-/** v1 の ja.yml（enums.pattern.kind）と同じ表記 */
+/** 画面上の呼び方。v1 は「出勤日」だが、勤務日数の集計と同じ「勤務日」に揃える */
 export const PATTERN_KIND_LABELS: Record<PatternKind, string> = {
-  workday: '出勤日',
+  workday: '勤務日',
   dayoff: '休み',
 }
 

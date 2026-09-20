@@ -8,12 +8,16 @@ export const DRAFT_BAND_WIDTH = mm(1.5)
 export type PdfCellPattern = { colorHex: string }
 
 /**
- * セルの色（010 §3.9）。web の `cellStyle()`（`components/shiftTable/cellStyle.ts`）と**同じ規則**だが、
- * `CSSProperties` と react-pdf の `Style` は別物なので共用しない。型を緩めて 1 つにすると
- * 「web で効いているつもりの指定が PDF では無視される」壊れ方をする。
+ * セルの色（010 §3.9）。`CSSProperties` と react-pdf の `Style` は別物なので共用しない。
+ * 型を緩めて 1 つにすると「web で効いているつもりの指定が PDF では無視される」壊れ方をする。
+ *
+ * **011 以降、web の `cellStyle()` とは規則が違う。** web の下書きはパターン色の淡塗りになったが、
+ * PDF はここでは v1 のまま（白地 + 上辺の色帯）にしてある。紙は淡い塗りが飛びやすく、
+ * 出力を目で確かめてからでないと動かせないため。揃えるときは `pdfDraftBandStyle()` の廃止と
+ * `tintColor()` / `inkColor()` の導入を対にして行う。
  *
  * - 空のセル・下書き: 何も当てない（白地 + 既定の文字色。v1 の `background-color: #fff !important` と同じ結果）
- * - 確定: パターン色で塗り、白文字 + 太字（白いパターンだけは既定の文字色のまま）
+ * - 確定: パターン色で塗り、輝度でインクを切る。白いパターンだけは既定の文字色のまま
  *
  * `color` と `fontWeight` はセルの `View` から子の `Text` に継承される（react-pdf で実測）。
  */

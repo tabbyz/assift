@@ -163,7 +163,7 @@ export function RestrictionForm({
             </Text>
           )}
 
-          <Group justify="flex-end">
+          <Group justify="flex-end" gap="xs">
             {/* v1 と同じ戻り先の作り分け: 登録中は種別選択へ、編集中は一覧へ */}
             <LinkButton
               href={
@@ -179,7 +179,7 @@ export function RestrictionForm({
               キャンセル
             </LinkButton>
             <Button type="submit" loading={isPending}>
-              {isEdit ? '更新する' : '登録する'}
+              {isEdit ? '保存' : '追加'}
             </Button>
           </Group>
         </Stack>

@@ -75,9 +75,9 @@ export function NewTenantForm({ isFirst }: { isFirst: boolean }) {
                 allowDeselect={false}
                 required
               />
-              <Group justify="flex-end">
+              <Group justify="flex-end" gap="xs">
                 {!isFirst && (
-                  <LinkButton href="/tenants" variant="subtle">
+                  <LinkButton href="/tenants" variant="subtle" color="gray">
                     キャンセル
                   </LinkButton>
                 )}

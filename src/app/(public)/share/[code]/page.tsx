@@ -31,7 +31,8 @@ export default async function SharePage({ params }: PageProps<'/share/[code]'>) 
   const { code } = await params
 
   // 存在しない / 期限切れ / 解除済みはすべて null（理由を出し分けない。009 §3.4）
-  const shared = await getSharedShiftTable(code, todayJst())
+  const today = todayJst()
+  const shared = await getSharedShiftTable(code, today)
   if (!shared) notFound()
 
   // 共有は保存済みの期間そのもの。店舗の作成周期で丸める `dateRange()` は使わない（009 §5.7）
@@ -39,7 +40,7 @@ export default async function SharePage({ params }: PageProps<'/share/[code]'>) 
 
   return (
     <div className={classes.page}>
-      <Group justify="space-between" align="baseline" wrap="nowrap" gap="xs" px="xs" pt="xs" pb={4}>
+      <Group justify="space-between" align="center" wrap="nowrap" gap="xs" px="xs" py={8}>
         {/* 単独で開かれるページなので h1 を置く（上位に見出しが無い） */}
         <Title order={1} size="h5">
           {formatMonthDay(shared.start)} 〜 {formatMonthDay(shared.end)}
@@ -52,6 +53,7 @@ export default async function SharePage({ params }: PageProps<'/share/[code]'>) 
       <Box className={classes.scroller}>
         <ShareTable
           dates={dates}
+          today={today}
           holidays={new Set(holidaysIn(dates))}
           staffs={shared.staffs}
           patternsById={new Map(shared.patterns.map((pattern) => [pattern.id, pattern]))}
@@ -60,16 +62,14 @@ export default async function SharePage({ params }: PageProps<'/share/[code]'>) 
         />
       </Box>
 
-      <Box px="xs">
-        <PatternDescriptionList patterns={shared.patterns} />
-      </Box>
-
-      <Group justify="center" pb="xs">
-        {/* Server Component から Link（関数）を渡さないための LinkAnchor（AGENTS.md の UI 規約） */}
-        <LinkAnchor href="/" size="xs" c="dimmed">
-          © assift
-        </LinkAnchor>
-      </Group>
+      <PatternDescriptionList
+        patterns={shared.patterns}
+        end={
+          <LinkAnchor href="/" size="xs" c="dimmed" style={{ flexShrink: 0 }}>
+            © assift
+          </LinkAnchor>
+        }
+      />
     </div>
   )
 }

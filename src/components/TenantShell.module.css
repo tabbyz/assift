@@ -1,0 +1,19 @@
+.accountButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.navLink {
+  padding: 6px 8px;
+  font-size: 13px;
+  color: var(--mantine-color-dimmed);
+}
+
+.navLink[data-active='true'] {
+  border-radius: var(--mantine-radius-sm);
+  background-color: var(--mantine-color-gray-1);
+  font-weight: 650;
+  color: var(--mantine-color-text);
+}

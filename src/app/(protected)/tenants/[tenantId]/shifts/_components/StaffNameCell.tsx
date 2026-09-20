@@ -19,6 +19,7 @@ type Props = {
   tenantId: string
   staffId: string
   name: string
+  workdays: number
   onBulk: (kind: BulkKind) => void
   /** 一括操作の実行中だけ。期間移動中は「スタッフ情報を編集」へ行けるように開けたままにする（008 §10.11） */
   disabled: boolean
@@ -28,16 +29,18 @@ type Props = {
  * スタッフ名のセル（v1 `_staff.html.slim` の dropdown）。
  * 一括操作はこのスタッフの分だけに効く（008）。
  */
-export function StaffNameCell({ tenantId, staffId, name, onBulk, disabled }: Props) {
+export function StaffNameCell({ tenantId, staffId, name, workdays, onBulk, disabled }: Props) {
   return (
     <Menu position="bottom-start" withinPortal>
       <MenuTarget>
         <UnstyledButton
           className={classes.menuButton}
-          aria-label={`${name} のメニュー`}
+          aria-label={`${name} のメニュー（勤務 ${workdays} 日）`}
           disabled={disabled}
         >
-          <span>{name}</span>
+          <span className={classes.staffNameText}>{name}</span>
+          {/* 単位を付けて「4」が何の数かを示す。幅は CSS が 2 桁ぶんで固定する */}
+          <span className={classes.workdays}>{workdays}日</span>
           <IconDotsVertical size={14} className={classes.menuIcon} />
         </UnstyledButton>
       </MenuTarget>

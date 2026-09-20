@@ -2,20 +2,24 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ActionIcon, Anchor, Button, Group, Popover, Stack, Text, Tooltip } from '@mantine/core'
-import { DateInput } from '@mantine/dates'
 import {
-  IconCalculator,
-  IconCalendar,
-  IconChevronLeft,
-  IconChevronRight,
-} from '@tabler/icons-react'
+  ActionIcon,
+  Anchor,
+  Button,
+  Group,
+  Popover,
+  Stack,
+  Text,
+  UnstyledButton,
+} from '@mantine/core'
+import { DateInput } from '@mantine/dates'
+import { IconChevronLeft, IconChevronRight } from '@tabler/icons-react'
 import type { BulkKind } from '../_lib/bulkOperations'
 import { ShareMenu } from './ShareMenu'
 import { ToolsMenu } from './ToolsMenu'
 import { SHIFT_CYCLE_LABELS, type ShiftCycle } from '@/lib/calendar/shiftCycle'
 import { WEEKDAY_LABELS } from '@/lib/calendar/weekdays'
-import { formatMonthDay } from '@/lib/calendar/dateString'
+import { formatPeriodTitle } from '@/lib/calendar/periodTitle'
 import type { DateRange } from '@/lib/calendar/dateRange'
 
 type Props = {
@@ -26,17 +30,17 @@ type Props = {
   onPrev: () => void
   onNext: () => void
   onPickStart: (start: string) => void
-  onOpenCount: () => void
   onOpenShare: () => void
   onBulk: (kind: BulkKind) => void
   onSetDefaultPatterns: () => void
+  onSetDefaultRequiredNums: () => void
   onOpenCopy: () => void
   disabled: boolean
 }
 
 /**
- * ツールバー（v1 `_toolbar.html.slim`）。
- * 左が期間ナビ（007）、右が 集計 / 共有（009。PDF / CSV も含む。010）/ ツール（008）。
+ * 期間はタイトル。見える動詞は共有。操作は一括 → デフォルト → コピー。集計は表の左上。
+ * 面は日付ヘッダーと同じ gray-0。店舗ヘッダー（白）との段差が、店とこの表の境目になる。
  */
 export function Toolbar({
   tenantId,
@@ -46,10 +50,10 @@ export function Toolbar({
   onPrev,
   onNext,
   onPickStart,
-  onOpenCount,
   onOpenShare,
   onBulk,
   onSetDefaultPatterns,
+  onSetDefaultRequiredNums,
   onOpenCopy,
   disabled,
 }: Props) {
@@ -62,19 +66,17 @@ export function Toolbar({
   }
 
   return (
-    <Group justify="space-between" wrap="nowrap" pb="sm">
+    <Group justify="space-between" wrap="nowrap" p={8} bg="gray.0">
       <Group gap={4} wrap="nowrap">
-        <Tooltip label="前の期間">
-          <ActionIcon
-            variant="default"
-            size="lg"
-            aria-label="前の期間"
-            onClick={onPrev}
-            disabled={disabled}
-          >
-            <IconChevronLeft size={18} />
-          </ActionIcon>
-        </Tooltip>
+        <ActionIcon
+          variant="default"
+          size={28}
+          aria-label="前の期間"
+          onClick={onPrev}
+          disabled={disabled}
+        >
+          <IconChevronLeft size={16} />
+        </ActionIcon>
 
         <Popover
           opened={opened}
@@ -84,17 +86,20 @@ export function Toolbar({
           width={300}
         >
           <Popover.Target>
-            <Button
-              variant="default"
-              leftSection={<IconCalendar size={16} />}
+            <UnstyledButton
+              px={6}
+              py={4}
               onClick={() => {
                 setDraft(range.start)
                 setOpened((current) => !current)
               }}
               aria-label="表示期間を変更"
+              disabled={disabled}
             >
-              {formatMonthDay(range.start)} 〜 {formatMonthDay(range.end)}
-            </Button>
+              <Text fw={650} size="md" lh={1.2}>
+                {formatPeriodTitle(cycle, range)}
+              </Text>
+            </UnstyledButton>
           </Popover.Target>
 
           <Popover.Dropdown>
@@ -116,13 +121,6 @@ export function Toolbar({
                 </Group>
               </div>
 
-              {/*
-                入力欄と「更新」を同じ行に並べる。カレンダーは入力欄の下に開くので、
-                縦に積むと「更新」を覆ってしまい押せなくなる（Portal に出しても浮いて重なる）。
-
-                `withinPortal: false` はカレンダーをこの Popover の DOM 内に描くため。
-                Portal に出すと、日付を押した瞬間に外側クリック扱いでドロップダウンごと閉じる（007 §5.7）。
-              */}
               <Group align="flex-end" gap="xs" wrap="nowrap">
                 <DateInput
                   label="開始日"
@@ -140,33 +138,18 @@ export function Toolbar({
           </Popover.Dropdown>
         </Popover>
 
-        <Tooltip label="次の期間">
-          <ActionIcon
-            variant="default"
-            size="lg"
-            aria-label="次の期間"
-            onClick={onNext}
-            disabled={disabled}
-          >
-            <IconChevronRight size={18} />
-          </ActionIcon>
-        </Tooltip>
+        <ActionIcon
+          variant="default"
+          size={28}
+          aria-label="次の期間"
+          onClick={onNext}
+          disabled={disabled}
+        >
+          <IconChevronRight size={16} />
+        </ActionIcon>
       </Group>
 
-      <Group gap={4} wrap="nowrap">
-        <Tooltip label="集計">
-          <ActionIcon
-            variant="default"
-            size="lg"
-            aria-label="集計"
-            onClick={onOpenCount}
-            disabled={disabled}
-          >
-            <IconCalculator size={18} />
-          </ActionIcon>
-        </Tooltip>
-
-        {/* エクスポートには正規化後の開始日を渡す（`dateRange()` は冪等なので表と必ず一致する。010 §3.1） */}
+      <Group gap={6} wrap="nowrap">
         <ShareMenu
           tenantId={tenantId}
           start={range.start}
@@ -177,6 +160,7 @@ export function Toolbar({
         <ToolsMenu
           onBulk={onBulk}
           onSetDefaultPatterns={onSetDefaultPatterns}
+          onSetDefaultRequiredNums={onSetDefaultRequiredNums}
           onOpenCopy={onOpenCopy}
           disabled={disabled}
         />

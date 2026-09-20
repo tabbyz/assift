@@ -15,10 +15,11 @@ import { defaultRequiredNum, type RequiredNumsByDay } from '@/lib/patterns/requi
 import type { PatternKind } from '@/lib/patterns/kinds'
 import { applyAssign, type AssignInput } from '@/lib/shifts/applyAssign'
 import { cellKey, toShiftMap, type ShiftCell } from '@/lib/shifts/key'
+import { countShifts } from '@/lib/shifts/count'
 import {
   assignedCounts,
   countAt,
-  isSatisfied,
+  coverageAt,
   requiredCounts,
   type RequiredNumRow,
 } from '@/lib/shifts/satisfaction'
@@ -125,13 +126,22 @@ export function ShiftsClient(props: Props) {
   )
   const required = useMemo(() => requiredCounts(props.requiredNums), [props.requiredNums])
   const assigned = useMemo(() => assignedCounts(shifts), [shifts])
-  const satisfiedByDate = useMemo(
+  const coverageByDate = useMemo(
     () =>
       new Map(
-        range.dates.map((date) => [date, isSatisfied(date, workdayPatternIds, required, assigned)])
+        range.dates.map((date) => [date, coverageAt(date, workdayPatternIds, required, assigned)])
       ),
     [range.dates, workdayPatternIds, required, assigned]
   )
+  const workdaysByStaffId = useMemo(() => {
+    const workdayIds = new Set(workdayPatternIds)
+    return new Map(
+      countShifts(shifts, staffs, workdayIds, range.dates).map((row) => [
+        row.staff.id,
+        row.workdays,
+      ])
+    )
+  }, [shifts, staffs, workdayPatternIds, range.dates])
 
   const navigate = (nextValue: string) => {
     void setQuery({ start: nextValue })
@@ -251,7 +261,7 @@ export function ShiftsClient(props: Props) {
    *
    * 開始日が表示期間の中にある場合は動かない。終了日だけがはみ出す（31 日の From を 30 日の月へ）ときに
    * 開始日へ移ると、月の周期では表示の起点が 1 日からずれてしまう（`dateRange('month')` は開始日を丸めない）。
-   * はみ出しはコピーモーダルが通知に添える。週・半月の周期では丸めた期間が今と同じなら移動しても変わらないので、それも動かない。
+   * 週・半月の周期では丸めた期間が今と同じなら移動しても変わらないので、それも動かない。
    */
   const showCopyResult = (toStart: string) => {
     if (toStart >= range.start && toStart <= range.end) return
@@ -285,10 +295,10 @@ export function ShiftsClient(props: Props) {
           onPrev={() => navigate(prevStart(cycle, range))}
           onNext={() => navigate(nextStart(cycle, range))}
           onPickStart={navigate}
-          onOpenCount={() => setCountOpened(true)}
           onOpenShare={() => setShareOpened(true)}
           onBulk={confirmBulk}
           onSetDefaultPatterns={confirmSetDefaultPatterns}
+          onSetDefaultRequiredNums={confirmSetDefaultRequiredNums}
           onOpenCopy={() => setCopyOpened(true)}
           disabled={isNavigating || isBulkPending}
         />
@@ -306,12 +316,14 @@ export function ShiftsClient(props: Props) {
           <CalendarTable
             tenantId={tenantId}
             range={range}
+            today={today}
             holidays={holidays}
             staffs={staffs}
             patternsById={patternsById}
             shifts={shifts}
             notesByDate={notesByDate}
-            satisfiedByDate={satisfiedByDate}
+            coverageByDate={coverageByDate}
+            workdaysByStaffId={workdaysByStaffId}
             activeCell={activeCell}
             draftFixed={draftFixed}
             onOpenCell={openCell}
@@ -320,7 +332,7 @@ export function ShiftsClient(props: Props) {
             onDraftFixedChange={changeDraftFixed}
             onOpenNote={setNoteDate}
             onOpenRequiredNum={setRequiredNumDate}
-            onSetDefaultRequiredNums={confirmSetDefaultRequiredNums}
+            onOpenCount={() => setCountOpened(true)}
             onStaffBulk={confirmBulk}
             // 期間移動中は無効にしない: メニューには「スタッフ情報を編集」もあり、007 では移動中も開けた
             bulkDisabled={isBulkPending}
@@ -363,6 +375,7 @@ export function ShiftsClient(props: Props) {
       {shareOpened && (
         <ShareModal
           tenantId={tenantId}
+          cycle={cycle}
           range={range}
           today={today}
           shares={shares}

@@ -2,6 +2,7 @@
 
 import { CheckIcon, ColorSwatch, Group, Input } from '@mantine/core'
 import { PATTERN_COLORS } from '@/lib/patterns/colors'
+import styles from './ColorSwatchPicker.module.css'
 
 type Props = {
   value: string
@@ -12,10 +13,11 @@ type Props = {
 export function ColorSwatchPicker({ value, onChange }: Props) {
   return (
     <Input.Wrapper label="カラー">
-      <Group gap="xs" mt={4}>
+      <Group gap={6} mt={4}>
         {PATTERN_COLORS.map((color) => (
           <ColorSwatch
             key={color.hex}
+            className={styles.swatch}
             component="button"
             type="button"
             color={color.hex}

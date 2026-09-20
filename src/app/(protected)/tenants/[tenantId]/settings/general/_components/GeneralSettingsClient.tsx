@@ -99,7 +99,7 @@ export function GeneralSettingsClient(props: Props) {
             />
             <Group justify="flex-end">
               <Button type="submit" loading={isSaving}>
-                更新する
+                保存
               </Button>
             </Group>
           </Stack>
@@ -109,12 +109,14 @@ export function GeneralSettingsClient(props: Props) {
       <Paper withBorder p="lg">
         <Stack gap="md">
           <Title order={4}>店舗を削除</Title>
-          <Text size="sm" c="dimmed">
-            削除すると、この店舗に関連するすべてのデータが削除されます。
-          </Text>
-          <Text size="sm" c="red">
-            この操作は元には戻せません。
-          </Text>
+          <Stack gap={4}>
+            <Text size="sm" c="dimmed">
+              削除すると、この店舗に関連するすべてのデータが削除されます。
+            </Text>
+            <Text size="sm" c="red">
+              この操作は元には戻せません。
+            </Text>
+          </Stack>
           <Group>
             <Button color="red" variant="outline" onClick={confirmDelete} loading={isDeleting}>
               削除する

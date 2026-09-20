@@ -1,0 +1,42 @@
+/* セルの枠が入力欄の枠。入力の線を残すと二重に見える */
+.field :global(.mantine-Input-input) {
+  --input-bd: transparent;
+  border-radius: 0;
+  background-color: transparent;
+  text-align: center;
+  padding-inline-start: 4px;
+}
+
+.field :global(.mantine-Input-input):focus {
+  --input-bd: transparent;
+  background-color: var(--mantine-color-gray-0);
+}
+
+.field :global(.mantine-NumberInput-control) {
+  border-inline-start-color: var(--table-border-color);
+}
+
+.head {
+  position: relative;
+}
+
+.copy {
+  position: absolute;
+  top: 0;
+  right: 2px;
+  bottom: 0;
+  margin-block: auto;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* 押下中、Mantine は transform で 1px 下げる。縦位置も transform だと、その指定が translateY(-50%) を置き換えてボタンがセル中央まで落ちる */
+button.copy:active {
+  transform: none;
+}
+
+.hot .copy,
+.copy:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}

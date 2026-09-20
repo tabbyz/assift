@@ -1,10 +1,12 @@
 /*
- * シフト表の sticky テーブル（v1 `framework/sticky_table.scss` + `shifts/calendar.scss` の再現）。
- * Mantine に無いレイアウトなので CSS Modules で書く（AGENTS.md の UI 規約）。
+ * シフト表の sticky テーブル。Mantine に無いレイアウトなので CSS Modules で書く（AGENTS.md の UI 規約）。
  * 色・余白は Mantine の CSS 変数を使い、hex は直書きしない（パターン色だけ inline style）。
  *
  * 保護ルートのシフト表（`shifts/_components/CalendarTable`）と公開ページ（`(public)/share/[code]`）で共有する。
  * 公開側のセルは押せない `<div>` なので、**hover は `button` に限定する**（009 §3.6）。
+ *
+ * 線の方針（011）: 表の骨格は **ヘッダーの下** と **名前列の右** と **フッターの上** の 3 本だけ。
+ * 本文に縦罫・横罫を引かない。マスの区切りはセル間の 3px の余白が担う。
  */
 
 .page {
@@ -23,10 +25,10 @@
 }
 
 .table {
-  --date-row-height: 50px;
-  --note-row-height: 32px;
-  --name-col-width: 95px;
-  --date-col-width: 50px;
+  --name-col-width: 132px;
+  --date-col-width: 56px;
+  /* セル間の白。上下左右とも padding だけで作る（片方を border で作ると縦横が揃わない） */
+  --cell-gap: 3px;
 
   table-layout: fixed;
   border-collapse: separate;
@@ -38,13 +40,11 @@
 .table td {
   width: var(--date-col-width);
   min-width: var(--date-col-width);
-  padding: 2px;
+  padding: calc(var(--cell-gap) / 2);
   vertical-align: middle;
   text-align: center;
   line-height: 1;
   background-color: var(--mantine-color-body);
-  border-right: 1px solid var(--mantine-color-default-border);
-  border-bottom: 1px solid var(--mantine-color-default-border);
 }
 
 .table th {
@@ -58,159 +58,382 @@
   z-index: 1;
   width: var(--name-col-width);
   min-width: var(--name-col-width);
-  border-left: 1px solid var(--mantine-color-default-border);
-  border-right: 2px solid var(--mantine-color-default-border);
+  border-right: 2px solid var(--mantine-color-gray-3);
 }
 
-/* ヘッダ 3 行は縦スクロールで固定。行ごとに top をずらす */
+/* 日付ヘッダーを縦スクロールで固定 */
 .table thead th {
   position: sticky;
+  top: 0;
   z-index: 2;
-  background-color: var(--mantine-color-default-hover);
+  padding: 0;
+  background-color: var(--mantine-color-gray-0);
+  border-top: 1px solid var(--mantine-color-default-border);
+  border-right: 1px solid var(--mantine-color-default-border);
+  border-bottom: 2px solid var(--mantine-color-gray-3);
 }
 
 .table thead th:first-child {
   /* 左上の角は両方の sticky が重なるので最前面 */
   z-index: 3;
+  border-right: 2px solid var(--mantine-color-gray-3);
 }
 
-.table thead tr:first-child th {
-  border-top: 1px solid var(--mantine-color-default-border);
+.dateRow th.staffHeader {
+  padding: 4px;
 }
 
-.dateRow th {
-  top: 0;
-  height: var(--date-row-height);
+.dateHead {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
 }
 
-.noteRow th {
-  top: var(--date-row-height);
-  height: var(--note-row-height);
-  padding: 0;
+/* 日曜と祝日は同じ赤（`dateToneClass()` がどちらにもこのクラスを当てる） */
+.dateHead.holiday {
+  background-color: var(--mantine-color-red-0);
 }
 
-.countRow th {
-  top: calc(var(--date-row-height) + var(--note-row-height));
-  padding: 2px;
+.dateHead.saturday {
+  background-color: var(--mantine-color-blue-0);
+}
+
+.dateMain {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  width: 100%;
+  gap: 1px;
+  padding: 3px 2px 0;
+  text-align: center;
+}
+
+/*
+ * 保護ルートではヘッダーセル全体が日付メモのボタン。ホバーは面を一段「濃く」する。
+ *
+ * `filter: brightness()` は使わない。全チャンネルを同じ比率で落とすので、赤や青の淡い面は
+ * 濃くなるのではなく**灰色に寄ってくすむ**。曜日ごとに Mantine のスケールを 1〜2 段上げて、
+ * 同じ色相のまま濃くする。
+ */
+button.dateHead:hover,
+button.dateHead:focus-visible {
+  background-color: var(--mantine-color-gray-2);
+}
+
+button.dateHead.holiday:hover,
+button.dateHead.holiday:focus-visible {
+  background-color: var(--mantine-color-red-1);
+}
+
+button.dateHead.saturday:hover,
+button.dateHead.saturday:focus-visible {
+  background-color: var(--mantine-color-blue-1);
+}
+
+button.dateHead:hover .noteCell {
+  color: var(--mantine-color-anchor);
 }
 
 .wday {
-  font-size: var(--mantine-font-size-md);
-  line-height: 1.25;
+  font-size: 10px;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--mantine-color-dimmed);
 }
 
 .day {
-  font-size: var(--mantine-font-size-xl);
-  line-height: 1.2;
-  font-weight: 500;
+  font-size: 17px;
+  line-height: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  /*
+   * 今日の下線用。全列に同じ余白を置き、今日だけ線を足しても数字の位置は揃う。
+   * 線は 3px でこの余白の一番下。インクから線まで約 2px。
+   */
+  padding-bottom: 3px;
 }
 
-/* 日曜と祝日は同じ赤（DateHeaderCell がどちらにもこのクラスを当てる） */
-.holiday {
-  color: var(--mantine-color-red-6);
+/*
+ * 今日は数字の直下の短い線。余白の一番下に置く。
+ * 幅 24px は 2 桁（約 20px）のインクに丸い端を足した長さ。1 桁も同じ幅にして、日によって印が細くならない。
+ * 太さ 3px。2px だと表の罫線と同じ髪の毛になり、短い線は見失う。
+ * 数字のインクから線まで約 2px。色は gray-7。数字の色は変えない。
+ */
+.dateHead[data-today='true'] .day {
+  position: relative;
 }
 
-.saturday {
-  color: var(--mantine-color-blue-6);
+.dateHead[data-today='true'] .day::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 24px;
+  height: 3px;
+  border-radius: 999px;
+  background-color: var(--mantine-color-gray-7);
+  transform: translateX(-50%);
 }
 
-/* セル（v1 `.button.pattern-button`） */
+.holiday .wday,
+.holiday .day {
+  color: var(--mantine-color-red-8);
+}
+
+.saturday .wday,
+.saturday .day {
+  color: var(--mantine-color-blue-8);
+}
+
+/*
+ * メモ行。メモがある日だけ文字を出す（空の日のペンはホバー時だけ）。
+ * 上限 12 文字を 2 行に収める。列は 56px、左右 2px を引くと 52px なので、
+ * 全角 6 文字 × 8px = 48px で 1 行に収まる。9px だと 5 文字で折り返して 3 行になる。
+ * 高さは 2 行分で固定し、短いメモの列と長いメモの列で日付の位置を揃える。
+ */
+.noteCell {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  width: 100%;
+  height: 20px;
+  /* 数字側の余白に 1px 重ね、下の罫線との間は 5px。2 行メモが枠に貼りつかない */
+  margin-top: -1px;
+  margin-bottom: 5px;
+  padding: 0 2px;
+  overflow: hidden;
+  font-size: 8px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  color: var(--mantine-color-gray-7);
+  word-break: break-all;
+}
+
+.notePlaceholder {
+  /* 文字は上揃え。ペンは flex 子なので text-align では揃わず、メモ枠の中央に置く */
+  align-self: center;
+  margin-block: auto;
+  color: var(--mantine-color-dimmed);
+  opacity: 0;
+}
+
+button.dateHead:hover .notePlaceholder,
+button.dateHead:focus-visible .notePlaceholder {
+  opacity: 0.45;
+}
+
+/*
+ * 公開ページは充足フッターが無い。外枠の下線（ヘッダー上端と同じ 1px）は最終行が担う。
+ * 保護ルートはフッターの border-bottom が同じ線なので、ここには足さない。
+ */
+.table:not(:has(tfoot)) tbody tr:last-child > th,
+.table:not(:has(tfoot)) tbody tr:last-child > td {
+  border-bottom: 1px solid var(--mantine-color-default-border);
+}
+
+/* セル */
 .cell {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 2.75em;
+  height: 35px;
   padding: 2px;
   overflow: hidden;
+  font-size: 13px;
   line-height: 1.1;
   word-break: break-all;
   border: 1px solid transparent;
-  border-radius: 2px;
+  border-radius: 3px;
   background-color: var(--mantine-color-body);
 }
 
-/* 担当できる曜日（v1 の whitesmoke） */
-.cell[data-enabled='true'] {
-  background-color: var(--mantine-color-default-hover);
+/* 長押しで文字が選択されたり、ブラウザのメニューが出たりしないようにする */
+button.cell {
+  position: relative;
+  user-select: none;
+  -webkit-touch-callout: none;
+  /* ダブルタップのズーム待ちを外す。スクロール（pan）は残す */
+  touch-action: manipulation;
 }
 
-/* アサイン済みは白地 + 上辺にパターン色の帯（下書き） */
-.cell[data-assigned='true'] {
-  background-color: var(--mantine-color-body);
-  border-top-width: 3px;
+/*
+ * 担当不可は斜線。ベタのグレーで塗ると「明け」のようなグレーのパターンと意味が衝突し、
+ * 空のマスとも紛らわしかった。
+ */
+.cell[data-enabled='false']:not([data-assigned='true']) {
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--mantine-color-gray-3) 0 3px,
+    var(--mantine-color-gray-0) 3px 6px
+  );
 }
 
-/* 確定は太字（背景はパターン色を inline style で塗る） */
+/* 確定は太字（塗りと文字色は `cellStyle()` が inline で当てる） */
 .cell[data-fixed='true'] {
   font-weight: 700;
 }
 
-/* 押せるセル（保護ルート）だけ反応させる。公開ページの <div> は変化しない */
-button.cell:hover {
-  background-color: var(--mantine-color-default-hover);
+/*
+ * アサイン済みだけホバーで暗くする。`background-color` で上書きすると inline のパターン色が
+ * 消えるので、`filter` で塗りの上に効かせる。
+ */
+button.cell[data-assigned='true']:hover {
+  filter: brightness(0.95);
+}
+
+button.cell[data-assigned='false']:hover {
+  background-color: var(--mantine-color-gray-0);
+}
+
+/*
+ * 長押しのあいだ、下端にインクが伸びる。伸び切ると下書きと確定が入れ替わる。
+ * 時間は `--hold-ms`（`HOLD_TO_TOGGLE_MS`）。色はセルの文字色（currentColor）で、新しい色は足さない。
+ * セル自体は縮めない。縮むと端を押した指がセルの外に出て、長押しがすぐキャンセルされる。
+ */
+button.cell[data-holding='true']::after {
+  content: '';
+  position: absolute;
+  right: 3px;
+  bottom: 2px;
+  left: 3px;
+  height: 2px;
+  border-radius: 1px;
+  background: currentColor;
+  opacity: 0.85;
+  transform: scaleX(0);
+  transform-origin: left center;
+  animation: cellHold var(--hold-ms, 350ms) linear forwards;
+}
+
+@keyframes cellHold {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button.cell[data-holding='true']::after {
+    transform: scaleX(1);
+    animation: none;
+    opacity: 0.45;
+  }
 }
 
 .cellPlus {
   color: var(--mantine-color-dimmed);
+  opacity: 0;
+}
+
+button.cell:hover .cellPlus,
+button.cell:focus-visible .cellPlus {
   opacity: 0.5;
 }
 
-/* メモ行（v1 `.event-link`）。公開ページは同じ見た目の <div> で描く */
-.noteCell {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: var(--note-row-height);
-  padding: 0 2px;
-  overflow: hidden;
-  font-size: var(--mantine-font-size-xs);
-  line-height: 1.1;
-  word-break: break-all;
+/*
+ * 充足のフッター（011）。配置人数は「列の集計」なので日付ヘッダーではなく表の下に置く。
+ * 縦スクロールしても下端に残る。
+ */
+.footRow th,
+.footRow td {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding: 0;
+  background-color: var(--mantine-color-gray-0);
+  border-top: 2px solid var(--mantine-color-gray-3);
+  border-bottom: 1px solid var(--mantine-color-default-border);
+  border-right: 1px solid var(--mantine-color-gray-2);
 }
 
-button.noteCell:hover {
-  color: var(--mantine-color-anchor);
+.footRow th:first-child {
+  z-index: 3;
+  border-right: 2px solid var(--mantine-color-gray-3);
 }
 
-.notePlaceholder {
+.footRow th.footLabel {
+  padding: 0 8px 0 4px;
+  text-align: right;
+  font-size: 11px;
+  font-weight: 600;
   color: var(--mantine-color-dimmed);
-  opacity: 0.6;
 }
 
-/* 人数行 */
-.countButton {
+.footCell {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 1.75rem;
-  border-radius: 2px;
-  background-color: var(--mantine-color-default);
+  height: 30px;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--mantine-color-green-9);
 }
 
-.countButton:hover {
-  background-color: var(--mantine-color-default-hover);
+.footCell[data-short='true'] {
+  font-weight: 700;
+  color: var(--mantine-color-red-9);
+}
+
+button.footCell:hover {
+  background-color: var(--mantine-color-gray-1);
 }
 
 .menuButton {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 2px;
+  gap: 6px;
   width: 100%;
-  padding: 2px 0 2px 4px;
+  min-height: 35px;
+  padding: 2px 6px 2px 4px;
   overflow: hidden;
   font-size: var(--mantine-font-size-sm);
   line-height: 1.15;
   text-align: left;
-  word-break: break-all;
 }
 
+.staffNameText {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/*
+ * 勤務日数。**2 桁ぶんの幅を常に確保する**ので「9日」と「10日」でバッジの幅が変わらない
+ * （表示期間は最長 31 日なので 2 桁で足りる）。
+ */
+.workdays {
+  box-sizing: border-box;
+  flex: none;
+  min-width: 36px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background-color: var(--mantine-color-gray-1);
+  color: var(--mantine-color-gray-7);
+  font-size: 11px;
+  line-height: 1.2;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* メニューの手がかりはホバー時だけ。14 行ぶん常時出すと名前より先に目に入る */
 .menuIcon {
   flex: none;
   color: var(--mantine-color-dimmed);
+  opacity: 0;
+}
+
+.menuButton:hover .menuIcon,
+.menuButton:focus-visible .menuIcon {
   opacity: 0.6;
 }
 
@@ -219,9 +442,10 @@ button.noteCell:hover {
  * 公開ページは押せない `<div>` なので文字の体裁だけを当てる。
  */
 .staffName {
-  padding: 2px 0 2px 4px;
+  padding: 2px 6px 2px 4px;
   overflow: hidden;
   font-size: var(--mantine-font-size-sm);
+  font-weight: 600;
   line-height: 1.15;
   text-align: left;
   word-break: break-all;

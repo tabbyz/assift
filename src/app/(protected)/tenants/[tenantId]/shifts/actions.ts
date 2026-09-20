@@ -171,7 +171,7 @@ export async function setDefaultRequiredNums(input: {
         .eq('kind', 'workday'),
     ])
     if (patternsError) throw patternsError
-    if (patterns.length === 0) fail('出勤日の勤務パターンがありません')
+    if (patterns.length === 0) fail('勤務日のパターンがありません')
 
     const dates = datesBetween(parsed.start, parsed.end)
     const rows: RequiredNumRow[] = []

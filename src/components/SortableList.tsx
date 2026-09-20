@@ -49,7 +49,8 @@ export function SortableList<T>({
   }
 
   const move = (index: number, delta: number) => {
-    if (!onReorder) return
+    // 送信中の再クリックは無視する。disabled にすると、押していない矢印まで一瞬グレーになる
+    if (!onReorder || isPending) return
     const next = moveItem(optimisticItems, index, delta)
     startTransition(async () => {
       setOptimisticItems(next)
@@ -82,7 +83,7 @@ export function SortableList<T>({
                       <ActionIcon
                         variant="default"
                         aria-label="上へ"
-                        disabled={index === 0 || isPending}
+                        disabled={index === 0}
                         onClick={() => move(index, -1)}
                       >
                         <IconArrowUp size={16} />
@@ -90,7 +91,7 @@ export function SortableList<T>({
                       <ActionIcon
                         variant="default"
                         aria-label="下へ"
-                        disabled={index === last || isPending}
+                        disabled={index === last}
                         onClick={() => move(index, 1)}
                       >
                         <IconArrowDown size={16} />
