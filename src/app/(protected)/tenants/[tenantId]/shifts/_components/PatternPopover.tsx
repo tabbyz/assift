@@ -9,6 +9,7 @@ import {
   UnstyledButton,
 } from '@mantine/core'
 import { IconX } from '@tabler/icons-react'
+import { outlineColor } from '@/lib/patterns/colors'
 import classes from './PatternPopover.module.css'
 
 export type PopoverPattern = { id: string; name: string; colorHex: string }
@@ -56,13 +57,8 @@ export function PatternPopover({ patterns, fixed, onFixedChange, onAssign, onClo
           <UnstyledButton
             key={pattern.id}
             className={classes.patternButton}
-            // 白いパターンは枠線の色をそのまま当てるとボタンごと見えなくなる（v1 も同じだった）。
-            // ここでは枠線が唯一の手がかりなので、白のときだけ既定の枠線色に落とす
-            style={
-              pattern.colorHex.toUpperCase() === '#FFFFFF'
-                ? undefined
-                : { borderColor: pattern.colorHex }
-            }
+            // 白いパターンは枠ごと見えなくなるので、`outlineColor()` が既定の枠線色に落とす
+            style={{ borderColor: outlineColor(pattern.colorHex) }}
             onClick={() => onAssign(pattern.id)}
           >
             {pattern.name}

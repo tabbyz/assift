@@ -11,6 +11,7 @@ import {
   IconChevronRight,
 } from '@tabler/icons-react'
 import type { BulkKind } from '../_lib/bulkOperations'
+import { ShareMenu } from './ShareMenu'
 import { ToolsMenu } from './ToolsMenu'
 import { SHIFT_CYCLE_LABELS, type ShiftCycle } from '@/lib/calendar/shiftCycle'
 import { WEEKDAY_LABELS } from '@/lib/calendar/weekdays'
@@ -26,6 +27,7 @@ type Props = {
   onNext: () => void
   onPickStart: (start: string) => void
   onOpenCount: () => void
+  onOpenShare: () => void
   onBulk: (kind: BulkKind) => void
   onSetDefaultPatterns: () => void
   onOpenCopy: () => void
@@ -34,7 +36,7 @@ type Props = {
 
 /**
  * ツールバー（v1 `_toolbar.html.slim`）。
- * 左が期間ナビ（007）、右が 集計 / ツール（008）。共有と PDF / CSV は 009 / 010 が間に足す。
+ * 左が期間ナビ（007）、右が 集計 / 共有（009）/ ツール（008）。PDF / CSV は 010 が共有メニューに足す。
  */
 export function Toolbar({
   tenantId,
@@ -45,6 +47,7 @@ export function Toolbar({
   onNext,
   onPickStart,
   onOpenCount,
+  onOpenShare,
   onBulk,
   onSetDefaultPatterns,
   onOpenCopy,
@@ -163,7 +166,7 @@ export function Toolbar({
           </ActionIcon>
         </Tooltip>
 
-        {/* 009 の共有 / 010 の PDF・CSV はここ（集計とツールの間）に入る */}
+        <ShareMenu onOpenShare={onOpenShare} disabled={disabled} />
 
         <ToolsMenu
           onBulk={onBulk}

@@ -10,6 +10,7 @@ import {
   endOfMonth,
   formatJapaneseMonthDay,
   formatMonthDay,
+  formatYearMonthDay,
   isDateString,
   startOfMonth,
   wday,
@@ -124,5 +125,15 @@ describe('表示用の整形', () => {
   it('v1 と同じ書式', () => {
     expect(formatMonthDay('2026-09-08')).toBe('9/8')
     expect(formatJapaneseMonthDay('2026-09-08')).toBe('9月8日')
+    expect(formatYearMonthDay('2026-09-08')).toBe('2026/9/8')
+  })
+
+  it('月日は 0 詰めしない', () => {
+    expect(formatYearMonthDay('2026-01-01')).toBe('2026/1/1')
+  })
+
+  it('年をまたぐ期間でも年が付く（共有の「2026/12/28〜」）', () => {
+    expect(formatYearMonthDay('2026-12-28')).toBe('2026/12/28')
+    expect(formatYearMonthDay('2027-01-03')).toBe('2027/1/3')
   })
 })

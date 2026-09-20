@@ -5,7 +5,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(97);
+select plan(108);
 
 -- ---------------------------------------------------------------------------
 -- 準備（postgres として実行。RLS はテーブル所有者には適用されない）
@@ -22,6 +22,9 @@ select plan(97);
 -- assign_shift（007 §5.2）用。A の「夜勤 → 明け」のペア
 \set pattern_a_night '''aaaaaaaa-3333-0000-0000-00000000001a'''
 \set pattern_a_after '''aaaaaaaa-3333-0000-0000-00000000002a'''
+-- 共有（009）
+\set share_a '''aaaaaaaa-6666-0000-0000-00000000000a'''
+\set share_b '''bbbbbbbb-6666-0000-0000-00000000000b'''
 
 insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
   raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
@@ -54,6 +57,11 @@ insert into public.required_nums (tenant_id, pattern_id, date, num)
 values (:tenant_b, :pattern_b, '2026-09-17', 2);
 insert into public.date_notes (tenant_id, date, note)
 values (:tenant_b, '2026-09-17', 'B の予定');
+
+-- 共有（009）。A / B に 1 件ずつ置いて、境界の両側を見る
+insert into public.shares (id, tenant_id, code, start_date, end_date)
+values (:share_a, :tenant_a, 'AAAAaaa1', '2026-09-01', '2026-09-30'),
+       (:share_b, :tenant_b, 'BBBBbbb1', '2026-09-01', '2026-09-30');
 
 -- ---------------------------------------------------------------------------
 -- ユーザー A になりすます
@@ -493,6 +501,46 @@ select throws_ok(
   '一括 INSERT: 別テナントへの ON CONFLICT DO NOTHING は衝突する行でも拒否'
 );
 
+-- ---------------------------------------------------------------------------
+-- 共有（009）: 発行（INSERT）と解除（DELETE）だけ。公開ページの読み取りは service_role なので
+-- RLS を通らず、境界は `lib/queries/publicShare.ts` の `.eq('tenant_id', ...)` が担う
+-- ---------------------------------------------------------------------------
+select is((select count(*) from public.shares), 1::bigint, 'A には自テナントの shares だけ見える');
+select is((select code from public.shares), 'AAAAaaa1', '見えているのは A の共有');
+select lives_ok(
+  format($$insert into public.shares (tenant_id, code, start_date, end_date)
+             values (%L, 'AAAAaaa2', '2026-10-01', '2026-10-31')$$, :tenant_a),
+  'A は自テナントに共有を発行できる'
+);
+select throws_ok(
+  format($$insert into public.shares (tenant_id, code, start_date, end_date)
+             values (%L, 'BBBBbbb2', '2026-10-01', '2026-10-31')$$, :tenant_b),
+  '42501', null, '別テナントの tenant_id での発行は RLS 違反'
+);
+-- CHECK（`end_date - start_date <= 31`）の境界をちょうどで固定する。
+-- **アプリ（Zod の refineTerm）は両端を含めて 31 日 = 差 30 日までなので DB のほうが 1 日ゆるい。**
+-- 012 で v1 の行を丸めるときは、DB ではなくアプリ側の規則に合わせること（§7.1）
+select lives_ok(
+  format($$insert into public.shares (tenant_id, code, start_date, end_date)
+             values (%L, 'AAAAaaa3', '2026-10-01', '2026-11-01')$$, :tenant_a),
+  'CHECK の上限ちょうど（差 31 日）は通る'
+);
+select throws_ok(
+  format($$insert into public.shares (tenant_id, code, start_date, end_date)
+             values (%L, 'AAAAaaa4', '2026-10-01', '2026-11-02')$$, :tenant_a),
+  '23514', null, '差 32 日は CHECK 違反'
+);
+-- UPDATE は誰からも使わないが GRANT は残っている（§3.7 で 013 に先送り）。
+-- RESTRICTIVE ポリシーが UPDATE の経路でも効くことを固定しておく
+with u as (
+  update public.shares set end_date = '2099-12-31' where id = :share_b returning 1
+)
+select is((select count(*) from u), 0::bigint, 'B の共有の UPDATE は 0 行（公開期限を延ばせない）');
+with d as (delete from public.shares where id = :share_b returning 1)
+select is((select count(*) from d), 0::bigint, 'B の共有の DELETE は 0 行（例外ではない）');
+with d as (delete from public.shares where id = :share_a returning 1)
+select is((select count(*) from d), 1::bigint, '自テナントの共有は解除できる');
+
 -- TRUNCATE は RLS を通らないので、権限の層で止める（003 §3.3）
 select throws_ok('truncate public.staffs', '42501', null, 'authenticated に TRUNCATE 権限はない');
 
@@ -597,6 +645,18 @@ select is(
   (select count(*) from public.shifts where tenant_id = :tenant_b and fixed = false),
   1::bigint,
   'B の shifts は A の一括操作後も下書きのまま残っている'
+);
+
+select is(
+  (select code from public.shares where tenant_id = :tenant_b),
+  'BBBBbbb1',
+  'B の共有は A の DELETE 後も残っている'
+);
+
+select is(
+  (select end_date from public.shares where tenant_id = :tenant_b),
+  '2026-09-30'::date,
+  'B の共有の公開期限は A の UPDATE 後も変わっていない'
 );
 
 select * from finish();

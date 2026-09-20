@@ -15,14 +15,14 @@ import { IconDotsVertical, IconUsersGroup } from '@tabler/icons-react'
 import { wday } from '@/lib/calendar/dateString'
 import type { DateRange } from '@/lib/calendar/dateRange'
 import { cellKey, type ShiftMap } from '@/lib/shifts/key'
-import { DateHeaderCell } from './DateHeaderCell'
+import { DateHeaderCell } from '@/components/shiftTable/DateHeaderCell'
 import { DateNoteCell } from './DateNoteCell'
 import type { BulkKind } from '../_lib/bulkOperations'
 import { PatternPopover, type PopoverPattern } from './PatternPopover'
 import { RequiredNumCell } from './RequiredNumCell'
 import { ShiftCell } from './ShiftCell'
 import { StaffNameCell } from './StaffNameCell'
-import classes from './CalendarTable.module.css'
+import classes from '@/components/shiftTable/ShiftTable.module.css'
 
 export type CalendarStaff = {
   id: string

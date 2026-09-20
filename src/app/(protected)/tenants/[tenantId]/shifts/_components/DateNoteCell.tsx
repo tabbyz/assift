@@ -2,7 +2,7 @@
 
 import { UnstyledButton } from '@mantine/core'
 import { IconPencil } from '@tabler/icons-react'
-import classes from './CalendarTable.module.css'
+import classes from '@/components/shiftTable/ShiftTable.module.css'
 
 type Props = { date: string; note?: string; onClick: () => void }
 
@@ -10,7 +10,7 @@ type Props = { date: string; note?: string; onClick: () => void }
 export function DateNoteCell({ date, note, onClick }: Props) {
   return (
     <UnstyledButton
-      className={classes.noteButton}
+      className={classes.noteCell}
       onClick={onClick}
       aria-label={note ? `${date} のメモ: ${note}` : `${date} のメモを追加`}
     >

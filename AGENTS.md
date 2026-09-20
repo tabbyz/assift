@@ -44,7 +44,8 @@ src/
   theme.ts                        createTheme（色・半径・フォントはここに集約）
   app/
     layout.tsx                    MantineProvider > ModalsProvider > NuqsAdapter > children + Notifications
-    (public)/                     LP、規約、share/[code] など認証不要
+    (public)/                     認証不要
+      share/[code]/               公開シフト表（未ログインで開く。読み取りは service_role）
     (auth)/                       login, signup, password/*
     (protected)/                  layout で未ログインを弾く
       tenants/[tenantId]/
@@ -56,14 +57,16 @@ src/
           _lib/                   このルート専用ロジック（Vitest 対象）
     api/                          Route Handler（PDF / CSV など）
   components/                     横断 UI（SortableList = 上下ボタンの並べ替え一覧 など）
+    shiftTable/                   シフト表の見た目（CSS Modules / DateHeaderCell / PatternDescriptionList / cellStyle）。保護ルートと公開ページで共有
   lib/
     actions/                      result / run / error / guards
     migration/v1Ids.ts            v1 の ID → uuid v5（旧 URL 解決と 012 が共有）
     tenants/                      旧 URL の書き換え・直近店舗 cookie の純関数
-    queries/                      読み取り（Server から呼ぶ）
+    queries/                      読み取り（Server から呼ぶ）。publicShare.ts だけが service_role（下記）
     <domain>/                     ドメインロジック（calendar, patterns, shifts, pdf, csv ...）
     calendar/                     dateString（YYYY-MM-DD の道具。dayjs はここだけ）/ dateRange / today / weekdays / holidays（server-only）
     shifts/                       key（セルの Map）/ applyAssign（楽観更新。assign_shift と同じ規則）/ satisfaction（必要人数の充足）/ count（集計）/ planDefaultPatterns（デフォルト勤務パターンの行を組む純関数）
+    shares/                       expiry（公開期限。v1 の DATE_LIMIT = 6）/ code（8 文字のコード）
     actions/reorder.ts              reorder_positions RPC の共通ラッパ（staffs / patterns / restrictions）
     supabase/createPrivilegedClient.ts   service_role の唯一の入口
     validation/                   Zod スキーマ
@@ -163,6 +166,11 @@ startTransition(async () => {
 `refresh()` を呼んだ Action の応答は「戻り値 + 現在ルートの RSC」を 1 本のストリームで返すので、`useOptimistic` の transition はその描画で終わる。
 
 `service_role` は `createPrivilegedClient()` のみ。ユーザー文脈の Action では使わない。用途は公開共有ページの読み取り、ジョブ、管理操作に限る。
+
+**RLS を通らない読み取りは `lib/queries/publicShare.ts` だけ**（009）。`/share/[code]` は未ログインで開くので RLS が使えず、
+テナント境界はクエリ側でしか担保できない。したがってこのファイルの中では**すべてのクエリに `.eq('tenant_id', …)` を書き**、
+`shifts` / `date_notes` は共有の期間（`gte` / `lte`）でしか読まない。汎用のクエリ関数にクライアントを引数で渡して使い回さない
+（service_role を差し込める口を作らないほうが、多少の重複より価値が大きい）。
 
 唯一の例外は `account/actions.ts` の `deleteAccount()`（`auth.admin.deleteUser` は service_role でしか呼べない）。渡す id は `requireUser()` の戻り値だけにし、入力から受け取らない。例外を足すときはここに追記する。
 

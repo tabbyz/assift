@@ -13,7 +13,7 @@ import {
 import { IconDotsVertical, IconSettings } from '@tabler/icons-react'
 import type { BulkKind } from '../_lib/bulkOperations'
 import { BulkMenuItems } from './BulkMenuItems'
-import classes from './CalendarTable.module.css'
+import classes from '@/components/shiftTable/ShiftTable.module.css'
 
 type Props = {
   tenantId: string

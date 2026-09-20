@@ -36,3 +36,14 @@ export const DEFAULT_PATTERN_COLOR: PatternColorHex = '#FFFFFF'
 export function fixedTextColor(colorHex: string): string | undefined {
   return colorHex.toUpperCase() === '#FFFFFF' ? undefined : '#FFFFFF'
 }
+
+/**
+ * 枠線でパターン色を示す場所（ポップオーバーの候補・表の下の凡例）の枠線色。
+ *
+ * **白いパターンは枠線まで白くすると要素ごと見えなくなる**（v1 も同じだった）。
+ * これらの場所では枠線が色の唯一の手がかりなので、白のときだけ既定の枠線色に落とす。
+ * セルは塗り・太字・名前でも見分けられるので、こちらは通さず `cellStyle()` がそのまま当てる。
+ */
+export function outlineColor(colorHex: string): string | undefined {
+  return colorHex.toUpperCase() === '#FFFFFF' ? undefined : colorHex
+}

@@ -3,14 +3,17 @@ import { notFound } from 'next/navigation'
 import { dateRange, defaultStart } from '@/lib/calendar/dateRange'
 import { holidaysIn } from '@/lib/calendar/holidays'
 import { todayJst } from '@/lib/calendar/today'
+import { requestOrigin } from '@/lib/auth/requestOrigin'
 import { parseRequiredNums } from '@/lib/patterns/requiredNums'
 import { listDateNotes } from '@/lib/queries/dateNotes'
 import { listPatterns } from '@/lib/queries/patterns'
 import { listRequiredNums } from '@/lib/queries/requiredNums'
+import { listShares, type ShareRow } from '@/lib/queries/shares'
 import { listShifts } from '@/lib/queries/shifts'
 import { listActiveStaffsWithPatternIds } from '@/lib/queries/staffs'
 import { getTenant } from '@/lib/queries/tenants'
 import { isUuid } from '@/utils/uuid'
+import type { ShareItem } from './_components/ShareModal'
 import { ShiftsClient } from './_components/ShiftsClient'
 import { loadShiftsSearchParams } from './searchParams'
 
@@ -31,17 +34,30 @@ export default async function ShiftsPage({
   ])
   if (!tenant) notFound()
 
+  // 共有の公開期限も同じ「今日」で判定する（Client に渡して発行ボタンの可否にも使う。009 §3.2）
+  const today = todayJst()
   // 不正な ?start= は parser が null にするので、JST 今日の月初に落とす（007 §3.1）
-  const requestedStart = start ?? defaultStart(todayJst())
+  const requestedStart = start ?? defaultStart(today)
   const range = dateRange(tenant.shift_cycle, tenant.start_of_week, requestedStart)
 
-  const [staffs, patterns, shiftRows, requiredNums, dateNotes] = await Promise.all([
+  const [staffs, patterns, shiftRows, requiredNums, dateNotes, shares, origin] = await Promise.all([
     listActiveStaffsWithPatternIds(tenantId),
     listPatterns(tenantId),
     listShifts(tenantId, range.start, range.end),
     listRequiredNums(tenantId, range.start, range.end),
     listDateNotes(tenantId, range.start, range.end),
+    listShares(tenantId, today),
+    requestOrigin(),
   ])
+
+  // 共有 URL はクエリではなくここで組む（クエリは DB の列だけを返す。009 §5.3）
+  const toShareItem = (share: ShareRow): ShareItem => ({
+    id: share.id,
+    url: `${origin}/share/${share.code}`,
+    startDate: share.startDate,
+    endDate: share.endDate,
+    createdAt: share.createdAt,
+  })
 
   // 退職者の行はクエリではなくここで落とす（007 §5.8）
   const activeStaffIds = new Set(staffs.map((staff) => staff.id))
@@ -52,6 +68,7 @@ export default async function ShiftsPage({
       cycle={tenant.shift_cycle}
       startOfWeek={tenant.start_of_week}
       start={requestedStart}
+      today={today}
       holidays={holidaysIn(range.dates)}
       staffs={staffs.map((staff) => ({
         id: staff.id,
@@ -72,6 +89,10 @@ export default async function ShiftsPage({
       shifts={shiftRows.filter((shift) => activeStaffIds.has(shift.staffId))}
       requiredNums={requiredNums}
       dateNotes={dateNotes}
+      shares={{
+        enabled: shares.enabled.map(toShareItem),
+        expired: shares.expired.map(toShareItem),
+      }}
     />
   )
 }

@@ -1,6 +1,6 @@
 import { WEEKDAY_LABELS } from '@/lib/calendar/weekdays'
 import { dayOfMonth, wday } from '@/lib/calendar/dateString'
-import classes from './CalendarTable.module.css'
+import classes from './ShiftTable.module.css'
 
 /** 日付行のセル（v1 `tr.date-area`）。日曜と祝日は赤、土曜は青 */
 export function DateHeaderCell({ date, isHoliday }: { date: string; isHoliday: boolean }) {

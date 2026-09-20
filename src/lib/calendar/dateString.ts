@@ -97,6 +97,12 @@ export function formatMonthDay(date: string): string {
   return `${d.month() + 1}/${d.date()}`
 }
 
+/** `2026/9/1`（v1 の `%Y/%-m/%-d`）。共有の期間表示のように年まで見せたいときに使う */
+export function formatYearMonthDay(date: string): string {
+  const d = dayjs(date)
+  return `${d.year()}/${d.month() + 1}/${d.date()}`
+}
+
 /** `9月18日`（v1 のメモモーダルの見出し） */
 export function formatJapaneseMonthDay(date: string): string {
   const d = dayjs(date)

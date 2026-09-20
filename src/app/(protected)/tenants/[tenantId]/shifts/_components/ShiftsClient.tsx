@@ -37,11 +37,12 @@ import { CalendarTable, type ActiveCell } from './CalendarTable'
 import { CopyModal } from './CopyModal'
 import { CountModal } from './CountModal'
 import { DateNoteModal } from './DateNoteModal'
-import { PatternDescriptionList } from './PatternDescriptionList'
+import { PatternDescriptionList } from '@/components/shiftTable/PatternDescriptionList'
 import { RequiredNumModal, type RequiredNumRowInput } from './RequiredNumModal'
 import { SetupNotice } from './SetupNotice'
+import { ShareModal, type ShareItem } from './ShareModal'
 import { Toolbar } from './Toolbar'
-import classes from './CalendarTable.module.css'
+import classes from '@/components/shiftTable/ShiftTable.module.css'
 
 export type ShiftsPattern = {
   id: string
@@ -65,12 +66,15 @@ type Props = {
   cycle: ShiftCycle
   startOfWeek: number
   start: string
+  /** JST の今日。共有の公開期限の判定に使う（端末の TZ で判定しない。009 §3.2） */
+  today: string
   holidays: string[]
   staffs: ShiftsStaff[]
   patterns: ShiftsPattern[]
   shifts: ShiftCell[]
   requiredNums: RequiredNumRow[]
   dateNotes: { date: string; note: string }[]
+  shares: { enabled: ShareItem[]; expired: ShareItem[] }
 }
 
 /**
@@ -81,7 +85,7 @@ type Props = {
  * - ポップオーバーは開いているセルだけ mount する（`activeCell`）
  */
 export function ShiftsClient(props: Props) {
-  const { tenantId, cycle, startOfWeek, start, staffs, patterns } = props
+  const { tenantId, cycle, startOfWeek, start, today, staffs, patterns, shares } = props
   const router = useRouter()
 
   const [isNavigating, startNavigation] = useTransition()
@@ -101,6 +105,7 @@ export function ShiftsClient(props: Props) {
   const [requiredNumDate, setRequiredNumDate] = useState<string | null>(null)
   const [countOpened, setCountOpened] = useState(false)
   const [copyOpened, setCopyOpened] = useState(false)
+  const [shareOpened, setShareOpened] = useState(false)
 
   const range = useMemo(() => dateRange(cycle, startOfWeek, start), [cycle, startOfWeek, start])
   const holidays = useMemo(() => new Set(props.holidays), [props.holidays])
@@ -281,6 +286,7 @@ export function ShiftsClient(props: Props) {
           onNext={() => navigate(nextStart(cycle, range))}
           onPickStart={navigate}
           onOpenCount={() => setCountOpened(true)}
+          onOpenShare={() => setShareOpened(true)}
           onBulk={confirmBulk}
           onSetDefaultPatterns={confirmSetDefaultPatterns}
           onOpenCopy={() => setCopyOpened(true)}
@@ -351,6 +357,16 @@ export function ShiftsClient(props: Props) {
           workdayPatternIds={workdayPatternIds}
           shifts={shifts}
           onClose={() => setCountOpened(false)}
+        />
+      )}
+
+      {shareOpened && (
+        <ShareModal
+          tenantId={tenantId}
+          range={range}
+          today={today}
+          shares={shares}
+          onClose={() => setShareOpened(false)}
         />
       )}
 

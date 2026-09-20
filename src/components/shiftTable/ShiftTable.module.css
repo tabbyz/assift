@@ -2,6 +2,9 @@
  * シフト表の sticky テーブル（v1 `framework/sticky_table.scss` + `shifts/calendar.scss` の再現）。
  * Mantine に無いレイアウトなので CSS Modules で書く（AGENTS.md の UI 規約）。
  * 色・余白は Mantine の CSS 変数を使い、hex は直書きしない（パターン色だけ inline style）。
+ *
+ * 保護ルートのシフト表（`shifts/_components/CalendarTable`）と公開ページ（`(public)/share/[code]`）で共有する。
+ * 公開側のセルは押せない `<div>` なので、**hover は `button` に限定する**（009 §3.6）。
  */
 
 .page {
@@ -143,7 +146,8 @@
   font-weight: 700;
 }
 
-.cell:hover {
+/* 押せるセル（保護ルート）だけ反応させる。公開ページの <div> は変化しない */
+button.cell:hover {
   background-color: var(--mantine-color-default-hover);
 }
 
@@ -152,8 +156,8 @@
   opacity: 0.5;
 }
 
-/* メモ行（v1 `.event-link`） */
-.noteButton {
+/* メモ行（v1 `.event-link`）。公開ページは同じ見た目の <div> で描く */
+.noteCell {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -166,7 +170,7 @@
   word-break: break-all;
 }
 
-.noteButton:hover {
+button.noteCell:hover {
   color: var(--mantine-color-anchor);
 }
 
@@ -208,4 +212,17 @@
   flex: none;
   color: var(--mantine-color-dimmed);
   opacity: 0.6;
+}
+
+/*
+ * スタッフ名（公開ページ）。保護ルートはメニューを開くボタン（`.menuButton`）だが、
+ * 公開ページは押せない `<div>` なので文字の体裁だけを当てる。
+ */
+.staffName {
+  padding: 2px 0 2px 4px;
+  overflow: hidden;
+  font-size: var(--mantine-font-size-sm);
+  line-height: 1.15;
+  text-align: left;
+  word-break: break-all;
 }

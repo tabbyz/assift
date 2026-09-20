@@ -1,6 +1,6 @@
 /*
   集計の表。スタッフ名の列だけ横スクロールで固定する。
-  シフト表本体（CalendarTable.module.css）は 3 行のヘッダも固定するので、そちらとは別に書く。
+  シフト表本体（components/shiftTable/ShiftTable.module.css）は 3 行のヘッダも固定するので、そちらとは別に書く。
 */
 .table {
   min-width: max-content;

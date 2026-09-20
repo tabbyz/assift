@@ -8,12 +8,21 @@ import type { ActionResult } from '@/lib/actions/result'
 import { runAction } from '@/lib/actions/run'
 import { datesBetween } from '@/lib/calendar/dateString'
 import { holidaysIn, isHolidayDate } from '@/lib/calendar/holidays'
+import { todayJst } from '@/lib/calendar/today'
 import { dayKeyFor } from '@/lib/calendar/weekdays'
 import { defaultRequiredNum, parseRequiredNums } from '@/lib/patterns/requiredNums'
 import { listActiveStaffsWithDefaultPatterns } from '@/lib/queries/staffs'
+import { generateShareCode } from '@/lib/shares/code'
+import { isShareEnabled } from '@/lib/shares/expiry'
 import { planDefaultPatterns, type PlannedShift } from '@/lib/shifts/planDefaultPatterns'
 import { saveDateNoteSchema } from '@/lib/validation/dateNotes'
 import { saveRequiredNumsSchema, setDefaultRequiredNumsSchema } from '@/lib/validation/requiredNums'
+import {
+  createShareSchema,
+  deleteShareSchema,
+  SHARE_EXPIRED_MESSAGE,
+  SHARE_NOT_FOUND_MESSAGE,
+} from '@/lib/validation/shares'
 import {
   assignShiftSchema,
   bulkShiftsSchema,
@@ -391,5 +400,97 @@ export async function copyShifts(input: {
 
     refresh()
     return { inserted }
+  })
+}
+
+// ---------------------------------------------------------------------------
+// 共有（009）
+// ---------------------------------------------------------------------------
+
+/** コードの引き直し回数。55^8 ≈ 8.4×10^13 なので実際には 1 回目で決まる */
+const SHARE_CODE_ATTEMPTS = 5
+
+/**
+ * 引き直してよい衝突か。
+ *
+ * 制約名（`shares_code_key`）は `schemas/` に書いておらず Postgres が導出した名前で、生成 migration にしか現れない。
+ * 名前で照合すると、sync のたびに作り直される名前が変わった瞬間に**静かに引き直さなくなる**。
+ * `shares` の unique は `code` と主キーの 2 つだけで、主キーも引き直しのたびに `gen_random_uuid()` で振り直されるので、
+ * 23505 なら区別せず引き直してよい。
+ */
+function isRetryableConflict(error: DbError): boolean {
+  return error.code === '23505'
+}
+
+/**
+ * 共有 URL の発行（v1 `SharesController#create`）。
+ *
+ * v1 は 31 日を超える期間を黙って切り、期限切れの期間でも保存自体は通していた（ボタンが disabled なだけ）。
+ * v2 は Zod で切らずに拒否し、期限切れもサーバーで断る（発行直後に 404 になる行を作らない。009 §3.8）。
+ */
+export async function createShare(input: {
+  tenantId: string
+  start: string
+  end: string
+}): Promise<ActionResult<{ code: string }>> {
+  return runAction(async () => {
+    const parsed = createShareSchema.parse(input)
+    await requireUser()
+    await requireTenant(parsed.tenantId)
+
+    // 一覧の分類・発行ボタンの可否と同じ規則（009 §3.2）
+    if (!isShareEnabled(parsed.end, todayJst())) fail(SHARE_EXPIRED_MESSAGE)
+
+    const supabase = await createClient()
+    for (let attempt = 0; attempt < SHARE_CODE_ATTEMPTS; attempt++) {
+      const code = generateShareCode()
+      const { error } = await supabase.from('shares').insert({
+        tenant_id: parsed.tenantId,
+        code,
+        start_date: parsed.start,
+        end_date: parsed.end,
+      })
+      if (!error) {
+        // シフト表の中で完結する書き込みなので、現在のルートだけ再描画する（AGENTS.md の表）
+        refresh()
+        return { code }
+      }
+      // 衝突したコードだけ引き直す。RLS 違反（42501）などはここで文言に写す
+      if (!isRetryableConflict(error)) failIfForbidden(error)
+    }
+    // 55^8 ≈ 8.4×10^13 なのでまず起きない。静かに握り潰さず、サーバーログにも残す
+    // （`runAction` が例外を ActionResult に変換するので、ここで出さないと痕跡が残らない）
+    console.warn(`[shares] createShare: コードの引き直しが ${SHARE_CODE_ATTEMPTS} 回とも衝突した`)
+    throw new Error('createShare: コードの引き直しが上限に達した')
+  })
+}
+
+/**
+ * 共有の解除（v1 `SharesController#destroy`）。
+ *
+ * `requireTenant()` を先に通しているので、以降の「0 行」は「対象が無かった」の一意味になる
+ * （UPDATE / DELETE の RLS 違反は例外ではなく 0 行。AGENTS.md）。
+ * 期限切れの共有は v1 と同じく解除できない（一覧に解除ボタンを出さない）。
+ */
+export async function deleteShare(input: {
+  tenantId: string
+  shareId: string
+}): Promise<ActionResult> {
+  return runAction(async () => {
+    const parsed = deleteShareSchema.parse(input)
+    await requireUser()
+    await requireTenant(parsed.tenantId)
+
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from('shares')
+      .delete()
+      .eq('id', parsed.shareId)
+      .eq('tenant_id', parsed.tenantId)
+      .select('id')
+    if (error) failIfForbidden(error)
+    if (data.length === 0) fail(SHARE_NOT_FOUND_MESSAGE)
+
+    refresh()
   })
 }

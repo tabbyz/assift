@@ -3,10 +3,8 @@
 import type { Ref } from 'react'
 import { UnstyledButton, type ElementProps } from '@mantine/core'
 import { IconPlus } from '@tabler/icons-react'
-import { fixedTextColor } from '@/lib/patterns/colors'
-import classes from './CalendarTable.module.css'
-
-export type CellPattern = { name: string; colorHex: string }
+import { cellStyle, type CellPattern } from '@/components/shiftTable/cellStyle'
+import classes from '@/components/shiftTable/ShiftTable.module.css'
 
 type Props = ElementProps<'button', 'onClick'> & {
   /** アサイン済みのパターン。無ければ空のセル */
@@ -29,7 +27,7 @@ type Props = ElementProps<'button', 'onClick'> & {
  * シフト表の 1 セル（v1 の `_staff.html.slim` + `shifts/pattern.scss`）。
  *
  * 担当可（薄いグレー + 「+」）/ 担当不可（背景なし）/ 下書き（白地 + 上辺の色帯）/
- * 確定（パターン色で塗り + 太字 + 白文字）の 4 通り。色はユーザーデータなので inline style。
+ * 確定（パターン色で塗り + 太字 + 白文字）の 4 通り。色の規則は `cellStyle()` に置いて公開ページと共有する。
  */
 export function ShiftCell({
   pattern,
@@ -56,16 +54,7 @@ export function ShiftCell({
       data-fixed={fixed}
       onClick={onClick}
       aria-label={label}
-      style={
-        pattern
-          ? {
-              borderColor: pattern.colorHex,
-              ...(fixed
-                ? { backgroundColor: pattern.colorHex, color: fixedTextColor(pattern.colorHex) }
-                : {}),
-            }
-          : undefined
-      }
+      style={cellStyle(pattern, fixed)}
     >
       {pattern ? pattern.name : enabled && <IconPlus size={14} className={classes.cellPlus} />}
     </UnstyledButton>

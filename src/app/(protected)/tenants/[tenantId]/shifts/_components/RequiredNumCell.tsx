@@ -2,7 +2,7 @@
 
 import { UnstyledButton } from '@mantine/core'
 import { IconAlertTriangleFilled, IconCheck } from '@tabler/icons-react'
-import classes from './CalendarTable.module.css'
+import classes from '@/components/shiftTable/ShiftTable.module.css'
 
 type Props = { date: string; satisfied: boolean; onClick: () => void }
 
