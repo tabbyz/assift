@@ -55,7 +55,7 @@ src/
           searchParams.ts         URL 状態があるときだけ（nuqs parser + createLoader）
           _components/            このルート専用 Client UI
           _lib/                   このルート専用ロジック（Vitest 対象）
-    api/                          Route Handler（PDF / CSV など）
+    api/tenants/[tenantId]/shifts/{pdf,csv}/route.ts   エクスポート（Route Handler。下記）
   components/                     横断 UI（SortableList = 上下ボタンの並べ替え一覧 など）
     shiftTable/                   シフト表の見た目（CSS Modules / DateHeaderCell / PatternDescriptionList / cellStyle）。保護ルートと公開ページで共有
   lib/
@@ -65,8 +65,11 @@ src/
     queries/                      読み取り（Server から呼ぶ）。publicShare.ts だけが service_role（下記）
     <domain>/                     ドメインロジック（calendar, patterns, shifts, pdf, csv ...）
     calendar/                     dateString（YYYY-MM-DD の道具。dayjs はここだけ）/ dateRange / today / weekdays / holidays（server-only）
-    shifts/                       key（セルの Map）/ applyAssign（楽観更新。assign_shift と同じ規則）/ satisfaction（必要人数の充足）/ count（集計）/ planDefaultPatterns（デフォルト勤務パターンの行を組む純関数）
+    shifts/                       key（セルの Map）/ applyAssign（楽観更新。assign_shift と同じ規則）/ satisfaction（必要人数の充足）/ count（集計）/ planDefaultPatterns（デフォルト勤務パターンの行を組む純関数）/ table（エクスポートが共有する表の型）
     shares/                       expiry（公開期限。v1 の DATE_LIMIT = 6）/ code（8 文字のコード）
+    export/                       request（認証 → 店舗 → 期間 → 表。PDF / CSV 共通の入口）/ filename
+    csv/                          shiftCsv（純関数）/ encode（CP932 か BOM 付き UTF-8。iconv-lite）
+    pdf/                          fonts（Font.register + 折り返し）/ styles / paginate / pdfCellStyle / ShiftPdfDocument
     actions/reorder.ts              reorder_positions RPC の共通ラッパ（staffs / patterns / restrictions）
     supabase/createPrivilegedClient.ts   service_role の唯一の入口
     validation/                   Zod スキーマ
@@ -74,6 +77,7 @@ src/
   utils/
     auth/current.ts               getAuthUser / currentUser
     supabase/{server,client,proxy,env}.ts
+assets/fonts/                     PDF に埋め込む Noto Sans JP（public/ に置かない。下記）
 supabase/
   config.toml
   schemas/                        宣言的スキーマ（正）。RPC は schemas/public/functions.sql
@@ -173,6 +177,40 @@ startTransition(async () => {
 （service_role を差し込める口を作らないほうが、多少の重複より価値が大きい）。
 
 唯一の例外は `account/actions.ts` の `deleteAccount()`（`auth.admin.deleteUser` は service_role でしか呼べない）。渡す id は `requireUser()` の戻り値だけにし、入力から受け取らない。例外を足すときはここに追記する。
+
+## Route Handler（`src/app/api/`）
+
+ファイルを返す GET だけを置く（現在は PDF / CSV のエクスポート。010）。書き込みは Server Action のまま。
+
+- **`ActionResult` を返さない。** ブラウザが直接開く GET なので `notifications.show()` の出番が無い。
+  未ログインは `401` + `text/plain`、見えない店舗・uuid でない id は **`notFound()`**（404。存在を漏らさない）、
+  それ以外の例外はそのまま投げる（500）。`runAction` / `ActionError` は持ち込まない
+- **ルート自身が認証を見る。** `app/api/` は `(protected)/layout.tsx` の外なので layout の `getAuthUser()` が掛からない。
+  守りは proxy（`PROTECTED_PREFIXES` に `/api/tenants`。redirect）とルート（401）の 2 枚。
+  認可の入口は 1 本にまとめる（`lib/export/request.ts` の `loadShiftExport()`）。ルートごとに書くと片方だけ抜ける
+- `createPrivilegedClient()` を使わない。エクスポートはユーザー文脈なので `createClient()`（anon + RLS）
+- **期間などの範囲は URL から受けず、サーバーが計算する。** エクスポートは `?start=` だけを受け、
+  `dateRange()` で組み直す（戻り値は最長 31 日なので、範囲を任意に広げられない）。壊れた `?start=` は失敗にせず既定に落とす
+- `Cache-Control: private, no-store` を付ける。**リンク側にキャッシュバスターを入れない**（`Date.now()` を href に
+  入れるとハイドレーション不一致になる）。リンクは `next/link` ではなく素の `<a>`（Next のページではない）
+- 日本語のファイル名は `Content-Disposition` に生で書けない（ヘッダは Latin-1）。RFC 5987 の
+  `filename*=UTF-8''…` と ASCII の `filename=` を併記する（`lib/export/filename.ts`）
+- **実行時に読むファイルは `outputFileTracingIncludes` に書く**（`next.config.ts`）。ルート glob の
+  `[tenantId]` は `*` に置き換える（picomatch が文字クラスとして解釈する）。**dev では効かないので `npm run build` で確かめる**
+
+### PDF（`lib/pdf/`）
+
+`@react-pdf/renderer`。日本語フォントは `assets/fonts/` に同梱し、**`Font.register` に絶対パスを渡す**
+（自オリジンへの `fetch` は preview の Deployment Protection で認証 HTML を掴む）。`public/` には置かない
+（読むのはサーバーだけで、置くと 9.2MB が CDN から誰でも落とせる）。
+
+- **フォントが欠けたときの症状は豆腐ではなく 500**（`fontkit.open` の ENOENT）。`.nft.json` を見るのが唯一の事前確認
+- **`lineHeight: 1` を落とすと文字が切れる。** Noto Sans CJK は自然な行高が 1.448 倍あり、v1 の
+  `line-height: 3mm`（= 1.0）を写し忘れると 3 行目が `…` に丸められる
+- **日本語は `Font.registerHyphenationCallback` を入れないと折り返さない。** ただし 1 文字ずつ返すと
+  textkit が改行位置にハイフンを挿す。**文字の間にソフトハイフンのパートを挟む**（`lib/pdf/fonts.ts`）
+- **高さは border-box。** 行の高さを `border` で削ると文字の入る行数が減る。下書きの色帯は v1 と同じく絶対配置で重ねる
+- 色は Mantine の外なので hex を直書きする（`lib/pdf/styles.ts` に集約し、対応する CSS 変数をコメントに書く）
 
 ## uuid の扱い
 

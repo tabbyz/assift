@@ -36,7 +36,7 @@ type Props = {
 
 /**
  * ツールバー（v1 `_toolbar.html.slim`）。
- * 左が期間ナビ（007）、右が 集計 / 共有（009）/ ツール（008）。PDF / CSV は 010 が共有メニューに足す。
+ * 左が期間ナビ（007）、右が 集計 / 共有（009。PDF / CSV も含む。010）/ ツール（008）。
  */
 export function Toolbar({
   tenantId,
@@ -166,7 +166,13 @@ export function Toolbar({
           </ActionIcon>
         </Tooltip>
 
-        <ShareMenu onOpenShare={onOpenShare} disabled={disabled} />
+        {/* エクスポートには正規化後の開始日を渡す（`dateRange()` は冪等なので表と必ず一致する。010 §3.1） */}
+        <ShareMenu
+          tenantId={tenantId}
+          start={range.start}
+          onOpenShare={onOpenShare}
+          disabled={disabled}
+        />
 
         <ToolsMenu
           onBulk={onBulk}
