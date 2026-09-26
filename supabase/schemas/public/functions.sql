@@ -301,3 +301,48 @@ $$;
 
 revoke execute on function public.copy_shifts(uuid, date, date, date, uuid[]) from public;
 grant execute on function public.copy_shifts(uuid, date, date, date, uuid[]) to authenticated;
+
+-- 自動アサインを元に戻す（012 §5.8）。v1 の `Shift.where(assist_token:).destroy_all` の後継。
+--
+-- v1 はテナントを絞らず、確定へ変えた行まで消していた。v2 は店舗で絞り、下書き（fixed = false）だけを消す
+-- （店長がその後に確定へ変えたセルは残す）。行数を返し、run に rolled_back_at を記録する。
+--
+-- 対象は succeeded の run だけ。running を戻すと完了後に行だけ残り、failed は行を書いていない。
+-- どちらも存在しない run と同じ `run not found` にする。2 回目の呼び出しは通る（残っている下書きが 0 行なら 0 を返す）。
+--
+-- security invoker: 他の RPC と同じ。テーブルの RLS がそのまま効き、他テナントの run は見えない = not found。
+create or replace function public.rollback_assist_run(
+  p_tenant_id uuid,
+  p_run_id    uuid
+)
+returns integer
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_count integer;
+begin
+  if not exists (select 1 from public.tenants where id = p_tenant_id) then
+    raise exception 'rollback_assist_run: tenant not found';
+  end if;
+
+  update public.assist_runs
+     set rolled_back_at = coalesce(rolled_back_at, now())
+   where id = p_run_id and tenant_id = p_tenant_id and status = 'succeeded';
+  if not found then
+    raise exception 'rollback_assist_run: run not found';
+  end if;
+
+  delete from public.shifts
+   where tenant_id = p_tenant_id
+     and assist_run_id = p_run_id
+     and fixed = false;
+
+  get diagnostics v_count = row_count;
+  return v_count;
+end;
+$$;
+
+revoke execute on function public.rollback_assist_run(uuid, uuid) from public;
+grant execute on function public.rollback_assist_run(uuid, uuid) to authenticated;

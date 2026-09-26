@@ -34,6 +34,12 @@ type Props = {
   notesByDate: Map<string, string>
   coverageByDate: Map<string, DateCoverage>
   workdaysByStaffId: Map<string, number>
+  /** 直近の自動アサインで入ったセル（`cellKey`）。結果を閉じるまで点を出す（012 §3.8） */
+  assistCells: Set<string>
+  /** 選んでいる効く一手で埋まるセル（`cellKey` → パターン）。点線で出し、ほかのセルを薄くする（012 §11.1） */
+  assistGhosts: Map<string, string>
+  /** 選んでいる効く一手で埋まったあとの充足。人数が変わる日だけ（フッターの「3/5 → 4/5」） */
+  previewCoverageByDate: Map<string, DateCoverage>
   activeCell: ActiveCell | null
   draftFixed: boolean
   onOpenCell: (cell: ActiveCell) => void
@@ -76,6 +82,9 @@ export function CalendarTable({
   notesByDate,
   coverageByDate,
   workdaysByStaffId,
+  assistCells,
+  assistGhosts,
+  previewCoverageByDate,
   activeCell,
   draftFixed,
   onOpenCell,
@@ -90,7 +99,7 @@ export function CalendarTable({
   popoverPatterns,
 }: Props) {
   return (
-    <table className={classes.table}>
+    <table className={classes.table} data-previewing={assistGhosts.size > 0 || undefined}>
       <thead>
         <tr className={classes.dateRow}>
           <th className={classes.staffHeader} scope="col" aria-label="スタッフ">
@@ -127,7 +136,12 @@ export function CalendarTable({
 
       <tbody>
         {staffs.map((staff) => (
-          <tr key={staff.id}>
+          <tr
+            key={staff.id}
+            data-ghost-row={
+              range.dates.some((date) => assistGhosts.has(cellKey(staff.id, date))) || undefined
+            }
+          >
             <th scope="row">
               <StaffNameCell
                 tenantId={tenantId}
@@ -141,6 +155,7 @@ export function CalendarTable({
             {range.dates.map((date) => {
               const shift = shifts.get(cellKey(staff.id, date))
               const pattern = shift ? patternsById.get(shift.patternId) : undefined
+              const ghostId = assistGhosts.get(cellKey(staff.id, date))
               const enabled = staff.availableWdays.includes(wday(date))
               const isActive = activeCell?.staffId === staff.id && activeCell.date === date
               const fixedLabel = pattern ? (shift?.fixed ? '確定' : '下書き') : ''
@@ -152,6 +167,8 @@ export function CalendarTable({
                   fixed={shift?.fixed ?? false}
                   enabled={enabled}
                   label={label}
+                  marked={Boolean(pattern) && assistCells.has(cellKey(staff.id, date))}
+                  ghost={ghostId ? patternsById.get(ghostId) : undefined}
                   onClick={() => onOpenCell({ staffId: staff.id, date })}
                   holdKey={cellKey(staff.id, date)}
                   onToggleFixed={
@@ -208,15 +225,27 @@ export function CalendarTable({
           </th>
           {range.dates.map((date) => {
             const coverage = coverageByDate.get(date)
+            const preview = previewCoverageByDate.get(date)
+            const shown = preview ?? coverage
             return (
               <td key={date}>
                 <UnstyledButton
                   className={classes.footCell}
-                  data-short={hasCoverage(coverage) && !coverage.satisfied ? true : undefined}
+                  data-short={hasCoverage(shown) && !shown.satisfied ? true : undefined}
+                  data-preview={preview ? true : undefined}
                   onClick={() => onOpenRequiredNum(date)}
-                  aria-label={coverageLabel(date, coverage)}
+                  aria-label={
+                    preview
+                      ? `${coverageLabel(date, coverage)}。選んでいる一手で ${preview.assigned}/${preview.required}`
+                      : coverageLabel(date, coverage)
+                  }
                 >
-                  {hasCoverage(coverage) ? `${coverage.assigned}/${coverage.required}` : ' '}
+                  {preview && hasCoverage(coverage) && (
+                    <span className={classes.footBefore}>
+                      {coverage.assigned}/{coverage.required}
+                    </span>
+                  )}
+                  {hasCoverage(shown) ? `${shown.assigned}/${shown.required}` : ' '}
                 </UnstyledButton>
               </td>
             )

@@ -11,3 +11,6 @@ create type public.restriction_kind as enum (
   'max_work_consecutive',
   'sat_or_sun_dayoff'
 );
+
+-- 自動アサインの実行状態（012 §5.8）
+create type public.assist_run_status as enum ('running', 'succeeded', 'failed');

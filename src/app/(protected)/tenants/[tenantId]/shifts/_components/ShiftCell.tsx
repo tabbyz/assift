@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type Ref } from 'react'
 import { UnstyledButton, type ElementProps } from '@mantine/core'
 import { IconPlus } from '@tabler/icons-react'
-import { cellStyle, type CellPattern } from '@/components/shiftTable/cellStyle'
+import { cellStyle, ghostStyle, type CellPattern } from '@/components/shiftTable/cellStyle'
 import classes from '@/components/shiftTable/ShiftTable.module.css'
 import {
   HOLD_FEEDBACK_DELAY_MS,
@@ -20,6 +20,10 @@ type Props = ElementProps<'button', 'onClick'> & {
   /** その曜日に勤務できるスタッフか（v1 の `data-enabled`） */
   enabled: boolean
   label: string
+  /** 直近の自動アサインで入ったセル。左上に 4px の点（012 §3.8） */
+  marked?: boolean
+  /** 自動アサインの効く一手を選んでいるとき、このセルに入るパターン（空のセルだけ。012 §11.1） */
+  ghost?: CellPattern
   onClick: () => void
   /** アサイン済みのときだけ。長押しで下書きと確定を入れ替える */
   onToggleFixed?: () => void
@@ -49,6 +53,8 @@ export function ShiftCell({
   fixed,
   enabled,
   label,
+  marked,
+  ghost,
   onClick,
   onToggleFixed,
   holdKey,
@@ -62,8 +68,9 @@ export function ShiftCell({
   ...rest
 }: Props) {
   const assigned = Boolean(pattern)
+  const showGhost = !pattern && ghost !== undefined
   const { holding, pointerProps } = useHoldToggle(holdKey, onToggleFixed)
-  const paint = cellStyle(pattern, fixed)
+  const paint = showGhost ? ghostStyle(ghost.colorHex) : cellStyle(pattern, fixed)
   const holdStyle: CSSProperties | undefined = holding
     ? ({
         ...paint,
@@ -83,6 +90,8 @@ export function ShiftCell({
       data-enabled={enabled ? 'true' : 'false'}
       data-fixed={fixed}
       data-holding={holding || undefined}
+      data-marked={marked || undefined}
+      data-ghost={showGhost || undefined}
       onClick={(event) => {
         if (consumeHoldClick(holdKey)) {
           event.preventDefault()
@@ -113,10 +122,14 @@ export function ShiftCell({
         // 長押しの途中でブラウザのメニューが出ると、切替より先に指が取られる
         if (onToggleFixed) event.preventDefault()
       }}
-      aria-label={label}
+      aria-label={showGhost ? `${label}（AI の提案: ${ghost.name}）` : label}
       style={holdStyle}
     >
-      {pattern ? pattern.name : enabled && <IconPlus size={18} className={classes.cellPlus} />}
+      {pattern
+        ? pattern.name
+        : showGhost
+          ? `+${ghost.name}`
+          : enabled && <IconPlus size={18} className={classes.cellPlus} />}
     </UnstyledButton>
   )
 }

@@ -71,6 +71,7 @@ src/
     csv/                          shiftCsv（純関数）/ encode（CP932 か BOM 付き UTF-8。iconv-lite）
     pdf/                          fonts（Font.register + 折り返し）/ styles / paginate / pdfCellStyle / ShiftPdfDocument
     actions/reorder.ts              reorder_positions RPC の共通ラッパ（staffs / patterns / restrictions）
+    assist/                       自動アサイン（012）。problem → model（MILP）→ solver/highs → validate（最後の門番）→ reasons → levers（効く一手の試算）。llm/ は指示の解釈だけ
     supabase/createPrivilegedClient.ts   service_role の唯一の入口
     validation/                   Zod スキーマ
   types/database.ts               CLI 生成。手書きしない
@@ -175,6 +176,10 @@ startTransition(async () => {
 テナント境界はクエリ側でしか担保できない。したがってこのファイルの中では**すべてのクエリに `.eq('tenant_id', …)` を書き**、
 `shifts` / `date_notes` は共有の期間（`gte` / `lte`）でしか読まない。汎用のクエリ関数にクライアントを引数で渡して使い回さない
 （service_role を差し込める口を作らないほうが、多少の重複より価値が大きい）。
+
+自動アサインの `lib/assist/load.ts` / `runs.ts` / `run.ts` は**クライアントを引数で受ける**（012 §3.4。将来ジョブ基盤へ移すとき
+service_role を渡すため）。したがって `publicShare.ts` と同じく、中のクエリにはすべて `.eq('tenant_id', …)` を書く。
+いまは Server Action がユーザーのクライアント（anon + RLS）を渡している。`lib/queries/` の汎用関数には渡さない。
 
 唯一の例外は `account/actions.ts` の `deleteAccount()`（`auth.admin.deleteUser` は service_role でしか呼べない）。渡す id は `requireUser()` の戻り値だけにし、入力から受け取らない。例外を足すときはここに追記する。
 
@@ -314,7 +319,7 @@ PK は uuid（`gen_random_uuid()`）。v1 から移行する行は `uuidv5('<tab
 ### RPC（`supabase/schemas/public/functions.sql`）
 
 複数行を 1 文で書き換える必要があるときだけ足す（現在は並べ替えの `reorder_positions`、シフトのアサインの `assign_shift`、
-一括操作の `set_shifts_fixed` / `clear_draft_shifts`、コピーの `copy_shifts`）。単純な CRUD は PostgREST のまま。
+一括操作の `set_shifts_fixed` / `clear_draft_shifts`、コピーの `copy_shifts`、自動アサインを元に戻す `rollback_assist_run`）。単純な CRUD は PostgREST のまま。
 
 一括の書き込みでも、1 文で書けるなら RPC にしない。ただし **PostgREST の UPDATE / DELETE は別テーブルの条件で絞れない**
 （「在籍スタッフの行だけ」は `staffs` との join）。そこで id を URL に並べて分割するのは回避策の積み重ねになるので、RPC にする（008 §10.13）。
@@ -386,6 +391,7 @@ npm run typecheck      # next typegen && tsc --noEmit
 npm test               # vitest run
 npm run format         # prettier --write .
 npm run format:check
+npm run assist:eval    # 自動アサインの評価（012 §6.3。手動。LLM を使う評価は AI_GATEWAY_API_KEY が要る）
 ```
 
 Prettier: `{ "semi": false, "singleQuote": true, "tabWidth": 2, "trailingComma": "es5", "printWidth": 100 }`

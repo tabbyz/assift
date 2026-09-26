@@ -3,11 +3,14 @@ import { notFound } from 'next/navigation'
 import { dateRange, defaultStart } from '@/lib/calendar/dateRange'
 import { holidaysIn } from '@/lib/calendar/holidays'
 import { todayJst } from '@/lib/calendar/today'
+import { isAssistAvailable } from '@/lib/assist/llm/client'
 import { requestOrigin } from '@/lib/auth/requestOrigin'
 import { parseRequiredNums } from '@/lib/patterns/requiredNums'
+import { getLatestAssistRun } from '@/lib/queries/assistRuns'
 import { listDateNotes } from '@/lib/queries/dateNotes'
 import { listPatterns } from '@/lib/queries/patterns'
 import { listRequiredNums } from '@/lib/queries/requiredNums'
+import { listRestrictions } from '@/lib/queries/restrictions'
 import { listShares, type ShareRow } from '@/lib/queries/shares'
 import { listShifts } from '@/lib/queries/shifts'
 import { listActiveStaffsWithPatternIds } from '@/lib/queries/staffs'
@@ -40,7 +43,17 @@ export default async function ShiftsPage({
   const requestedStart = start ?? defaultStart(today)
   const range = dateRange(tenant.shift_cycle, tenant.start_of_week, requestedStart)
 
-  const [staffs, patterns, shiftRows, requiredNums, dateNotes, shares, origin] = await Promise.all([
+  const [
+    staffs,
+    patterns,
+    shiftRows,
+    requiredNums,
+    dateNotes,
+    shares,
+    origin,
+    restrictions,
+    latestAssist,
+  ] = await Promise.all([
     listActiveStaffsWithPatternIds(tenantId),
     listPatterns(tenantId),
     listShifts(tenantId, range.start, range.end),
@@ -48,6 +61,9 @@ export default async function ShiftsPage({
     listDateNotes(tenantId, range.start, range.end),
     listShares(tenantId, today),
     requestOrigin(),
+    // 自動アサイン（012 §4.2）。表の描画には使わず、モーダルの「制約 n 件」だけに使う
+    listRestrictions(tenantId),
+    getLatestAssistRun(tenantId, range.start, range.end),
   ])
 
   // 共有 URL はクエリではなくここで組む（クエリは DB の列だけを返す。009 §5.3）
@@ -92,6 +108,12 @@ export default async function ShiftsPage({
       shares={{
         enabled: shares.enabled.map(toShareItem),
         expired: shares.expired.map(toShareItem),
+      }}
+      assist={{
+        available: isAssistAvailable(),
+        notes: tenant.assist_notes ?? '',
+        restrictionCount: restrictions.length,
+        latest: latestAssist,
       }}
     />
   )

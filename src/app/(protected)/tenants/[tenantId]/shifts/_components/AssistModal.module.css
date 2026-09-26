@@ -1,0 +1,96 @@
+/*
+  自動アサインのモーダル（012 §4）。共有・コピーのモーダルと同じく面の塗りは使わず、区切りは線だけ。
+  焦点は状態ごとに 1 つ: 実行前は「作成する」。結果はモーダルではなくパネル（AssistPanel。§11）。
+*/
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.titlePeriod {
+  color: var(--mantine-color-dimmed);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* ---- 実行前の 3 行（不足 / 対象 / 規則） ---- */
+.facts {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  row-gap: 8px;
+  column-gap: 12px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.factLabel {
+  color: var(--mantine-color-gray-6);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.6;
+}
+
+.factValue {
+  min-width: 0;
+  margin: 0;
+  text-wrap: pretty;
+}
+
+.total {
+  margin-right: 10px;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.muted {
+  color: var(--mantine-color-gray-6);
+}
+
+.privacy {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  color: var(--mantine-color-gray-6);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.privacy svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+/* ---- 実行中の段階 ---- */
+.stages {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.stage {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  color: var(--mantine-color-gray-5);
+}
+
+.stage[data-state='done'] {
+  color: var(--mantine-color-text);
+}
+
+.stage[data-state='current'] {
+  color: var(--mantine-color-text);
+  font-weight: 650;
+}
+
+.stageIcon {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+}

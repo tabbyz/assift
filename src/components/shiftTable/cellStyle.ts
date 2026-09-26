@@ -64,6 +64,19 @@ export function chipStyle(colorHex: string): CSSProperties {
 }
 
 /**
+ * 自動アサインの効く一手で埋まるセル（012 §11.1）。空のセルに点線の輪郭と「+早番」を、パターンの濃い色で、
+ * 下書きと同じ淡い塗りの上に出す。一手を選んでいる間は表のほかのセルが薄くなる（CSS の `data-previewing`）ので、
+ * 塗っても下書きと紛れない。白いパターンは中立の線と灰色。
+ */
+export function ghostStyle(colorHex: string): CSSProperties {
+  if (isWhitePattern(colorHex)) {
+    return { borderColor: NEUTRAL_OUTLINE, backgroundColor: 'var(--mantine-color-gray-1)' }
+  }
+  const ink = inkColor(colorHex)
+  return { borderColor: ink, color: ink, backgroundColor: tintColor(colorHex) }
+}
+
+/**
  * アサイン候補のボタン。下書き / 確定のどちらで押すかに合わせて、セルと同じ塗りにする。
  *
  * 色付きはボタン側の 2px 枠を消す（塗りが輪郭）。白いパターンだけ枠を残す

@@ -292,6 +292,49 @@ button.cell[data-assigned='false']:hover {
 }
 
 /*
+ * 直近の自動アサインで入ったセル（012 §3.8）。結果を閉じるまで左上に 4px の点。
+ * 色はセルの文字色（currentColor）で、下書きの淡塗り・確定のベタ塗りのどちらでも読める。新しい色は足さない。
+ * 011 の「記号を減らす」に反するので、閉じたら消える一時的な印にとどめる。
+ */
+button.cell[data-marked='true']::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: currentColor;
+  pointer-events: none;
+}
+
+/*
+ * 自動アサインの効く一手のプレビュー（012 §11.1）。一手を選んでいる間だけ、空のセルに点線と「+早番」を出し、
+ * **表のほかのセルと、点線の無い行のスタッフ名を薄くする**。色の付いたセルが並ぶ表の中で、点線だけを強めても埋もれたため
+ * （点滅も試したが目立たないか、うるさいかのどちらかだった）。日付ヘッダーとフッターは薄くしない（どの日か・何人になるかを読む）。
+ * スタッフ名は sticky の th ごと薄くすると、横スクロールで下のセルが透けるので、中身だけを薄くする。
+ * 線・文字・塗りの色は `ghostStyle()` が inline に当てる。
+ */
+button.cell[data-ghost='true'] {
+  border-width: 2px;
+  border-style: dashed;
+  font-weight: 700;
+}
+
+.table tbody button.cell,
+.table tbody th > * {
+  transition: opacity 150ms ease;
+}
+
+.table[data-previewing] tbody button.cell:not([data-ghost]) {
+  opacity: 0.3;
+}
+
+.table[data-previewing] tbody tr:not([data-ghost-row]) th > * {
+  opacity: 0.4;
+}
+
+/*
  * 長押しのあいだ、下端にインクが伸びる。伸び切ると下書きと確定が入れ替わる。
  * 時間は `--hold-ms`（`HOLD_TO_TOGGLE_MS`）。色はセルの文字色（currentColor）で、新しい色は足さない。
  * セル自体は縮めない。縮むと端を押した指がセルの外に出て、長押しがすぐキャンセルされる。
@@ -379,6 +422,27 @@ button.cell:focus-visible .cellPlus {
 .footCell[data-short='true'] {
   font-weight: 700;
   color: var(--mantine-color-red-9);
+}
+
+/*
+ * 一手のプレビュー中、その一手で人数が変わる日（012 §11.1）。上に今の数（打ち消し線）、下に埋まったあとの数。
+ * 充足すれば緑、まだ足りなければ赤。面を緑の淡色にして、どの日が良くなるかを列で拾えるようにする。
+ * 高さは通常のセル（30px）のまま 2 段に収める。伸ばすと、一手を選んだときにフッターの行ごと高さが変わる
+ */
+.footCell[data-preview='true'] {
+  flex-direction: column;
+  gap: 2px;
+  background-color: var(--mantine-color-green-0);
+  font-weight: 800;
+  line-height: 1;
+}
+
+.footBefore {
+  color: var(--mantine-color-dimmed);
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1;
+  text-decoration: line-through;
 }
 
 button.footCell:hover {

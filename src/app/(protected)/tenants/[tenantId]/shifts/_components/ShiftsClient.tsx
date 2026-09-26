@@ -1,7 +1,7 @@
 'use client'
 
 import 'dayjs/locale/ja'
-import { useMemo, useOptimistic, useState, useTransition } from 'react'
+import { useEffect, useMemo, useOptimistic, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Box, LoadingOverlay, Text } from '@mantine/core'
 import { DatesProvider, type DayOfWeek } from '@mantine/dates'
@@ -21,9 +21,12 @@ import {
   countAt,
   coverageAt,
   requiredCounts,
+  type DateCoverage,
   type RequiredNumRow,
 } from '@/lib/shifts/satisfaction'
 import type { ActionResult } from '@/lib/actions/result'
+import { formatJstMonthDayTime } from '@/lib/calendar/datetime'
+import type { LatestAssistRun } from '@/lib/queries/assistRuns'
 import {
   assignShift,
   clearDraftShifts,
@@ -32,8 +35,12 @@ import {
   setShiftsFixed,
 } from '../actions'
 import { shiftsParsers } from '../searchParams'
+import { ghostCells, hasRequiredNums, previewCoverage, shortageByPattern } from '../_lib/assist'
 import { BULK_COPY, type BulkKind } from '../_lib/bulkOperations'
 import { failure, outcome, type Notice } from '../_lib/notices'
+import { AssistModal, useAssist } from './AssistModal'
+import { AssistMobileBar, AssistPanel } from './AssistPanel'
+import panelClasses from './AssistPanel.module.css'
 import { CalendarTable, type ActiveCell } from './CalendarTable'
 import { CopyModal } from './CopyModal'
 import { CountModal } from './CountModal'
@@ -76,6 +83,15 @@ type Props = {
   requiredNums: RequiredNumRow[]
   dateNotes: { date: string; note: string }[]
   shares: { enabled: ShareItem[]; expired: ShareItem[] }
+  /** 自動アサイン（012） */
+  assist: {
+    /** LLM のキーがあるか。無ければボタンは「現在利用できません」 */
+    available: boolean
+    /** 店舗の既定の指示 */
+    notes: string
+    restrictionCount: number
+    latest: LatestAssistRun | null
+  }
 }
 
 /**
@@ -282,6 +298,65 @@ export function ShiftsClient(props: Props) {
 
   const needsSetup = patterns.length === 0 || staffs.length === 0
 
+  // ---- 自動アサイン（012 §4） ----------------------------------------------
+  const latestAssist = props.assist.latest
+  const assist = useAssist({
+    tenantId,
+    start: range.start,
+    defaultNotes: props.assist.notes,
+    pending: latestAssist && !latestAssist.acknowledged ? latestAssist.view : null,
+  })
+  // 直近の実行で入ったセルの点。結果を閉じるまで（§3.8）
+  const assistCells = useMemo(
+    () => new Set(latestAssist && !latestAssist.acknowledged ? latestAssist.cellKeys : []),
+    [latestAssist]
+  )
+  // 選んでいる効く一手で埋まるセル。表に点線で出す（§11.1）
+  const assistResult = assist.result
+  const selectedLever =
+    assistResult && assist.selectedLever !== null
+      ? assistResult.levers[assist.selectedLever]
+      : undefined
+  const assistGhosts = useMemo(
+    () => (selectedLever ? ghostCells(selectedLever, shifts) : new Map<string, string>()),
+    [selectedLever, shifts]
+  )
+  // フッターの「3/5 → 4/5」（§11.1）
+  const assistPreviewCoverage = useMemo(
+    () =>
+      selectedLever
+        ? previewCoverage(selectedLever, shifts, workdayPatternIds, required, assigned)
+        : new Map<string, DateCoverage>(),
+    [selectedLever, shifts, workdayPatternIds, required, assigned]
+  )
+  // 一手を選んだとき、点線が画面の外にあれば最初の 1 つまで表をスクロールする（スマホは 4 日分しか見えない）。
+  // 点線は表の編集でも描き直るが、そのたびに動かすと編集中のセルから視線が飛ぶので、選んだときだけにする
+  useEffect(() => {
+    if (!selectedLever) return
+    document
+      .querySelector('[data-ghost="true"]')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+  }, [selectedLever])
+  const shortage = useMemo(
+    () => shortageByPattern(range.dates, workdayPatterns, required, assigned),
+    [range.dates, workdayPatterns, required, assigned]
+  )
+  const patternNames = useMemo(
+    () => new Map(patterns.map((pattern) => [pattern.id, pattern.name])),
+    [patterns]
+  )
+  const requiredNumsSet = useMemo(
+    () => hasRequiredNums(props.requiredNums, new Set(workdayPatternIds)),
+    [props.requiredNums, workdayPatternIds]
+  )
+  const assistUndo =
+    latestAssist && latestAssist.draftCount > 0
+      ? {
+          label: `AI の作成を元に戻す（${formatJstMonthDayTime(latestAssist.view.createdAt)}）`,
+          onClick: () => assist.rollback(latestAssist.view),
+        }
+      : null
+
   return (
     <DatesProvider
       settings={{ locale: 'ja', firstDayOfWeek: startOfWeek as DayOfWeek, weekendDays: [0, 6] }}
@@ -300,7 +375,16 @@ export function ShiftsClient(props: Props) {
           onSetDefaultPatterns={confirmSetDefaultPatterns}
           onSetDefaultRequiredNums={confirmSetDefaultRequiredNums}
           onOpenCopy={() => setCopyOpened(true)}
-          disabled={isNavigating || isBulkPending}
+          assistAvailable={props.assist.available}
+          onOpenAssist={assist.openNew}
+          assistUndo={assistUndo}
+          disabled={
+            isNavigating ||
+            isBulkPending ||
+            assist.running ||
+            assist.isRollingBack ||
+            assist.isApplying
+          }
         />
 
         {needsSetup && (
@@ -311,36 +395,64 @@ export function ShiftsClient(props: Props) {
           />
         )}
 
-        <Box className={classes.scroller} pos="relative">
-          <LoadingOverlay visible={isNavigating || isBulkPending} zIndex={4} />
-          <CalendarTable
-            tenantId={tenantId}
-            range={range}
-            today={today}
-            holidays={holidays}
-            staffs={staffs}
-            patternsById={patternsById}
-            shifts={shifts}
-            notesByDate={notesByDate}
-            coverageByDate={coverageByDate}
-            workdaysByStaffId={workdaysByStaffId}
-            activeCell={activeCell}
-            draftFixed={draftFixed}
-            onOpenCell={openCell}
-            onCloseCell={() => setActiveCell(null)}
-            onAssign={assign}
-            onDraftFixedChange={changeDraftFixed}
-            onOpenNote={setNoteDate}
-            onOpenRequiredNum={setRequiredNumDate}
-            onOpenCount={() => setCountOpened(true)}
-            onStaffBulk={confirmBulk}
-            // 期間移動中は無効にしない: メニューには「スタッフ情報を編集」もあり、007 では移動中も開けた
-            bulkDisabled={isBulkPending}
-            popoverPatterns={popoverPatterns}
-          />
-        </Box>
+        {/* 表と凡例を縦に積み、結果のパネルはその右に下端まで伸ばす（§11） */}
+        <div className={panelClasses.layout}>
+          <div className={panelClasses.main}>
+            <Box className={classes.scroller} pos="relative">
+              <LoadingOverlay visible={isNavigating || isBulkPending} zIndex={4} />
+              <CalendarTable
+                tenantId={tenantId}
+                range={range}
+                today={today}
+                holidays={holidays}
+                staffs={staffs}
+                patternsById={patternsById}
+                shifts={shifts}
+                notesByDate={notesByDate}
+                coverageByDate={coverageByDate}
+                workdaysByStaffId={workdaysByStaffId}
+                assistCells={assistCells}
+                assistGhosts={assistGhosts}
+                previewCoverageByDate={assistPreviewCoverage}
+                activeCell={activeCell}
+                draftFixed={draftFixed}
+                onOpenCell={openCell}
+                onCloseCell={() => setActiveCell(null)}
+                onAssign={assign}
+                onDraftFixedChange={changeDraftFixed}
+                onOpenNote={setNoteDate}
+                onOpenRequiredNum={setRequiredNumDate}
+                onOpenCount={() => setCountOpened(true)}
+                onStaffBulk={confirmBulk}
+                // 期間移動中は無効にしない: メニューには「スタッフ情報を編集」もあり、007 では移動中も開けた
+                bulkDisabled={isBulkPending}
+                popoverPatterns={popoverPatterns}
+              />
+            </Box>
+            <PatternDescriptionList patterns={patterns} />
+          </div>
+          {assistResult && (
+            <AssistPanel
+              assist={assist}
+              run={assistResult}
+              tenantId={tenantId}
+              holidays={holidays}
+              workdayPatterns={workdayPatterns}
+              patternNames={patternNames}
+            />
+          )}
+        </div>
 
-        <PatternDescriptionList patterns={patterns} />
+        {assistResult && (
+          <AssistMobileBar
+            assist={assist}
+            run={assistResult}
+            tenantId={tenantId}
+            holidays={holidays}
+            workdayPatterns={workdayPatterns}
+            patternNames={patternNames}
+          />
+        )}
       </div>
 
       {noteDate && (
@@ -382,6 +494,22 @@ export function ShiftsClient(props: Props) {
           onClose={() => setShareOpened(false)}
         />
       )}
+
+      <AssistModal
+        assist={assist}
+        tenantId={tenantId}
+        cycle={cycle}
+        range={range}
+        shortage={shortage}
+        hasRequiredNums={requiredNumsSet}
+        staffCount={staffs.length}
+        workdayPatternCount={workdayPatterns.length}
+        restrictionCount={props.assist.restrictionCount}
+        onSetDefaultRequiredNums={() => {
+          assist.close()
+          confirmSetDefaultRequiredNums()
+        }}
+      />
 
       {copyOpened && (
         <CopyModal

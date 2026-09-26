@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { cellStyle, chipStyle, choiceStyle } from './cellStyle'
-import { inkColor, tintColor } from '@/lib/patterns/colors'
+import { cellStyle, chipStyle, choiceStyle, ghostStyle } from './cellStyle'
+import { inkColor, NEUTRAL_OUTLINE, tintColor } from '@/lib/patterns/colors'
 
 describe('cellStyle', () => {
   it('空のセルには何も当てない', () => {
@@ -95,6 +95,23 @@ describe('choiceStyle', () => {
       backgroundColor: '#FFFFFF',
       borderColor: '#CED4DA',
       borderStyle: 'solid',
+    })
+  })
+})
+
+describe('ghostStyle', () => {
+  it('線と文字はパターンの濃い色、塗りは下書きと同じ淡色', () => {
+    expect(ghostStyle('#FF5722')).toEqual({
+      borderColor: inkColor('#FF5722'),
+      color: inkColor('#FF5722'),
+      backgroundColor: tintColor('#FF5722'),
+    })
+  })
+
+  it('白いパターンは中立の線と灰色', () => {
+    expect(ghostStyle('#FFFFFF')).toEqual({
+      borderColor: NEUTRAL_OUTLINE,
+      backgroundColor: 'var(--mantine-color-gray-1)',
     })
   })
 })

@@ -2,6 +2,30 @@ SET local check_function_bodies = off;
 
 CREATE SCHEMA "private";
 
+CREATE TABLE "public"."assist_runs" (
+  "id"              uuid                     NOT NULL DEFAULT gen_random_uuid(),
+  "tenant_id"       uuid                     NOT NULL,
+  "start_date"      date                     NOT NULL,
+  "end_date"        date                     NOT NULL,
+  "instructions"    text,
+  "models"          jsonb,
+  "request"         jsonb,
+  "result"          jsonb,
+  "usage"           jsonb,
+  "error"           text,
+  "acknowledged_at" timestamp with time zone,
+  "rolled_back_at"  timestamp with time zone,
+  "created_at"      timestamp with time zone NOT NULL DEFAULT now(),
+  "updated_at"      timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT "assist_runs_check" CHECK (((end_date >= start_date) AND ((end_date - start_date) < 31))),
+  CONSTRAINT "assist_runs_id_tenant_id_key" UNIQUE (id, tenant_id),
+  CONSTRAINT "assist_runs_instructions_check" CHECK ((char_length(instructions) <= 500)),
+  CONSTRAINT "assist_runs_pkey" PRIMARY KEY (id)
+);
+
+ALTER TABLE "public"."assist_runs"
+  ENABLE ROW LEVEL SECURITY;
+
 CREATE TABLE "public"."date_notes" (
   "id"         uuid                     NOT NULL DEFAULT gen_random_uuid(),
   "tenant_id"  uuid                     NOT NULL,
@@ -112,14 +136,15 @@ ALTER TABLE "public"."shares"
   ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE "public"."shifts" (
-  "id"         uuid                     NOT NULL DEFAULT gen_random_uuid(),
-  "tenant_id"  uuid                     NOT NULL,
-  "staff_id"   uuid                     NOT NULL,
-  "pattern_id" uuid                     NOT NULL,
-  "date"       date                     NOT NULL,
-  "fixed"      boolean                  NOT NULL DEFAULT false,
-  "created_at" timestamp with time zone NOT NULL DEFAULT now(),
-  "updated_at" timestamp with time zone NOT NULL DEFAULT now(),
+  "id"            uuid                     NOT NULL DEFAULT gen_random_uuid(),
+  "tenant_id"     uuid                     NOT NULL,
+  "staff_id"      uuid                     NOT NULL,
+  "pattern_id"    uuid                     NOT NULL,
+  "date"          date                     NOT NULL,
+  "fixed"         boolean                  NOT NULL DEFAULT false,
+  "assist_run_id" uuid,
+  "created_at"    timestamp with time zone NOT NULL DEFAULT now(),
+  "updated_at"    timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT "shifts_pkey" PRIMARY KEY (id),
   CONSTRAINT "shifts_staff_id_date_key" UNIQUE (staff_id, date)
 );
@@ -174,8 +199,10 @@ CREATE TABLE "public"."tenants" (
   "id"            uuid                     NOT NULL DEFAULT gen_random_uuid(),
   "name"          text                     NOT NULL,
   "start_of_week" smallint                 NOT NULL DEFAULT 0,
+  "assist_notes"  text,
   "created_at"    timestamp with time zone NOT NULL DEFAULT now(),
   "updated_at"    timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT "tenants_assist_notes_check" CHECK ((char_length(assist_notes) <= 500)),
   CONSTRAINT "tenants_name_check" CHECK (((char_length(name) >= 1) AND (char_length(name) <= 20))),
   CONSTRAINT "tenants_pkey" PRIMARY KEY (id),
   CONSTRAINT "tenants_start_of_week_check" CHECK (((start_of_week >= 0) AND (start_of_week <= 6))),
@@ -184,6 +211,15 @@ CREATE TABLE "public"."tenants" (
 
 ALTER TABLE "public"."tenants"
   ENABLE ROW LEVEL SECURITY;
+
+CREATE TYPE "public"."assist_run_status" AS ENUM (
+  'running',
+  'succeeded',
+  'failed'
+);
+
+ALTER TABLE "public"."assist_runs"
+  ADD COLUMN "status" public.assist_run_status NOT NULL DEFAULT 'running'::public.assist_run_status;
 
 CREATE TYPE "public"."pattern_kind" AS ENUM (
   'workday',
@@ -458,6 +494,38 @@ begin
 end;
 $function$;
 
+CREATE OR REPLACE FUNCTION public.rollback_assist_run (
+  p_tenant_id uuid,
+  p_run_id    uuid
+)
+  RETURNS integer
+  LANGUAGE plpgsql
+  SET search_path TO ''
+  AS $function$
+declare
+  v_count integer;
+begin
+  if not exists (select 1 from public.tenants where id = p_tenant_id) then
+    raise exception 'rollback_assist_run: tenant not found';
+  end if;
+
+  update public.assist_runs
+     set rolled_back_at = coalesce(rolled_back_at, now())
+   where id = p_run_id and tenant_id = p_tenant_id and status = 'succeeded';
+  if not found then
+    raise exception 'rollback_assist_run: run not found';
+  end if;
+
+  delete from public.shifts
+   where tenant_id = p_tenant_id
+     and assist_run_id = p_run_id
+     and fixed = false;
+
+  get diagnostics v_count = row_count;
+  return v_count;
+end;
+$function$;
+
 CREATE OR REPLACE FUNCTION public.set_shifts_fixed (
   p_tenant_id uuid,
   p_start     date,
@@ -522,6 +590,9 @@ ALTER TABLE "public"."restrictions"
   ADD CONSTRAINT "restrictions_pattern2_id_tenant_id_fkey" FOREIGN KEY (pattern2_id, tenant_id) REFERENCES public.patterns(id, tenant_id) ON DELETE CASCADE;
 
 ALTER TABLE "public"."shifts"
+  ADD CONSTRAINT "shifts_assist_run_id_tenant_id_fkey" FOREIGN KEY (assist_run_id, tenant_id) REFERENCES public.assist_runs(id, tenant_id) ON DELETE SET NULL (assist_run_id);
+
+ALTER TABLE "public"."shifts"
   ADD CONSTRAINT "shifts_pattern_id_tenant_id_fkey" FOREIGN KEY (pattern_id, tenant_id) REFERENCES public.patterns(id, tenant_id) ON DELETE CASCADE;
 
 ALTER TABLE "public"."staff_default_patterns"
@@ -538,6 +609,9 @@ ALTER TABLE "public"."staff_default_patterns"
 
 ALTER TABLE "public"."staff_patterns"
   ADD CONSTRAINT "staff_patterns_staff_id_tenant_id_fkey" FOREIGN KEY (staff_id, tenant_id) REFERENCES public.staffs(id, tenant_id) ON DELETE CASCADE;
+
+ALTER TABLE "public"."assist_runs"
+  ADD CONSTRAINT "assist_runs_tenant_id_fkey" FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
 
 ALTER TABLE "public"."date_notes"
   ADD CONSTRAINT "date_notes_tenant_id_fkey" FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
@@ -566,6 +640,11 @@ ALTER TABLE "public"."staff_patterns"
 ALTER TABLE "public"."staffs"
   ADD CONSTRAINT "staffs_tenant_id_fkey" FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
 
+CREATE UNIQUE INDEX assist_runs_one_running_idx ON public.assist_runs USING btree (tenant_id)
+  WHERE (status = 'running'::public.assist_run_status);
+
+CREATE INDEX assist_runs_tenant_created_idx ON public.assist_runs USING btree (tenant_id, created_at DESC);
+
 CREATE INDEX patterns_pair_pattern_id_idx ON public.patterns USING btree (pair_pattern_id);
 
 CREATE INDEX patterns_tenant_position_idx ON public.patterns USING btree (tenant_id, "position");
@@ -581,6 +660,8 @@ CREATE INDEX restrictions_pattern2_id_idx ON public.restrictions USING btree (pa
 CREATE INDEX restrictions_tenant_position_idx ON public.restrictions USING btree (tenant_id, "position");
 
 CREATE INDEX shares_tenant_created_idx ON public.shares USING btree (tenant_id, created_at DESC);
+
+CREATE INDEX shifts_assist_run_id_idx ON public.shifts USING btree (assist_run_id);
 
 CREATE INDEX shifts_pattern_id_idx ON public.shifts USING btree (pattern_id);
 
@@ -609,6 +690,11 @@ CREATE TRIGGER on_auth_user_email_updated
   FOR EACH ROW
   WHEN (((old.email)::text IS DISTINCT FROM (new.email)::text))
   EXECUTE FUNCTION private.sync_profile_email();
+
+CREATE TRIGGER assist_runs_set_updated_at
+  BEFORE UPDATE ON public.assist_runs
+  FOR EACH ROW
+  EXECUTE FUNCTION private.set_updated_at();
 
 CREATE TRIGGER date_notes_set_updated_at
   BEFORE UPDATE ON public.date_notes
@@ -644,6 +730,19 @@ CREATE TRIGGER tenants_set_updated_at
   BEFORE UPDATE ON public.tenants
   FOR EACH ROW
   EXECUTE FUNCTION private.set_updated_at();
+
+CREATE POLICY "assist_runs_member_all" ON "public"."assist_runs"
+  FOR ALL
+  TO "authenticated"
+  USING (true)
+  WITH CHECK (true);
+
+CREATE POLICY "assist_runs_restrict_same_tenant" ON "public"."assist_runs"
+  AS RESTRICTIVE
+  FOR ALL
+  TO "authenticated"
+  USING ((tenant_id IN ( SELECT private.owned_tenant_ids() AS owned_tenant_ids)))
+  WITH CHECK ((tenant_id IN ( SELECT private.owned_tenant_ids() AS owned_tenant_ids)));
 
 CREATE POLICY "date_notes_member_all" ON "public"."date_notes"
   FOR ALL
@@ -798,11 +897,21 @@ REVOKE ALL ON FUNCTION "public"."reorder_positions"(text, uuid, uuid[]) FROM PUB
 
 GRANT EXECUTE ON FUNCTION "public"."reorder_positions"(text, uuid, uuid[]) TO "anon", "authenticated", "postgres", "service_role";
 
+REVOKE ALL ON FUNCTION "public"."rollback_assist_run"(uuid, uuid) FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION "public"."rollback_assist_run"(uuid, uuid) TO "anon", "authenticated", "postgres", "service_role";
+
 REVOKE ALL ON FUNCTION "public"."set_shifts_fixed"(uuid, date, date, boolean, uuid) FROM PUBLIC;
 
 GRANT EXECUTE ON FUNCTION "public"."set_shifts_fixed"(uuid, date, date, boolean, uuid) TO "anon", "authenticated", "postgres", "service_role";
 
 GRANT CREATE, USAGE ON SCHEMA "private" TO "postgres";
+
+REVOKE ALL ON TABLE "public"."assist_runs" FROM "authenticated";
+
+GRANT INSERT, SELECT, UPDATE ON TABLE "public"."assist_runs" TO "authenticated";
+
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."assist_runs" TO "postgres", "service_role";
 
 REVOKE ALL ON TABLE "public"."date_notes" FROM "authenticated";
 
@@ -875,6 +984,8 @@ REVOKE ALL ON TABLE "public"."tenants" FROM "authenticated";
 GRANT DELETE, INSERT, SELECT, UPDATE ON TABLE "public"."tenants" TO "authenticated";
 
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."tenants" TO "postgres", "service_role";
+
+GRANT USAGE ON TYPE "public"."assist_run_status" TO "postgres";
 
 GRANT USAGE ON TYPE "public"."pattern_kind" TO "postgres";
 

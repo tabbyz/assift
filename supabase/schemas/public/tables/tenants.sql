@@ -5,6 +5,8 @@ create table public.tenants (
   name          text        not null check (char_length(name) between 1 and 20),
   shift_cycle   public.shift_cycle not null default 'month',
   start_of_week smallint    not null default 0 check (start_of_week between 0 and 6),
+  -- 自動アサインの「AI への指示」の店舗の既定（012 §4.2）。上限は lib/validation/assist.ts と同じ
+  assist_notes  text        check (char_length(assist_notes) <= 500),
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now()
 );

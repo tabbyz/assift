@@ -5,7 +5,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(108);
+select plan(126);
 
 -- ---------------------------------------------------------------------------
 -- 準備（postgres として実行。RLS はテーブル所有者には適用されない）
@@ -25,6 +25,10 @@ select plan(108);
 -- 共有（009）
 \set share_a '''aaaaaaaa-6666-0000-0000-00000000000a'''
 \set share_b '''bbbbbbbb-6666-0000-0000-00000000000b'''
+-- 自動アサイン（012）
+\set run_a '''aaaaaaaa-7777-0000-0000-00000000000a'''
+\set run_a_running '''aaaaaaaa-7777-0000-0000-00000000001a'''
+\set run_b '''bbbbbbbb-7777-0000-0000-00000000000b'''
 
 insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
   raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
@@ -62,6 +66,16 @@ values (:tenant_b, '2026-09-17', 'B の予定');
 insert into public.shares (id, tenant_id, code, start_date, end_date)
 values (:share_a, :tenant_a, 'AAAAaaa1', '2026-09-01', '2026-09-30'),
        (:share_b, :tenant_b, 'BBBBbbb1', '2026-09-01', '2026-09-30');
+
+-- 自動アサイン（012）。A に succeeded と running を 1 件ずつ、B に succeeded を 1 件。
+-- A の run には下書きと確定を 1 行ずつ付ける（元に戻すのは下書きだけ）。日付は他の節と重ならない 2027-01
+insert into public.assist_runs (id, tenant_id, start_date, end_date, status)
+values (:run_a, :tenant_a, '2027-01-01', '2027-01-31', 'succeeded'),
+       (:run_a_running, :tenant_a, '2027-02-01', '2027-02-28', 'running'),
+       (:run_b, :tenant_b, '2027-01-01', '2027-01-31', 'succeeded');
+-- A の行は A として入れる（「B の shifts は見えない」が A の可視行を 0 と数えるため、準備の段階では置かない）
+insert into public.shifts (tenant_id, staff_id, pattern_id, date, fixed, assist_run_id)
+values (:tenant_b, :staff_b, :pattern_b, '2027-01-05', false, :run_b);
 
 -- ---------------------------------------------------------------------------
 -- ユーザー A になりすます
@@ -541,6 +555,61 @@ select is((select count(*) from d), 0::bigint, 'B の共有の DELETE は 0 行�
 with d as (delete from public.shares where id = :share_a returning 1)
 select is((select count(*) from d), 1::bigint, '自テナントの共有は解除できる');
 
+-- ---------------------------------------------------------------------------
+-- 自動アサイン（012 §5.8）: assist_runs の境界と rollback_assist_run
+-- ---------------------------------------------------------------------------
+select is((select count(*) from public.assist_runs), 2::bigint, 'A には自テナントの assist_runs だけ見える');
+select throws_ok(
+  format($$insert into public.assist_runs (tenant_id, start_date, end_date) values (%L, '2027-03-01', '2027-03-31')$$, :tenant_b),
+  '42501', null, '別テナントの tenant_id で assist_runs は作れない'
+);
+select throws_ok(
+  format($$insert into public.assist_runs (tenant_id, start_date, end_date) values (%L, '2027-03-01', '2027-03-31')$$, :tenant_a),
+  '23505', null, '同じ店舗で running は 2 つ作れない（partial unique）'
+);
+select throws_ok(
+  format($$insert into public.assist_runs (tenant_id, start_date, end_date, status) values (%L, '2027-03-01', '2027-04-01', 'failed')$$, :tenant_a),
+  '23514', null, 'assist_runs の期間は差 30 日まで（表示期間の上限と同じ）'
+);
+with u as (
+  update public.assist_runs set acknowledged_at = now() where id = :run_b returning 1
+)
+select is((select count(*) from u), 0::bigint, 'B の assist_runs の UPDATE は 0 行');
+select throws_ok(
+  format($$delete from public.assist_runs where id = %L$$, :run_a),
+  '42501', null, 'assist_runs に DELETE 権限はない'
+);
+select throws_ok(
+  format($$insert into public.shifts (tenant_id, staff_id, pattern_id, date, assist_run_id) values (%L, %L, %L, '2027-01-07', %L)$$,
+    :tenant_a, :staff_a, :pattern_a, :run_b),
+  '23503', null, 'shifts.assist_run_id に他テナントの run は入れられない（複合 FK）'
+);
+select lives_ok(
+  format($$insert into public.shifts (tenant_id, staff_id, pattern_id, date, fixed, assist_run_id)
+           values (%L, %L, %L, '2027-01-05', false, %L), (%L, %L, %L, '2027-01-06', true, %L)$$,
+    :tenant_a, :staff_a, :pattern_a, :run_a, :tenant_a, :staff_a, :pattern_a, :run_a),
+  '自動アサイン: A の run に下書きと確定を 1 行ずつ置く（準備）'
+);
+select is(public.rollback_assist_run(:tenant_a, :run_a), 1,
+  'rollback_assist_run: 自テナントの run の下書きだけを消し、件数を返す');
+select is(
+  (select count(*) from public.shifts where assist_run_id = :run_a and fixed),
+  1::bigint, 'rollback_assist_run: 確定へ変えた行は残る');
+select isnt((select rolled_back_at from public.assist_runs where id = :run_a), null,
+  'rollback_assist_run: rolled_back_at を記録する');
+select throws_ok(
+  format($$select public.rollback_assist_run(%L, %L)$$, :tenant_a, :run_b),
+  'P0001', 'rollback_assist_run: run not found',
+  'rollback_assist_run: 他テナントの run id は not found');
+select throws_ok(
+  format($$select public.rollback_assist_run(%L, %L)$$, :tenant_b, :run_b),
+  'P0001', 'rollback_assist_run: tenant not found',
+  'rollback_assist_run: 他テナントの店舗は not found');
+select throws_ok(
+  format($$select public.rollback_assist_run(%L, %L)$$, :tenant_a, :run_a_running),
+  'P0001', 'rollback_assist_run: run not found',
+  'rollback_assist_run: running の run は戻せない（not found）');
+
 -- TRUNCATE は RLS を通らないので、権限の層で止める（003 §3.3）
 select throws_ok('truncate public.staffs', '42501', null, 'authenticated に TRUNCATE 権限はない');
 
@@ -582,6 +651,10 @@ select throws_ok(
 select throws_ok(
   $$select public.copy_shifts('aaaaaaaa-1111-0000-0000-00000000000a', '2026-09-01', '2026-09-30', '2026-10-01', array['aaaaaaaa-3333-0000-0000-00000000000a']::uuid[])$$,
   '42501', null, 'anon は copy_shifts を実行できない');
+select throws_ok(
+  $$select public.rollback_assist_run('aaaaaaaa-1111-0000-0000-00000000000a', 'aaaaaaaa-7777-0000-0000-00000000000a')$$,
+  '42501', null, 'anon は rollback_assist_run を実行できない');
+select throws_ok('select count(*) from public.assist_runs', '42501', null, 'anon は assist_runs を読めない');
 
 -- Supabase の ALTER DEFAULT PRIVILEGES は新しい public の関数にも anon の EXECUTE を付ける。
 -- unmanaged/restrict_anon_grants.sql の追記を忘れた RPC がここで落ちるよう、関数ごとではなく全体を見る
@@ -642,7 +715,7 @@ select is(
 -- 008 の一括操作（範囲 UPDATE / DELETE）が B の行を触っていないことを確かめる。
 -- 0 行だったことは A 側で見たが、行そのものが無事かは postgres でしか見えない
 select is(
-  (select count(*) from public.shifts where tenant_id = :tenant_b and fixed = false),
+  (select count(*) from public.shifts where tenant_id = :tenant_b and fixed = false and assist_run_id is null),
   1::bigint,
   'B の shifts は A の一括操作後も下書きのまま残っている'
 );
@@ -657,6 +730,18 @@ select is(
   (select end_date from public.shares where tenant_id = :tenant_b),
   '2026-09-30'::date,
   'B の共有の公開期限は A の UPDATE 後も変わっていない'
+);
+
+select is(
+  (select count(*) from public.shifts where assist_run_id = :run_b),
+  1::bigint,
+  'B の自動アサインの行は A の rollback 後も残っている'
+);
+
+select is(
+  (select acknowledged_at from public.assist_runs where id = :run_b),
+  null,
+  'B の assist_runs は A の UPDATE 後も変わっていない'
 );
 
 select * from finish();

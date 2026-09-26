@@ -1,0 +1,473 @@
+/*
+  自動アサインの結果（012 §11）。PC は表の右のパネル、スマホは下からのシートと下端のバー。
+  面の塗りは使わず、区切りは線だけ（モーダルと同じ）。色は「足りない = 赤」「増える = 緑」の 2 つだけ。
+*/
+
+/* ---- 表とパネルを横に並べる（ShiftsClient） ---- */
+.layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* 表（縦に伸びる）と凡例。横幅はパネルの残り */
+.main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.muted {
+  color: var(--mantine-color-dimmed);
+  font-size: 12px;
+}
+
+.short {
+  color: var(--mantine-color-red-9);
+  font-weight: 700;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---- 入れ物 ---- */
+/* 上端の線は表の日付ヘッダーの上端（1px）と揃える。ツールバーとの境目になる */
+.panel {
+  position: relative;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: 360px;
+  min-height: 0;
+  border-top: calc(0.0625rem * var(--mantine-scale)) solid var(--mantine-color-default-border);
+  border-left: calc(0.0625rem * var(--mantine-scale)) solid var(--mantine-color-default-border);
+  background-color: var(--mantine-color-body);
+}
+
+.sheet {
+  border-radius: 12px 12px 0 0;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.scroll {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 0;
+  padding: 16px 20px;
+  overflow-y: auto;
+}
+
+.body[data-mobile] .scroll {
+  padding: 4px 16px 16px;
+}
+
+.footer {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: calc(0.0625rem * var(--mantine-scale)) solid var(--mantine-color-gray-2);
+}
+
+.closeButton {
+  margin-left: auto;
+}
+
+.body[data-mobile] .footer {
+  padding: 12px 16px calc(16px + env(safe-area-inset-bottom));
+}
+
+/* スマホは 3 つを同じ幅に並べる（押しやすさを揃える） */
+.body[data-mobile] .footer > * {
+  flex: 1;
+  margin-left: 0;
+  padding-inline: 8px;
+}
+
+.grabber {
+  align-self: center;
+  flex: none;
+  width: 36px;
+  height: 4px;
+  margin: 8px auto 4px;
+  border-radius: 2px;
+  background-color: var(--mantine-color-gray-4);
+}
+
+/* ---- 見出し ---- */
+.header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 30px;
+}
+
+.title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.notice {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 8px 10px;
+  border-radius: var(--mantine-radius-sm);
+  background-color: var(--mantine-color-gray-0);
+  color: var(--mantine-color-gray-8);
+}
+
+.notice svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.allFilled {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 0;
+  color: var(--mantine-color-green-9);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ---- 区切り ---- */
+.section {
+  display: grid;
+  gap: 8px;
+}
+
+.divided {
+  padding-top: 16px;
+  border-top: calc(0.0625rem * var(--mantine-scale)) solid var(--mantine-color-gray-2);
+}
+
+.sectionHead {
+  display: grid;
+  gap: 2px;
+}
+
+.sectionTitle {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sectionTitleRow {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.promptIcon {
+  flex: none;
+}
+
+.shortage {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+/* ---- 不足している枠の小さな表 ---- */
+.gridScroller {
+  --label-width: 56px;
+  --grid-gap: 2px;
+  /* 日付（11px）がマスの中に収まる下限。これより狭い日数は出さず、幅が余る端末は日数を増やす */
+  --min-day: 22px;
+
+  container-type: inline-size;
+  padding-bottom: 6px;
+  overflow-x: auto;
+  scrollbar-color: var(--mantine-color-gray-4) transparent;
+  scrollbar-width: thin;
+}
+
+.gridScroller:focus-visible {
+  outline: 2px solid var(--mantine-color-blue-5);
+  outline-offset: 2px;
+}
+
+.grid {
+  width: max-content;
+  border-collapse: separate;
+  border-spacing: var(--grid-gap);
+  margin: calc(var(--grid-gap) * -1);
+  table-layout: fixed;
+}
+
+/* 見える日数ぶんで幅を割る。ラベル列と、その範囲に入る間隔を引いてから割る */
+.gridDay,
+.gridCell {
+  width: calc(
+    (100cqi - var(--label-width) - var(--visible-gaps) * var(--grid-gap)) / var(--visible-days)
+  );
+  min-width: var(--min-day);
+  padding: 0;
+  text-align: center;
+}
+
+.gridCorner,
+.gridLabel {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  width: var(--label-width);
+  max-width: var(--label-width);
+  padding: 0 2px 0 0;
+  background-color: var(--mantine-color-body);
+  /* border-spacing はセルの外なので、固定列の塗りをそこまで伸ばす。伸ばさないと横スクロールしたマスが隙間から見える */
+  box-shadow: 0 0 0 var(--grid-gap) var(--mantine-color-body);
+  color: var(--mantine-color-gray-7);
+  font-size: 12px;
+  font-weight: 400;
+  text-align: left;
+}
+
+.gridLabelRow {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-width: 0;
+}
+
+.gridName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gridTotal {
+  flex: none;
+  color: var(--mantine-color-red-9);
+  font-weight: 700;
+}
+
+.gridDay > span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: var(--mantine-color-dimmed);
+  font-variant-numeric: tabular-nums;
+}
+
+.gridWday {
+  font-size: 9px;
+  line-height: 1.2;
+}
+
+.gridDate {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.gridCell {
+  height: 22px;
+  border-radius: 3px;
+  background-color: var(--mantine-color-gray-1);
+  color: var(--mantine-color-red-9);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.gridCell[data-short] {
+  background-color: var(--mantine-color-red-1);
+}
+
+/* 選んでいる一手で埋まる枠 */
+.gridCell[data-hit] {
+  box-shadow: inset 0 0 0 1.5px var(--mantine-color-green-8);
+}
+
+.sun {
+  color: var(--mantine-color-red-8) !important;
+}
+
+.sat {
+  color: var(--mantine-color-blue-8) !important;
+}
+
+/* ---- 効く一手 ---- */
+.lever {
+  /* 子の背景が角の枠線の上に描かれて線が欠けるのを防ぐ */
+  overflow: hidden;
+  border: calc(0.0625rem * var(--mantine-scale)) solid var(--mantine-color-gray-3);
+  border-radius: 6px;
+}
+
+.lever:hover {
+  background-color: var(--mantine-color-gray-0);
+}
+
+.lever[data-selected] {
+  /* 1px の枠の外側にもう 1 本。中の余白は動かさず、見た目だけ 2px の黒にする */
+  border-color: var(--mantine-color-dark-7);
+  outline: 1px solid var(--mantine-color-dark-7);
+}
+
+.leverMain {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  width: 100%;
+  min-height: 44px;
+  padding: 12px 14px;
+  border-radius: 0;
+  text-align: left;
+}
+
+
+.leverHead {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.leverText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.leverKind {
+  color: var(--mantine-color-dimmed);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.leverTitle {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.leverSub {
+  color: var(--mantine-color-gray-7);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.gain {
+  color: var(--mantine-color-green-9);
+  font-size: 20px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.leverActions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 0 14px 12px;
+}
+
+.leverApply {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+}
+
+/* ---- 指示の解釈 ---- */
+.interpretations {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.interpretations li {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.interpretations svg {
+  margin-top: 3px;
+}
+
+.kept {
+  color: var(--mantine-color-green-9);
+}
+
+.broken {
+  color: var(--mantine-color-red-9);
+}
+
+.detail {
+  margin-left: 6px;
+  color: var(--mantine-color-gray-6);
+}
+
+/* ---- スマホの下端のバー ---- */
+.peek,
+.bar {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 0 16px calc(14px + env(safe-area-inset-bottom));
+  border-radius: 12px 12px 0 0;
+  background-color: var(--mantine-color-body);
+  box-shadow: 0 -6px 20px rgb(0 0 0 / 12%);
+}
+
+.peekRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 14px;
+}
+
+.peekTitle {
+  font-weight: 700;
+}
+
+.peekIcon {
+  margin-left: auto;
+  color: var(--mantine-color-gray-7);
+}
+
+.barActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.barActions > :last-child,
+.barActions .apply {
+  flex: 1;
+}

@@ -13,7 +13,16 @@ const nextConfig: NextConfig = {
    */
   outputFileTracingIncludes: {
     '/api/tenants/*/shifts/pdf': ['assets/fonts/**'],
+    // 自動アサインのソルバー（012 §5.11）。Server Action はそのページのルートで動くので、キーはシフト表のページ。
+    // route group `(protected)` はキーに書かない（実測で効く）。`.wasm` は今のローダーならトレーサも拾うが、
+    // 実行時にパスを組んで読むファイルなので、ローダーの書き方が変わっても落ちないよう明示する
+    '/tenants/*/shifts': ['node_modules/highs/build/**'],
   },
+  /**
+   * HiGHS（WASM）の Emscripten ローダーをバンドルしない（`@react-pdf/renderer` と同じ理由）。
+   * バンドルすると `.wasm` の位置（パッケージの隣）を解決できなくなる
+   */
+  serverExternalPackages: ['highs'],
   experimental: {
     optimizePackageImports: ['@mantine/core', '@mantine/hooks'],
   },

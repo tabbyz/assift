@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type MouseEvent } from 'react'
 import Link from 'next/link'
 import {
   ActionIcon,
@@ -10,13 +10,14 @@ import {
   Popover,
   Stack,
   Text,
+  Tooltip,
   UnstyledButton,
 } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
-import { IconChevronLeft, IconChevronRight } from '@tabler/icons-react'
+import { IconChevronLeft, IconChevronRight, IconSparkles } from '@tabler/icons-react'
 import type { BulkKind } from '../_lib/bulkOperations'
 import { ShareMenu } from './ShareMenu'
-import { ToolsMenu } from './ToolsMenu'
+import { ToolsMenu, type AssistUndo } from './ToolsMenu'
 import { SHIFT_CYCLE_LABELS, type ShiftCycle } from '@/lib/calendar/shiftCycle'
 import { WEEKDAY_LABELS } from '@/lib/calendar/weekdays'
 import { formatPeriodTitle } from '@/lib/calendar/periodTitle'
@@ -35,11 +36,15 @@ type Props = {
   onSetDefaultPatterns: () => void
   onSetDefaultRequiredNums: () => void
   onOpenCopy: () => void
+  /** 自動アサイン（012 §4.1）。キーが無ければ「現在利用できません」 */
+  assistAvailable: boolean
+  onOpenAssist: () => void
+  assistUndo: AssistUndo | null
   disabled: boolean
 }
 
 /**
- * 期間はタイトル。見える動詞は共有。操作は一括 → デフォルト → コピー。集計は表の左上。
+ * 期間はタイトル。見える動詞は AI で作成・共有・操作。操作は一括 → デフォルト → コピー。集計は表の左上。
  * 面は日付ヘッダーと同じ gray-0。店舗ヘッダー（白）との段差が、店とこの表の境目になる。
  */
 export function Toolbar({
@@ -55,6 +60,9 @@ export function Toolbar({
   onSetDefaultPatterns,
   onSetDefaultRequiredNums,
   onOpenCopy,
+  assistAvailable,
+  onOpenAssist,
+  assistUndo,
   disabled,
 }: Props) {
   const [opened, setOpened] = useState(false)
@@ -150,6 +158,8 @@ export function Toolbar({
       </Group>
 
       <Group gap={6} wrap="nowrap">
+        <AssistButton available={assistAvailable} onOpen={onOpenAssist} disabled={disabled} />
+
         <ShareMenu
           tenantId={tenantId}
           start={range.start}
@@ -162,9 +172,54 @@ export function Toolbar({
           onSetDefaultPatterns={onSetDefaultPatterns}
           onSetDefaultRequiredNums={onSetDefaultRequiredNums}
           onOpenCopy={onOpenCopy}
+          assistUndo={assistUndo}
           disabled={disabled}
         />
       </Group>
     </Group>
+  )
+}
+
+/**
+ * 「AI で作成」（012 §3.7）。共有・操作と並ぶ 3 つ目の動詞。狭い画面（390px）では 3 つの文字ボタンが収まらないので
+ * アイコンだけにする。キーが無い環境ではツールチップ「現在利用できません」で押せない
+ * （`disabled` の button は mouse イベントを出さずツールチップが出ないので、`data-disabled` で見た目だけ無効にする。Mantine の指針）。
+ */
+function AssistButton({
+  available,
+  onOpen,
+  disabled,
+}: {
+  available: boolean
+  onOpen: () => void
+  disabled: boolean
+}) {
+  const unavailable = !available
+  const props = unavailable
+    ? { 'data-disabled': true, onClick: (event: MouseEvent) => event.preventDefault() }
+    : { disabled, onClick: onOpen }
+
+  const buttons = (
+    <>
+      <Button
+        variant="default"
+        size="compact-sm"
+        leftSection={<IconSparkles size={16} />}
+        visibleFrom="xs"
+        {...props}
+      >
+        AI で作成
+      </Button>
+      <ActionIcon variant="default" size={28} aria-label="AI で作成" hiddenFrom="xs" {...props}>
+        <IconSparkles size={16} />
+      </ActionIcon>
+    </>
+  )
+
+  if (!unavailable) return buttons
+  return (
+    <Tooltip label="現在利用できません" withinPortal>
+      <span>{buttons}</span>
+    </Tooltip>
   )
 }

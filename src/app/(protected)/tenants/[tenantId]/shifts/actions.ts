@@ -6,6 +6,21 @@ import { fail } from '@/lib/actions/error'
 import { requireTenant, requireUser } from '@/lib/actions/guards'
 import type { ActionResult } from '@/lib/actions/result'
 import { runAction } from '@/lib/actions/run'
+import { removeInstructionSpan } from '@/lib/assist/instructions'
+import { getAssistLlm } from '@/lib/assist/llm/client'
+import { toAssistRunView, type AssistResult, type AssistRunView } from '@/lib/assist/result'
+import { runAssist } from '@/lib/assist/run'
+import {
+  assistDailyLimit,
+  countRunsSince,
+  createRunningRun,
+  jstDayStart,
+  loadPreviousRun,
+  loadRunDrafts,
+  markStaleRuns,
+} from '@/lib/assist/runs'
+import { HIGHS_VERSION } from '@/lib/assist/solver/highs'
+import { dateRange } from '@/lib/calendar/dateRange'
 import { datesBetween } from '@/lib/calendar/dateString'
 import { holidaysIn, isHolidayDate } from '@/lib/calendar/holidays'
 import { todayJst } from '@/lib/calendar/today'
@@ -15,6 +30,14 @@ import { listActiveStaffsWithDefaultPatterns } from '@/lib/queries/staffs'
 import { generateShareCode } from '@/lib/shares/code'
 import { isShareEnabled } from '@/lib/shares/expiry'
 import { planDefaultPatterns, type PlannedShift } from '@/lib/shifts/planDefaultPatterns'
+import {
+  ASSIST_LEVER_NOT_FOUND_MESSAGE,
+  ASSIST_RUN_NOT_FOUND_MESSAGE,
+  ASSIST_UNAVAILABLE_MESSAGE,
+  applyAssistLeverSchema,
+  assistRunSchema,
+  startAssistSchema,
+} from '@/lib/validation/assist'
 import { saveDateNoteSchema } from '@/lib/validation/dateNotes'
 import { saveRequiredNumsSchema, setDefaultRequiredNumsSchema } from '@/lib/validation/requiredNums'
 import {
@@ -49,6 +72,7 @@ const RPC_MESSAGES: { match: string; message: string }[] = [
   { match: 'tenant not found', message: TENANT_NOT_FOUND_MESSAGE },
   { match: 'staff not found', message: STAFF_NOT_FOUND_MESSAGE },
   { match: 'pattern not found', message: PATTERN_NOT_FOUND_MESSAGE },
+  { match: 'run not found', message: ASSIST_RUN_NOT_FOUND_MESSAGE },
   {
     match: 'no source',
     message: 'コピー元に条件に合うシフトがありません（勤務パターンの選択を確認してください）',
@@ -490,6 +514,240 @@ export async function deleteShare(input: {
       .select('id')
     if (error) failIfForbidden(error)
     if (data.length === 0) fail(SHARE_NOT_FOUND_MESSAGE)
+
+    refresh()
+  })
+}
+
+// ---------------------------------------------------------------------------
+// 自動アサイン（012）
+// ---------------------------------------------------------------------------
+
+/**
+ * 自動アサインを実行する（012 §5.1）。同期の Server Action で、5〜30 秒かかる。
+ *
+ * 流れ: Zod → requireUser → requireTenant → `dateRange(start)`（`end` は受けない）→ 打ち切られた running の片付け →
+ * 1 日の上限 → running を 1 行（同時実行は partial unique で弾く）→ `runAssist()`。
+ * ユーザーのクライアント（anon + RLS）を渡すので、他の書き込みと同じ認可のまま動く（§3.4）。
+ */
+export async function startAssist(input: {
+  tenantId: string
+  start: string
+  instructions: string
+  saveNotes: boolean
+  retryOfRunId?: string | null
+}): Promise<ActionResult<{ run: AssistRunView }>> {
+  return runAction(async () => {
+    const parsed = startAssistSchema.parse(input)
+    await requireUser()
+    const tenant = await requireTenant(parsed.tenantId)
+
+    const llm = getAssistLlm()
+    if (!llm) fail(ASSIST_UNAVAILABLE_MESSAGE)
+
+    const range = dateRange(tenant.shift_cycle, tenant.start_of_week, parsed.start)
+    const supabase = await createClient()
+
+    await markStaleRuns(supabase, parsed.tenantId)
+    await ensureDailyLimit(supabase, parsed.tenantId)
+
+    // 前の案は rollback で shifts から消えるので、先に result.plan を読んでおく（§3.10）
+    const previous = parsed.retryOfRunId
+      ? await loadPreviousRun(supabase, parsed.tenantId, parsed.retryOfRunId)
+      : null
+
+    if (parsed.saveNotes) {
+      const { error } = await supabase
+        .from('tenants')
+        .update({ assist_notes: parsed.instructions || null })
+        .eq('id', parsed.tenantId)
+      if (error) throw error
+    }
+
+    const runId = await createRunningRun(supabase, {
+      tenantId: parsed.tenantId,
+      start: range.start,
+      end: range.end,
+      instructions: parsed.instructions,
+      models: { interpret: llm.models.interpret, via: llm.via, solver: HIGHS_VERSION },
+    })
+
+    const result = await runAssist({
+      supabase,
+      tenantId: parsed.tenantId,
+      runId,
+      period: { start: range.start, end: range.end },
+      startOfWeek: tenant.start_of_week,
+      instructions: parsed.instructions,
+      retryOfRunId: parsed.retryOfRunId ?? null,
+      previousPlan: previous?.result.plan ?? null,
+      // 本文が前の案と同じなら、前の案の指示をそのまま使う（外した指示が戻らない。LLM を呼ばない。§11.3）
+      directives:
+        previous && previous.instructions === parsed.instructions ? previous.directives : null,
+      keep: null,
+      llm,
+      relaxRestriction: null,
+    })
+
+    // シフト表の中で完結する書き込み（点と「元に戻す」も同じ描画で出る）
+    refresh()
+    return { run: runView(runId, range, parsed.instructions, result) }
+  })
+}
+
+/**
+ * 効く一手を実行する（012 §11.3）。
+ *
+ * 前の run の下書きは消さずに残し、空いた枠だけを解く。LLM は呼ばない。
+ * 指示の一手はその指示を 1 件外す。制約の一手は店舗の設定を変えず、この実行だけその制約を緩める。
+ * 試算と同じ問題を解くので、表が変わっていなければ試算の点線どおりに入る。最後に前の下書きを新しい run へ付け替える。
+ */
+export async function applyAssistLever(input: {
+  tenantId: string
+  runId: string
+  leverIndex: number
+}): Promise<ActionResult<{ run: AssistRunView }>> {
+  return runAction(async () => {
+    const parsed = applyAssistLeverSchema.parse(input)
+    await requireUser()
+    const tenant = await requireTenant(parsed.tenantId)
+    const supabase = await createClient()
+
+    const previous = await loadPreviousRun(supabase, parsed.tenantId, parsed.runId)
+    if (!previous) fail(ASSIST_RUN_NOT_FOUND_MESSAGE)
+    const lever = previous.result.levers[parsed.leverIndex]
+    const stored = previous.directives
+    if (!lever) fail(ASSIST_LEVER_NOT_FOUND_MESSAGE)
+
+    const directiveIndex = lever.kind === 'directive' ? lever.directiveIndex : null
+    if (lever.kind === 'directive') {
+      if (directiveIndex === null || !stored || !stored.directives[directiveIndex]) {
+        fail(ASSIST_LEVER_NOT_FOUND_MESSAGE)
+      }
+    } else if (lever.restrictionIndex === null && !lever.label) {
+      fail(ASSIST_LEVER_NOT_FOUND_MESSAGE)
+    }
+
+    await markStaleRuns(supabase, parsed.tenantId)
+    await ensureDailyLimit(supabase, parsed.tenantId)
+
+    // 外した指示の原文を本文から取り除く（次に本文を書き換えて解釈し直しても戻らないように）
+    const span =
+      directiveIndex === null
+        ? ''
+        : (stored?.interpretations.find((item) => item.directive === directiveIndex)?.text ?? '')
+    const instructions =
+      lever.kind === 'directive'
+        ? removeInstructionSpan(previous.instructions, span)
+        : previous.instructions
+    const keep = await loadRunDrafts(supabase, parsed.tenantId, previous)
+
+    const runId = await createRunningRun(supabase, {
+      tenantId: parsed.tenantId,
+      start: previous.period.start,
+      end: previous.period.end,
+      instructions,
+      models: { interpret: null, via: null, solver: HIGHS_VERSION },
+    })
+
+    const result = await runAssist({
+      supabase,
+      tenantId: parsed.tenantId,
+      runId,
+      period: previous.period,
+      startOfWeek: tenant.start_of_week,
+      instructions,
+      retryOfRunId: null,
+      previousPlan: null,
+      directives:
+        stored && directiveIndex !== null
+          ? { ...stored, disabled: [...new Set([...stored.disabled, directiveIndex])] }
+          : stored,
+      keep: { runId: previous.id, rows: keep },
+      llm: null,
+      relaxRestriction:
+        lever.kind === 'restriction'
+          ? {
+              index: lever.restrictionIndex,
+              label: lever.label,
+              action: lever.action,
+              relaxedTo: lever.relaxedTo,
+            }
+          : null,
+    })
+
+    refresh()
+    return { run: runView(runId, previous.period, instructions, result) }
+  })
+}
+
+async function ensureDailyLimit(supabase: Client, tenantId: string): Promise<void> {
+  const limit = assistDailyLimit()
+  const used = await countRunsSince(supabase, tenantId, jstDayStart(todayJst()))
+  if (used >= limit) fail(`本日の上限に達しました（1 日 ${limit} 回まで）`)
+}
+
+function runView(
+  runId: string,
+  period: { start: string; end: string },
+  instructions: string,
+  result: AssistResult
+): AssistRunView {
+  const run = toAssistRunView({
+    id: runId,
+    start_date: period.start,
+    end_date: period.end,
+    created_at: new Date().toISOString(),
+    instructions,
+    result,
+  })
+  if (!run) throw new Error('assist: result が schema に合わない')
+  return run
+}
+
+/**
+ * 自動アサインを元に戻す（012 §5.8）。その実行で入った下書きだけを消す（確定へ変えたセルは残る）。
+ * 店舗・run の可視性は RPC が not found にする（往復 1 回）。
+ */
+export async function rollbackAssistRun(input: {
+  tenantId: string
+  runId: string
+}): Promise<ActionResult<{ deleted: number }>> {
+  return runAction(async () => {
+    const parsed = assistRunSchema.parse(input)
+    await requireUser()
+
+    const supabase = await createClient()
+    const { data: deleted, error } = await supabase.rpc('rollback_assist_run', {
+      p_tenant_id: parsed.tenantId,
+      p_run_id: parsed.runId,
+    })
+    if (error) failFromRpc(error)
+
+    refresh()
+    return { deleted }
+  })
+}
+
+/** 結果モーダルを閉じた（表の点を消す。§3.8） */
+export async function acknowledgeAssistRun(input: {
+  tenantId: string
+  runId: string
+}): Promise<ActionResult> {
+  return runAction(async () => {
+    const parsed = assistRunSchema.parse(input)
+    await requireUser()
+    await requireTenant(parsed.tenantId)
+
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from('assist_runs')
+      .update({ acknowledged_at: new Date().toISOString() })
+      .eq('id', parsed.runId)
+      .eq('tenant_id', parsed.tenantId)
+      .select('id')
+    if (error) throw error
+    if (data.length === 0) fail(ASSIST_RUN_NOT_FOUND_MESSAGE)
 
     refresh()
   })

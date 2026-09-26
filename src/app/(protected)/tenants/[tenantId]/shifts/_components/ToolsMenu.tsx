@@ -1,15 +1,25 @@
 'use client'
 
 import { Button, Menu, MenuDivider, MenuDropdown, MenuItem, MenuTarget } from '@mantine/core'
-import { IconCopy, IconSquareRoundedPlus, IconTool, IconUsersGroup } from '@tabler/icons-react'
+import {
+  IconArrowBackUp,
+  IconCopy,
+  IconSquareRoundedPlus,
+  IconTool,
+  IconUsersGroup,
+} from '@tabler/icons-react'
 import type { BulkKind } from '../_lib/bulkOperations'
 import { BulkMenuItems } from './BulkMenuItems'
+
+/** 直近の自動アサインを元に戻す（012 §4.5）。その実行の下書きが残っている間だけ出す */
+export type AssistUndo = { label: string; onClick: () => void }
 
 type Props = {
   onBulk: (kind: BulkKind) => void
   onSetDefaultPatterns: () => void
   onSetDefaultRequiredNums: () => void
   onOpenCopy: () => void
+  assistUndo: AssistUndo | null
   disabled: boolean
 }
 
@@ -21,6 +31,7 @@ export function ToolsMenu({
   onSetDefaultPatterns,
   onSetDefaultRequiredNums,
   onOpenCopy,
+  assistUndo,
   disabled,
 }: Props) {
   return (
@@ -53,6 +64,15 @@ export function ToolsMenu({
         <MenuItem leftSection={<IconCopy size={16} />} onClick={onOpenCopy}>
           シフトを別の期間にコピー
         </MenuItem>
+
+        {assistUndo && (
+          <>
+            <MenuDivider />
+            <MenuItem leftSection={<IconArrowBackUp size={16} />} onClick={assistUndo.onClick}>
+              {assistUndo.label}
+            </MenuItem>
+          </>
+        )}
       </MenuDropdown>
     </Menu>
   )

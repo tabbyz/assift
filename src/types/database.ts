@@ -9,6 +9,68 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      assist_runs: {
+        Row: {
+          acknowledged_at: string | null
+          created_at: string
+          end_date: string
+          error: string | null
+          id: string
+          instructions: string | null
+          models: Json | null
+          request: Json | null
+          result: Json | null
+          rolled_back_at: string | null
+          start_date: string
+          status: Database["public"]["Enums"]["assist_run_status"]
+          tenant_id: string
+          updated_at: string
+          usage: Json | null
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          created_at?: string
+          end_date: string
+          error?: string | null
+          id?: string
+          instructions?: string | null
+          models?: Json | null
+          request?: Json | null
+          result?: Json | null
+          rolled_back_at?: string | null
+          start_date: string
+          status?: Database["public"]["Enums"]["assist_run_status"]
+          tenant_id: string
+          updated_at?: string
+          usage?: Json | null
+        }
+        Update: {
+          acknowledged_at?: string | null
+          created_at?: string
+          end_date?: string
+          error?: string | null
+          id?: string
+          instructions?: string | null
+          models?: Json | null
+          request?: Json | null
+          result?: Json | null
+          rolled_back_at?: string | null
+          start_date?: string
+          status?: Database["public"]["Enums"]["assist_run_status"]
+          tenant_id?: string
+          updated_at?: string
+          usage?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assist_runs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       date_notes: {
         Row: {
           created_at: string
@@ -300,6 +362,7 @@ export type Database = {
       }
       shifts: {
         Row: {
+          assist_run_id: string | null
           created_at: string
           date: string
           fixed: boolean
@@ -310,6 +373,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          assist_run_id?: string | null
           created_at?: string
           date: string
           fixed?: boolean
@@ -320,6 +384,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          assist_run_id?: string | null
           created_at?: string
           date?: string
           fixed?: boolean
@@ -330,6 +395,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "shifts_assist_run_id_tenant_id_fkey"
+            columns: ["assist_run_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "assist_runs"
+            referencedColumns: ["id", "tenant_id"]
+          },
           {
             foreignKeyName: "shifts_pattern_id_tenant_id_fkey"
             columns: ["pattern_id", "tenant_id"]
@@ -482,6 +554,7 @@ export type Database = {
       }
       tenants: {
         Row: {
+          assist_notes: string | null
           created_at: string
           id: string
           name: string
@@ -491,6 +564,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          assist_notes?: string | null
           created_at?: string
           id?: string
           name: string
@@ -500,6 +574,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          assist_notes?: string | null
           created_at?: string
           id?: string
           name?: string
@@ -556,6 +631,10 @@ export type Database = {
         Args: { p_ids: string[]; p_table: string; p_tenant_id: string }
         Returns: undefined
       }
+      rollback_assist_run: {
+        Args: { p_run_id: string; p_tenant_id: string }
+        Returns: number
+      }
       set_shifts_fixed: {
         Args: {
           p_end: string
@@ -568,6 +647,7 @@ export type Database = {
       }
     }
     Enums: {
+      assist_run_status: "running" | "succeeded" | "failed"
       pattern_kind: "workday" | "dayoff"
       restriction_kind:
         | "deny_pattern_pair"
@@ -702,6 +782,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      assist_run_status: ["running", "succeeded", "failed"],
       pattern_kind: ["workday", "dayoff"],
       restriction_kind: [
         "deny_pattern_pair",
