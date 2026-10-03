@@ -1,4 +1,4 @@
-/* 200ms 以内に描画が返る遷移ではスケルトンを見せない（一瞬の点滅のほうが遅く感じる） */
+/* 200ms 以内に描画が返る遷移ではスピナーを見せない（一瞬の点滅のほうが遅く感じる） */
 .delayed {
   opacity: 0;
   animation: appear 150ms ease-out 200ms forwards;
