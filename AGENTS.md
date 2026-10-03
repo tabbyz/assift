@@ -84,8 +84,8 @@ assets/fonts/                     PDF に埋め込む Noto Sans JP（public/ に
 supabase/
   config.toml
   schemas/                        宣言的スキーマ（正）。RPC は schemas/public/functions.sql
-  migrations/                     sync の出力
-  unmanaged/                      pg-delta が生成できない SQL。sync 後に migration へ追記する
+  migrations/                     sync の出力（init_schema は凍結。以降は差分を積む）
+  unmanaged/                      pg-delta が生成できない SQL。テーブル・関数を足した差分 migration へ追記する
   tests/                          RLS の pgTAP（npx supabase test db）
   seed.sql                        ローカル専用。dev@example.com / password
 ```
@@ -277,10 +277,10 @@ CLI は `devDependencies` の `supabase` を `npx supabase` で使う（未ピ�
 ```bash
 npx supabase start
 # schemas/ に SQL を書く
-rm -f supabase/migrations/*.sql   # 本番へ push するまでは init_schema 1 本を作り直す（下記）
-npx supabase db schema declarative sync --no-apply --name init_schema --strict-coverage
+npx supabase db schema declarative sync --no-apply --name <変更の内容> --strict-coverage   # 差分 migration を作る
 # 生成物を確認（欠けた GRANT / storage ポリシーは生成ファイルに追記してよい）
-cat supabase/unmanaged/restrict_anon_grants.sql >> supabase/migrations/*_init_schema.sql
+# 新しいテーブル・シーケンス・関数を足したときだけ、生成された差分 migration の末尾に追記する（冪等）
+cat supabase/unmanaged/restrict_anon_grants.sql >> supabase/migrations/<ts>_<変更の内容>.sql
 npx supabase db reset             # migration → seed を空から通す
 npx supabase test db              # RLS の pgTAP
 npx supabase gen types typescript --local --schema public > src/types/database.ts
@@ -288,13 +288,15 @@ npx supabase gen types typescript --local --schema public > src/types/database.t
 
 - `db diff` は「起動中のローカル DB 対 migrations」であり `schemas/` は見ない。宣言的スキーマの差分には使わない
 - `config.toml` の `schema_paths` は使わない（適用順は依存関係から決まる）
-- `migrations/` は sync の出力を正にする。ゼロから手書きしない。適用済みの migration は書き換えない
+- `migrations/` は sync の出力を正にする。ゼロから手書きしない。**適用済みの migration は書き換えない・消さない**
 - 空から作り直すときだけ `npx supabase db reset`（未コミットのローカルデータは消える）
-- **本番に初回 push（マイルストーン 015。001 の 013 から 012・013 のぶん繰り下げた）するまでは migration を `init_schema` 1 本に保つ。**
-  スキーマを変えたら差分を積むのではなく `migrations/` を空にして sync をやり直し、`db reset` で検証する。
-  push 以降は通常どおり差分 migration を追加し、適用済みは書き換えない
-- `supabase/unmanaged/` は pg-delta が生成できない SQL の置き場。sync のたびに生成 migration の末尾へ追記する。
-  現在は `anon` からの REVOKE のみ（理由はファイル冒頭のコメント）。追記漏れは `npx supabase test db` で落ちる
+- **`20260928144543_init_schema.sql`（013 を merge した時点のスキーマ）で凍結した。** 以降は `migrations/` を消さずに、
+  `declarative sync --name <内容>` で差分 migration を 1 本ずつ積む。
+  理由: Supabase Branching（Vercel プレビューのブランチ DB）は適用済みの migration を再実行しないため、
+  書き換えたり作り直したりすると、既存のブランチ DB に変更が届かない
+- `supabase/unmanaged/` は pg-delta が生成できない SQL の置き場。現在は `anon` からの REVOKE のみ（理由はファイル冒頭のコメント）。
+  差分 migration では、**新しいテーブル・シーケンス・関数を足したときに**生成 migration の末尾へ追記する
+  （`REVOKE ALL ... FROM anon` は何度流しても同じ結果になる）。追記漏れは `npx supabase test db` で落ちる
 
 PK は uuid（`gen_random_uuid()`）。v1 から移行する行は `uuidv5('<table>:<v1 id>', V1_UUID_NAMESPACE)` で決定的に導出する。
 
@@ -354,7 +356,7 @@ DB の行から DB の行を作るだけのもの（コピー）は `insert ... 
 - 動的 SQL のテーブル名は **アプリからは受け取らない**。Server Action が定数で渡し、SQL 側でもホワイトリストする
 - `public` の関数は Supabase の既定権限で `anon` にも EXECUTE が付く。
   `revoke ... from public` を書いても生成 migration には `GRANT ... TO anon` が残るので、
-  `unmanaged/restrict_anon_grants.sql` の `REVOKE ALL ON ALL FUNCTIONS` で外す（sync のたびに追記する）
+  `unmanaged/restrict_anon_grants.sql` の `REVOKE ALL ON ALL FUNCTIONS` で外す（関数を足した差分 migration に追記する）
 - pgTAP に「自テナントは通る / 他テナントは例外 / anon は 42501」を足す
 
 ### 型
@@ -397,6 +399,24 @@ npm run assist:eval    # 自動アサインの評価（012 §6.3。手動。LLM 
 ```
 
 Prettier: `{ "semi": false, "singleQuote": true, "tabWidth": 2, "trailingComma": "es5", "printWidth": 100 }`
+
+## クラウドのセッション
+
+スマホなどのクラウドセッション（`CLAUDE_CODE_REMOTE=true`）で開発するときの決まり。
+
+- dockerd は SessionStart フック（`scripts/cloud-session-start.sh`）が起動し、`node_modules` が無ければ `npm ci` する。ローカルの PC では何もしない
+- `supabase start` はセッションの最初ではなく、**DB が必要になったとき**に、使わないサービスを外して起動する:
+  `npx supabase start -x studio,storage-api,imgproxy,edge-runtime,logflare,vector,realtime,supavisor,mailpit`
+- `.env.local` は `npx supabase status -o env` の 3 つの値（API URL / publishable key / secret key）から作る（コミットしない）
+- 長い出力（`npm test`、`supabase` の起動ログなど）は `tail` で末尾だけ読む
+
+## PR の流れ
+
+- PR の前に `npm run lint` / `npm run typecheck` / `npm test` / `npx supabase test db` を通す。
+  スキーマを触ったら `npx supabase db reset` と `gen types` も行う
+- push したらすぐ PR を作る。Supabase のブランチ DB の環境変数は、PR を作ったときに Vercel へ同期される
+- Vercel のプレビューでは seed のユーザー（`dev@example.com` / `password`）でログインできる。
+  メールのリンクと Google ログインはプレビューでは使えない（メールテンプレートが Site URL = localhost を使うため。本番は 015 で設定する）
 
 ## コミット
 
