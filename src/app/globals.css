@@ -7,3 +7,15 @@ body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
 }
+
+/*
+ * iOS Safari は font-size が 16px 未満の入力欄にフォーカスすると画面を拡大する。
+ * Mantine の入力欄は size="sm" で 14px なので、iOS（WebKit のタッチ端末）だけ 16px に上げる。
+ * `--_input-fz` は Mantine の `.mantine-Input-input` が `--input-fz`（size から決まる値）より優先して読む変数。
+ * viewport に `maximum-scale=1` を足す手は使わない: Android ではピンチズームまで止まる。
+ */
+@supports (-webkit-touch-callout: none) {
+  .mantine-Input-input {
+    --_input-fz: 16px;
+  }
+}
