@@ -11,7 +11,8 @@ import classes from './SettingsNav.module.css'
 /**
  * 設定ページのナビ。頻度順。店舗情報は末尾。
  * 「シフト表へ」は戻り。「設定」が見出しで項目を束ねる。
- * デスクトップは左カラム、モバイルは本文の上に積む（親の Flex が向きを変える）。
+ * `sm` 以上だけ出す（左カラム）。モバイルはヘッダーのバーガーに同じ項目があるので、
+ * 本文の上に積むと重複したうえ画面の半分以上を占める。
  *
  * 現在地はクリックした瞬間に移す。usePathname() は遷移が確定するまで変わらず、
  * 本文の読み込み中（prefetch が間に合わないとき）に押したのに無反応に見えるため。
@@ -31,7 +32,7 @@ export function SettingsNav({ tenantId }: { tenantId: string }) {
   }
 
   return (
-    <Stack gap={4} miw={200}>
+    <Stack gap={4} miw={200} visibleFrom="sm">
       <UnstyledButton component={Link} href={shiftsHref(tenantId)} className={classes.back}>
         <IconArrowLeft size={16} />
         シフト表へ

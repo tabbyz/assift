@@ -146,7 +146,7 @@ v1 のチュートリアルは `settings/patterns/_form` と `settings/staffs/_f
 | `TenantShell` | `src/components/TenantShell.tsx`（Client） | 左: Burger（`hiddenFrom="sm"`）・ロゴ「assift」→ `/tenants`・`TenantSwitcher`。右（`visibleFrom="sm"`）: 設定 `Menu`（店舗情報 / スタッフ / 勤務パターン / 自動アサイン制約）・アカウント `Menu`（メール表示、アカウント情報、ログアウト）。モバイルの Navbar には同じ項目を `NavLink` で並べる |
 | `TenantSwitcher` | `src/components/TenantSwitcher.tsx`（Client） | 現在の店舗名（12 文字で省略、v1 と同じ）をトリガにした `Menu`。店舗一覧（→ `/tenants/<id>`）+ 区切り + 「店舗を追加」（→ `/tenants/new`） |
 | `SimpleShell` | `src/components/SimpleShell.tsx`（Client） | ロゴ + 「店舗へ戻る」（→ `/tenants`。店舗 0 件の初回は出さない）+ ログアウト。`/tenants/new` と `/account` で使う（v1 の simple navbar） |
-| `SettingsNav` | `src/components/SettingsNav.tsx`（Client） | `NavLink` の縦並び 1 種類。デスクトップは左カラム、モバイルは本文の上に積む（`Flex` の direction を切り替えるだけで、モバイル専用の UI は作らない）。「シフト表へ」+ 基本設定 3 件 + アサイン設定 1 件。`usePathname()` で active |
+| `SettingsNav` | `src/components/SettingsNav.tsx`（Client） | `NavLink` の縦並び 1 種類。デスクトップは左カラム、モバイルは本文の上に積む（`Flex` の direction を切り替えるだけで、モバイル専用の UI は作らない）。**→ 後に変更: モバイル（`sm` 未満）では出さない。バーガーの Navbar に同じ項目があり、積むと画面の 6 割を占めていた**。「シフト表へ」+ 基本設定 3 件 + アサイン設定 1 件。`usePathname()` で active |
 
 - `logout` は 004 の申し送りどおり `account/actions.ts` から **`src/app/(protected)/actions.ts`** に移す（account 画面・両シェルの 3 か所から呼ぶ。AGENTS.md に「グループ共通の Action は `(protected)/actions.ts`」と追記）
 - モバイルの Navbar は `usePathname()` の変化で閉じる（`NavLink` で遷移したあと開いたままにならないように）
@@ -401,7 +401,7 @@ revalidatePath(`/tenants/${tenantId}`, 'layout')
 | 6   | `updateTenant` / `deleteTenant` は RLS で見えない行に対して**エラーにならず 0 行**で終わる。成功通知を出してしまう                                                                                           | `.select('id').maybeSingle()` で 0 行を検出して `fail('店舗が見つかりません')`（§4）                                                                                 |
 | 7   | `PatternForm` の `onCreated` でクライアントが一覧を更新する設計は、`revalidatePath` で Server が再描画するのと二重                                                                                          | クライアントに一覧の状態を持たせない（3.4）                                                                                                                          |
 | 8   | 旧 URL の遷移先を文字列で組むと open redirect の余地を残す。308 がブラウザに永続キャッシュされる点も未記載                                                                                                | `nextUrl.clone()` に `pathname` / `search` を代入する。namespace は本番で変えない前提を明記（3.1）                                                                   |
-| 9   | 初回ユーザーの `/tenants/new` に「店舗へ戻る」が出る（戻り先が無い）。モバイル Navbar が遷移後に開いたまま。`SettingsNav` がデスクトップとモバイルで別 UI                                                  | `SimpleShell` は店舗 0 件で戻るリンクを隠す。Navbar は `usePathname()` の変化で閉じる。`SettingsNav` は 1 種類を積み替えるだけ（3.5）                                |
+| 9   | 初回ユーザーの `/tenants/new` に「店舗へ戻る」が出る（戻り先が無い）。モバイル Navbar が遷移後に開いたまま。`SettingsNav` がデスクトップとモバイルで別 UI                                                  | `SimpleShell` は店舗 0 件で戻るリンクを隠す。Navbar は `usePathname()` の変化で閉じる。`SettingsNav` は 1 種類を積み替えるだけ（3.5。後にモバイルでは出さないよう変更）                                |
 | 10  | 「他人の店舗は 404」の検証手順が無い（seed はユーザー 1 人）。ページの `metadata.title` が未定。position 計算の置き場が未定。名前の `trim` が未記載                                                        | 2 人目のユーザーで確認（§6 の 11）。title を 3.7 に列挙。`lib/queries/positions.ts` に `nextPosition()`。名前は `.trim()`（§4）                                       |
 
 ### 2 回目のレビュー（2026-09-17）
