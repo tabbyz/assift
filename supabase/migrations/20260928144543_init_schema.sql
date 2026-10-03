@@ -109,11 +109,17 @@ CREATE TABLE "public"."restrictions" (
   "days"        smallint,
   "pattern1_id" uuid,
   "pattern2_id" uuid,
+  "staff_id"    uuid,
+  "hard"        boolean                  NOT NULL DEFAULT true,
+  "wdays"       smallint[],
   "position"    integer                  NOT NULL DEFAULT 0,
   "created_at"  timestamp with time zone NOT NULL DEFAULT now(),
   "updated_at"  timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT "restrictions_days_check" CHECK (((days >= 1) AND (days <= 7))),
-  CONSTRAINT "restrictions_pkey" PRIMARY KEY (id)
+  CONSTRAINT "restrictions_pkey" PRIMARY KEY (id),
+  CONSTRAINT "restrictions_wdays_check"
+    CHECK
+    (((wdays IS NULL) OR (((cardinality(wdays) >= 1) AND (cardinality(wdays) <= 6)) AND (wdays <@ ARRAY[(0)::smallint, (1)::smallint, (2)::smallint, (3)::smallint, (4)::smallint,
+    (5)::smallint, (6)::smallint]))))
 );
 
 ALTER TABLE "public"."restrictions"
@@ -233,7 +239,10 @@ CREATE TYPE "public"."restriction_kind" AS ENUM (
   'deny_pattern_pair',
   'max_work_week',
   'max_work_consecutive',
-  'sat_or_sun_dayoff'
+  'sat_or_sun_dayoff',
+  'min_work_week',
+  'max_weekend_days',
+  'prefer_dayoff_wdays'
 );
 
 ALTER TABLE "public"."restrictions"
@@ -469,7 +478,7 @@ declare
   expected integer := coalesce(array_length(p_ids, 1), 0);
   updated  integer;
 begin
-  if p_table not in ('staffs', 'patterns', 'restrictions') then
+  if p_table not in ('staffs', 'patterns') then
     raise exception 'reorder_positions: unsupported table %', p_table;
   end if;
 
@@ -584,6 +593,16 @@ ALTER TABLE "public"."required_nums"
   ADD CONSTRAINT "required_nums_pattern_id_tenant_id_fkey" FOREIGN KEY (pattern_id, tenant_id) REFERENCES public.patterns(id, tenant_id) ON DELETE CASCADE;
 
 ALTER TABLE "public"."restrictions"
+  ADD CONSTRAINT "restrictions_check1" CHECK (((days >= 1) AND (days <=
+CASE
+    WHEN (kind = 'max_weekend_days'::public.restriction_kind) THEN 15
+    ELSE 7
+END)));
+
+ALTER TABLE "public"."restrictions"
+  ADD CONSTRAINT "restrictions_check" CHECK (((kind <> 'prefer_dayoff_wdays'::public.restriction_kind) OR (NOT hard)));
+
+ALTER TABLE "public"."restrictions"
   ADD CONSTRAINT "restrictions_pattern1_id_tenant_id_fkey" FOREIGN KEY (pattern1_id, tenant_id) REFERENCES public.patterns(id, tenant_id) ON DELETE CASCADE;
 
 ALTER TABLE "public"."restrictions"
@@ -600,6 +619,9 @@ ALTER TABLE "public"."staff_default_patterns"
 
 ALTER TABLE "public"."staff_patterns"
   ADD CONSTRAINT "staff_patterns_pattern_id_tenant_id_fkey" FOREIGN KEY (pattern_id, tenant_id) REFERENCES public.patterns(id, tenant_id) ON DELETE CASCADE;
+
+ALTER TABLE "public"."restrictions"
+  ADD CONSTRAINT "restrictions_staff_id_tenant_id_fkey" FOREIGN KEY (staff_id, tenant_id) REFERENCES public.staffs(id, tenant_id) ON DELETE CASCADE;
 
 ALTER TABLE "public"."shifts"
   ADD CONSTRAINT "shifts_staff_id_tenant_id_fkey" FOREIGN KEY (staff_id, tenant_id) REFERENCES public.staffs(id, tenant_id) ON DELETE CASCADE;
@@ -656,6 +678,8 @@ CREATE INDEX required_nums_tenant_date_idx ON public.required_nums USING btree (
 CREATE INDEX restrictions_pattern1_id_idx ON public.restrictions USING btree (pattern1_id);
 
 CREATE INDEX restrictions_pattern2_id_idx ON public.restrictions USING btree (pattern2_id);
+
+CREATE INDEX restrictions_staff_id_idx ON public.restrictions USING btree (staff_id);
 
 CREATE INDEX restrictions_tenant_position_idx ON public.restrictions USING btree (tenant_id, "position");
 

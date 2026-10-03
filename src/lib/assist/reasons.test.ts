@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildProblem, type AssistInput, type PlanRow } from './problem'
 import { explainUnfilled, filledCount, OTHER_SLOT } from './reasons'
-import { FIXTURE_PATTERNS as P, required, smallInput } from './testing/fixtures'
+import { FIXTURE_PATTERNS as P, required, restrictionRow, smallInput } from './testing/fixtures'
 
 const OPTIMAL = { shortageOptimal: true, hardDirectives: false }
 
@@ -65,7 +65,12 @@ describe('explainUnfilled', () => {
     const input = smallInput({
       staffCount: 3,
       restrictions: [
-        { kind: 'deny_pattern_pair', days: null, pattern1Id: P.late, pattern2Id: P.early },
+        restrictionRow({
+          kind: 'deny_pattern_pair',
+          days: null,
+          pattern1Id: P.late,
+          pattern2Id: P.early,
+        }),
       ],
       requiredNums: [
         ...required(P.early, ['2026-10-06'], 3),

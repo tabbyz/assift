@@ -1,7 +1,9 @@
 import { addDays, wday } from '@/lib/calendar/dateString'
+import { wdaysLabel } from '@/lib/restrictions/describe'
 import { cellKey } from '@/lib/shifts/key'
 import {
   capacityAt,
+  isWeekendOrHoliday,
   isWorkday,
   slotKey,
   weekDates,
@@ -18,9 +20,9 @@ import {
  */
 
 export type ViolationCode =
-  'H1' | 'H2' | 'H3' | 'H4' | 'H5' | 'H6' | 'H7' | 'H8' | 'H9' | 'H10' | 'H11'
+  'H1' | 'H2' | 'H3' | 'H4' | 'H5' | 'H6' | 'H7' | 'H8' | 'H9' | 'H10' | 'H11' | 'H12'
 
-/** `rule` は理由の集計でまとめる短い名前（H5〜H9 だけ。例: `週上限（5日）` / `「夜勤は1週間に1日まで」`） */
+/** `rule` は理由の集計でまとめる短い名前（H5〜H9・H12 だけ。例: `週上限（5日）` / `「夜勤は1週間に1日まで」`） */
 export type Violation = { code: ViolationCode; message: string; rule?: string }
 
 /** 親とペアは 1 単位で受理・棄却する（片方だけを保存しない。`assign_shift` を 1 トランザクションにしたのと同じ理由） */
@@ -59,8 +61,18 @@ export class PlanState {
   }
 }
 
-/** 制約の 1 行（describe.ts の `describeRestriction` と同じ言い回し。正規化済みの制約から作る） */
+/**
+ * 制約の 1 行（describe.ts の `describeRestriction` と同じ言い回し。正規化済みの制約から作る）。
+ * スタッフ別は `川田 真里奈 · 早番は1週間に2日まで` のように名前を前に付ける（013）。
+ * **店舗全体の既存 4 種の文言は変えない**: 効く一手はこの文言で制約を引き直すので、変えると古い run の一手が外れる
+ */
 export function restrictionLabel(problem: Problem, restriction: Restriction): string {
+  const body = restrictionBody(problem, restriction)
+  if (restriction.staffId === null) return body
+  return `${problem.staffById.get(restriction.staffId)?.name ?? '?'} · ${body}`
+}
+
+function restrictionBody(problem: Problem, restriction: Restriction): string {
   const name = (id: string | null) => (id ? (problem.patternById.get(id)?.name ?? '?') : '勤務日')
   switch (restriction.kind) {
     case 'deny_pattern_pair':
@@ -71,6 +83,14 @@ export function restrictionLabel(problem: Problem, restriction: Restriction): st
       return `${name(restriction.patternId)}は連続で${restriction.days}日まで`
     case 'sat_or_sun_dayoff':
       return '土日のどちらかは休み'
+    case 'min_work_week':
+      return `週に${restriction.days}日以上は入れる`
+    case 'max_weekend_days':
+      // 設定画面は表示期間で言い換える（「1ヶ月に」）。結果は 1 回の実行の話なので「期間中」
+      return `土日祝は期間中${restriction.days}日まで`
+    case 'prefer_dayoff_wdays':
+      // 設定画面と同じ関数（一手・結果の文言は文字列で突き合わせるので、並びを揃える）
+      return `${wdaysLabel(restriction.wdays)}はなるべく休み`
   }
 }
 
@@ -181,7 +201,9 @@ export function unitViolations(problem: Problem, state: PlanState, unit: PlanUni
   }
 
   for (const restriction of problem.restrictions) {
+    // なるべくの制約は検証しない（破ってよい）。スタッフ別はその人の行だけを見る
     if (!restriction.hard) continue
+    if (restriction.staffId !== null && restriction.staffId !== staff.id) continue
     const label = restrictionLabel(problem, restriction)
 
     switch (restriction.kind) {
@@ -235,6 +257,29 @@ export function unitViolations(problem: Problem, state: PlanState, unit: PlanUni
           violations.push({ code: 'H9', message: `「${label}」に反します`, rule: `「${label}」` })
         break
       }
+      case 'max_weekend_days': {
+        // H12: 期間の土日祝の勤務日数 ≤ days。上限なので逐次受理で守れる（013 §5.4）
+        // 期間の外（ペアの着地日）の行は数えない。model の式も期間の土日祝だけ（揃えないと、MILP が置いた行を落とす）
+        if (
+          !workRows.some(
+            (row) =>
+              row.date >= problem.period.start &&
+              row.date <= problem.period.end &&
+              isWeekendOrHoliday(problem, row.date)
+          )
+        )
+          break
+        const count = problem.dates.filter(
+          (date) => isWeekendOrHoliday(problem, date) && works(date)
+        ).length
+        if (count > restriction.days)
+          violations.push({ code: 'H12', message: `「${label}」に反します`, rule: `「${label}」` })
+        break
+      }
+      // 下限は行を落としても守れない。ソフトの評価（守れたか）は restrictionOutcomes.ts が数える
+      case 'min_work_week':
+      case 'prefer_dayoff_wdays':
+        break
     }
   }
 

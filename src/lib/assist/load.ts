@@ -42,7 +42,7 @@ export async function loadAssistInput(
       .order('position', { ascending: true }),
     supabase
       .from('restrictions')
-      .select('kind, days, pattern1_id, pattern2_id')
+      .select('id, kind, days, pattern1_id, pattern2_id, staff_id, hard, wdays')
       .eq('tenant_id', tenantId)
       .order('position', { ascending: true }),
     // パターン数 × 32 日。パターンが多い店舗で max_rows を超えうるので pageAll（AGENTS.md）
@@ -97,11 +97,16 @@ export async function loadAssistInput(
       kind: pattern.kind,
       pairPatternId: pattern.pair_pattern_id,
     })),
+    // 退職者の規則は buildProblem が在籍スタッフで落とす（013 §3.8）
     restrictions: restrictions.data.map((row) => ({
+      id: row.id,
       kind: row.kind,
       days: row.days,
       pattern1Id: row.pattern1_id,
       pattern2Id: row.pattern2_id,
+      staffId: row.staff_id,
+      hard: row.hard,
+      wdays: row.wdays,
     })),
     requiredNums: requiredNums.map((row) => ({
       patternId: row.pattern_id,

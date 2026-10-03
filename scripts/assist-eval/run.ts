@@ -6,6 +6,7 @@
  *   npm run assist:eval -- --interpret                                # 指示の例文 20 本の解釈の正解率
  *   npm run assist:eval -- --fixture small --instructions "青木さんは土日に多め"
  *   npm run assist:eval -- --fixture all --levers                     # 効く一手（012 §11.2）の試算と所要時間
+ *   npm run assist:eval -- --fixture all --staff-rules                # スタッフ別の規則（013 §5.5）を足す
  *
  * `--engine solver` は API キー無しでも動く（指示の解釈だけが LLM）。
  * 出力は Markdown の表。重み（weights.ts）・effort・モデルはこれで決め、結果を 012 の実装ログに残す。
@@ -21,6 +22,7 @@ import { totalCost, type LlmUsage } from '@/lib/assist/pricing'
 import { evaluateLevers } from '@/lib/assist/levers'
 import { buildProblem, type PlanRow, type Problem } from '@/lib/assist/problem'
 import { explainUnfilled } from '@/lib/assist/reasons'
+import { restrictionOutcomes } from '@/lib/assist/restrictionOutcomes'
 import { fixtureInput, type FixtureScale } from '@/lib/assist/testing/fixtures'
 import { validatePlan } from '@/lib/assist/validate'
 import { INSTRUCTION_CASES } from './instructions'
@@ -34,6 +36,7 @@ const { values } = parseArgs({
     instructions: { type: 'string', default: '' },
     interpret: { type: 'boolean', default: false },
     levers: { type: 'boolean', default: false },
+    'staff-rules': { type: 'boolean', default: false },
   },
   allowPositionals: true,
 })
@@ -61,6 +64,8 @@ type Row = {
   requested: number
   filled: number
   rejected: number
+  /** 守れなかった制約の数（013 §5.6） */
+  broken: number
   metrics: ReturnType<typeof computeMetrics>
   usages: LlmUsage[]
   ms: Record<string, number>
@@ -68,7 +73,8 @@ type Row = {
 }
 
 async function runOnce(scale: FixtureScale, seed: number): Promise<Row> {
-  const problem = buildProblem(fixtureInput({ scale, seed }))
+  const fixture = { scale, seed, staffRules: values['staff-rules'] }
+  const problem = buildProblem(fixtureInput(fixture))
   const usages: LlmUsage[] = []
   const ms: Record<string, number> = {}
   let directives: Directive[] = []
@@ -103,7 +109,7 @@ async function runOnce(scale: FixtureScale, seed: number): Promise<Row> {
   const metrics = computeMetrics(problem, validation.accepted)
 
   if (values.levers) {
-    const input = fixtureInput({ scale, seed })
+    const input = fixtureInput(fixture)
     const unfilled = explainUnfilled(problem, validation.accepted, {
       shortageOptimal: true,
       hardDirectives: directives.some((directive) => directive.hard),
@@ -123,6 +129,13 @@ async function runOnce(scale: FixtureScale, seed: number): Promise<Row> {
     )
   }
 
+  const outcomes = restrictionOutcomes(problem, validation.accepted)
+  if (outcomes.length > 0) {
+    console.log(
+      `\n[${scale} seed ${seed}] 守れなかった制約 ${outcomes.length} 件\n${outcomes.map((o) => `- ${o.label}: ${o.detail}`).join('\n')}`
+    )
+  }
+
   return {
     fixture: scale,
     seed,
@@ -130,6 +143,7 @@ async function runOnce(scale: FixtureScale, seed: number): Promise<Row> {
     requested: problem.requested,
     filled: metrics.filled,
     rejected: validation.rejected.length,
+    broken: outcomes.length,
     metrics,
     usages,
     ms,
@@ -145,6 +159,7 @@ function printRows(rows: Row[]) {
     '充足',
     '充足率',
     '検証で落ちた',
+    '守れなかった制約',
     '稼働率 min–max (σ)',
     '土日祝 min–max',
     'tokens in/out',
@@ -169,6 +184,7 @@ function printRows(rows: Row[]) {
         `${row.filled}/${row.requested}`,
         `${(row.metrics.fillRate * 100).toFixed(1)}%`,
         row.rejected,
+        row.broken,
         `${row.metrics.utilization.min}–${row.metrics.utilization.max} (${row.metrics.utilization.stdev})`,
         `${row.metrics.weekends.min}–${row.metrics.weekends.max}`,
         row.usages.length > 0 ? `${input}/${output}` : '-',

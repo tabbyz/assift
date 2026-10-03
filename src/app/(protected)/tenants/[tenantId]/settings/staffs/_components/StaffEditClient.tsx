@@ -42,7 +42,7 @@ export function StaffEditClient({ tenantId, staffId, retired }: Props) {
         <Stack gap="xs">
           <Text size="sm">本当に削除しますか？この操作は取り消せません。</Text>
           <Text size="sm" c="dimmed">
-            このスタッフのシフトも削除されます。
+            このスタッフのシフトと規則も削除されます。
           </Text>
         </Stack>
       ),

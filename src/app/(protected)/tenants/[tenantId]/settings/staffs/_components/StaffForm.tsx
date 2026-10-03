@@ -6,6 +6,7 @@ import {
   Button,
   Checkbox,
   CheckboxGroup,
+  Divider,
   Group,
   Input,
   NumberInput,
@@ -139,21 +140,9 @@ export function StaffForm({ tenantId, patterns, initial, afterCreate }: Props) {
             maw={280}
           />
 
-          <CheckboxGroup
-            label="勤務できる曜日"
-            value={values.availableWdays.map(String)}
-            onChange={(next) => set('availableWdays', next.map(Number))}
-          >
-            <Group gap="md" mt={4}>
-              {WEEKDAY_VALUES.map((wday) => (
-                <Checkbox key={wday} value={String(wday)} label={WEEKDAY_LABELS[wday]} />
-              ))}
-            </Group>
-          </CheckboxGroup>
-
           <Input.Wrapper
             label="デフォルトの勤務パターン"
-            description="設定したデフォルトパターンは、シフト表画面の[ツール]ボタンから一括でアサインできます（自動的にはアサインされません）"
+            description="シフト表の[ツール]から一括でセットできます。AI で作成するときも「なるべくこのパターン」として使います"
           >
             {patterns.length === 0 ? (
               <Text size="sm" c="dimmed" mt={4}>
@@ -186,38 +175,60 @@ export function StaffForm({ tenantId, patterns, initial, afterCreate }: Props) {
             )}
           </Input.Wrapper>
 
-          <NumberInput
-            label="週の最大勤務日数"
-            description="自動シフト作成時にアサインされる最大日数を設定します（手動アサイン時には影響しません）"
-            value={values.maxWorkWeek}
-            onChange={(raw) => set('maxWorkWeek', raw === '' ? '' : Number(raw))}
-            min={MAX_WORK_WEEK_MIN}
-            max={MAX_WORK_WEEK_MAX}
-            clampBehavior="strict"
-            allowDecimal={false}
-            allowNegative={false}
-            required
-            // ラベルと説明文はフォーム幅のまま。狭いのは入力欄だけ
-            styles={{ wrapper: { maxWidth: 120 } }}
-          />
-
-          <CheckboxGroup
-            label="選択可能な勤務パターン"
-            value={values.availablePatternIds}
-            onChange={(next) => set('availablePatternIds', next)}
-          >
-            {patterns.length === 0 ? (
-              <Text size="sm" c="dimmed" mt={4}>
-                勤務パターンが登録されていません
+          <Stack gap="md">
+            <Divider />
+            <Stack gap={2}>
+              <Text fw={700}>自動アサインの条件</Text>
+              <Text size="xs" c="dimmed">
+                いつも守ること（必須）。
+                {/* 新規登録・チュートリアルにはまだ「この人の規則」の枠が無い */}
+                {isEdit && 'この人だけの規則は、下の「この人の規則」で追加します。'}
               </Text>
-            ) : (
+            </Stack>
+            <CheckboxGroup
+              label="勤務できる曜日"
+              description="シフト表では、勤務できない曜日を斜線で表示します"
+              value={values.availableWdays.map(String)}
+              onChange={(next) => set('availableWdays', next.map(Number))}
+            >
               <Group gap="md" mt={4}>
-                {patterns.map((pattern) => (
-                  <Checkbox key={pattern.id} value={pattern.id} label={pattern.name} />
+                {WEEKDAY_VALUES.map((wday) => (
+                  <Checkbox key={wday} value={String(wday)} label={WEEKDAY_LABELS[wday]} />
                 ))}
               </Group>
-            )}
-          </CheckboxGroup>
+            </CheckboxGroup>
+            <CheckboxGroup
+              label="選択可能な勤務パターン"
+              value={values.availablePatternIds}
+              onChange={(next) => set('availablePatternIds', next)}
+            >
+              {patterns.length === 0 ? (
+                <Text size="sm" c="dimmed" mt={4}>
+                  勤務パターンが登録されていません
+                </Text>
+              ) : (
+                <Group gap="md" mt={4}>
+                  {patterns.map((pattern) => (
+                    <Checkbox key={pattern.id} value={pattern.id} label={pattern.name} />
+                  ))}
+                </Group>
+              )}
+            </CheckboxGroup>
+            <NumberInput
+              label="週の最大勤務日数"
+              description="AI で作成するときにアサインされる最大日数です（手動のアサインには影響しません）"
+              value={values.maxWorkWeek}
+              onChange={(raw) => set('maxWorkWeek', raw === '' ? '' : Number(raw))}
+              min={MAX_WORK_WEEK_MIN}
+              max={MAX_WORK_WEEK_MAX}
+              clampBehavior="strict"
+              allowDecimal={false}
+              allowNegative={false}
+              required
+              // ラベルと説明文はフォーム幅のまま。狭いのは入力欄だけ
+              styles={{ wrapper: { maxWidth: 120 } }}
+            />
+          </Stack>
 
           <Group justify="flex-end" gap="xs">
             {/* チュートリアルでは出さない（v1 の `unless @tutorial_step`） */}

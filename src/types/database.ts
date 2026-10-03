@@ -271,35 +271,44 @@ export type Database = {
         Row: {
           created_at: string
           days: number | null
+          hard: boolean
           id: string
           kind: Database["public"]["Enums"]["restriction_kind"]
           pattern1_id: string | null
           pattern2_id: string | null
           position: number
+          staff_id: string | null
           tenant_id: string
           updated_at: string
+          wdays: number[] | null
         }
         Insert: {
           created_at?: string
           days?: number | null
+          hard?: boolean
           id?: string
           kind: Database["public"]["Enums"]["restriction_kind"]
           pattern1_id?: string | null
           pattern2_id?: string | null
           position?: number
+          staff_id?: string | null
           tenant_id: string
           updated_at?: string
+          wdays?: number[] | null
         }
         Update: {
           created_at?: string
           days?: number | null
+          hard?: boolean
           id?: string
           kind?: Database["public"]["Enums"]["restriction_kind"]
           pattern1_id?: string | null
           pattern2_id?: string | null
           position?: number
+          staff_id?: string | null
           tenant_id?: string
           updated_at?: string
+          wdays?: number[] | null
         }
         Relationships: [
           {
@@ -314,6 +323,13 @@ export type Database = {
             columns: ["pattern2_id", "tenant_id"]
             isOneToOne: false
             referencedRelation: "patterns"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "restrictions_staff_id_tenant_id_fkey"
+            columns: ["staff_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "staffs"
             referencedColumns: ["id", "tenant_id"]
           },
           {
@@ -654,6 +670,9 @@ export type Database = {
         | "max_work_week"
         | "max_work_consecutive"
         | "sat_or_sun_dayoff"
+        | "min_work_week"
+        | "max_weekend_days"
+        | "prefer_dayoff_wdays"
       shift_cycle: "month" | "half_month" | "two_week" | "week"
     }
     CompositeTypes: {
@@ -789,6 +808,9 @@ export const Constants = {
         "max_work_week",
         "max_work_consecutive",
         "sat_or_sun_dayoff",
+        "min_work_week",
+        "max_weekend_days",
+        "prefer_dayoff_wdays",
       ],
       shift_cycle: ["month", "half_month", "two_week", "week"],
     },

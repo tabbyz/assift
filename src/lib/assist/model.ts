@@ -4,18 +4,21 @@ import { cellKey } from '@/lib/shifts/key'
 import { addDirective, type Directive, type DirectiveModelContext } from './directives'
 import { Linear, LpBuilder, row } from './lp'
 import {
+  allWeeks,
   capacityAt,
+  fullWeeks,
   isWeekendOrHoliday,
   isWorkday,
+  restrictionStaffs,
   slotKey,
   staticBlock,
-  weekDates,
   withPair,
   type PlanRow,
   type Problem,
+  type Restriction,
   type Slot,
 } from './problem'
-import { WEIGHTS, type Weights } from './weights'
+import { RELAXED_STRENGTH, WEIGHTS, type Weights } from './weights'
 
 /**
  * ハード制約（H1〜H10）とソフト目標を MILP に写す（012 §5.3 / §5.4）。LP 形式の文字列を組むだけの純関数。
@@ -28,7 +31,12 @@ export type ModelOptions = {
   directives?: Directive[]
   /** 「別の案を作る」の前の案（`result.plan`）。同じセルにペナルティ（§3.10） */
   previousPlan?: PlanRow[]
-  /** ハードな指示をすべてソフトに落とした 2 回目（§3.9） */
+  /**
+   * 解が無くなったときの 1 段目（013 §3.5）。**必須の下限（`min_work_week`）**をソフトに落とす。
+   * 上限の制約は必須のままでも解がある（全変数 0・不足 = 枠数）ので落とさない
+   */
+  relaxRestrictions?: boolean
+  /** ハードな指示をソフトに落とす（§3.9）。必須の下限とは独立（両方を落とすときは両方 true） */
   relaxDirectives?: boolean
   weights?: Weights
 }
@@ -41,7 +49,12 @@ export type AssistModel = {
   cells: Map<string, ModelCell>
   /** 不足変数の名前 → 枠 */
   shortages: Map<string, Slot>
-  /** ハードな指示を含むか（解が無ければソフトに落として解き直す） */
+  /**
+   * 必須の下限をハードな制約として立てたか（解が無ければ、まずこれだけをソフトに落として解き直す）。
+   * 行があっても、対象の人に変数が無い・どの週も入れる日数が足りずソフトにした、なら false（解き直しても同じ問題）
+   */
+  hasHardMinRestrictions: boolean
+  /** ハードな指示を含むか（それでも解が無ければ、指示もソフトに落として解き直す） */
   hasHardDirectives: boolean
 }
 
@@ -142,39 +155,58 @@ export function buildModel(problem: Problem, options: ModelOptions = {}): Assist
   }
 
   // ---- H5: 週の勤務日数 -----------------------------------------------------
-  const weeks = new Map<string, string[]>()
-  for (const date of scope) {
-    const week = weekDates(date, problem.startOfWeek)
-    weeks.set(week[0], week)
-  }
+  const weeks = allWeeks(problem, scope)
   for (const staff of problem.staffs) {
     if (!staffsWithVars.has(staff.id)) continue
-    for (const week of weeks.values()) {
+    for (const week of weeks) {
       const expr = new Linear()
       for (const date of week) expr.plus(work(staff.id, date))
       builder.constrain(expr, '<=', staff.maxWorkWeek, { clamp: true })
     }
   }
 
-  // ---- H6〜H9: 制約（restrictions） -----------------------------------------
+  // ---- ソフトな違反量（制約のなるべく・店長の指示で共有） ---------------------
+  let softIndex = 0
+  /** 違反量の変数 v を作り、`expr op rhs` を「v を許して」書く。v の費用は weight */
+  const soft = (expr: Linear, op: '<=' | '>=', rhs: number, weight: number) => {
+    if (expr.size === 0) return
+    const name = `v${softIndex++}`
+    builder.objective.add(name, weight)
+    // <= なら expr − v ≤ rhs、>= なら expr + v ≥ rhs
+    builder.constrain(expr.add(name, op === '<=' ? -1 : 1), op, rhs)
+  }
+  // 2 つの緩めは独立（engine.ts が「規則だけ」「指示だけ」「両方」の順に試す）
+  const relaxRestrictions = options.relaxRestrictions ?? false
+  /** 必須の下限を実際にハードで立てたか（立てていなければ、緩めて解き直しても同じ問題になる） */
+  let emittedHardMin = false
+  // 期間に丸ごと入る週（下限の制約の数だけ呼ばない）
+  const minWeeks = fullWeeks(problem)
+
+  // ---- H6〜H9・H12: 制約（restrictions）。なるべくはソフト項（013） ------------
   const pairStart = addDays(problem.period.start, -1)
+  const weekendDates = problem.dates.filter((date) => isWeekendOrHoliday(problem, date))
+  const upper = (restriction: Restriction, expr: Linear, rhs: number) => {
+    if (restriction.hard) builder.constrain(expr, '<=', rhs, { clamp: true })
+    else soft(expr, '<=', rhs, weights.restrictionSoft)
+  }
   for (const restriction of problem.restrictions) {
-    if (!restriction.hard) continue
-    for (const staffId of staffsWithVars) {
+    for (const staff of restrictionStaffs(problem, restriction)) {
+      const staffId = staff.id
+      if (!staffsWithVars.has(staffId)) continue
       switch (restriction.kind) {
         case 'deny_pattern_pair':
           for (const date of datesBetween(pairStart, problem.landingDate)) {
             const expr = is(staffId, date, restriction.pattern1Id).plus(
               is(staffId, addDays(date, 1), restriction.pattern2Id)
             )
-            builder.constrain(expr, '<=', 1, { clamp: true })
+            upper(restriction, expr, 1)
           }
           break
         case 'max_work_week':
-          for (const week of weeks.values()) {
+          for (const week of weeks) {
             const expr = new Linear()
             for (const date of week) expr.plus(is(staffId, date, restriction.patternId))
-            builder.constrain(expr, '<=', restriction.days, { clamp: true })
+            upper(restriction, expr, restriction.days)
           }
           break
         case 'max_work_consecutive': {
@@ -190,17 +222,55 @@ export function buildModel(problem: Problem, options: ModelOptions = {}): Assist
           )) {
             const expr = new Linear()
             for (let offset = 0; offset <= n; offset++) expr.plus(matches(addDays(start, offset)))
-            builder.constrain(expr, '<=', n, { clamp: true })
+            upper(restriction, expr, n)
           }
           break
         }
         case 'sat_or_sun_dayoff':
           for (const date of datesBetween(pairStart, problem.landingDate)) {
             if (wday(date) !== 6) continue
-            const expr = work(staffId, date).plus(work(staffId, addDays(date, 1)))
-            builder.constrain(expr, '<=', 1, { clamp: true })
+            upper(restriction, work(staffId, date).plus(work(staffId, addDays(date, 1))), 1)
           }
           break
+        case 'max_weekend_days': {
+          const expr = new Linear()
+          for (const date of weekendDates) expr.plus(work(staffId, date))
+          upper(restriction, expr, restriction.days)
+          break
+        }
+        case 'min_work_week':
+          for (const week of minWeeks) {
+            const days = week.map((date) => work(staffId, date))
+            const expr = new Linear()
+            for (const day of days) expr.plus(day)
+            // その週に入れる日数（勤務になりうる日・週の上限）が足りなければ、必須でもその週だけソフトにする。
+            // 1 人の 1 週が守れないだけで、すべての「必ず」まで緩めて解き直すのを避ける（013 §3.5）
+            const reachable = Math.min(
+              days.filter((day) => day.constant > 0 || day.size > 0).length,
+              staff.maxWorkWeek
+            )
+            if (restriction.hard && !relaxRestrictions && reachable >= restriction.days) {
+              // 変数の無い週（既存だけで足りている）は行が書かれない。緩めて解き直しても変わらないので数えない
+              if (expr.size > 0) emittedHardMin = true
+              builder.constrain(expr, '>=', restriction.days)
+            } else {
+              const weight = restriction.hard
+                ? weights.directivePerStrength * RELAXED_STRENGTH
+                : weights.restrictionSoft
+              soft(expr, '>=', restriction.days, weight)
+            }
+          }
+          break
+        case 'prefer_dayoff_wdays': {
+          const wdays = new Set(restriction.wdays)
+          for (const date of problem.dates) {
+            if (!wdays.has(wday(date))) continue
+            for (const [name, coef] of work(staffId, date).terms) {
+              builder.objective.add(name, coef * weights.restrictionSoft)
+            }
+          }
+          break
+        }
       }
     }
   }
@@ -225,7 +295,6 @@ export function buildModel(problem: Problem, options: ModelOptions = {}): Assist
   }
 
   // ---- 店長の指示 -----------------------------------------------------------
-  let softIndex = 0
   const ctx: DirectiveModelContext = {
     problem,
     weights,
@@ -234,23 +303,20 @@ export function buildModel(problem: Problem, options: ModelOptions = {}): Assist
     newLinear: () => new Linear(),
     shortage: (date, patternId) => shortageByKey.get(slotKey(date, patternId)),
     hard: (expr, op, rhs, clamp) => builder.constrain(expr, op, rhs, { clamp }),
-    soft: (expr, op, rhs, weight) => {
-      if (expr.size === 0) return
-      const name = `v${softIndex++}`
-      builder.objective.add(name, weight)
-      // <= なら expr − v ≤ rhs、>= なら expr + v ≥ rhs
-      builder.constrain(expr.add(name, op === '<=' ? -1 : 1), op, rhs)
-    },
+    soft,
     objective: (expr, factor) => {
       for (const [name, coef] of expr.terms) builder.objective.add(name, coef * factor)
     },
   }
-  for (const directive of directives) addDirective(ctx, directive, options.relaxDirectives ?? false)
+  for (const directive of directives) {
+    addDirective(ctx, directive, options.relaxDirectives ?? false)
+  }
 
   return {
     builder,
     cells,
     shortages,
+    hasHardMinRestrictions: emittedHardMin,
     hasHardDirectives: directives.some((directive) => directive.hard),
   }
 }

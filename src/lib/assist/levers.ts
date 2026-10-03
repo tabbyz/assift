@@ -36,6 +36,8 @@ export type Lever = {
   directiveIndex: number | null
   /** 問題の `restrictions` の添字（制約の一手のとき。適用時にラベルでも引き直す） */
   restrictionIndex: number | null
+  /** 制約の id（013 から。規則の編集画面へのリンクと、適用時の引き直しに使う） */
+  restrictionId: string | null
   /** 増える枠の数 */
   gain: number
   /** 増える枠のパターンごとの内訳（パターンの表示順） */
@@ -101,10 +103,25 @@ export function leverCandidates(
   return [...directiveCandidates, ...restrictionCandidates].slice(0, MAX_CANDIDATES)
 }
 
+/** 日数を 1 増やして緩める制約（上限だけ。下限を緩めても枠は増えない） */
 function isRelaxable(
   restriction: Restriction
-): restriction is Extract<Restriction, { days: number }> {
-  return restriction.kind === 'max_work_week' || restriction.kind === 'max_work_consecutive'
+): restriction is Extract<
+  Restriction,
+  { kind: 'max_work_week' | 'max_work_consecutive' | 'max_weekend_days' }
+> {
+  return (
+    restriction.kind === 'max_work_week' ||
+    restriction.kind === 'max_work_consecutive' ||
+    restriction.kind === 'max_weekend_days'
+  )
+}
+
+/** 一手が指す制約の添字を id で引く（013 から）。id が無い・見つからないときは null */
+function indexById(problem: Problem, restrictionId: string | null | undefined): number | null {
+  if (!restrictionId) return null
+  const index = problem.restrictions.findIndex((restriction) => restriction.id === restrictionId)
+  return index === -1 ? null : index
 }
 
 /**
@@ -148,18 +165,25 @@ export function restrictionsForLever(
   problem: Problem,
   lever: {
     restrictionIndex: number | null
+    restrictionId?: string | null
     label: string
     action: 'remove' | 'relax'
     relaxedTo: number | null
   }
 ): Restriction[] | null {
+  // id は同じ文言の制約が複数あるときの手がかりにだけ使う。文言の確認は外さない
+  // （id が同じでも、あとで中身を書き換えた制約には当てない）
+  const hinted = {
+    ...lever,
+    restrictionIndex: indexById(problem, lever.restrictionId) ?? lever.restrictionIndex,
+  }
   if (lever.action === 'remove') {
-    const index = matchRestrictionIndex(problem, lever)
+    const index = matchRestrictionIndex(problem, hinted)
     if (index === null) return null
     return problem.restrictions.filter((_, i) => i !== index)
   }
   if (lever.relaxedTo === null) return null
-  const index = findRelaxTarget(problem, lever, lever.relaxedTo - 1)
+  const index = findRelaxTarget(problem, hinted, lever.relaxedTo - 1)
   const current = index === null ? undefined : problem.restrictions[index]
   if (!current || !isRelaxable(current) || current.days >= lever.relaxedTo) return null
   const days = lever.relaxedTo
@@ -281,6 +305,7 @@ export async function evaluateLevers(params: {
         relaxedTo: null,
         directiveIndex: candidate.directiveIndex,
         restrictionIndex: null,
+        restrictionId: null,
         gain,
         byPattern: gainByPattern(problem, rows),
         rows,
@@ -294,6 +319,7 @@ export async function evaluateLevers(params: {
         relaxedTo: isRelaxable(restriction) ? restriction.days + 1 : null,
         directiveIndex: null,
         restrictionIndex: candidate.restrictionIndex,
+        restrictionId: restriction.id,
         gain,
         byPattern: gainByPattern(problem, rows),
         rows,

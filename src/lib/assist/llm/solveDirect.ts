@@ -2,6 +2,7 @@ import 'server-only'
 import { z } from 'zod'
 import { formatMonthDay, wday } from '@/lib/calendar/dateString'
 import { WEEKDAY_LABELS } from '@/lib/calendar/weekdays'
+import { strengthLabel } from '@/lib/restrictions/kinds'
 import type { LlmUsage } from '../pricing'
 import { withPair, type PlanRow, type Problem } from '../problem'
 import { restrictionLabel, validatePlan, type RejectedUnit } from '../validate'
@@ -23,7 +24,7 @@ const INSTRUCTIONS = `あなたはシフト表を作ります。入力の「埋�
 - 1 人 1 日 1 枠。すでにシフトが入っているマスには入れない
 - スタッフの勤務できる曜日・選択できるパターン・週の上限日数を守る
 - ペアのあるパターン（例: 夜勤 → 明け）は翌日にペアが自動で入る。翌日が埋まっている人には入れない
-- 自動アサイン制約をすべて守る
+- 自動アサイン制約の「必須」は守る。「なるべく」はできるだけ守る（行頭の S コードはそのスタッフだけの制約）
 - 枠の人数を超えない。埋められない枠は残してよい
 assignments には割り当て（staff は S コード、pattern は P コード、date は YYYY-MM-DD）だけを書く。ペアの行は書かない`
 
@@ -48,7 +49,12 @@ function problemText(problem: Problem): string {
     ),
     `# 週の始まり: ${WEEKDAY_LABELS[problem.startOfWeek]}曜日`,
     '# 自動アサイン制約',
-    ...problem.restrictions.map((restriction) => `- ${restrictionLabel(problem, restriction)}`),
+    // スタッフ別の制約は名前ではなく S コードで書く（スタッフ一覧が S コードだけなので）
+    ...problem.restrictions.map((restriction) => {
+      const owner = restriction.staffId ? problem.staffById.get(restriction.staffId)?.code : null
+      const body = restrictionLabel(problem, { ...restriction, staffId: null })
+      return `- ${owner ? `${owner}: ` : ''}${body}（${strengthLabel(restriction.hard)}）`
+    }),
     '# 埋める枠（日付 パターン 人数）',
     ...problem.demand.map(
       (slot) => `${day(slot.date)} ${problem.patternById.get(slot.patternId)?.code} ${slot.count}`
