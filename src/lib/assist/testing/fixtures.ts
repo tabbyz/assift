@@ -57,19 +57,58 @@ const PATTERNS: AssistPatternInput[] = [
   { id: FIXTURE_PATTERNS.off, name: '休み', kind: 'dayoff', pairPatternId: null },
 ]
 
+/**
+ * 制約の入力を組む（013 で id / staffId / hard / wdays が増えた）。既定は店舗全体・必須（012 までの意味）。
+ * id は中身から決める（テストの順序に依らず同じ値になる）
+ */
+export function restrictionRow(
+  row: Pick<AssistRestrictionInput, 'kind'> & Partial<AssistRestrictionInput>
+): AssistRestrictionInput {
+  const base = {
+    days: null,
+    pattern1Id: null,
+    pattern2Id: null,
+    staffId: null,
+    hard: true,
+    wdays: null,
+    ...row,
+  }
+  return {
+    ...base,
+    id:
+      row.id ??
+      [
+        'r',
+        base.kind,
+        base.staffId,
+        base.pattern1Id,
+        base.pattern2Id,
+        base.days,
+        base.wdays?.join(''),
+      ]
+        .map((part) => part ?? '')
+        .join(':'),
+  }
+}
+
 const RESTRICTIONS: AssistRestrictionInput[] = [
   // 遅番の翌日に早番を入れない
-  {
+  restrictionRow({
     kind: 'deny_pattern_pair',
     days: null,
     pattern1Id: FIXTURE_PATTERNS.late,
     pattern2Id: FIXTURE_PATTERNS.early,
-  },
+  }),
   // 夜勤は週 1 日まで
-  { kind: 'max_work_week', days: 1, pattern1Id: FIXTURE_PATTERNS.night, pattern2Id: null },
+  restrictionRow({
+    kind: 'max_work_week',
+    days: 1,
+    pattern1Id: FIXTURE_PATTERNS.night,
+    pattern2Id: null,
+  }),
   // 勤務日は連続 5 日まで
-  { kind: 'max_work_consecutive', days: 5, pattern1Id: null, pattern2Id: null },
-  { kind: 'sat_or_sun_dayoff', days: null, pattern1Id: null, pattern2Id: null },
+  restrictionRow({ kind: 'max_work_consecutive', days: 5, pattern1Id: null, pattern2Id: null }),
+  restrictionRow({ kind: 'sat_or_sun_dayoff', days: null, pattern1Id: null, pattern2Id: null }),
 ]
 
 const FAMILY = [
@@ -111,6 +150,22 @@ export type FixtureOptions = {
   period?: { start: string; end: string }
   /** 必要人数の水準（1 = 在籍の勤務可能日数の 8 割程度） */
   load?: number
+  /** スタッフ別の規則（seed.sql の 4 件と同じ形。013 §5.5）を足す */
+  staffRules?: boolean
+}
+
+/**
+ * seed.sql のスタッフ別の規則と同じ 4 件（013 §5.5）。3 人目 = 週 3 日以上（なるべく）・土日祝 2 日まで（必須）、
+ * 4 人目 = 水曜なるべく休み、5 人目 = 金曜なるべく休み
+ */
+function staffRules(staffs: AssistStaffInput[]): AssistRestrictionInput[] {
+  const [, , third, fourth, fifth] = staffs
+  return [
+    restrictionRow({ kind: 'min_work_week', days: 3, staffId: third.id, hard: false }),
+    restrictionRow({ kind: 'max_weekend_days', days: 2, staffId: third.id }),
+    restrictionRow({ kind: 'prefer_dayoff_wdays', wdays: [3], staffId: fourth.id, hard: false }),
+    restrictionRow({ kind: 'prefer_dayoff_wdays', wdays: [5], staffId: fifth.id, hard: false }),
+  ]
 }
 
 /**
@@ -189,7 +244,7 @@ export function fixtureInput(options: FixtureOptions): AssistInput {
     holidays: ['2026-10-12'],
     staffs,
     patterns: PATTERNS,
-    restrictions: RESTRICTIONS,
+    restrictions: options.staffRules ? [...RESTRICTIONS, ...staffRules(staffs)] : RESTRICTIONS,
     requiredNums,
     shifts,
   }

@@ -7,8 +7,9 @@
 -- （{table}_restrict_same_tenant）がそのまま UPDATE に効く。別テナントの行は対象外になり
 -- 更新行数が合わなくなるため、下の件数チェックで例外 → ロールバックする。
 --
--- p_table はクライアントからは渡さない。reorderStaffs / reorderPatterns / reorderRestrictions の
--- 3 つの Server Action が定数で渡す。ホワイトリストは Action を経由しない直接呼び出しへの二重の守り。
+-- p_table はクライアントからは渡さない。reorderStaffs / reorderPatterns の
+-- 2 つの Server Action が定数で渡す。ホワイトリストは Action を経由しない直接呼び出しへの二重の守り。
+-- restrictions は 013 で並べ替えをやめた（店舗全体 / スタッフ別の 2 群に分けたので、上下ボタンの意味が薄い）。
 create or replace function public.reorder_positions(
   p_table     text,
   p_tenant_id uuid,
@@ -23,7 +24,7 @@ declare
   expected integer := coalesce(array_length(p_ids, 1), 0);
   updated  integer;
 begin
-  if p_table not in ('staffs', 'patterns', 'restrictions') then
+  if p_table not in ('staffs', 'patterns') then
     raise exception 'reorder_positions: unsupported table %', p_table;
   end if;
 

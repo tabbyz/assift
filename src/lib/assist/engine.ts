@@ -6,19 +6,27 @@ import { HIGHS_VERSION, solve, type StageResult } from './solver/highs'
 import type { Weights } from './weights'
 
 /**
- * 割り当てを解く（012 §5.1 の 4）。MILP を組んで HiGHS で解き、**ハードな指示で解が無くなったら
- * ハードな指示をすべてソフトに落として 1 回だけ解き直す**（§3.9。どの指示が原因かは個別に探索しない）。
+ * 割り当てを解く（012 §5.1 の 4）。MILP を組んで HiGHS で解き、解が無くなったら順に緩める（§3.9 / 013 §3.5）:
  *
- * restrictions 由来の制約はハードのままでも常に解がある（全変数 0・不足 = 枠数が実行可能）。
- * 解が無くなりうるのは「必ず」の指示だけ。
+ * 1. 必須の下限の制約（週の最低勤務日数）だけをソフトに落として解き直す。店長がこの実行で書いた「必ず」の指示を、
+ *    設定に残っている規則より優先する（規則 1 つが守れないだけで、すべての指示を緩めない）
+ * 2. だめなら、ハードな指示だけをソフトに落とす（規則は必須のまま。指示だけが原因なら規則を巻き込まない）
+ * 3. それでも解が無ければ、両方をソフトに落とす
+ *
+ * どの条件が原因かは個別に探索しない。
+ *
+ * 上限の制約（週の上限・連勤・組み合わせ・土日祝の上限）は必須のままでも常に解がある（全変数 0・不足 = 枠数が実行可能）。
+ * 解が無くなりうるのは「必ず」の指示と、必須の週の最低勤務日数だけ。
  */
 
 export type SolverSummary = {
   solver: string
   /** 不足の最小性がソルバーの最適性で言えるか（1 段目が Optimal）。理由の文言を分ける（§5.6） */
   shortageOptimal: boolean
-  /** ハードな指示をソフトに落として解き直したか */
+  /** ハードな指示をソフトに落として解き直したか（結果に「『必ず』の指示を守れなかった」と出す） */
   relaxed: boolean
+  /** 必須の下限の制約をソフトに落として解き直したか（013。守れなかった規則は `restrictionOutcomes` に出る） */
+  relaxedRestrictions: boolean
   stages: StageResult[]
   variables: number
   constraints: number
@@ -54,6 +62,7 @@ export async function planAssignments(
   }
 
   let relaxed = false
+  let relaxedRestrictions = false
   let model = buildModel(problem, modelOptions)
   if (model.cells.size === 0) {
     // 候補が 1 人もいない（全枠が候補なし）。解くまでもなく空の計画
@@ -63,6 +72,7 @@ export async function planAssignments(
         solver: HIGHS_VERSION,
         shortageOptimal: true,
         relaxed,
+        relaxedRestrictions,
         stages: [],
         variables: 0,
         constraints: model.builder.constraintCount,
@@ -73,9 +83,21 @@ export async function planAssignments(
 
   let outcome = await solve(model, solveOptions)
   const stages = [...outcome.stages]
-  if (outcome.kind === 'infeasible' && model.hasHardDirectives) {
-    relaxed = true
-    model = buildModel(problem, { ...modelOptions, relaxDirectives: true })
+  const { hasHardMinRestrictions, hasHardDirectives } = model
+  // 緩める順（013 §3.5）: 規則だけ → 指示だけ → 両方。どちらかだけで解けるなら、もう片方は必須のまま守る。
+  // 解が無いことは 1 段目ですぐ分かる（不足を最小化する前に止まる）ので、試す回数が増えても重くない
+  const steps: { relaxRestrictions: boolean; relaxDirectives: boolean }[] = [
+    ...(hasHardMinRestrictions ? [{ relaxRestrictions: true, relaxDirectives: false }] : []),
+    ...(hasHardDirectives ? [{ relaxRestrictions: false, relaxDirectives: true }] : []),
+    ...(hasHardMinRestrictions && hasHardDirectives
+      ? [{ relaxRestrictions: true, relaxDirectives: true }]
+      : []),
+  ]
+  for (const step of steps) {
+    if (outcome.kind !== 'infeasible') break
+    relaxedRestrictions = step.relaxRestrictions
+    relaxed = step.relaxDirectives
+    model = buildModel(problem, { ...modelOptions, ...step })
     outcome = await solve(model, solveOptions)
     stages.push(...outcome.stages)
   }
@@ -92,6 +114,7 @@ export async function planAssignments(
       solver: HIGHS_VERSION,
       shortageOptimal: outcome.shortageOptimal,
       relaxed,
+      relaxedRestrictions,
       stages,
       variables: model.builder.binaryCount,
       constraints: model.builder.constraintCount,

@@ -668,7 +668,8 @@ export async function applyAssistLever(input: {
       relaxRestriction:
         lever.kind === 'restriction'
           ? {
-              index: lever.restrictionIndex,
+              restrictionIndex: lever.restrictionIndex,
+              restrictionId: lever.restrictionId,
               label: lever.label,
               action: lever.action,
               relaxedTo: lever.relaxedTo,

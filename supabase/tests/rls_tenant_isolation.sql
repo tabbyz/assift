@@ -5,7 +5,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(126);
+select plan(133);
 
 -- ---------------------------------------------------------------------------
 -- 準備（postgres として実行。RLS はテーブル所有者には適用されない）
@@ -168,6 +168,46 @@ select throws_ok(
   null,
   'required_nums に他テナントの pattern を混ぜると複合 FK 違反'
 );
+-- スタッフ別の規則（013 §6.2）。自テナントの tenant_id に他テナントのスタッフを混ぜると複合 FK で落ちる
+select lives_ok(
+  format($$insert into public.restrictions (tenant_id, staff_id, kind, days, hard) values (%L, %L, 'min_work_week', 3, false)$$,
+    'aaaaaaaa-1111-0000-0000-00000000000a', 'aaaaaaaa-2222-0000-0000-00000000000a'),
+  '自テナントのスタッフの規則は追加できる'
+);
+select throws_ok(
+  format($$insert into public.restrictions (tenant_id, staff_id, kind, days) values (%L, %L, 'min_work_week', 3)$$,
+    'aaaaaaaa-1111-0000-0000-00000000000a', 'bbbbbbbb-2222-0000-0000-00000000000b'),
+  '23503',
+  null,
+  'restrictions に他テナントのスタッフを混ぜると複合 FK 違反'
+);
+select throws_ok(
+  format($$insert into public.restrictions (tenant_id, kind, wdays, hard) values (%L, 'prefer_dayoff_wdays', '{3}', true)$$,
+    'aaaaaaaa-1111-0000-0000-00000000000a'),
+  '23514',
+  null,
+  'なるべく休みの曜日は必須にできない'
+);
+-- 土日祝の上限だけは 1..15（表示期間で数える。1 か月の土日祝は 9〜12 日）。週の種別は 1..7 のまま
+select lives_ok(
+  format($$insert into public.restrictions (tenant_id, kind, days) values (%L, 'max_weekend_days', 15)$$,
+    'aaaaaaaa-1111-0000-0000-00000000000a'),
+  '土日祝の上限は 15 日まで入る'
+);
+select throws_ok(
+  format($$insert into public.restrictions (tenant_id, kind, days) values (%L, 'max_weekend_days', 16)$$,
+    'aaaaaaaa-1111-0000-0000-00000000000a'),
+  '23514',
+  null,
+  '土日祝の上限の 16 日は入らない'
+);
+select throws_ok(
+  format($$insert into public.restrictions (tenant_id, kind, days) values (%L, 'min_work_week', 8)$$,
+    'aaaaaaaa-1111-0000-0000-00000000000a'),
+  '23514',
+  null,
+  '週の最低勤務日数の 8 日は入らない'
+);
 
 -- ---------------------------------------------------------------------------
 -- reorder_positions（006 §5.1）: security invoker なので RLS がそのまま効く
@@ -200,6 +240,14 @@ select throws_ok(
   'P0001',
   'reorder_positions: unsupported table profiles',
   'ホワイトリスト外のテーブル名は例外'
+);
+select throws_ok(
+  format($$select public.reorder_positions('restrictions', %L, array[%L]::uuid[])$$,
+    'aaaaaaaa-1111-0000-0000-00000000000a',
+    'aaaaaaaa-2222-0000-0000-00000000000a'),
+  'P0001',
+  'reorder_positions: unsupported table restrictions',
+  '制約の並べ替えは 013 でやめた'
 );
 
 -- 設計の肝: 自テナントの id に他テナントの id を混ぜたとき、通った分もロールバックされる

@@ -1,7 +1,7 @@
 import { addDays, datesBetween, wday } from '@/lib/calendar/dateString'
 import type { DayKey } from '@/lib/calendar/weekdays'
 import type { PatternKind } from '@/lib/patterns/kinds'
-import type { RestrictionKind } from '@/lib/restrictions/kinds'
+import { normalizeWdays, type RestrictionKind } from '@/lib/restrictions/kinds'
 import { cellKey } from '@/lib/shifts/key'
 import type { RequiredNumRow } from '@/lib/shifts/satisfaction'
 
@@ -29,10 +29,16 @@ export type AssistPatternInput = {
 }
 
 export type AssistRestrictionInput = {
+  id: string
   kind: RestrictionKind
   days: number | null
   pattern1Id: string | null
   pattern2Id: string | null
+  /** null = 店舗全体（013 §3.2） */
+  staffId: string | null
+  /** 必須 = true / なるべく = false */
+  hard: boolean
+  wdays: number[] | null
 }
 
 export type ExistingShift = { staffId: string; date: string; patternId: string }
@@ -53,14 +59,21 @@ export type AssistInput = {
 }
 
 /**
- * 制約（H5〜H9 の元）。`hard` は 012 では restrictions 由来が常に true。
- * 将来の「必須 / できれば」トグル（§3.9）はこのフラグの素通しで足せるよう、正規化の段階から持たせる。
+ * 制約（H6〜H9・H12 と、下限・なるべく休みのソフト項の元）。`hard` は DB の列の素通し（013。012 §3.9 の想定どおり）。
+ * `staffId` が null なら在籍スタッフ全員、値があればその人だけに効く。
  */
-export type Restriction =
-  | { kind: 'deny_pattern_pair'; pattern1Id: string; pattern2Id: string; hard: boolean }
-  | { kind: 'max_work_week'; patternId: string; days: number; hard: boolean }
-  | { kind: 'max_work_consecutive'; patternId: string | null; days: number; hard: boolean }
-  | { kind: 'sat_or_sun_dayoff'; hard: boolean }
+export type Restriction = { id: string; staffId: string | null; hard: boolean } & (
+  | { kind: 'deny_pattern_pair'; pattern1Id: string; pattern2Id: string }
+  | { kind: 'max_work_week'; patternId: string; days: number }
+  | { kind: 'max_work_consecutive'; patternId: string | null; days: number }
+  | { kind: 'sat_or_sun_dayoff' }
+  /** 期間に丸ごと入る週ごとの勤務日数 ≥ days（指示の `min_workdays` の週と同じ） */
+  | { kind: 'min_work_week'; days: number }
+  /** 期間の土日祝の勤務日数 ≤ days（指示の `limit_weekends` と同じ数え方） */
+  | { kind: 'max_weekend_days'; days: number }
+  /** その曜日に勤務しない（常にソフト。指示の `prefer_off` と同じ） */
+  | { kind: 'prefer_dayoff_wdays'; wdays: number[] }
+)
 
 export type ProblemStaff = {
   id: string
@@ -153,46 +166,90 @@ export function isWeekendOrHoliday(problem: Problem, date: string): boolean {
 }
 
 /**
- * restrictions を正規化する。参照先のパターンが店舗に無い行・日数が欠けた行は捨てる
+ * restrictions を正規化する。参照先のパターンが店舗に無い行・日数や曜日が欠けた行は捨てる
  * （v1 から移行した行に欠けがありうる。describe.ts の `?` 表示と同じ前提）。
+ * 在籍でないスタッフの規則も捨てる（退職しても規則は残す。013 §3.8）。なるべく休みの曜日は常にソフト（DB の CHECK と同じ）。
  */
 function normalizeRestrictions(
   rows: AssistRestrictionInput[],
-  patternIds: Set<string>
+  patternIds: Set<string>,
+  staffIds: Set<string>
 ): Restriction[] {
   const known = (id: string | null): id is string => id !== null && patternIds.has(id)
   const result: Restriction[] = []
 
   for (const row of rows) {
+    if (row.staffId !== null && !staffIds.has(row.staffId)) continue
+    const base = { id: row.id, staffId: row.staffId, hard: row.hard }
+
     switch (row.kind) {
       case 'deny_pattern_pair':
         if (known(row.pattern1Id) && known(row.pattern2Id)) {
           result.push({
+            ...base,
             kind: row.kind,
             pattern1Id: row.pattern1Id,
             pattern2Id: row.pattern2Id,
-            hard: true,
           })
         }
         break
       case 'max_work_week':
         if (known(row.pattern1Id) && row.days !== null) {
-          result.push({ kind: row.kind, patternId: row.pattern1Id, days: row.days, hard: true })
+          result.push({ ...base, kind: row.kind, patternId: row.pattern1Id, days: row.days })
         }
         break
       case 'max_work_consecutive':
         // pattern1 は任意（null = 勤務日全体）。指定があるのに店舗に無いなら捨てる
         if (row.days !== null && (row.pattern1Id === null || known(row.pattern1Id))) {
-          result.push({ kind: row.kind, patternId: row.pattern1Id, days: row.days, hard: true })
+          result.push({ ...base, kind: row.kind, patternId: row.pattern1Id, days: row.days })
         }
         break
       case 'sat_or_sun_dayoff':
-        result.push({ kind: row.kind, hard: true })
+        result.push({ ...base, kind: row.kind })
         break
+      case 'min_work_week':
+      case 'max_weekend_days':
+        if (row.days !== null) result.push({ ...base, kind: row.kind, days: row.days })
+        break
+      case 'prefer_dayoff_wdays': {
+        const wdays = normalizeWdays(row.wdays)
+        if (wdays.length > 0) result.push({ ...base, hard: false, kind: row.kind, wdays })
+        break
+      }
     }
   }
 
   return result
+}
+
+/** その制約が効くスタッフ（店舗全体なら在籍スタッフ全員。表示順） */
+export function restrictionStaffs(problem: Problem, restriction: Restriction): ProblemStaff[] {
+  if (restriction.staffId === null) return problem.staffs
+  const staff = problem.staffById.get(restriction.staffId)
+  return staff ? [staff] : []
+}
+
+/** 日付の並びがかかる週（`start_of_week` 基準の 7 日。日付の順）。週上限・週の上限の制約・指示の週が共有する */
+export function allWeeks(
+  problem: Pick<Problem, 'startOfWeek'>,
+  dates: readonly string[]
+): string[][] {
+  const weeks = new Map<string, string[]>()
+  for (const date of dates) {
+    const week = weekDates(date, problem.startOfWeek)
+    weeks.set(week[0], week)
+  }
+  return [...weeks.values()]
+}
+
+/**
+ * 期間に丸ごと入る週（`start_of_week` 基準）。週の下限（`min_work_week` と指示の `min_workdays`）はここだけで数える:
+ * 期間の外の日は動かせないので、端の週に下限を課すと守れない（012 §10.3）
+ */
+export function fullWeeks(problem: Problem): string[][] {
+  return allWeeks(problem, problem.dates).filter(
+    (week) => week[0] >= problem.period.start && week[week.length - 1] <= problem.period.end
+  )
 }
 
 /**
@@ -228,6 +285,7 @@ export function buildProblem(input: AssistInput): Problem {
     defaults: staff.defaults,
   }))
   const staffById = new Map(staffs.map((staff) => [staff.id, staff]))
+  const staffIds = new Set(staffById.keys())
 
   const existing = new Map<string, string>()
   const assigned = new Map<string, number>()
@@ -267,7 +325,7 @@ export function buildProblem(input: AssistInput): Problem {
     staffById,
     patterns,
     patternById,
-    restrictions: normalizeRestrictions(input.restrictions, patternIds),
+    restrictions: normalizeRestrictions(input.restrictions, patternIds, staffIds),
     existing,
     capacity,
     demand,

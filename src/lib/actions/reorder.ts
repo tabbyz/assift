@@ -5,7 +5,7 @@ import { reorderSchema } from '@/lib/validation/ordering'
 import { createClient } from '@/utils/supabase/server'
 
 /** `reorder_positions` RPC が受け付けるテーブル（SQL 側のホワイトリストと合わせる） */
-type ReorderableTable = 'staffs' | 'patterns' | 'restrictions'
+type ReorderableTable = 'staffs' | 'patterns'
 
 /**
  * 表示中の id 配列の順で `position` を 0..n-1 に振り直す（006 §3.3 / §5.1）。

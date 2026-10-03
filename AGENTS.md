@@ -57,6 +57,7 @@ src/
           _lib/                   このルート専用ロジック（Vitest 対象）
     api/tenants/[tenantId]/shifts/{pdf,csv}/route.ts   エクスポート（Route Handler。下記）
   components/                     横断 UI（SortableList = 上下ボタンの並べ替え一覧 など）
+    restrictions/                 制約の行（説明・種類・強さの札・編集）。制約ページとスタッフの編集画面で共有（013）
     shiftTable/                   シフト表の見た目（CSS Modules / DateHeaderCell / PatternDescriptionList / cellStyle）。保護ルートと公開ページで共有
   lib/
     actions/                      result / run / error / guards
@@ -70,8 +71,9 @@ src/
     export/                       request（認証 → 店舗 → 期間 → 表。PDF / CSV 共通の入口）/ filename
     csv/                          shiftCsv（純関数）/ encode（CP932 か BOM 付き UTF-8。iconv-lite）
     pdf/                          fonts（Font.register + 折り返し）/ styles / paginate / pdfCellStyle / ShiftPdfDocument
-    actions/reorder.ts              reorder_positions RPC の共通ラッパ（staffs / patterns / restrictions）
-    assist/                       自動アサイン（012）。problem → model（MILP）→ solver/highs → validate（最後の門番）→ reasons → levers（効く一手の試算）。llm/ は指示の解釈だけ
+    actions/reorder.ts              reorder_positions RPC の共通ラッパ（staffs / patterns。restrictions は 013 で並べ替えをやめた）
+    restrictions/                 制約の種類（kinds）/ 説明文（describe。土日祝の上限は表示期間で言い換える）/ 守れない下限の注意（warnings）/ 一覧の 1 行（rowView）
+    assist/                       自動アサイン（012）。problem → model（MILP）→ solver/highs → validate（最後の門番）→ reasons → levers（効く一手の試算）→ restrictionOutcomes（守れなかった「なるべく」。013）。llm/ は指示の解釈だけ
     supabase/createPrivilegedClient.ts   service_role の唯一の入口
     validation/                   Zod スキーマ
   types/database.ts               CLI 生成。手書きしない
@@ -288,7 +290,7 @@ npx supabase gen types typescript --local --schema public > src/types/database.t
 - `config.toml` の `schema_paths` は使わない（適用順は依存関係から決まる）
 - `migrations/` は sync の出力を正にする。ゼロから手書きしない。適用済みの migration は書き換えない
 - 空から作り直すときだけ `npx supabase db reset`（未コミットのローカルデータは消える）
-- **本番に初回 push（マイルストーン 013）するまでは migration を `init_schema` 1 本に保つ。**
+- **本番に初回 push（マイルストーン 015。001 の 013 から 012・013 のぶん繰り下げた）するまでは migration を `init_schema` 1 本に保つ。**
   スキーマを変えたら差分を積むのではなく `migrations/` を空にして sync をやり直し、`db reset` で検証する。
   push 以降は通常どおり差分 migration を追加し、適用済みは書き換えない
 - `supabase/unmanaged/` は pg-delta が生成できない SQL の置き場。sync のたびに生成 migration の末尾へ追記する。

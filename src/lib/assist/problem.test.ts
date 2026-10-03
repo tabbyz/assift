@@ -9,7 +9,7 @@ import {
   weekStart,
   withPair,
 } from './problem'
-import { FIXTURE_PATTERNS as P, required, smallInput } from './testing/fixtures'
+import { FIXTURE_PATTERNS as P, required, restrictionRow, smallInput } from './testing/fixtures'
 
 describe('buildProblem: 不足枠', () => {
   it('required − assigned を枠にし、0 以下は枠にしない', () => {
@@ -64,15 +64,27 @@ describe('buildProblem: 不足枠', () => {
       smallInput({
         patterns: [{ id: 'a', name: 'A', kind: 'workday', pairPatternId: 'gone' }],
         restrictions: [
-          { kind: 'max_work_week', days: 1, pattern1Id: 'gone', pattern2Id: null },
-          { kind: 'max_work_consecutive', days: 3, pattern1Id: null, pattern2Id: null },
-          { kind: 'max_work_week', days: null, pattern1Id: 'a', pattern2Id: null },
+          restrictionRow({ kind: 'max_work_week', days: 1, pattern1Id: 'gone', pattern2Id: null }),
+          restrictionRow({
+            kind: 'max_work_consecutive',
+            days: 3,
+            pattern1Id: null,
+            pattern2Id: null,
+          }),
+          restrictionRow({ kind: 'max_work_week', days: null, pattern1Id: 'a', pattern2Id: null }),
         ],
       })
     )
     expect(problem.patternById.get('a')?.pairPatternId).toBeNull()
     expect(problem.restrictions).toEqual([
-      { kind: 'max_work_consecutive', patternId: null, days: 3, hard: true },
+      {
+        id: 'r:max_work_consecutive::::3:',
+        staffId: null,
+        kind: 'max_work_consecutive',
+        patternId: null,
+        days: 3,
+        hard: true,
+      },
     ])
   })
 })

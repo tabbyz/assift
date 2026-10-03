@@ -3,7 +3,7 @@ import { planAssignments } from './engine'
 import { buildModel, shortageObjective } from './model'
 import { buildProblem } from './problem'
 import { exceedsCapacity, filledCount } from './reasons'
-import { FIXTURE_PATTERNS as P, required, smallInput } from './testing/fixtures'
+import { FIXTURE_PATTERNS as P, required, restrictionRow, smallInput } from './testing/fixtures'
 import { validatePlan } from './validate'
 
 const WEEK = [
@@ -19,10 +19,15 @@ const WEEK = [
 /** 3 人 × 7 日。seed と同じ制約 4 種と夜勤 → 明け */
 const input = smallInput({
   restrictions: [
-    { kind: 'deny_pattern_pair', days: null, pattern1Id: P.late, pattern2Id: P.early },
-    { kind: 'max_work_week', days: 1, pattern1Id: P.night, pattern2Id: null },
-    { kind: 'max_work_consecutive', days: 3, pattern1Id: null, pattern2Id: null },
-    { kind: 'sat_or_sun_dayoff', days: null, pattern1Id: null, pattern2Id: null },
+    restrictionRow({
+      kind: 'deny_pattern_pair',
+      days: null,
+      pattern1Id: P.late,
+      pattern2Id: P.early,
+    }),
+    restrictionRow({ kind: 'max_work_week', days: 1, pattern1Id: P.night, pattern2Id: null }),
+    restrictionRow({ kind: 'max_work_consecutive', days: 3, pattern1Id: null, pattern2Id: null }),
+    restrictionRow({ kind: 'sat_or_sun_dayoff', days: null, pattern1Id: null, pattern2Id: null }),
   ],
   requiredNums: [
     ...required(P.early, WEEK, 1),

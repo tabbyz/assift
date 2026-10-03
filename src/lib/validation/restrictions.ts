@@ -1,19 +1,51 @@
 import { z } from 'zod'
-import { RESTRICTION_DAYS_MAX, RESTRICTION_DAYS_MIN } from '@/lib/restrictions/kinds'
+import {
+  hasStrengthChoice,
+  normalizeWdays,
+  PREFER_DAYOFF_WDAYS_MAX,
+  RESTRICTION_DAYS_MAX,
+  RESTRICTION_DAYS_MIN,
+  RESTRICTION_WEEKEND_DAYS_MAX,
+} from '@/lib/restrictions/kinds'
 import { tenantIdSchema } from './tenants'
 
 export const restrictionIdSchema = z.guid({ error: '制約が見つかりません' })
 
+/** 対象。null = 店舗全体（013 §3.2） */
+const staffIdSchema = z.guid({ error: 'スタッフを選択してください' }).nullable()
+
+/** 強さ。`true` = 必須 / `false` = なるべく */
+const hardSchema = z.boolean({ error: '強さを選択してください' })
+
+/**
+ * 保存・削除のあとに戻るスタッフの編集画面（開いた元の画面。null = 制約ページ）。
+ * URL はサーバーが組む（入力から URL を受けない。013 §4.2）。対象を別の人に変えても、開いた元へ戻す（キャンセルと同じ）
+ */
+const returnStaffIdSchema = z.guid({ error: '戻り先が正しくありません' }).nullable()
+
+const WDAYS_ERROR = { error: '曜日を選択してください' }
+
+const wdaysSchema = z
+  .array(z.int(WDAYS_ERROR).min(0, WDAYS_ERROR).max(6, WDAYS_ERROR), WDAYS_ERROR)
+  .min(1, WDAYS_ERROR)
+  .max(PREFER_DAYOFF_WDAYS_MAX, { error: 'すべての曜日は選べません' })
+  .refine((wdays) => new Set(wdays).size === wdays.length, WDAYS_ERROR)
+  // 範囲と重複は上で弾いたので、ここでは並べるだけ（エンジン・画面の文言と同じ並び）
+  .transform(normalizeWdays)
+
 const patternRef = z.guid({ error: '勤務パターンを選択してください' })
 
-const DAYS_RANGE_ERROR = {
-  error: `日数は${RESTRICTION_DAYS_MIN}〜${RESTRICTION_DAYS_MAX}で入力してください`,
+function daysSchemaUpTo(max: number) {
+  const rangeError = { error: `日数は${RESTRICTION_DAYS_MIN}〜${max}で入力してください` }
+  return z
+    .int({ error: '日数を入力してください' })
+    .min(RESTRICTION_DAYS_MIN, rangeError)
+    .max(max, rangeError)
 }
 
-const daysSchema = z
-  .int({ error: '日数を入力してください' })
-  .min(RESTRICTION_DAYS_MIN, DAYS_RANGE_ERROR)
-  .max(RESTRICTION_DAYS_MAX, DAYS_RANGE_ERROR)
+const daysSchema = daysSchemaUpTo(RESTRICTION_DAYS_MAX)
+/** 土日祝の上限は表示期間で数えるので広い（013 §9.6） */
+const weekendDaysSchema = daysSchemaUpTo(RESTRICTION_WEEKEND_DAYS_MAX)
 
 /**
  * 種別ごとに使う列が違うので discriminated union にする（006 §3.7）。
@@ -35,6 +67,9 @@ export const restrictionInputSchema = z.discriminatedUnion(
       days: daysSchema,
     }),
     z.object({ kind: z.literal('sat_or_sun_dayoff') }),
+    z.object({ kind: z.literal('min_work_week'), days: daysSchema }),
+    z.object({ kind: z.literal('max_weekend_days'), days: weekendDaysSchema }),
+    z.object({ kind: z.literal('prefer_dayoff_wdays'), wdays: wdaysSchema }),
   ],
   { error: '制約タイプを選択してください' }
 )
@@ -50,22 +85,41 @@ export type RawRestrictionInput =
   | { kind: 'max_work_week'; pattern1Id: string | null; days: number | '' }
   | { kind: 'max_work_consecutive'; pattern1Id: string | null; days: number | '' }
   | { kind: 'sat_or_sun_dayoff' }
+  | { kind: 'min_work_week'; days: number | '' }
+  | { kind: 'max_weekend_days'; days: number | '' }
+  | { kind: 'prefer_dayoff_wdays'; wdays: number[] }
 
+/**
+ * 対象と強さは種別に依らないので、判別共用体の外（Action の引数）に置く。
+ * union 全体に `.extend()` が無いので、tenantId と同じ扱い（006 §3.7）
+ */
 export const createRestrictionSchema = z.object({
   tenantId: tenantIdSchema,
+  staffId: staffIdSchema,
+  hard: hardSchema,
   input: restrictionInputSchema,
+  returnStaffId: returnStaffIdSchema,
 })
 
 export const updateRestrictionSchema = z.object({
   tenantId: tenantIdSchema,
   restrictionId: restrictionIdSchema,
+  staffId: staffIdSchema,
+  hard: hardSchema,
   input: restrictionInputSchema,
+  returnStaffId: returnStaffIdSchema,
 })
 
 export const deleteRestrictionSchema = z.object({
   tenantId: tenantIdSchema,
   restrictionId: restrictionIdSchema,
+  returnStaffId: returnStaffIdSchema,
 })
+
+/** 強さを選べない種別（なるべく休みの曜日）は画面の値を信じず、なるべくに固定する（DB の CHECK と同じ） */
+export function resolveHard(input: Pick<RestrictionInput, 'kind'>, hard: boolean): boolean {
+  return hasStrengthChoice(input.kind) ? hard : false
+}
 
 /** 種別ごとの入力を DB の列に落とす（使わない列は必ず null にする） */
 export function toRestrictionColumns(input: RestrictionInput) {
@@ -76,6 +130,7 @@ export function toRestrictionColumns(input: RestrictionInput) {
         days: null,
         pattern1_id: input.pattern1Id,
         pattern2_id: input.pattern2Id,
+        wdays: null,
       }
     case 'max_work_week':
       return {
@@ -83,6 +138,7 @@ export function toRestrictionColumns(input: RestrictionInput) {
         days: input.days,
         pattern1_id: input.pattern1Id,
         pattern2_id: null,
+        wdays: null,
       }
     case 'max_work_consecutive':
       return {
@@ -90,8 +146,26 @@ export function toRestrictionColumns(input: RestrictionInput) {
         days: input.days,
         pattern1_id: input.pattern1Id,
         pattern2_id: null,
+        wdays: null,
       }
     case 'sat_or_sun_dayoff':
-      return { kind: input.kind, days: null, pattern1_id: null, pattern2_id: null }
+      return { kind: input.kind, days: null, pattern1_id: null, pattern2_id: null, wdays: null }
+    case 'min_work_week':
+    case 'max_weekend_days':
+      return {
+        kind: input.kind,
+        days: input.days,
+        pattern1_id: null,
+        pattern2_id: null,
+        wdays: null,
+      }
+    case 'prefer_dayoff_wdays':
+      return {
+        kind: input.kind,
+        days: null,
+        pattern1_id: null,
+        pattern2_id: null,
+        wdays: input.wdays,
+      }
   }
 }

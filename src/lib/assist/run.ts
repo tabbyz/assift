@@ -19,6 +19,7 @@ import {
 } from './directives'
 import { planAssignments, SolverError } from './engine'
 import { evaluateLevers, restrictionsForLever, WHAT_IF_TIME_LIMIT, type Lever } from './levers'
+import { restrictionOutcomes } from './restrictionOutcomes'
 import type { AssistLlm } from './llm/client'
 import { interpretInstructions } from './llm/interpret'
 import { LlmError } from './llm/structured'
@@ -67,7 +68,9 @@ export type RunAssistParams = {
    * 添字は試算時の問題の並び。ラベルが一致しなければ引き直す。
    */
   relaxRestriction: {
-    index: number | null
+    restrictionIndex: number | null
+    /** 013 から。規則の id が今もあればそれで引く（無い・古い run はラベルで引き直す） */
+    restrictionId: string | null
     label: string
     action: 'remove' | 'relax'
     relaxedTo: number | null
@@ -326,7 +329,7 @@ export async function runAssist(params: RunAssistParams): Promise<AssistResult> 
     const disabled = new Set(stored.disabled)
     const directives = stored.directives.filter((_, index) => !disabled.has(index))
 
-    // 4. 解く（ハードな指示で解が無ければソフトに落として 1 回だけ再解）
+    // 4. 解く（解が無ければ、必須の下限だけ → 指示だけ → 両方の順にソフトに落として解き直す。engine.ts）
     const solved = await timed('solve', async () => {
       try {
         return await planAssignments(solveProblem, {
@@ -403,6 +406,7 @@ export async function runAssist(params: RunAssistParams): Promise<AssistResult> 
         disabled
       ),
       levers,
+      restrictionOutcomes: restrictionOutcomes(problem, saved),
       metrics: {
         fillRate: metrics.fillRate,
         utilization: metrics.utilization,

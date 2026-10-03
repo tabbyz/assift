@@ -38,6 +38,19 @@ export async function listRetiredStaffs(tenantId: string): Promise<Staff[]> {
   return data
 }
 
+/** スタッフを 1 件（関連なし）。在籍・退職を問わない。他店舗・存在しない id は null */
+export async function getStaff(tenantId: string, staffId: string): Promise<Staff | null> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('staffs')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .eq('id', staffId)
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
 /** `staff_default_patterns` の行を `{ day_key → pattern_id }` に畳む。知らないキーは捨てる */
 function toDefaultPatterns(
   rows: { day_key: string; pattern_id: string }[]

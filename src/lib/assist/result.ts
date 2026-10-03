@@ -44,9 +44,19 @@ const leverSchema = z.object({
   directiveIndex: z.number().nullable(),
   /** 012 の途中から。無い run は null（適用時にラベルで引き直す） */
   restrictionIndex: z.number().nullable().default(null),
+  /** 013 から。無い run は null（ラベルで引き直す） */
+  restrictionId: z.string().nullable().default(null),
   gain: z.number(),
   byPattern: z.array(z.object({ patternId: z.string(), count: z.number() })),
   rows: z.array(planRowSchema),
+})
+
+/** 守れなかった制約（013 §5.6。`restrictionOutcomes.ts`）。画面への出し方は結果画面のプラン */
+const restrictionOutcomeSchema = z.object({
+  restrictionId: z.string(),
+  label: z.string(),
+  hard: z.boolean(),
+  detail: z.string(),
 })
 
 export const assistResultSchema = z.object({
@@ -64,6 +74,8 @@ export const assistResultSchema = z.object({
   interpretations: z.array(interpretationSchema),
   /** 012 §11 より前の run には無い */
   levers: z.array(leverSchema).default([]),
+  /** 013 より前の run には無い */
+  restrictionOutcomes: z.array(restrictionOutcomeSchema).default([]),
   metrics: z.object({
     fillRate: z.number(),
     utilization: z.object({ min: z.number(), max: z.number(), stdev: z.number() }),
@@ -73,6 +85,8 @@ export const assistResultSchema = z.object({
     solver: z.string(),
     shortageOptimal: z.boolean(),
     relaxed: z.boolean(),
+    /** 013 から。必須の下限の制約だけを緩めて解き直した */
+    relaxedRestrictions: z.boolean().default(false),
     variables: z.number(),
     constraints: z.number(),
     elapsedMs: z.number(),
@@ -89,6 +103,7 @@ export type AssistResult = z.infer<typeof assistResultSchema>
 export type AssistUnfilled = z.infer<typeof unfilledSchema>
 export type AssistInterpretation = z.infer<typeof interpretationSchema>
 export type AssistLever = z.infer<typeof leverSchema>
+export type AssistRestrictionOutcome = z.infer<typeof restrictionOutcomeSchema>
 
 /**
  * `assist_runs.request`（jsonb）のうち、次の実行が読み直すもの（012 §11.3）。
@@ -125,8 +140,12 @@ export type AssistRunView = {
   unfilled: AssistUnfilled[]
   interpretations: AssistInterpretation[]
   levers: AssistLever[]
-  /** ハードな指示をソフトに落として解き直した */
+  /** 守れなかった制約（013 §5.6）。結果画面プランが表示する */
+  restrictionOutcomes: AssistRestrictionOutcome[]
+  /** ハードな指示をソフトに落として解き直した（パネルが「『必ず』の指示を…」と出す） */
   relaxed: boolean
+  /** 必須の下限の制約だけをソフトに落として解き直した（013。表示は結果画面プラン） */
+  relaxedRestrictions: boolean
   /** 「別の案を作る」で、前の案と 1 割未満しか変わらなかった */
   similarToPrevious: boolean
 }
@@ -163,7 +182,9 @@ export function toAssistRunView(row: AssistRunRow): AssistRunView | null {
     unfilled: result.unfilled,
     interpretations: result.interpretations,
     levers: result.levers,
+    restrictionOutcomes: result.restrictionOutcomes,
     relaxed: result.solver.relaxed,
+    relaxedRestrictions: result.solver.relaxedRestrictions,
     similarToPrevious: result.changedRatio !== null && result.changedRatio < SIMILAR_PLAN_THRESHOLD,
   }
 }

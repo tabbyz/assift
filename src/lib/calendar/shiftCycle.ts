@@ -14,6 +14,14 @@ export const SHIFT_CYCLE_LABELS: Record<ShiftCycle, string> = {
   week: '1週間ごと',
 }
 
+/** 「1ヶ月に 2日まで」のように、表示期間 1 回ぶんを言うときの言葉（013 §3.3） */
+export const SHIFT_CYCLE_UNITS: Record<ShiftCycle, string> = {
+  month: '1ヶ月',
+  half_month: '半月',
+  two_week: '2週間',
+  week: '1週間',
+}
+
 /** Mantine の Select に渡す形 */
 export const SHIFT_CYCLE_OPTIONS = SHIFT_CYCLES.map((value) => ({
   value,

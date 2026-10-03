@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { formatMonthDay, isDateString, wday } from '@/lib/calendar/dateString'
 import { WEEKDAY_LABELS } from '@/lib/calendar/weekdays'
 import type { Linear } from './lp'
-import { isWeekendOrHoliday, weekDates, type Problem } from './problem'
+import { allWeeks, fullWeeks, isWeekendOrHoliday, type Problem } from './problem'
 import type { PlanState } from './validate'
 import { RELAXED_STRENGTH, type Weights } from './weights'
 
@@ -458,15 +458,9 @@ export function addDirective(
  */
 function directiveWeeks(problem: Problem, scope: 'week' | 'period', minimum: boolean): string[][] {
   if (scope === 'period') return [problem.dates]
-  const weeks = new Map<string, string[]>()
-  for (const date of problem.dates) {
-    const week = weekDates(date, problem.startOfWeek)
-    weeks.set(week[0], week)
-  }
-  return [...weeks.values()].filter(
-    (week) =>
-      !minimum || (week[0] >= problem.period.start && week[week.length - 1] <= problem.period.end)
-  )
+  // 下限は制約の `min_work_week` と同じ週で数える（013 §5.4。指示から規則へ保存しても意味が変わらない）
+  if (minimum) return fullWeeks(problem)
+  return allWeeks(problem, problem.dates)
 }
 
 // ---------------------------------------------------------------------------

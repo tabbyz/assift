@@ -11,7 +11,7 @@ import {
 } from './levers'
 import { buildProblem, type AssistInput } from './problem'
 import { explainUnfilled } from './reasons'
-import { FIXTURE_PATTERNS as P, required, smallInput } from './testing/fixtures'
+import { FIXTURE_PATTERNS as P, required, restrictionRow, smallInput } from './testing/fixtures'
 import { validatePlan } from './validate'
 
 /** 2026-10-04（日）〜 10-10（土）の毎日 */
@@ -110,7 +110,9 @@ describe('evaluateLevers', () => {
     // 早番は週 1 日まで。3 人で 3 枠しか埋まらない。2 日にすると 6 枠
     const restricted = smallInput({
       requiredNums: required(P.early, WEEK, 1),
-      restrictions: [{ kind: 'max_work_week', days: 1, pattern1Id: P.early, pattern2Id: null }],
+      restrictions: [
+        restrictionRow({ kind: 'max_work_week', days: 1, pattern1Id: P.early, pattern2Id: null }),
+      ],
     })
     const { saved, unfilled } = await runOnce(restricted, [])
     expect(saved).toHaveLength(3)
@@ -157,8 +159,13 @@ describe('leverCandidates', () => {
   const problem = buildProblem(
     smallInput({
       restrictions: [
-        { kind: 'max_work_week', days: 1, pattern1Id: P.early, pattern2Id: null },
-        { kind: 'sat_or_sun_dayoff', days: null, pattern1Id: null, pattern2Id: null },
+        restrictionRow({ kind: 'max_work_week', days: 1, pattern1Id: P.early, pattern2Id: null }),
+        restrictionRow({
+          kind: 'sat_or_sun_dayoff',
+          days: null,
+          pattern1Id: null,
+          pattern2Id: null,
+        }),
       ],
     })
   )
@@ -192,8 +199,13 @@ describe('matchRestrictionIndex', () => {
   const problem = buildProblem(
     smallInput({
       restrictions: [
-        { kind: 'max_work_week', days: 1, pattern1Id: P.early, pattern2Id: null },
-        { kind: 'sat_or_sun_dayoff', days: null, pattern1Id: null, pattern2Id: null },
+        restrictionRow({ kind: 'max_work_week', days: 1, pattern1Id: P.early, pattern2Id: null }),
+        restrictionRow({
+          kind: 'sat_or_sun_dayoff',
+          days: null,
+          pattern1Id: null,
+          pattern2Id: null,
+        }),
       ],
     })
   )
@@ -211,8 +223,8 @@ describe('matchRestrictionIndex', () => {
   it('見つからなければ null。日数の制約は 1 日増やし、それ以外は外す', () => {
     expect(matchRestrictionIndex(problem, { restrictionIndex: 0, label: '「無い」' })).toBeNull()
     expect(relaxedRestrictionList(problem, 0)).toEqual([
-      { kind: 'max_work_week', patternId: P.early, days: 2, hard: true },
-      { kind: 'sat_or_sun_dayoff', hard: true },
+      { ...problem.restrictions[0], days: 2 },
+      problem.restrictions[1],
     ])
     expect(relaxedRestrictionList(problem, 1)).toEqual([problem.restrictions[0]])
     expect(relaxedRestrictionList(problem, 9)).toBeNull()
@@ -223,8 +235,13 @@ describe('restrictionsForLever', () => {
   const problem = buildProblem(
     smallInput({
       restrictions: [
-        { kind: 'max_work_week', days: 2, pattern1Id: P.early, pattern2Id: null },
-        { kind: 'sat_or_sun_dayoff', days: null, pattern1Id: null, pattern2Id: null },
+        restrictionRow({ kind: 'max_work_week', days: 2, pattern1Id: P.early, pattern2Id: null }),
+        restrictionRow({
+          kind: 'sat_or_sun_dayoff',
+          days: null,
+          pattern1Id: null,
+          pattern2Id: null,
+        }),
       ],
     })
   )
@@ -237,10 +254,7 @@ describe('restrictionsForLever', () => {
         action: 'relax',
         relaxedTo: 3,
       })
-    ).toEqual([
-      { kind: 'max_work_week', patternId: P.early, days: 3, hard: true },
-      problem.restrictions[1],
-    ])
+    ).toEqual([{ ...problem.restrictions[0], days: 3 }, problem.restrictions[1]])
     // 一度 3 日で解いたあとの次の一手。店舗の行は 2 日のまま
     expect(
       restrictionsForLever(problem, {
@@ -249,10 +263,44 @@ describe('restrictionsForLever', () => {
         action: 'relax',
         relaxedTo: 4,
       })
-    ).toEqual([
-      { kind: 'max_work_week', patternId: P.early, days: 4, hard: true },
-      problem.restrictions[1],
-    ])
+    ).toEqual([{ ...problem.restrictions[0], days: 4 }, problem.restrictions[1]])
+  })
+
+  it('id が同じでも、中身を書き換えた制約には当てない（013）', () => {
+    const edited = buildProblem(
+      smallInput({
+        restrictions: [
+          restrictionRow({ id: 'r1', kind: 'max_work_week', days: 1, pattern1Id: P.night }),
+        ],
+      })
+    )
+    const lever = {
+      restrictionIndex: 0,
+      restrictionId: 'r1',
+      label: '「早番は1週間に2日まで」',
+      relaxedTo: 3,
+    }
+    expect(restrictionsForLever(edited, { ...lever, action: 'relax' })).toBeNull()
+    expect(restrictionsForLever(edited, { ...lever, action: 'remove' })).toBeNull()
+  })
+
+  it('同じ文言の制約が 2 つあるときは id の方を緩める（013）', () => {
+    const twins = buildProblem(
+      smallInput({
+        restrictions: [
+          restrictionRow({ id: 'a', kind: 'max_work_week', days: 2, pattern1Id: P.early }),
+          restrictionRow({ id: 'b', kind: 'max_work_week', days: 2, pattern1Id: P.early }),
+        ],
+      })
+    )
+    const relaxed = restrictionsForLever(twins, {
+      restrictionIndex: null,
+      restrictionId: 'b',
+      label: '「早番は1週間に2日まで」',
+      action: 'relax',
+      relaxedTo: 3,
+    })
+    expect(relaxed?.map((r) => ('days' in r ? r.days : null))).toEqual([2, 3])
   })
 
   it('すでにその日数以上なら緩めたことにならない。外す一手はその制約だけ除く', () => {

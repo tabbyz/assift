@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AssistInput, PlanRow } from './problem'
 import { buildProblem } from './problem'
-import { FIXTURE_PATTERNS as P, required, smallInput } from './testing/fixtures'
+import { FIXTURE_PATTERNS as P, required, restrictionRow, smallInput } from './testing/fixtures'
 import { validatePlan } from './validate'
 
 // 2026-10-04（日）〜 10-10（土）の 1 週間。週の始まりは日曜
@@ -190,7 +190,12 @@ describe('H5: 週上限', () => {
 
 describe('H6: 遷移禁止', () => {
   const restrictions: AssistInput['restrictions'] = [
-    { kind: 'deny_pattern_pair', days: null, pattern1Id: P.late, pattern2Id: P.early },
+    restrictionRow({
+      kind: 'deny_pattern_pair',
+      days: null,
+      pattern1Id: P.late,
+      pattern2Id: P.early,
+    }),
   ]
   it('新規どうし', () => {
     const input = smallInput({
@@ -222,7 +227,9 @@ describe('H6: 遷移禁止', () => {
 describe('H7: パターンの週上限', () => {
   it('夜勤は週 1 日まで', () => {
     const input = smallInput({
-      restrictions: [{ kind: 'max_work_week', days: 1, pattern1Id: P.night, pattern2Id: null }],
+      restrictions: [
+        restrictionRow({ kind: 'max_work_week', days: 1, pattern1Id: P.night, pattern2Id: null }),
+      ],
       requiredNums: everyDay(P.night),
     })
     const plan = [
@@ -237,7 +244,7 @@ describe('H7: パターンの週上限', () => {
 
 describe('H8: 連続勤務', () => {
   const restriction = (patternId: string | null, days: number): AssistInput['restrictions'] => [
-    { kind: 'max_work_consecutive', days, pattern1Id: patternId, pattern2Id: null },
+    restrictionRow({ kind: 'max_work_consecutive', days, pattern1Id: patternId, pattern2Id: null }),
   ]
 
   it('勤務日全体: 期間の前から続く連勤も数える', () => {
@@ -304,7 +311,7 @@ describe('H8: 連続勤務', () => {
 
 describe('H9: 土日のどちらかは休み', () => {
   const restrictions: AssistInput['restrictions'] = [
-    { kind: 'sat_or_sun_dayoff', days: null, pattern1Id: null, pattern2Id: null },
+    restrictionRow({ kind: 'sat_or_sun_dayoff', days: null, pattern1Id: null, pattern2Id: null }),
   ]
   it('土曜と翌日曜の両方には入れない（日曜が期間の外の既存）', () => {
     const input = smallInput({
@@ -415,7 +422,14 @@ describe('H11: 参照の妥当性', () => {
 describe('逐次受理', () => {
   it('(date, pattern, 入力順) で見る。受理された集合はどの順で見直しても違反 0', () => {
     const input = smallInput({
-      restrictions: [{ kind: 'max_work_consecutive', days: 2, pattern1Id: null, pattern2Id: null }],
+      restrictions: [
+        restrictionRow({
+          kind: 'max_work_consecutive',
+          days: 2,
+          pattern1Id: null,
+          pattern2Id: null,
+        }),
+      ],
       requiredNums: everyDay(P.early),
     })
     const plan = [...WEEK].reverse().map((date) => assign('s1', date, P.early))

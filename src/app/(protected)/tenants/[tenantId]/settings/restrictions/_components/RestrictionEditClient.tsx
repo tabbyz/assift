@@ -11,9 +11,12 @@ import { deleteRestriction } from '../actions'
 export function RestrictionEditClient({
   tenantId,
   restrictionId,
+  returnStaffId,
 }: {
   tenantId: string
   restrictionId: string
+  /** 開いた元のスタッフの画面（null = 制約ページ） */
+  returnStaffId: string | null
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -26,7 +29,7 @@ export function RestrictionEditClient({
       confirmProps: { color: 'red' },
       onConfirm: () =>
         startTransition(async () => {
-          const result = await deleteRestriction({ tenantId, restrictionId })
+          const result = await deleteRestriction({ tenantId, restrictionId, returnStaffId })
           if (!result.ok) {
             notifications.show({ message: result.error, color: 'red' })
             return
