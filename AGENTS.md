@@ -16,8 +16,6 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - Phase 1 全体設計（スキーマ・RLS・URL・移行）: `docs/plans/001-phase1-architecture/README.md`
 - マイルストーンごとのプランと実装ログ: `docs/plans/00N-<slug>/README.md`。実装前にプランを書き、実装後に同じファイルへログを追記する
 
-**ユーザーへの回答は日本語で書く。**
-
 ## スタック
 
 | 層             | 選択                                                                                         |
