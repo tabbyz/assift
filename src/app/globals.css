@@ -3,6 +3,15 @@ body {
   height: 100%;
 }
 
+/*
+ * ダブルタップでの拡大を止める（シフト表のセルを続けてタップしたときに画面が動かないように）。
+ * touch-action は継承しないが、ブラウザは祖先の値との積を取るので html に書けばページ全体に効く。
+ * manipulation はスクロールとピンチズームを残す。
+ */
+html {
+  touch-action: manipulation;
+}
+
 body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
