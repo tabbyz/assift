@@ -3,7 +3,28 @@ body {
   height: 100%;
 }
 
+/*
+ * ダブルタップでの拡大を止める（シフト表のセルを続けてタップしたときに画面が動かないように）。
+ * touch-action は継承しないが、ブラウザは祖先の値との積を取るので html に書けばページ全体に効く。
+ * manipulation はスクロールとピンチズームを残す。
+ */
+html {
+  touch-action: manipulation;
+}
+
 body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
+}
+
+/*
+ * iOS Safari は font-size が 16px 未満の入力欄にフォーカスすると画面を拡大する。
+ * Mantine の入力欄は size="sm" で 14px なので、iOS（WebKit のタッチ端末）だけ 16px に上げる。
+ * `--_input-fz` は Mantine の `.mantine-Input-input` が `--input-fz`（size から決まる値）より優先して読む変数。
+ * viewport に `maximum-scale=1` を足す手は使わない: Android ではピンチズームまで止まる。
+ */
+@supports (-webkit-touch-callout: none) {
+  .mantine-Input-input {
+    --_input-fz: 16px;
+  }
 }
