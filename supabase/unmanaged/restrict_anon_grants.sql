@@ -8,8 +8,8 @@
 --   そのため schemas/ に revoke を書いても migration に落ちない。
 --
 -- 運用（AGENTS.md にも記載）:
---   declarative sync をやり直したら、生成された migration の末尾にこのファイルを追記する。
---     cat supabase/unmanaged/restrict_anon_grants.sql >> supabase/migrations/<ts>_init_schema.sql
+--   新しいテーブル・シーケンス・関数を足した差分 migration の末尾に、このファイルを追記する（冪等）。
+--     cat supabase/unmanaged/restrict_anon_grants.sql >> supabase/migrations/<ts>_<name>.sql
 --   追記を忘れると npx supabase test db の「anon は ... を読めない」が落ちる。
 --
 -- RLS だけでも anon は 0 行しか読めないが、TRUNCATE は RLS を通らないので権限の層で閉じる。
