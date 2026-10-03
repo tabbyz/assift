@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, type MouseEvent } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Divider, NavLink, Stack, Text, UnstyledButton } from '@mantine/core'
@@ -11,9 +12,23 @@ import classes from './SettingsNav.module.css'
  * 設定ページのナビ。頻度順。店舗情報は末尾。
  * 「シフト表へ」は戻り。「設定」が見出しで項目を束ねる。
  * デスクトップは左カラム、モバイルは本文の上に積む（親の Flex が向きを変える）。
+ *
+ * 現在地はクリックした瞬間に移す。usePathname() は遷移が確定するまで変わらず、
+ * 本文の読み込み中（prefetch が間に合わないとき）に押したのに無反応に見えるため。
+ * 押したときの pathname を覚えておき、pathname が変われば（遷移の確定・取り消し）自然に無効になる。
  */
 export function SettingsNav({ tenantId }: { tenantId: string }) {
   const pathname = usePathname()
+  const [pending, setPending] = useState<{ href: string; from: string } | null>(null)
+  const currentPath = pending?.from === pathname ? pending.href : pathname
+
+  // 新しいタブで開く操作は現在地を動かさない
+  const onNavigate = (href: string) => (event: MouseEvent) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+      return
+    }
+    setPending({ href, from: pathname })
+  }
 
   return (
     <Stack gap={4} miw={200}>
@@ -30,7 +45,8 @@ export function SettingsNav({ tenantId }: { tenantId: string }) {
           component={Link}
           href={link.href}
           label={link.label}
-          active={isLinkActive(link.href, pathname)}
+          active={isLinkActive(link.href, currentPath)}
+          onClick={onNavigate(link.href)}
         />
       ))}
       <Divider />
@@ -40,7 +56,8 @@ export function SettingsNav({ tenantId }: { tenantId: string }) {
           component={Link}
           href={link.href}
           label={link.label}
-          active={isLinkActive(link.href, pathname)}
+          active={isLinkActive(link.href, currentPath)}
+          onClick={onNavigate(link.href)}
         />
       ))}
     </Stack>
