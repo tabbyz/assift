@@ -52,7 +52,6 @@ type Props = {
  * アサインした直後に開いても表と一致する。
  */
 export function CountModal({ range, staffs, patterns, workdayPatternIds, shifts, onClose }: Props) {
-  const dayCount = range.dates.length
   const rows = useMemo(
     () => countShifts(shifts, staffs, new Set(workdayPatternIds), range.dates),
     [shifts, staffs, workdayPatternIds, range.dates]
@@ -77,58 +76,46 @@ export function CountModal({ range, staffs, patterns, workdayPatternIds, shifts,
           在籍スタッフが登録されていません
         </Text>
       ) : (
-        <>
-          <div className={classes.scroller}>
-            <Table stickyHeader withTableBorder withColumnBorders className={classes.table}>
-              <TableThead>
-                <TableTr>
-                  <TableTh className={classes.nameCell}>
-                    <span className={classes.face} />
+        <div className={classes.scroller}>
+          <Table stickyHeader withTableBorder withColumnBorders className={classes.table}>
+            <TableThead>
+              <TableTr>
+                <TableTh className={classes.nameCell}>
+                  <span className={classes.face} />
+                </TableTh>
+                {/* scope: 数字だけの表なので、支援技術がセルと列見出しを結べるようにする（007 と同じ） */}
+                <TableTh scope="col" className={classes.workdayCell}>
+                  <span className={classes.face}>勤務日</span>
+                </TableTh>
+                {patterns.map((pattern) => (
+                  <TableTh key={pattern.id} scope="col">
+                    <span className={classes.face} style={patternHeaderStyle(pattern.colorHex)}>
+                      {pattern.name}
+                    </span>
                   </TableTh>
-                  {/* scope: 数字だけの表なので、支援技術がセルと列見出しを結べるようにする（007 と同じ） */}
-                  <TableTh scope="col" className={classes.workdayCell}>
-                    <span className={classes.face}>勤務日</span>
+                ))}
+              </TableTr>
+            </TableThead>
+            <TableTbody>
+              {rows.map(({ staff, workdays, byPattern }) => (
+                <TableTr key={staff.id}>
+                  <TableTh scope="row" className={classes.nameCell}>
+                    {staff.name}
                   </TableTh>
-                  <TableTh scope="col" className={classes.offCell}>
-                    <span className={classes.face}>休み</span>
-                  </TableTh>
+                  {/* 0 は空欄にする（v1 と同じ） */}
+                  <TableTd ta="center" className={classes.workdayCell}>
+                    {workdays || ''}
+                  </TableTd>
                   {patterns.map((pattern) => (
-                    <TableTh key={pattern.id} scope="col">
-                      <span className={classes.face} style={patternHeaderStyle(pattern.colorHex)}>
-                        {pattern.name}
-                      </span>
-                    </TableTh>
+                    <TableTd key={pattern.id} ta="center">
+                      {byPattern.get(pattern.id) ?? ''}
+                    </TableTd>
                   ))}
                 </TableTr>
-              </TableThead>
-              <TableTbody>
-                {rows.map(({ staff, workdays, byPattern }) => (
-                  <TableTr key={staff.id}>
-                    <TableTh scope="row" className={classes.nameCell}>
-                      {staff.name}
-                    </TableTh>
-                    {/* 0 は空欄にする（v1 と同じ）。「休み」= 日数 − 勤務日 だけは常に出す */}
-                    <TableTd ta="center" className={classes.workdayCell}>
-                      {workdays || ''}
-                    </TableTd>
-                    <TableTd ta="center" className={classes.offCell}>
-                      {dayCount - workdays}
-                    </TableTd>
-                    {patterns.map((pattern) => (
-                      <TableTd key={pattern.id} ta="center">
-                        {byPattern.get(pattern.id) ?? ''}
-                      </TableTd>
-                    ))}
-                  </TableTr>
-                ))}
-              </TableTbody>
-            </Table>
-          </div>
-
-          <Text size="xs" c="dimmed" mt="sm">
-            休み = 期間の日数 − 勤務日数（未アサインの日を含む）
-          </Text>
-        </>
+              ))}
+            </TableTbody>
+          </Table>
+        </div>
       )}
     </Modal>
   )

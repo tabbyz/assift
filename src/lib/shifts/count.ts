@@ -3,7 +3,7 @@ import type { ShiftMap } from './key'
 /** スタッフ 1 人分の集計（v1 `shifts/_count.html.slim` の 1 行）。`staff` は呼び出し側が渡したものをそのまま返す */
 export type StaffCount<S> = {
   staff: S
-  /** 出勤日（`kind = 'workday'`）のパターンがアサインされた日数。「休み」は 期間の日数 − これ で表示側が出す */
+  /** 出勤日（`kind = 'workday'`）のパターンがアサインされた日数 */
   workdays: number
   /** パターン id → 件数。0 件のパターンはキーを持たない（表示側で空欄にする） */
   byPattern: Map<string, number>

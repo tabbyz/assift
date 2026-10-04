@@ -21,7 +21,7 @@ const cell = (staffId: string, date: string, patternId: string): ShiftCell => ({
 })
 
 describe('countShifts', () => {
-  it('勤務日とパターン別を数える。休みは表示側が 日数 − 勤務日 で出す', () => {
+  it('勤務日とパターン別を数える', () => {
     const shifts = toShiftMap([
       cell(STAFF_A, '2026-09-01', EARLY),
       cell(STAFF_A, '2026-09-02', EARLY),
