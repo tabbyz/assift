@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { toActionError } from '@/lib/actions/error'
-import { createStaffSchema } from './staffs'
+import { createStaffSchema, updateStaffConditionsSchema, updateStaffNameSchema } from './staffs'
 
 const TENANT = '22222222-2222-2222-2222-222222222222'
 const PATTERN = '33333333-3333-3333-3333-000000000001'
@@ -64,5 +64,40 @@ describe('createStaffSchema', () => {
 
   it('デフォルト勤務パターンの知らないキーを弾く', () => {
     expect(message({ ...valid, defaultPatterns: { '7': PATTERN } })).not.toBeNull()
+  })
+})
+
+const STAFF = '44444444-4444-4444-4444-000000000001'
+const conditions = {
+  tenantId: TENANT,
+  availableWdays: valid.availableWdays,
+  maxWorkWeek: valid.maxWorkWeek,
+  availablePatternIds: valid.availablePatternIds,
+  defaultPatterns: valid.defaultPatterns,
+}
+
+describe('編集画面のセクションごとの保存', () => {
+  it('基本情報は名前だけを受ける', () => {
+    expect(
+      updateStaffNameSchema.safeParse({ tenantId: TENANT, staffId: STAFF, name: '山田' }).success
+    ).toBe(true)
+    const r = updateStaffNameSchema.safeParse({ tenantId: TENANT, staffId: STAFF, name: ' ' })
+    expect(r.success ? null : toActionError(r.error)).toBe('スタッフ名を入力してください')
+  })
+
+  it('勤務条件は名前なしで通り、名前を送っても使わない', () => {
+    const r = updateStaffConditionsSchema.safeParse({ ...conditions, staffId: STAFF })
+    expect(r.success).toBe(true)
+    const withName = updateStaffConditionsSchema.parse({ ...valid, staffId: STAFF })
+    expect('name' in withName).toBe(false)
+  })
+
+  it('勤務条件の空欄の上限は日本語で弾く', () => {
+    const r = updateStaffConditionsSchema.safeParse({
+      ...conditions,
+      staffId: STAFF,
+      maxWorkWeek: '',
+    })
+    expect(r.success ? null : toActionError(r.error)).toBe('週の最大勤務日数を入力してください')
   })
 })
