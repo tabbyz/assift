@@ -65,6 +65,15 @@ export function StaffEditClient({ tenantId, staffId, retired }: Props) {
         }),
     })
 
+  // 開いたら、開閉の行が最初の項目の見出しを兼ねる（同じ見出しを 2 行続けて出さない）
+  const toggleLabel = opened
+    ? retired
+      ? 'スタッフを削除'
+      : 'スタッフを退職済みにする'
+    : retired
+      ? 'スタッフを削除する'
+      : '退職済みにする・削除する'
+
   return (
     <SettingsSection title="退職処理" padded={false}>
       <UnstyledButton
@@ -73,10 +82,14 @@ export function StaffEditClient({ tenantId, staffId, retired }: Props) {
         aria-controls="staff-retire-panel"
         w="100%"
         px="lg"
-        py="md"
+        pt="md"
+        // 開いたときは見出しの直下に説明文が続くので、見出しと説明の間隔（4px）に詰める
+        pb={opened ? 4 : 'md'}
       >
         <Group justify="space-between" wrap="nowrap">
-          <Text size="sm">{retired ? 'スタッフを削除する' : '退職済みにする・削除する'}</Text>
+          <Text size="sm" fw={opened ? 700 : undefined}>
+            {toggleLabel}
+          </Text>
           <IconChevronDown
             size={16}
             style={{
@@ -91,16 +104,11 @@ export function StaffEditClient({ tenantId, staffId, retired }: Props) {
           <Stack gap="md">
             {!retired && (
               <>
-                <Stack gap={4}>
-                  <Text size="sm" fw={700}>
-                    スタッフを退職済みにする
-                  </Text>
-                  <Text size="sm" c="dimmed">
-                    退職済みにすると、シフト表に表示されなくなります。
-                    <br />
-                    この操作はいつでも元に戻せます。
-                  </Text>
-                </Stack>
+                <Text size="sm" c="dimmed">
+                  退職済みにすると、シフト表に表示されなくなります。
+                  <br />
+                  この操作はいつでも元に戻せます。
+                </Text>
                 <Group>
                   <Button
                     color="dark"
@@ -116,9 +124,12 @@ export function StaffEditClient({ tenantId, staffId, retired }: Props) {
             )}
 
             <Stack gap={4}>
-              <Text size="sm" fw={700}>
-                スタッフを削除
-              </Text>
+              {/* 退職済みのときは開閉の行が「スタッフを削除」の見出しを兼ねる */}
+              {!retired && (
+                <Text size="sm" fw={700}>
+                  スタッフを削除
+                </Text>
+              )}
               <Text size="sm" c="dimmed">
                 削除すると、このスタッフに関連するすべてのデータが削除されます。
               </Text>
