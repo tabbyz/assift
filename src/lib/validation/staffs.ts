@@ -53,7 +53,16 @@ export const staffInputSchema = z.object({
 
 export const createStaffSchema = staffInputSchema.extend({ tenantId: tenantIdSchema })
 
-export const updateStaffSchema = createStaffSchema.extend({ staffId: staffIdSchema })
+/** 編集画面はセクションごとに保存する。基本情報（名前）と勤務条件を別々に受ける */
+export const updateStaffNameSchema = z.object({
+  tenantId: tenantIdSchema,
+  staffId: staffIdSchema,
+  name: staffNameSchema,
+})
+
+export const updateStaffConditionsSchema = staffInputSchema
+  .omit({ name: true })
+  .extend({ tenantId: tenantIdSchema, staffId: staffIdSchema })
 
 /** 退職 / 復帰 / 削除。id だけを受け取り、所有は RLS と tenant_id の重ねがけで確かめる */
 export const staffRefSchema = z.object({

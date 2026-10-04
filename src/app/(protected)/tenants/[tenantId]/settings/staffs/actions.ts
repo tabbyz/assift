@@ -11,7 +11,8 @@ import { nextPosition } from '@/lib/queries/positions'
 import {
   createStaffSchema,
   staffRefSchema,
-  updateStaffSchema,
+  updateStaffConditionsSchema,
+  updateStaffNameSchema,
   STAFF_NOT_FOUND_MESSAGE,
 } from '@/lib/validation/staffs'
 import type { Database } from '@/types/database'
@@ -34,9 +35,8 @@ export type StaffInput = {
   defaultPatterns: Partial<Record<DayKey, string>>
 }
 
-function toColumns(parsed: { name: string; availableWdays: number[]; maxWorkWeek: number }) {
+function toConditionColumns(parsed: { availableWdays: number[]; maxWorkWeek: number }) {
   return {
-    name: parsed.name,
     // 画面のチェック順に依存させない（カレンダーの曜日判定は集合として使う）
     available_wdays: [...parsed.availableWdays].sort((a, b) => a - b),
     max_work_week: parsed.maxWorkWeek,
@@ -139,7 +139,7 @@ export async function createStaff(input: StaffInput): Promise<ActionResult<{ nam
 
     const { data: staff, error } = await supabase
       .from('staffs')
-      .insert({ tenant_id: tenantId, position, ...toColumns(parsed) })
+      .insert({ tenant_id: tenantId, position, name: parsed.name, ...toConditionColumns(parsed) })
       .select('id')
       .single()
     if (error) throw error
@@ -158,9 +158,37 @@ export async function createStaff(input: StaffInput): Promise<ActionResult<{ nam
   })
 }
 
-export async function updateStaff(input: StaffInput & { staffId: string }): Promise<ActionResult> {
+/** 編集画面の「基本情報」の保存 */
+export async function updateStaffName(input: {
+  tenantId: string
+  staffId: string
+  name: string
+}): Promise<ActionResult> {
   return runAction(async () => {
-    const parsed = updateStaffSchema.parse(input)
+    const { tenantId, staffId, name } = updateStaffNameSchema.parse(input)
+    await requireUser()
+
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from('staffs')
+      .update({ name })
+      .eq('id', staffId)
+      .eq('tenant_id', tenantId)
+      .select('id')
+      .maybeSingle()
+    if (error) throw error
+    if (!data) fail(STAFF_NOT_FOUND_MESSAGE)
+
+    revalidatePath(`/tenants/${tenantId}`, 'layout')
+  })
+}
+
+/** 編集画面の「勤務条件」の保存（勤務できる曜日・週の上限・選択可能なパターン・デフォルトのパターン） */
+export async function updateStaffConditions(
+  input: Omit<StaffInput, 'name'> & { staffId: string }
+): Promise<ActionResult> {
+  return runAction(async () => {
+    const parsed = updateStaffConditionsSchema.parse(input)
     const { tenantId, staffId } = parsed
     await requireUser()
 
@@ -177,7 +205,7 @@ export async function updateStaff(input: StaffInput & { staffId: string }): Prom
 
     const { data, error } = await supabase
       .from('staffs')
-      .update(toColumns(parsed))
+      .update(toConditionColumns(parsed))
       .eq('id', staffId)
       .eq('tenant_id', tenantId)
       .select('id')

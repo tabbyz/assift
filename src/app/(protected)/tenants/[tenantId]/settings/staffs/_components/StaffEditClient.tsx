@@ -2,9 +2,10 @@
 
 import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button, Divider, Group, Paper, Stack, Text, Title } from '@mantine/core'
+import { Button, Divider, Group, Stack, Text } from '@mantine/core'
 import { modals } from '@mantine/modals'
 import { notifications } from '@mantine/notifications'
+import { SettingsSection } from '@/components/SettingsSection'
 import { deleteStaff, restoreStaff, retireStaff } from '../actions'
 
 type Props = {
@@ -61,10 +62,8 @@ export function StaffEditClient({ tenantId, staffId, retired }: Props) {
     })
 
   return (
-    <Paper withBorder p="lg">
+    <SettingsSection title="退職処理">
       <Stack gap="md">
-        <Title order={4}>退職処理</Title>
-
         {!retired && (
           <>
             <Stack gap={4}>
@@ -103,6 +102,6 @@ export function StaffEditClient({ tenantId, staffId, retired }: Props) {
           </Button>
         </Group>
       </Stack>
-    </Paper>
+    </SettingsSection>
   )
 }

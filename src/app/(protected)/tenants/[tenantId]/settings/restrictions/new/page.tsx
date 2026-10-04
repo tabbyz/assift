@@ -20,7 +20,7 @@ export default async function NewRestrictionPage({
   // layout と page は並行に描画されるので、layout の notFound() は page のクエリを止めない。
   // uuid でない tenantId をそのまま投げると Postgres が 22P02 を出してログが汚れる（006 §3.11）
   if (!isUuid(tenantId)) notFound()
-  const { staffId, from } = await loadRestrictionFormSearchParams(searchParams)
+  const { staffId } = await loadRestrictionFormSearchParams(searchParams)
   const [tenant, patterns, staffs] = await Promise.all([
     getTenant(tenantId),
     listPatterns(tenantId),
@@ -32,19 +32,11 @@ export default async function NewRestrictionPage({
   const options = restrictionPatternOptions(patterns, null)
   // 在籍でないスタッフ（退職・他店舗・壊れた値）は未選択に落とす
   const initialStaff = staffs.find((staff) => staff.id === staffId) ?? null
-  const returnTo = from === 'staff' && initialStaff ? 'staff' : 'list'
 
   return (
     <Stack gap="md">
       <SettingsBreadcrumbs
-        parent={
-          returnTo === 'staff' && initialStaff
-            ? {
-                href: `/tenants/${tenantId}/settings/staffs/${initialStaff.id}`,
-                label: initialStaff.name,
-              }
-            : { href: `/tenants/${tenantId}/settings/restrictions`, label: '自動アサイン制約' }
-        }
+        parent={{ href: `/tenants/${tenantId}/settings/restrictions`, label: '自動アサイン制約' }}
         current="制約の登録"
       />
       <Title order={2}>制約の登録</Title>
@@ -55,7 +47,6 @@ export default async function NewRestrictionPage({
         staffs={staffs}
         pattern1Options={options}
         pattern2Options={options}
-        returnTo={returnTo}
         initialStaffId={initialStaff?.id ?? null}
       />
     </Stack>

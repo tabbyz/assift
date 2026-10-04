@@ -2,16 +2,7 @@
 
 import { type FormEvent, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import {
-  Button,
-  Group,
-  Input,
-  Paper,
-  SegmentedControl,
-  Select,
-  Stack,
-  TextInput,
-} from '@mantine/core'
+import { Button, Input, SegmentedControl, Select, Stack, TextInput } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { FormErrorAlert } from '@/components/FormErrorAlert'
 import { PATTERN_KIND_OPTIONS, type PatternKind } from '@/lib/patterns/kinds'
@@ -19,6 +10,7 @@ import { DEFAULT_PATTERN_COLOR } from '@/lib/patterns/colors'
 import type { RequiredNumsByDay } from '@/lib/patterns/requiredNums'
 import { PATTERN_DESCRIPTION_MAX_LENGTH, PATTERN_NAME_MAX_LENGTH } from '@/lib/validation/patterns'
 import { LinkButton } from '@/components/LinkButton'
+import { SettingsSection } from '@/components/SettingsSection'
 import { createPattern, updatePattern } from '../actions'
 import { ColorSwatchPicker } from './ColorSwatchPicker'
 import { RequiredNumsInput } from './RequiredNumsInput'
@@ -102,8 +94,28 @@ export function PatternForm({ tenantId, pairOptions, initial, afterCreate }: Pro
   }
 
   return (
-    <Paper withBorder p="lg">
-      <form onSubmit={submit}>
+    <form onSubmit={submit}>
+      <SettingsSection
+        footer={
+          <>
+            {/* チュートリアルでは出さない（v1 の `unless @tutorial_step`） */}
+            {afterCreate === 'list' && (
+              <LinkButton
+                href={`/tenants/${tenantId}/settings/patterns`}
+                variant="subtle"
+                color="gray"
+                // 送信中に押すと、書き込みは走ったまま遷移して通知とエラー表示を取りこぼす
+                disabled={isPending}
+              >
+                キャンセル
+              </LinkButton>
+            )}
+            <Button type="submit" loading={isPending}>
+              {isEdit ? '更新する' : '登録する'}
+            </Button>
+          </>
+        }
+      >
         <Stack gap="md">
           <FormErrorAlert message={error} />
 
@@ -164,26 +176,8 @@ export function PatternForm({ tenantId, pairOptions, initial, afterCreate }: Pro
               styles={{ wrapper: { maxWidth: 240 } }}
             />
           )}
-
-          <Group justify="flex-end" gap="xs">
-            {/* チュートリアルでは出さない（v1 の `unless @tutorial_step`） */}
-            {afterCreate === 'list' && (
-              <LinkButton
-                href={`/tenants/${tenantId}/settings/patterns`}
-                variant="subtle"
-                color="gray"
-                // 送信中に押すと、書き込みは走ったまま遷移して通知とエラー表示を取りこぼす
-                disabled={isPending}
-              >
-                キャンセル
-              </LinkButton>
-            )}
-            <Button type="submit" loading={isPending}>
-              {isEdit ? '更新する' : '登録する'}
-            </Button>
-          </Group>
         </Stack>
-      </form>
-    </Paper>
+      </SettingsSection>
+    </form>
   )
 }

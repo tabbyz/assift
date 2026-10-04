@@ -17,12 +17,6 @@ const staffIdSchema = z.guid({ error: 'スタッフを選択してください' 
 /** 強さ。`true` = 必須 / `false` = なるべく */
 const hardSchema = z.boolean({ error: '強さを選択してください' })
 
-/**
- * 保存・削除のあとに戻るスタッフの編集画面（開いた元の画面。null = 制約ページ）。
- * URL はサーバーが組む（入力から URL を受けない。013 §4.2）。対象を別の人に変えても、開いた元へ戻す（キャンセルと同じ）
- */
-const returnStaffIdSchema = z.guid({ error: '戻り先が正しくありません' }).nullable()
-
 const WDAYS_ERROR = { error: '曜日を選択してください' }
 
 const wdaysSchema = z
@@ -98,7 +92,6 @@ export const createRestrictionSchema = z.object({
   staffId: staffIdSchema,
   hard: hardSchema,
   input: restrictionInputSchema,
-  returnStaffId: returnStaffIdSchema,
 })
 
 export const updateRestrictionSchema = z.object({
@@ -107,13 +100,11 @@ export const updateRestrictionSchema = z.object({
   staffId: staffIdSchema,
   hard: hardSchema,
   input: restrictionInputSchema,
-  returnStaffId: returnStaffIdSchema,
 })
 
 export const deleteRestrictionSchema = z.object({
   tenantId: tenantIdSchema,
   restrictionId: restrictionIdSchema,
-  returnStaffId: returnStaffIdSchema,
 })
 
 /** 強さを選べない種別（なるべく休みの曜日）は画面の値を信じず、なるべくに固定する（DB の CHECK と同じ） */

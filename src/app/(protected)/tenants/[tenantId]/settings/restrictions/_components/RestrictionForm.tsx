@@ -11,7 +11,6 @@ import {
   Group,
   Input,
   NumberInput,
-  Paper,
   Radio,
   RadioGroup,
   SegmentedControl,
@@ -23,6 +22,7 @@ import {
 import { notifications } from '@mantine/notifications'
 import { FormErrorAlert } from '@/components/FormErrorAlert'
 import { LinkButton } from '@/components/LinkButton'
+import { SettingsSection } from '@/components/SettingsSection'
 import { SHIFT_CYCLE_UNITS, type ShiftCycle } from '@/lib/calendar/shiftCycle'
 import { WEEKDAY_LABELS, WEEKDAY_VALUES } from '@/lib/calendar/weekdays'
 import {
@@ -75,8 +75,6 @@ type Props = {
    * すり抜けて戻ってくる。
    */
   pattern2Options: PatternOption[]
-  /** 保存・削除・キャンセルのあとにスタッフの編集画面へ戻るか（013 §4.2） */
-  returnTo: 'list' | 'staff'
   /** 新規の対象の初期値（`?staffId=`）。在籍でなければ呼び出し側が null にする */
   initialStaffId?: string | null
   /** 編集のときだけ。種類は変えられない（006 と同じ） */
@@ -123,7 +121,6 @@ export function RestrictionForm({
   staffs,
   pattern1Options,
   pattern2Options,
-  returnTo,
   initialStaffId = null,
   initial,
 }: Props) {
@@ -167,11 +164,7 @@ export function RestrictionForm({
       ? lowerBoundWarning({ kind, days: values.days, staff_id: staffId }, staffs)
       : null
 
-  // 開いた元のスタッフの画面（対象を別の人に変えても、キャンセル・保存とも開いた元へ戻す）
-  const returnStaffId = returnTo === 'staff' ? (initial?.staffId ?? initialStaffId) : null
-  const cancelHref = returnStaffId
-    ? `/tenants/${tenantId}/settings/staffs/${returnStaffId}`
-    : `/tenants/${tenantId}/settings/restrictions`
+  const cancelHref = `/tenants/${tenantId}/settings/restrictions`
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -184,7 +177,7 @@ export function RestrictionForm({
       return
     }
     startTransition(async () => {
-      const args = { tenantId, staffId, hard, input: toInput(kind, values), returnStaffId }
+      const args = { tenantId, staffId, hard, input: toInput(kind, values) }
       const result = initial
         ? await updateRestriction({ ...args, restrictionId: initial.restrictionId })
         : await createRestriction(args)
@@ -230,8 +223,25 @@ export function RestrictionForm({
   )
 
   return (
-    <Paper withBorder p="lg">
-      <form onSubmit={submit}>
+    <form onSubmit={submit}>
+      <SettingsSection
+        footer={
+          <>
+            <LinkButton
+              href={cancelHref}
+              variant="subtle"
+              color="gray"
+              // 送信中に押すと、書き込みは走ったまま遷移して通知とエラー表示を取りこぼす
+              disabled={isPending}
+            >
+              キャンセル
+            </LinkButton>
+            <Button type="submit" loading={isPending} disabled={kind === null}>
+              {isEdit ? '保存' : '登録'}
+            </Button>
+          </>
+        }
+      >
         <Stack gap="lg">
           <FormErrorAlert message={error} />
 
@@ -443,23 +453,8 @@ export function RestrictionForm({
               </Stack>
             </Input.Wrapper>
           )}
-
-          <Group justify="flex-end" gap="xs">
-            <LinkButton
-              href={cancelHref}
-              variant="subtle"
-              color="gray"
-              // 送信中に押すと、書き込みは走ったまま遷移して通知とエラー表示を取りこぼす
-              disabled={isPending}
-            >
-              キャンセル
-            </LinkButton>
-            <Button type="submit" loading={isPending} disabled={kind === null}>
-              {isEdit ? '保存' : '登録'}
-            </Button>
-          </Group>
         </Stack>
-      </form>
-    </Paper>
+      </SettingsSection>
+    </form>
   )
 }

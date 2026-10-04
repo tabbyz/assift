@@ -2,9 +2,10 @@
 
 import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button, Group, Paper, Stack, Text, Title } from '@mantine/core'
+import { Button, Group, Stack, Text } from '@mantine/core'
 import { modals } from '@mantine/modals'
 import { notifications } from '@mantine/notifications'
+import { SettingsSection } from '@/components/SettingsSection'
 import { deletePattern } from '../actions'
 
 /** 編集画面の下に置く削除パネル（v1 の「勤務パターンを削除」） */
@@ -44,9 +45,8 @@ export function PatternEditClient({
     })
 
   return (
-    <Paper withBorder p="lg">
+    <SettingsSection title="勤務パターンを削除">
       <Stack gap="md">
-        <Title order={4}>勤務パターンを削除</Title>
         <Stack gap={4}>
           <Text size="sm" c="dimmed">
             削除すると、この勤務パターンに関連するすべてのデータが削除されます。
@@ -61,6 +61,6 @@ export function PatternEditClient({
           </Button>
         </Group>
       </Stack>
-    </Paper>
+    </SettingsSection>
   )
 }

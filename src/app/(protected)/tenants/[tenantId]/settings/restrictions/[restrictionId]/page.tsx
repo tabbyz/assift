@@ -10,20 +10,17 @@ import { RESTRICTION_DAYS_DEFAULT, restrictionPatternOptions } from '@/lib/restr
 import { isUuid } from '@/utils/uuid'
 import { RestrictionEditClient } from '../_components/RestrictionEditClient'
 import { RestrictionForm } from '../_components/RestrictionForm'
-import { loadRestrictionFormSearchParams } from '../searchParams'
 
 export const metadata: Metadata = { title: '制約の編集' }
 
 export default async function EditRestrictionPage({
   params,
-  searchParams,
 }: PageProps<'/tenants/[tenantId]/settings/restrictions/[restrictionId]'>) {
   const { tenantId, restrictionId } = await params
   // layout と page は並行に描画されるので、layout の notFound() は page のクエリを止めない。
   // uuid でない tenantId をそのまま投げると Postgres が 22P02 を出してログが汚れる（006 §3.11）
   if (!isUuid(tenantId)) notFound()
   if (!isUuid(restrictionId)) notFound()
-  const { from } = await loadRestrictionFormSearchParams(searchParams)
 
   const [tenant, restriction, patterns, staffs] = await Promise.all([
     getTenant(tenantId),
@@ -45,18 +42,11 @@ export default async function EditRestrictionPage({
   // 欄ごとに作る: まとめると片方の休みパターンをもう片方でも新たに選べてしまう
   const pattern1Options = restrictionPatternOptions(patterns, restriction.pattern1_id)
   const pattern2Options = restrictionPatternOptions(patterns, restriction.pattern2_id)
-  // 退職したスタッフの規則も、その人の編集画面から開いたらそこへ戻す（編集・削除はできる）
-  const owner = activeOwner ?? retiredOwner
-  const returnTo = from === 'staff' && owner ? 'staff' : 'list'
 
   return (
     <Stack gap="md">
       <SettingsBreadcrumbs
-        parent={
-          returnTo === 'staff' && owner
-            ? { href: `/tenants/${tenantId}/settings/staffs/${owner.id}`, label: owner.name }
-            : { href: `/tenants/${tenantId}/settings/restrictions`, label: '自動アサイン制約' }
-        }
+        parent={{ href: `/tenants/${tenantId}/settings/restrictions`, label: '自動アサイン制約' }}
         current="制約の編集"
       />
       <Title order={2}>制約の編集</Title>
@@ -67,7 +57,6 @@ export default async function EditRestrictionPage({
         staffs={staffOptions}
         pattern1Options={pattern1Options}
         pattern2Options={pattern2Options}
-        returnTo={returnTo}
         initial={{
           restrictionId: restriction.id,
           kind: restriction.kind,
@@ -80,11 +69,7 @@ export default async function EditRestrictionPage({
         }}
       />
 
-      <RestrictionEditClient
-        tenantId={tenantId}
-        restrictionId={restriction.id}
-        returnStaffId={returnTo === 'staff' && owner ? owner.id : null}
-      />
+      <RestrictionEditClient tenantId={tenantId} restrictionId={restriction.id} />
     </Stack>
   )
 }
