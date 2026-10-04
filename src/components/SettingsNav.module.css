@@ -12,3 +12,22 @@
 .back:hover {
   color: var(--mantine-color-text);
 }
+
+/*
+ * 32px。Mantine の既定（上下 8px + 行 21.7px = 約 41px）は 4 項目には間延びする。
+ * padding で高さを作らない（日本語フォントの行ボックスで 1px ずれる）
+ */
+.item {
+  min-height: 32px;
+  padding: 0 8px;
+  border-radius: var(--mantine-radius-sm);
+}
+
+.icon {
+  margin-inline-end: 10px;
+  color: var(--mantine-color-dimmed);
+}
+
+.item[data-active] .icon {
+  color: inherit;
+}

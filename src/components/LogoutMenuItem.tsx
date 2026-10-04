@@ -2,7 +2,7 @@
 
 import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { MenuItem, NavLink } from '@mantine/core'
+import { MenuItem, NavLink, type NavLinkProps } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { IconLogout } from '@tabler/icons-react'
 import { logout } from '@/app/(protected)/actions'
@@ -35,17 +35,18 @@ export function LogoutMenuItem() {
   )
 }
 
-/** モバイルの Navbar で使うログアウト */
-export function LogoutNavLink() {
+/** モバイルの Navbar で使うログアウト。見た目は Navbar の他の項目に合わせる */
+export function LogoutNavLink({ classNames }: Pick<NavLinkProps, 'classNames'>) {
   const { run, isPending } = useLogout()
   return (
     <NavLink
       component="button"
       type="button"
       label="ログアウト"
-      leftSection={<IconLogout size={18} />}
+      leftSection={<IconLogout size={18} stroke={1.75} />}
       onClick={run}
       disabled={isPending}
+      classNames={classNames}
     />
   )
 }

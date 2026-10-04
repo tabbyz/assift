@@ -3,15 +3,18 @@
 import { useState, type MouseEvent } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Divider, NavLink, Stack, Text, UnstyledButton } from '@mantine/core'
+import { NavLink, Stack, Text, UnstyledButton } from '@mantine/core'
 import { IconArrowLeft } from '@tabler/icons-react'
-import { configLinks, isLinkActive, masterLinks, shiftsHref } from '@/lib/tenants/navigation'
+import { isLinkActive, settingsLinks, shiftsHref } from '@/lib/tenants/navigation'
 import classes from './SettingsNav.module.css'
 
 /**
  * 設定ページのナビ。頻度順。店舗情報は末尾。
- * 「シフト表へ」は戻り。「設定」が見出しで項目を束ねる。
- * デスクトップは左カラム、モバイルは本文の上に積む（親の Flex が向きを変える）。
+ * 1 項目 32px（GitHub Primer の NavList・GitLab のサイドバーと同じ密度）。
+ * `sm` 以上はマウス操作が主なので、モバイルの 44px（タップ領域）より詰める。
+ * 「シフト表画面へ」は戻り。「設定」が見出しで項目を束ねる。
+ * `sm` 以上だけ出す（左カラム）。モバイルはヘッダーのバーガーに同じ項目があるので、
+ * 本文の上に積むと重複したうえ画面の半分以上を占める。
  *
  * 現在地はクリックした瞬間に移す。usePathname() は遷移が確定するまで変わらず、
  * 本文の読み込み中（prefetch が間に合わないとき）に押したのに無反応に見えるため。
@@ -31,33 +34,24 @@ export function SettingsNav({ tenantId }: { tenantId: string }) {
   }
 
   return (
-    <Stack gap={4} miw={200}>
+    <Stack gap={2} miw={200} visibleFrom="sm">
       <UnstyledButton component={Link} href={shiftsHref(tenantId)} className={classes.back}>
         <IconArrowLeft size={16} />
-        シフト表へ
+        シフト表画面へ
       </UnstyledButton>
-      <Text size="xs" c="dimmed" px="sm">
+      <Text size="xs" c="dimmed" px={8} pt={4} pb={2}>
         設定
       </Text>
-      {masterLinks(tenantId).map((link) => (
+      {settingsLinks(tenantId).map((link) => (
         <NavLink
           key={link.href}
           component={Link}
           href={link.href}
           label={link.label}
+          leftSection={<link.icon size={16} stroke={1.75} />}
           active={isLinkActive(link.href, currentPath)}
           onClick={onNavigate(link.href)}
-        />
-      ))}
-      <Divider />
-      {configLinks(tenantId).map((link) => (
-        <NavLink
-          key={link.href}
-          component={Link}
-          href={link.href}
-          label={link.label}
-          active={isLinkActive(link.href, currentPath)}
-          onClick={onNavigate(link.href)}
+          classNames={{ root: classes.item, section: classes.icon }}
         />
       ))}
     </Stack>
