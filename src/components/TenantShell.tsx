@@ -58,7 +58,10 @@ export function TenantShell({ tenant, tenants, email, children }: Props) {
   const [opened, { toggle, close }] = useDisclosure(false)
   const pathname = usePathname()
 
+  // 遷移したら閉じる。いま開いているページの項目を押したときは pathname が変わらないので、
+  // その項目の onClick で閉じる（閉じるのを遷移の確定まで待つのは別ページへ行くときだけ）
   useEffect(close, [pathname, close])
+  const closeIfActive = (active: boolean) => (active ? close : undefined)
 
   const primary = primaryLinks(tenant.id)
   const settingsActive = isSettingsPath(pathname)
@@ -128,6 +131,7 @@ export function TenantShell({ tenant, tenants, email, children }: Props) {
                 label={link.label}
                 leftSection={<link.icon size={18} stroke={1.75} />}
                 active={isShiftsPath(pathname)}
+                onClick={closeIfActive(isShiftsPath(pathname))}
                 classNames={navLinkClassNames}
               />
             ))}
@@ -143,6 +147,7 @@ export function TenantShell({ tenant, tenants, email, children }: Props) {
                 label={link.label}
                 leftSection={<link.icon size={18} stroke={1.75} />}
                 active={isLinkActive(link.href, pathname)}
+                onClick={closeIfActive(isLinkActive(link.href, pathname))}
                 classNames={navLinkClassNames}
               />
             ))}
