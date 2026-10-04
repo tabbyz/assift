@@ -17,3 +17,21 @@
   font-weight: 650;
   color: var(--mantine-color-text);
 }
+
+/*
+ * モバイルの Navbar の項目。44px は Apple HIG のタップ領域の下限。
+ * padding で高さを作らない（日本語フォントの行ボックスが 1px 増えて 45px になる）
+ */
+.drawerItem {
+  min-height: 44px;
+  padding-block: 0;
+  border-radius: var(--mantine-radius-sm);
+}
+
+.drawerIcon {
+  color: var(--mantine-color-dimmed);
+}
+
+.drawerItem[data-active] .drawerIcon {
+  color: inherit;
+}

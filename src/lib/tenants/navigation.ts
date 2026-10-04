@@ -1,28 +1,40 @@
+import {
+  IconBuilding,
+  IconCalendar,
+  IconClock,
+  IconListCheck,
+  IconUsers,
+  type Icon,
+} from '@tabler/icons-react'
+
 /** ヘッダーと設定ナビで共有する、テナント配下のリンク定義（005 §3.5） */
 
 export type TenantLink = {
   href: string
   label: string
+  icon: Icon
 }
 
 /** モバイルのメニュー。デスクトップのヘッダーには出さない */
 export function primaryLinks(tenantId: string): TenantLink[] {
-  return [{ href: shiftsHref(tenantId), label: 'シフト表' }]
+  return [{ href: shiftsHref(tenantId), label: 'シフト表画面', icon: IconCalendar }]
 }
 
-/** 運用で触るマスタ。設定の先頭 */
-export function masterLinks(tenantId: string): TenantLink[] {
+/**
+ * 設定の項目。触る頻度の順（運用で触るマスタが先頭）。
+ * 店舗情報は末尾（名前・周期・削除で、いちばん触らない）。
+ * 4 件しかないので区切り線で群に分けない（線のほうが目立って、並びの意味より強く見える）
+ */
+export function settingsLinks(tenantId: string): TenantLink[] {
   return [
-    { href: `/tenants/${tenantId}/settings/staffs`, label: 'スタッフ' },
-    { href: `/tenants/${tenantId}/settings/patterns`, label: '勤務パターン' },
-  ]
-}
-
-/** マスタより下。店舗情報は末尾（名前・周期・削除で、いちばん触らない） */
-export function configLinks(tenantId: string): TenantLink[] {
-  return [
-    { href: `/tenants/${tenantId}/settings/restrictions`, label: '自動アサイン制約' },
-    { href: `/tenants/${tenantId}/settings/general`, label: '店舗情報' },
+    { href: `/tenants/${tenantId}/settings/staffs`, label: 'スタッフ', icon: IconUsers },
+    { href: `/tenants/${tenantId}/settings/patterns`, label: '勤務パターン', icon: IconClock },
+    {
+      href: `/tenants/${tenantId}/settings/restrictions`,
+      label: '自動アサイン制約',
+      icon: IconListCheck,
+    },
+    { href: `/tenants/${tenantId}/settings/general`, label: '店舗情報', icon: IconBuilding },
   ]
 }
 
