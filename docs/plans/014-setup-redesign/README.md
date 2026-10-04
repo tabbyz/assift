@@ -13,7 +13,7 @@ IT に慣れていない人でも迷わないことを最優先にし、「業�
 > 移行・カットオーバーを 015 / 016 に繰り下げる。本番の初回 push より前に入れる（利用者が来る前に初回体験を直す）。
 > AGENTS.md の「本番は 015 で設定する」と 013 §5.7 の「014 に申し送り」は、本プランの実装時に 016 / 015 へ直す。
 
-**状態: プラン（未実装。2026-10-04）**
+**状態: 実装済み（確認待ち。2026-10-04）。実装ログは §10。**
 
 ---
 
@@ -580,6 +580,94 @@ v1 の `tutorial_completed?`（勤務あり かつ 在籍スタッフあり）�
 
 ---
 
-## 10. 実装ログ
+## 10. 実装ログ（2026-10-04）
 
-（未実装）
+### 10.1 作ったもの
+
+| 場所 | 内容 |
+| --- | --- |
+| `supabase/schemas/public/tables/tenants.sql` | `setup_completed_at` 列と `tenants_guard_setup_completed_at` トリガ |
+| `supabase/schemas/private/functions.sql` | `private.guard_setup_completed_at()`（一度入った完了日時を変えさせない） |
+| `supabase/schemas/public/functions.sql` | `save_setup_patterns` / `complete_setup`（店舗の行を `for update`、完了済み・スタッフありを検査） |
+| `supabase/migrations/20261004142809_setup_completed_at.sql` | `declarative sync` の出力 + 埋め戻し（スタッフが 1 人でもいれば完了）+ `restrict_anon_grants.sql` |
+| `supabase/seed.sql` | seed の店舗に `setup_completed_at` を明示 |
+| `supabase/tests/setup.sql` | 初期設定の pgTAP（31 件。§6.2） |
+| `src/lib/setup/` | `templates`（業種テンプレート・色）/ `patternsState`（画面の状態 ⇔ 保存の形・再開）/ `parseStaffNames` / `preview`。すべて Vitest |
+| `src/lib/validation/setup.ts` | ステップ 1〜3 の Zod（1ヶ月・半月は週の始まりを 0 に寄せる transform） |
+| `src/components/setup/` | `SetupWizard` / `SetupHeader` / `StoreStep` / `PatternsStep` / `StaffStep` / `SetupDone`（完成・ここまで保存しました・削除）/ `SetupPreview`（PC の完成イメージとスマホの見本）/ `Setup.module.css` |
+| `tenants/new/` | ステップ 1（`SetupWizard mode="new"`）。`createTenant` は週の始まりを受け、`{ tenantId, redirectTo: /setup }` を返す |
+| `tenants/[tenantId]/setup/` | ステップ 2・3（`mode="resume"`）と `updateSetupTenant` / `saveSetupPatterns` / `completeSetup` |
+| `tenants/[tenantId]/actions.ts` | `deleteTenant` を `settings/general/actions.ts` から移した |
+| `tenants/[tenantId]/{page,layout}.tsx` ・ `settings/layout.tsx` ・ `shifts/page.tsx` | 完了日時で振り分け。準備中は枠を描かず、シフト表・設定は `/setup` へ |
+| `lib/queries/tenants.ts` | `getTutorialStatus` → `getSetupState`。`listTenants` は `TenantListItem`（`ready`）を返す |
+| `TenantSwitcher` | 準備中の店舗に「準備中」 |
+| `shifts/_components/` | `EmptyNotice`（`SetupNotice` の置き換え）/ `useFirstVisitCoach` + `CalendarTable` の初回の案内 / `QuickRequiredNums`（自動作成で必要人数を聞く） |
+| `shifts/actions.ts` ・ `lib/patterns/requiredNums.ts` ・ `lib/validation/requiredNums.ts` | `setUniformDefaultRequiredNums` / `uniformRequiredNums` / `setUniformDefaultRequiredNumsSchema` |
+| `next.config.ts` | `/tenants/:id/tutorial/:path*` → `/tenants/:id`（308） |
+| 消したもの | `tutorial/*`・`TutorialSteps`・`NewTenantForm`・`SetupNotice`・`getTutorialStatus`・`createTenantSchema`・`PatternForm` / `StaffForm` の `afterCreate` |
+| `AGENTS.md` | ディレクトリ表（`components/setup` / `lib/setup`）、チュートリアルの例外を削除、初期設定の振り分けの注記、RPC の一覧、本番の番号 015 → 016 |
+| `docs/plans/013-…` | 冒頭に番号の繰り下げ（移行 015 / カットオーバー 016）を追記 |
+
+### 10.2 プランから変えたこと
+
+1. **完成からシフト表へは全体の読み込みで移る（`window.location.assign`）。`completeSetup` は再検証しない。**
+   Server Action の `revalidatePath` は表示中のページをその場で描き直す（`revalidatePath.md`: "Updates the UI immediately (if viewing
+   the affected path)"）。`revalidatePath('/tenants', 'layout')` だと `/setup` が描き直され、完了済みの `/setup` は `/shifts` へ
+   redirect するので、完成の画面が飛ぶ。またクライアント遷移では `[tenantId]` の layout（準備中は枠なし）が使い回され、
+   完成後もヘッダーの無い表になる。店舗に 1 回だけの遷移なので、全体の読み込みにした。古いタブの `setup completed` も同じ
+2. **`saveSetupPatterns` は `refresh()` / 再検証しない。** 画面の状態はウィザードが持ち、`/setup` は動的なので次に開けば読み直す
+3. **pgTAP は `rls_tenant_isolation.sql` に足さず、`supabase/tests/setup.sql` に分けた**（31 件）。境界の検査（他テナント・anon）は
+   新しいファイルの中で持ち、anon の関数全体の検査（`rls_tenant_isolation.sql`）はそのまま新しい RPC にも効いている
+4. **生成 migration に `restrictions_wdays_check` の drop → add が入った。** schemas と init_schema の CHECK は同じ式で、pg-delta が
+   配列リテラルの表記の違いを差分と見たもの。同じ制約を張り直すだけなので、生成物のまま残した
+5. **再開の案内（おかえりなさい）は `useSyncExternalStore` で読み、ページを読み込んでいるあいだの値をモジュールに保つ。**
+   effect の中で setState すると lint（`react-hooks/set-state-in-effect`）に当たり、アンマウントで捨てると開発時の StrictMode の
+   マウントのやり直しで 2 回目の読みが「再開ではない」になる。同じタブで別の店舗へ行って戻ると案内がもう一度出るが、それも再開なので許す
+6. **初回の案内の Popover は `zIndex={150}`。** 既定（300）だとモーダル（200）の上に残り、自動作成のモーダルに重なった
+7. **スタッフ名の 10 文字は UTF-16 の長さで数える**（サーバーの `staffNameSchema` と同じ。コードポイントで数えると、サロゲートペアを
+   含む名前が画面では通るのに保存で落ちる）
+8. `SetupNotice` は残さず `EmptyNotice` に作り直した（STEP カードではなく 1 行。名前も中身に合わせた）
+
+### 10.3 検証
+
+| 項目 | 結果 |
+| --- | --- |
+| `npm run lint` | 0 errors（warning 1 件は既存の `reasons.test.ts`） |
+| `npm run typecheck` | 通る |
+| `npm test` | 67 files / 651 tests 通る（新規: `lib/setup/*` 4 本、`validation/setup`、`requiredNums` に追加） |
+| `npx supabase db reset` → `gen types` → `npx supabase test db` | 2 files / 164 tests 通る（既存 133 + 新規 31） |
+| `npm run build` | 通る（`/tenants/[tenantId]/setup` が動的ルートとして出る） |
+| `npm run format:check` | 今回の変更は整形済み。**既存の 6 ファイル（`.agents/skills/interface-design/*`・`AssistPanel.module.css`・`ShareModal.tsx`・`holdToToggle.test.ts`・`SimpleShell.tsx`）が main の時点で未整形**で、ここでは触っていない |
+
+ブラウザ（Playwright・ローカル。新規ユーザーで 1280px と 390px）で確かめたこと:
+
+- ログイン → `/tenants/new` → 店名・2 週間・月曜 → `/setup`（週の始まりを選ぶまで「あと少し：何曜日から始まるか選んでください」）
+- 介護を選ぶと勤務 7 行と「夜勤の次の日に『明け』」のスイッチ。有給を外して次へ → 名前を 4 行（同じ名前 1 組）→ 注意だけ出て完成できる
+- 完成 →「シフト表をひらく」でヘッダー（店舗切替・設定）付きのシフト表。console のエラーなし
+- ステップ 1 のあとの「戻る」は作成フォームに戻らない（店舗が二重にならない）
+- 飲食を選んで「あとで続ける」→「ここまで保存しました」。別のブラウザで開き直すとステップ 3 に着地し「おかえりなさい」
+- ステップ 3 から「もどる」で保存済みの勤務が一覧に戻る。スマホ幅で下まで送っても固定の主ボタンが中身に重ならない
+- 準備中の店舗の `/shifts`・`/settings/staffs` は `/setup` へ。完了済みの `/setup` と `/tutorial/pattern` はシフト表へ。切替メニューに「準備中」
+- シフト表の初回: 最初のマスに案内 → 自動作成を開くと「1日に何人ずつ必要ですか？」→ 入れると必要人数が入り、その口は消える →
+  1 つ入れると「できました。…」が出て案内が消える（自動作成のモーダルはダミーのキーで開いた。解く処理は呼んでいない）
+- 同時実行: `psql` 2 本で `complete_setup` を重ねると、後の方は約 3 秒待ってから `setup completed`（`immutable` ではない）。スタッフは 1 組だけ
+
+### 10.4 未検証・申し送り
+
+- v1 の**トークンの** `/tenants/<token>/tutorial/...`（redirects → proxy の 2 回の移動）は試していない（`V1_UUID_NAMESPACE` が要る）。
+  uuid の `/tutorial/pattern` が店舗のトップへ送られることだけ確かめた
+- 「あとで続ける」で保存できない変更があるときの確認ダイアログ、二度押しはブラウザでは押していない
+  （二度押しの DB 側は pgTAP と `psql` で確かめた）
+- ダークモードは見ていない
+- 業種テンプレートは仮の値（§3.2）。015 の移行後に実データで見直す
+
+### 10.5 実装レビューの反映
+
+- 「できました。…」の通知を、案内を出せる状態（期間が空・スタッフと勤務がある）のときだけにした。
+  `coach.active`（この端末の localStorage に印が無い）だけを見ていたため、シフトのある店を新しい端末で開くと最初のアサインで出ていた
+- 自動作成の「1日に何人ずつ必要ですか？」は、働く日の勤務が 0 件なら出さない（空配列の `every()` が true になり、中身の無いフォームが出ていた）
+- `<button>` の中の `Text`（`<p>`）を `component="span"` にした（業種ボタン・勤務の行）
+- 進み具合の読み上げを、role の無い `div` の `aria-label` から `VisuallyHidden` のテキストにした
+- `updateSetupTenant` に `.eq('owner_id', user.id)` を足し、`updateTenant` と揃えた（RLS で守られているので挙動は同じ）
+- 準備中の店舗の削除はブラウザで確かめた: `/tenants` → 別の店舗のシフト表へ移り、404 のちらつき・エラーは無い
+- lint 0 errors / typecheck / Vitest 67 files・651 tests

@@ -32,7 +32,6 @@ export default async function NewPatternPage({
       <PatternForm
         tenantId={tenantId}
         pairOptions={patterns.map((pattern) => ({ value: pattern.id, label: pattern.name }))}
-        afterCreate="list"
       />
     </Stack>
   )

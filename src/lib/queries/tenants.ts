@@ -1,24 +1,32 @@
 import 'server-only'
 import { cache } from 'react'
 import type { Tables } from '@/types/database'
+import { type Pattern, listPatterns } from '@/lib/queries/patterns'
+import { resumeStep } from '@/lib/setup/patternsState'
 import { createClient } from '@/utils/supabase/server'
 
 export type Tenant = Tables<'tenants'>
-/** ヘッダーの切替メニューに渡す最小限（Client に渡すので列を絞る） */
+/** ヘッダーに渡す最小限（Client に渡すので列を絞る） */
 export type TenantSummary = Pick<Tenant, 'id' | 'name'>
+/** 店舗一覧の 1 件。`ready` = 初期設定を終えた（切替メニューの「準備中」。014 §5.6） */
+export type TenantListItem = TenantSummary & { ready: boolean }
 
 /**
  * 自分がオーナーの店舗一覧。RLS（tenants_owner_all）で自分の行しか返らない。
  * 並びは作成順（v1 の navbar と同じ）。`/tenants` のフォールバックはこの末尾を使う。
  */
-export const listTenants = cache(async (): Promise<TenantSummary[]> => {
+export const listTenants = cache(async (): Promise<TenantListItem[]> => {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('tenants')
-    .select('id, name')
+    .select('id, name, setup_completed_at')
     .order('created_at', { ascending: true })
   if (error) throw error
-  return data
+  return data.map((tenant) => ({
+    id: tenant.id,
+    name: tenant.name,
+    ready: tenant.setup_completed_at !== null,
+  }))
 })
 
 /**
@@ -36,19 +44,15 @@ export const getTenant = cache(async (tenantId: string): Promise<Tenant | null> 
   return data
 })
 
-export type TutorialStatus = { hasPattern: boolean; hasActiveStaff: boolean; completed: boolean }
-
-/** v1 の `tutorial_completed?`（勤務パターン 1 件以上 かつ 在籍スタッフ 1 件以上） */
-export const getTutorialStatus = cache(async (tenantId: string): Promise<TutorialStatus> => {
-  const supabase = await createClient()
-  const [patterns, staffs] = await Promise.all([
-    supabase.from('patterns').select('id').eq('tenant_id', tenantId).limit(1),
-    supabase.from('staffs').select('id').eq('tenant_id', tenantId).is('retired_at', null).limit(1),
-  ])
-  if (patterns.error) throw patterns.error
-  if (staffs.error) throw staffs.error
-
-  const hasPattern = patterns.data.length > 0
-  const hasActiveStaff = staffs.data.length > 0
-  return { hasPattern, hasActiveStaff, completed: hasPattern && hasActiveStaff }
-})
+/**
+ * 初期設定の状態（014 §5.6）。完了は `setup_completed_at` で決める（勤務やスタッフの有無ではない。
+ * 運用中に全員退職させても初期設定に戻さないため）。続きのステップは勤務の有無から決め、保存しない。
+ *
+ * 呼び出し側は `getTenant` で店舗が見えることを確かめてから呼ぶ（ここでは店舗を読まない）。
+ */
+export const getSetupState = cache(
+  async (tenantId: string): Promise<{ step: 2 | 3; patterns: Pattern[] }> => {
+    const patterns = await listPatterns(tenantId)
+    return { step: resumeStep(patterns.length), patterns }
+  }
+)

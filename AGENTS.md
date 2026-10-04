@@ -60,6 +60,7 @@ src/
     api/tenants/[tenantId]/shifts/{pdf,csv}/route.ts   エクスポート（Route Handler。下記）
   components/                     横断 UI（SortableList = 上下ボタンの並べ替え一覧 など）
     restrictions/                 制約の行（説明・種類・強さの札・編集）。制約ページとスタッフの編集画面で共有（013）
+    setup/                        初期設定のウィザード（ステップ・ヘッダー・完成イメージ）。/tenants/new と /tenants/<id>/setup で共有（014）
     shiftTable/                   シフト表の見た目（CSS Modules / DateHeaderCell / PatternDescriptionList / cellStyle）。保護ルートと公開ページで共有
   lib/
     actions/                      result / run / error / guards
@@ -75,6 +76,7 @@ src/
     pdf/                          fonts（Font.register + 折り返し）/ styles / paginate / pdfCellStyle / ShiftPdfDocument
     actions/reorder.ts              reorder_positions RPC の共通ラッパ（staffs / patterns。restrictions は 013 で並べ替えをやめた）
     restrictions/                 制約の種類（kinds）/ 説明文（describe。土日祝の上限は表示期間で言い換える）/ 守れない下限の注意（warnings）/ 一覧の 1 行（rowView）
+    setup/                        初期設定（014）。業種テンプレート（templates。仮の値）/ 画面の状態と保存の形（patternsState）/ 名前の分割（parseStaffNames）/ 完成イメージ（preview）
     assist/                       自動アサイン（012）。problem → model（MILP）→ solver/highs → validate（最後の門番）→ reasons → levers（効く一手の試算）→ restrictionOutcomes（守れなかった「なるべく」。013）。llm/ は指示の解釈だけ
     supabase/createPrivilegedClient.ts   service_role の唯一の入口
     validation/                   Zod スキーマ
@@ -94,9 +96,12 @@ supabase/
 
 ページ専用は `_components/` / `_lib/`、横断 UI は `src/components/`、読み取りは `lib/queries/`、書き込みは各ルートの `actions.ts`。
 
-例外: チュートリアル（`tutorial/pattern` `tutorial/staff`）は設定画面の `_components/` のフォームと `actions.ts` を import する。v1 も同じフォームを使い回しており、同じものを 2 つ持つほうが壊れやすい。
+ルートをまたいで使う Action は、そのグループ直下に置く（`(protected)/actions.ts` の `logout` はヘッダーとアカウント画面の両方から呼ぶ。
+`tenants/[tenantId]/actions.ts` の `deleteTenant` は店舗情報と初期設定の両方から呼ぶ）。
 
-ルートをまたいで使う Action は、そのグループ直下に置く（`(protected)/actions.ts` の `logout` はヘッダーとアカウント画面の両方から呼ぶ）。
+初期設定（014）: 店舗は `tenants.setup_completed_at` が null のあいだ「準備中」。`[tenantId]/layout.tsx` は枠（`TenantShell`）を描かず、
+`shifts/page.tsx` と `settings/layout.tsx` が `/setup` へ送る。完了はデータ（勤務・スタッフの有無）ではなくこの列で決める。
+`/setup` からシフト表へは**全体の読み込み**（`window.location.assign`）で移る（クライアント遷移だと枠の無い layout が使い回される）。
 
 ## コード規約
 
@@ -326,7 +331,8 @@ PK は uuid（`gen_random_uuid()`）。v1 から移行する行は `uuidv5('<tab
 ### RPC（`supabase/schemas/public/functions.sql`）
 
 複数行を 1 文で書き換える必要があるときだけ足す（現在は並べ替えの `reorder_positions`、シフトのアサインの `assign_shift`、
-一括操作の `set_shifts_fixed` / `clear_draft_shifts`、コピーの `copy_shifts`、自動アサインを元に戻す `rollback_assist_run`）。単純な CRUD は PostgREST のまま。
+一括操作の `set_shifts_fixed` / `clear_draft_shifts`、コピーの `copy_shifts`、自動アサインを元に戻す `rollback_assist_run`、
+初期設定の `save_setup_patterns` / `complete_setup`）。単純な CRUD は PostgREST のまま。
 
 一括の書き込みでも、1 文で書けるなら RPC にしない。ただし **PostgREST の UPDATE / DELETE は別テーブルの条件で絞れない**
 （「在籍スタッフの行だけ」は `staffs` との join）。そこで id を URL に並べて分割するのは回避策の積み重ねになるので、RPC にする（008 §10.13）。
@@ -419,7 +425,7 @@ Prettier: `{ "semi": false, "singleQuote": true, "tabWidth": 2, "trailingComma":
   スキーマを触ったら `npx supabase db reset` と `gen types` も行う
 - push したらすぐ PR を作る。Supabase のブランチ DB の環境変数は、PR を作ったときに Vercel へ同期される
 - Vercel のプレビューでは seed のユーザー（`dev@example.com` / `password`）でログインできる。
-  メールのリンクと Google ログインはプレビューでは使えない（メールテンプレートが Site URL = localhost を使うため。本番は 015 で設定する）
+  メールのリンクと Google ログインはプレビューでは使えない（メールテンプレートが Site URL = localhost を使うため。本番は 016 で設定する）
 
 ## コミット
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { Button, Popover, UnstyledButton } from '@mantine/core'
+import { Button, Popover, Text, UnstyledButton } from '@mantine/core'
 import { wday } from '@/lib/calendar/dateString'
 import type { DateRange } from '@/lib/calendar/dateRange'
 import type { DateCoverage } from '@/lib/shifts/satisfaction'
@@ -52,6 +52,9 @@ type Props = {
   onStaffBulk: (kind: BulkKind, staff: CalendarStaff) => void
   bulkDisabled: boolean
   popoverPatterns: (cell: ActiveCell) => PopoverPattern[]
+  /** 初めて開いたときの案内を出すセル（014 §4.7）。出さないときは null */
+  coachCell: ActiveCell | null
+  onCoachDismiss: () => void
 }
 
 /** 0/0（必要人数も配置も無い日）は数字を出さない。全列に出すと指標として読まれなくなる */
@@ -97,6 +100,8 @@ export function CalendarTable({
   onStaffBulk,
   bulkDisabled,
   popoverPatterns,
+  coachCell,
+  onCoachDismiss,
 }: Props) {
   return (
     <table className={classes.table} data-previewing={assistGhosts.size > 0 || undefined}>
@@ -205,6 +210,27 @@ export function CalendarTable({
                           }
                           onClose={onCloseCell}
                         />
+                      </Popover.Dropdown>
+                    </Popover>
+                  ) : coachCell?.staffId === staff.id && coachCell.date === date ? (
+                    // 初めて開いたときだけ（014 §4.7）。セルを押すと案内は閉じてパターンのポップオーバーに替わる
+                    // モーダル（z-index 200）より下に置く。既定の 300 だと自動作成などのモーダルの上に残る
+                    <Popover
+                      opened
+                      position="bottom-start"
+                      withArrow
+                      shadow="md"
+                      withinPortal
+                      zIndex={150}
+                    >
+                      <Popover.Target>{cell}</Popover.Target>
+                      <Popover.Dropdown p="sm" maw={260}>
+                        <Text size="sm" fw={600}>
+                          マスを押すと、勤務を入れられます
+                        </Text>
+                        <Button size="compact-xs" variant="subtle" mt={6} onClick={onCoachDismiss}>
+                          わかりました
+                        </Button>
                       </Popover.Dropdown>
                     </Popover>
                   ) : (

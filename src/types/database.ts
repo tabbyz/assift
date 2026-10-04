@@ -575,6 +575,7 @@ export type Database = {
           id: string
           name: string
           owner_id: string
+          setup_completed_at: string | null
           shift_cycle: Database["public"]["Enums"]["shift_cycle"]
           start_of_week: number
           updated_at: string
@@ -585,6 +586,7 @@ export type Database = {
           id?: string
           name: string
           owner_id?: string
+          setup_completed_at?: string | null
           shift_cycle?: Database["public"]["Enums"]["shift_cycle"]
           start_of_week?: number
           updated_at?: string
@@ -595,6 +597,7 @@ export type Database = {
           id?: string
           name?: string
           owner_id?: string
+          setup_completed_at?: string | null
           shift_cycle?: Database["public"]["Enums"]["shift_cycle"]
           start_of_week?: number
           updated_at?: string
@@ -633,6 +636,10 @@ export type Database = {
         }
         Returns: number
       }
+      complete_setup: {
+        Args: { p_staff_names: string[]; p_tenant_id: string }
+        Returns: number
+      }
       copy_shifts: {
         Args: {
           p_from_end: string
@@ -649,6 +656,10 @@ export type Database = {
       }
       rollback_assist_run: {
         Args: { p_run_id: string; p_tenant_id: string }
+        Returns: number
+      }
+      save_setup_patterns: {
+        Args: { p_patterns: Json; p_tenant_id: string }
         Returns: number
       }
       set_shifts_fixed: {

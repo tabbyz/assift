@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { saveRequiredNumsSchema, setDefaultRequiredNumsSchema } from './requiredNums'
+import {
+  saveRequiredNumsSchema,
+  setDefaultRequiredNumsSchema,
+  setUniformDefaultRequiredNumsSchema,
+} from './requiredNums'
 
 const TENANT = '22222222-2222-2222-2222-222222222222'
 const PATTERN = '33333333-3333-3333-3333-000000000001'
@@ -97,5 +101,26 @@ describe('setDefaultRequiredNumsSchema', () => {
     })
     expect(result.success).toBe(false)
     expect(result.error?.issues[0]?.message).toBe('期間が正しくありません')
+  })
+})
+
+describe('setUniformDefaultRequiredNumsSchema（014 §3.8）', () => {
+  it('勤務 id → 人数 を通し、空欄は 0 にする', () => {
+    expect(
+      setUniformDefaultRequiredNumsSchema.parse({ tenantId: TENANT, nums: { [PATTERN]: '' } }).nums
+    ).toEqual({ [PATTERN]: 0 })
+  })
+
+  it('勤務が 1 つも無ければ弾く', () => {
+    const r = setUniformDefaultRequiredNumsSchema.safeParse({ tenantId: TENANT, nums: {} })
+    expect(r.success).toBe(false)
+  })
+
+  it('範囲外は日本語で弾く', () => {
+    const r = setUniformDefaultRequiredNumsSchema.safeParse({
+      tenantId: TENANT,
+      nums: { [PATTERN]: 100 },
+    })
+    expect(r.success ? null : r.error.issues[0].message).toBe('必要人数は0〜99で入力してください')
   })
 })

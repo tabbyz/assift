@@ -7,6 +7,8 @@ create table public.tenants (
   start_of_week smallint    not null default 0 check (start_of_week between 0 and 6),
   -- 自動アサインの「AI への指示」の店舗の既定（012 §4.2）。上限は lib/validation/assist.ts と同じ
   assist_notes  text        check (char_length(assist_notes) <= 500),
+  -- 初期設定（014）を終えた日時。null = 準備中。一度入れたら変えない（private.guard_setup_completed_at）
+  setup_completed_at timestamptz,
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now()
 );
@@ -26,3 +28,7 @@ create policy tenants_owner_all on public.tenants
 create trigger tenants_set_updated_at
   before update on public.tenants
   for each row execute function private.set_updated_at();
+
+create trigger tenants_guard_setup_completed_at
+  before update on public.tenants
+  for each row execute function private.guard_setup_completed_at();

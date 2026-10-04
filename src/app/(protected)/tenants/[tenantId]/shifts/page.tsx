@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { dateRange, defaultStart } from '@/lib/calendar/dateRange'
 import { holidaysIn } from '@/lib/calendar/holidays'
 import { todayJst } from '@/lib/calendar/today'
@@ -36,6 +36,8 @@ export default async function ShiftsPage({
     getTenant(tenantId),
   ])
   if (!tenant) notFound()
+  // 準備中の店舗は初期設定の続きへ（014 §3.7）
+  if (!tenant.setup_completed_at) redirect(`/tenants/${tenantId}/setup`)
 
   // 共有の公開期限も同じ「今日」で判定する（Client に渡して発行ボタンの可否にも使う。009 §3.2）
   const today = todayJst()

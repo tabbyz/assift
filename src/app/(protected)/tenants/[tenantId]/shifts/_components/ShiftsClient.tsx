@@ -32,6 +32,7 @@ import {
   clearDraftShifts,
   setDefaultPatterns,
   setDefaultRequiredNums,
+  setUniformDefaultRequiredNums,
   setShiftsFixed,
 } from '../actions'
 import { shiftsParsers } from '../searchParams'
@@ -47,7 +48,8 @@ import { CountModal } from './CountModal'
 import { DateNoteModal } from './DateNoteModal'
 import { PatternDescriptionList } from '@/components/shiftTable/PatternDescriptionList'
 import { RequiredNumModal, type RequiredNumRowInput } from './RequiredNumModal'
-import { SetupNotice } from './SetupNotice'
+import { EmptyNotice } from './EmptyNotice'
+import { useFirstVisitCoach } from './useFirstVisitCoach'
 import { ShareModal, type ShareItem } from './ShareModal'
 import { Toolbar } from './Toolbar'
 import classes from '@/components/shiftTable/ShiftTable.module.css'
@@ -163,8 +165,23 @@ export function ShiftsClient(props: Props) {
     void setQuery({ start: nextValue })
   }
 
+  const coach = useFirstVisitCoach(tenantId)
+  // 表示中の期間が空で、入れられるスタッフと勤務があるときだけ、最初のスタッフの期間初日に出す
+  const coachEligible =
+    coach.active && shifts.size === 0 && staffs.length > 0 && patterns.length > 0
+  const coachCell =
+    coachEligible && !activeCell ? { staffId: staffs[0].id, date: range.dates[0] } : null
+
   const assign = (cell: ActiveCell, patternId: string | null, fixed: boolean) => {
     setActiveCell(null)
+    // ヒントを出していた店だけ（既にシフトがある期間で初めて開いた端末には出さない）
+    if (coachEligible && patternId) {
+      coach.finish()
+      notifications.show({
+        message: 'できました。ほかのマスも同じように入れられます',
+        color: 'green',
+      })
+    }
     startAssign(async () => {
       addOptimisticAssign({ ...cell, patternId, fixed })
       const result = await assignShift({ tenantId, ...cell, patternId, fixed })
@@ -255,6 +272,23 @@ export function ShiftsClient(props: Props) {
             )
         ),
     })
+
+  // 必要人数もデフォルトも無い店（初期設定のテンプレートは必要人数を持たない）は、自動作成でその場で聞く（014 §3.8）
+  const quickRequiredNumPatterns =
+    workdayPatterns.length > 0 &&
+    workdayPatterns.every((pattern) => Object.keys(pattern.defaultRequiredNums).length === 0)
+      ? workdayPatterns.map((pattern) => ({ id: pattern.id, name: pattern.name }))
+      : null
+
+  const applyUniformRequiredNums = (nums: Record<string, number | ''>) =>
+    runBulk(
+      async () => {
+        const saved = await setUniformDefaultRequiredNums({ tenantId, nums })
+        if (!saved.ok) return saved
+        return setDefaultRequiredNums({ tenantId, start: range.start, end: range.end })
+      },
+      () => ({ message: '必要人数を入れました', color: 'green' })
+    )
 
   const confirmSetDefaultRequiredNums = () =>
     modals.openConfirmModal({
@@ -388,7 +422,7 @@ export function ShiftsClient(props: Props) {
         />
 
         {needsSetup && (
-          <SetupNotice
+          <EmptyNotice
             tenantId={tenantId}
             hasPattern={patterns.length > 0}
             hasStaff={staffs.length > 0}
@@ -427,6 +461,8 @@ export function ShiftsClient(props: Props) {
                 // 期間移動中は無効にしない: メニューには「スタッフ情報を編集」もあり、007 では移動中も開けた
                 bulkDisabled={isBulkPending}
                 popoverPatterns={popoverPatterns}
+                coachCell={coachCell}
+                onCoachDismiss={coach.finish}
               />
             </Box>
             <PatternDescriptionList patterns={patterns} />
@@ -509,6 +545,9 @@ export function ShiftsClient(props: Props) {
           assist.close()
           confirmSetDefaultRequiredNums()
         }}
+        quickRequiredNumPatterns={quickRequiredNumPatterns}
+        onApplyRequiredNums={applyUniformRequiredNums}
+        applyingRequiredNums={isBulkPending}
       />
 
       {copyOpened && (

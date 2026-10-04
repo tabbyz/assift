@@ -1,0 +1,260 @@
+/*
+ * 初期設定（014 §4.6）。md 以上は左に入力・右に完成イメージ、md 未満は 1 カラムで下に固定の主ボタン。
+ * Mantine に無いのは 2 カラムの高さの合わせ方と、選択肢ボタンの「選んだ」状態だけなので、ここに置く。
+ */
+.page {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.form {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: $mantine-breakpoint-md) {
+  .form {
+    flex: 0 0 520px;
+    border-right: 1px solid var(--mantine-color-default-border);
+  }
+}
+
+.content {
+  flex: 1;
+  padding: var(--mantine-spacing-lg) var(--mantine-spacing-md) var(--mantine-spacing-xl);
+}
+
+@media (min-width: $mantine-breakpoint-md) {
+  .content {
+    padding-inline: var(--mantine-spacing-xl);
+  }
+}
+
+/* 主ボタンは画面の下に固定する（スマホでフォームの下まで探させない） */
+.footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  background: var(--mantine-color-body);
+  border-top: 1px solid var(--mantine-color-default-border);
+  padding: var(--mantine-spacing-sm) var(--mantine-spacing-md) var(--mantine-spacing-md);
+}
+
+@media (min-width: $mantine-breakpoint-md) {
+  .footer {
+    padding-inline: var(--mantine-spacing-xl);
+  }
+}
+
+.preview {
+  flex: 1;
+  min-width: 0;
+  background: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-8));
+  padding: var(--mantine-spacing-xl);
+}
+
+/* 見出しへフォーカスを移したとき（014 §4.9）。キーボードで来たときだけ枠を出す */
+.heading:focus {
+  outline: none;
+}
+
+.heading:focus-visible {
+  outline: 2px solid var(--mantine-primary-color-filled);
+  outline-offset: 4px;
+}
+
+/* ---------------------------------------------------------------------------
+ * 選択肢のボタン（業種・作成周期・曜日）。aria-pressed で選んだ状態を描く
+ * ------------------------------------------------------------------------- */
+.option {
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 1.5px solid var(--mantine-color-default-border);
+  border-radius: var(--mantine-radius-md);
+  background: var(--mantine-color-body);
+  font-size: var(--mantine-font-size-md);
+  text-align: center;
+  cursor: pointer;
+}
+
+.option:hover {
+  border-color: light-dark(var(--mantine-color-gray-5), var(--mantine-color-dark-2));
+}
+
+.option[aria-pressed='true'] {
+  border-color: light-dark(var(--mantine-color-dark-6), var(--mantine-color-gray-3));
+  box-shadow: inset 0 0 0 1px light-dark(var(--mantine-color-dark-6), var(--mantine-color-gray-3));
+  background: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-6));
+  font-weight: 700;
+}
+
+/* 業種のボタンは左寄せの 2 行（名前 + 中身） */
+.industry {
+  composes: option;
+  min-height: 64px;
+  text-align: left;
+  padding: 10px 14px;
+}
+
+/* ---------------------------------------------------------------------------
+ * 勤務の行（行全体がチェックのボタン + 右に鉛筆）
+ * ------------------------------------------------------------------------- */
+.patternRow {
+  display: flex;
+  align-items: stretch;
+  border: 1.5px solid var(--mantine-color-default-border);
+  border-radius: var(--mantine-radius-md);
+  background: var(--mantine-color-body);
+  overflow: hidden;
+}
+
+.patternRow[data-off] {
+  border-style: dashed;
+  background: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-7));
+}
+
+.patternToggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.patternRow[data-off] .patternName {
+  text-decoration: line-through;
+  color: var(--mantine-color-dimmed);
+}
+
+.patternRow[data-off] .swatch {
+  opacity: 0.35;
+}
+
+.swatch {
+  flex: 0 0 34px;
+  height: 34px;
+  border-radius: var(--mantine-radius-sm);
+  border: 1px solid transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+.check {
+  flex: 0 0 26px;
+  height: 26px;
+  border-radius: var(--mantine-radius-sm);
+  border: 2px solid var(--mantine-color-gray-5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.check[data-on] {
+  background: var(--mantine-color-dark-6);
+  border-color: var(--mantine-color-dark-6);
+  color: var(--mantine-color-white);
+}
+
+.patternEdit {
+  flex: 0 0 52px;
+  border-left: 1px solid var(--mantine-color-default-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mantine-color-dimmed);
+  cursor: pointer;
+}
+
+.patternEdit:hover {
+  background: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6));
+}
+
+/* ---------------------------------------------------------------------------
+ * 完成イメージの表（本物の表のセルの色は cellStyle で付ける）
+ * ------------------------------------------------------------------------- */
+.zone {
+  border-radius: var(--mantine-radius-md);
+  outline: 2px dashed transparent;
+  outline-offset: 4px;
+}
+
+.zone[data-active] {
+  outline-color: light-dark(var(--mantine-color-dark-4), var(--mantine-color-gray-4));
+}
+
+.tableScroll {
+  overflow-x: auto;
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: var(--mantine-radius-sm);
+  background: var(--mantine-color-body);
+}
+
+.table {
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  font-size: var(--mantine-font-size-xs);
+}
+
+.table th,
+.table td {
+  border-right: 1px solid var(--mantine-color-default-border);
+  border-bottom: 1px solid var(--mantine-color-default-border);
+  text-align: center;
+  padding: 2px;
+}
+
+.table th {
+  height: 40px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.table td {
+  height: 32px;
+}
+
+.table .staffCell {
+  text-align: left;
+  padding-inline: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--mantine-font-size-sm);
+}
+
+/* スタッフ列の見出し（ステップ 3）。表のセルなので角は丸めず、内側に点線を引く */
+.table .staffHead[data-active] {
+  outline: 2px dashed light-dark(var(--mantine-color-dark-4), var(--mantine-color-gray-4));
+  outline-offset: -3px;
+}
+
+.table .ghost {
+  color: var(--mantine-color-dimmed);
+}
+
+.cell {
+  height: 100%;
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  font-weight: 600;
+}

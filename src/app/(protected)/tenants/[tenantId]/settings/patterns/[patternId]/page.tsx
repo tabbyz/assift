@@ -49,7 +49,6 @@ export default async function EditPatternPage({
           pairPatternId: pattern.pair_pattern_id,
           defaultRequiredNums: parseRequiredNums(pattern.default_required_nums),
         }}
-        afterCreate="list"
       />
 
       <PatternEditClient tenantId={tenantId} patternId={pattern.id} />
