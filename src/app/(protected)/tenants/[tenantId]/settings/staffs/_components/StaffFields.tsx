@@ -96,7 +96,7 @@ export function StaffConditionFields({
     <Stack gap="lg">
       <Input.Wrapper
         label="曜日ごとの勤務"
-        description="オフの曜日は勤務できません（シフト表では斜線）。パターンはシフト表の[ツール]で一括セットでき、AI で作成するときも優先されます"
+        description="オフの曜日はシフト表では斜線で表示されます。パターンはシフト表の[ツール]で一括セットでき、AI で作成するときも優先されます"
       >
         <Table mt={4} maw={360} withRowBorders={false} verticalSpacing={4}>
           <TableTbody>
