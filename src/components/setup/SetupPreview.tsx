@@ -177,7 +177,7 @@ export function SetupPreview({
             </Paper>
           ) : (
             <Text size="sm" c="dimmed">
-              お仕事を選ぶと、ここと表のマスに色がつきます。
+              業種を選ぶと、ここと表のマスに色がつきます。
             </Text>
           )}
         </Stack>

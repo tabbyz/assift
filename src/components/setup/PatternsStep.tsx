@@ -70,10 +70,10 @@ export function PatternsStep({
     }
     if (!fromSaved) return reset()
     modals.openConfirmModal({
-      title: 'お仕事を選びなおす',
+      title: '業種を選びなおす',
       children: (
         <Text size="sm">
-          いまの勤務の一覧は、選んだお仕事のよく使う勤務に置き換わります（「次へ」を押すまでは保存されません）。
+          いまの勤務の一覧は、選んだ業種でよく使う勤務に置き換わります（「次へ」を押すまでは保存されません）。
         </Text>
       ),
       labels: { confirm: '選びなおす', cancel: 'やめる' },
@@ -86,9 +86,9 @@ export function PatternsStep({
       <Stack gap="xl">
         <Stack gap={6}>
           <Title order={2} fz={22} ref={headingRef} tabIndex={-1} className={classes.heading}>
-            どんなお仕事のお店ですか？
+            お店の業種を選んでください
           </Title>
-          <Text c="dimmed">選んだお仕事に合わせて、よく使う勤務を用意します。</Text>
+          <Text c="dimmed">近いものを選ぶと、よく使う勤務を用意します。</Text>
         </Stack>
         <SimpleGrid cols={{ base: 1, xs: 2 }} spacing="sm">
           {INDUSTRIES.map((value) => (
@@ -159,14 +159,14 @@ export function PatternsStep({
         <Text size="sm">
           {industry ? (
             <>
-              お仕事：<b>{INDUSTRY_LABELS[industry]}</b>
+              業種：<b>{INDUSTRY_LABELS[industry]}</b>
             </>
           ) : (
             '保存してある勤務'
           )}
         </Text>
         <Button variant="default" size="compact-sm" onClick={chooseAgain}>
-          お仕事を選びなおす
+          業種を選びなおす
         </Button>
       </Group>
 

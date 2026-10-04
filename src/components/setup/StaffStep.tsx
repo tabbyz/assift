@@ -22,9 +22,7 @@ export function StaffStep({ text, onChange, parsed, headingRef }: Props) {
         <Title order={2} fz={22} ref={headingRef} tabIndex={-1} className={classes.heading}>
           働く人の名前を入れてください
         </Title>
-        <Text c="dimmed">
-          <b>1行に1人</b>ずつ。LINE や Excel からまとめて貼り付けてもOKです。
-        </Text>
+        <Text c="dimmed">1行に1人ずつ入力してください。</Text>
       </Stack>
 
       <Stack gap={6}>

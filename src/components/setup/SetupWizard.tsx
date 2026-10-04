@@ -184,7 +184,7 @@ export function SetupWizard(props: Props) {
         return '何曜日から始まるか選んでください'
     }
     if (view === 'patterns') {
-      if (!selected) return 'お仕事の種類を選んでください'
+      if (!selected) return '業種を選んでください'
       if (!selected.patterns.some((row) => row.kind === 'workday'))
         return '働く日の勤務を 1 つ以上残してください'
     }
@@ -424,7 +424,7 @@ export function SetupWizard(props: Props) {
               <Stack gap={6} maw={560} mx="auto">
                 {hint && (
                   <Text id={hintId} size="sm" c="orange.9" ta="center">
-                    あと少し：{hint}
+                    {hint}
                   </Text>
                 )}
                 <Group gap="sm" wrap="nowrap">
@@ -455,6 +455,10 @@ export function SetupWizard(props: Props) {
                     {nextLabel}
                   </Button>
                 </Group>
+                {/* どのステップでも見える場所に置く。「あとで直せる」と分かれば、迷っても先へ進める */}
+                <Text size="xs" c="dimmed" ta="center">
+                  入力した内容は、あとからいつでも変更できます
+                </Text>
               </Stack>
             </div>
           )}
