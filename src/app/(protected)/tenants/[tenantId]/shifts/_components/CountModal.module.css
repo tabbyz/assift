@@ -2,8 +2,9 @@
   集計の表。シフト表本体とは別に書く。
 
   縦: スタッフが多いときはこの領域だけスクロールし、見出し行は stickyHeader で残す。
-  横: パターン列だけ流れ、名前・勤務日・休み（3 列目）までを固定する。
-  left は列幅の合計。幅を max までロックしないと、表が広がったとき left がずれる。
+  横: パターン列だけ流れ、名前・勤務日（2 列目）までを固定する。
+  勤務日の left は名前列の幅。名前列は幅を max までロックしないと、表が広がったとき left がずれる。
+  勤務日は固定範囲の右端なので幅をロックせず、中身ぴったりにする（スマホで流せる幅を残す）。
 */
 .scroller {
   max-height: calc(100dvh - var(--modal-y-offset, 5dvh) * 2 - 8rem);
@@ -30,7 +31,6 @@
 
 .table {
   --count-name-width: 100px;
-  --count-day-width: 4.5rem;
 
   width: max-content;
   min-width: 100%;
@@ -120,8 +120,7 @@
 }
 
 .nameCell,
-.workdayCell,
-.offCell {
+.workdayCell {
   position: sticky;
   z-index: 2;
   background-color: var(--mantine-color-body);
@@ -130,8 +129,7 @@
 
 /* 見出し行の中でも、流れるパターン名より手前に置く。面は日付ヘッダーと同じ gray-0 */
 .table thead .nameCell,
-.table thead .workdayCell,
-.table thead .offCell {
+.table thead .workdayCell {
   z-index: 5;
   background-color: var(--mantine-color-gray-0);
   background-image: linear-gradient(var(--mantine-color-gray-0), var(--mantine-color-gray-0));
@@ -148,18 +146,11 @@
   box-shadow: inset 1px 0 0 var(--table-border-color);
 }
 
-.workdayCell {
+.table .workdayCell {
   left: var(--count-name-width);
-  width: var(--count-day-width);
-  min-width: var(--count-day-width);
-  max-width: var(--count-day-width);
-}
-
-.table .offCell {
-  left: calc(var(--count-name-width) + var(--count-day-width));
-  width: var(--count-day-width);
-  min-width: var(--count-day-width);
-  max-width: var(--count-day-width);
+  /* 1px + nowrap: 表が min-width: 100% で広がっても余りを受けず、中身の幅に縮む */
+  width: 1px;
+  white-space: nowrap;
   /* 固定範囲の右端。見出しの下線と同じ 2px */
   border-inline-end: 2px solid var(--mantine-color-gray-3);
 }
