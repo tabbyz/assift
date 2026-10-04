@@ -27,7 +27,7 @@ export default async function EditPatternPage({
   if (!pattern) notFound()
 
   return (
-    <Stack gap="md">
+    <Stack gap="lg">
       <SettingsBreadcrumbs
         parent={{ href: `/tenants/${tenantId}/settings/patterns`, label: '勤務パターン一覧' }}
         current="勤務パターンの編集"

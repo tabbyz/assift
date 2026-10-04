@@ -1,6 +1,34 @@
+/* 列数は画面幅ではなく置かれた幅で決める（フォームの幅はナビの有無で変わる） */
+.container {
+  container-type: inline-size;
+  margin-top: 4px;
+}
+
+/* 表の枠線は外枠を grid、内側を各セルの右・下で描く */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  border-top: 1px solid var(--table-border-color);
+  border-left: 1px solid var(--table-border-color);
+  --table-border-color: light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+}
+
+/* 8 列だと 1 セルが 60px を切り、数字とスピンボタンが窮屈になる。曜日 4 + 4 の 2 段にする */
+@container (max-width: 560px) {
+  .grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.cell {
+  border-right: 1px solid var(--table-border-color);
+  border-bottom: 1px solid var(--table-border-color);
+}
+
 /* セルの枠が入力欄の枠。入力の線を残すと二重に見える */
 .field :global(.mantine-Input-input) {
   --input-bd: transparent;
+  --input-height: 40px;
   border-radius: 0;
   background-color: transparent;
   text-align: center;
@@ -18,6 +46,9 @@
 
 .head {
   position: relative;
+  padding-block: 6px;
+  text-align: center;
+  border-bottom: 1px solid var(--table-border-color);
 }
 
 .copy {

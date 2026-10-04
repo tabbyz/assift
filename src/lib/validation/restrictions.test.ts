@@ -145,7 +145,6 @@ describe('createRestrictionSchema', () => {
     staffId: S,
     hard: true,
     input: { kind: 'min_work_week', days: 3 },
-    returnStaffId: S,
   }
 
   it('対象は店舗全体（null）かスタッフ', () => {
@@ -153,11 +152,5 @@ describe('createRestrictionSchema', () => {
     expect(createRestrictionSchema.safeParse({ ...valid, staffId: null }).success).toBe(true)
     const r = createRestrictionSchema.safeParse({ ...valid, staffId: 'x' })
     expect(r.success ? null : toActionError(r.error)).toBe('スタッフを選択してください')
-  })
-
-  it('戻り先はスタッフの id か null だけ（URL は受けない）', () => {
-    expect(createRestrictionSchema.safeParse({ ...valid, returnStaffId: null }).success).toBe(true)
-    const r = createRestrictionSchema.safeParse({ ...valid, returnStaffId: '/evil' })
-    expect(r.success ? null : toActionError(r.error)).toBe('戻り先が正しくありません')
   })
 })

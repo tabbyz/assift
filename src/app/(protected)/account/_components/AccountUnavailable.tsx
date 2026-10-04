@@ -28,7 +28,7 @@ export function AccountUnavailable() {
   return (
     <Container size="sm" py="xl">
       <Stack gap="lg">
-        <Title order={2}>アカウント</Title>
+        <Title order={2}>アカウント情報</Title>
         <Alert color="orange" variant="light" icon={<IconAlertCircle size={16} />}>
           アカウント情報を読み込めませんでした。ログインの有効期限が切れているか、アカウントが削除された可能性があります。
         </Alert>

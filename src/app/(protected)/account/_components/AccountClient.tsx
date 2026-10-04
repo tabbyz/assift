@@ -7,7 +7,6 @@ import {
   Button,
   Container,
   Group,
-  Paper,
   PasswordInput,
   Stack,
   Text,
@@ -17,8 +16,8 @@ import {
 import { modals } from '@mantine/modals'
 import { notifications } from '@mantine/notifications'
 import { IconInfoCircle } from '@tabler/icons-react'
-import { logout } from '@/app/(protected)/actions'
 import { FormErrorAlert } from '@/components/FormErrorAlert'
+import { SettingsSection } from '@/components/SettingsSection'
 import { PASSWORD_MIN_LENGTH } from '@/lib/validation/auth'
 import { deleteAccount, updateEmail, updatePassword } from '../actions'
 
@@ -41,7 +40,6 @@ export function AccountClient({ email, newEmail, hasPassword, notice, initialErr
   const [passwordConfirmation, setPasswordConfirmation] = useState('')
   const [isEmailPending, startEmail] = useTransition()
   const [isPasswordPending, startPassword] = useTransition()
-  const [isLogoutPending, startLogout] = useTransition()
   const [isDeletePending, startDelete] = useTransition()
 
   const submitEmail = (e: FormEvent<HTMLFormElement>) => {
@@ -76,16 +74,6 @@ export function AccountClient({ email, newEmail, hasPassword, notice, initialErr
     })
   }
 
-  const doLogout = () =>
-    startLogout(async () => {
-      const r = await logout()
-      if (!r.ok) {
-        notifications.show({ message: r.error, color: 'red' })
-        return
-      }
-      router.push(r.data.redirectTo)
-    })
-
   const confirmDelete = () =>
     modals.openConfirmModal({
       title: 'アカウントを削除',
@@ -107,7 +95,7 @@ export function AccountClient({ email, newEmail, hasPassword, notice, initialErr
   return (
     <Container size="sm" py="xl">
       <Stack gap="lg">
-        <Title order={2}>アカウント</Title>
+        <Title order={2}>アカウント情報</Title>
 
         <FormErrorAlert message={initialError} />
 
@@ -118,9 +106,17 @@ export function AccountClient({ email, newEmail, hasPassword, notice, initialErr
           </Alert>
         )}
 
-        <Paper withBorder p="lg">
+        <SettingsSection
+          title="メールアドレス"
+          footer={
+            hasPassword && (
+              <Button type="submit" form="email-form" variant="default" loading={isEmailPending}>
+                確認メールを送信
+              </Button>
+            )
+          }
+        >
           <Stack gap="md">
-            <Title order={4}>メールアドレス</Title>
             <Text>{email}</Text>
             {newEmail && (
               <Text size="sm" c="dimmed">
@@ -128,22 +124,16 @@ export function AccountClient({ email, newEmail, hasPassword, notice, initialErr
               </Text>
             )}
             {hasPassword ? (
-              <form onSubmit={submitEmail}>
-                <Stack gap="sm">
-                  <TextInput
-                    label="新しいメールアドレス"
-                    type="email"
-                    autoComplete="email"
-                    value={nextEmail}
-                    onChange={(e) => setNextEmail(e.currentTarget.value)}
-                    required
-                  />
-                  <Group justify="flex-end">
-                    <Button type="submit" variant="default" loading={isEmailPending}>
-                      確認メールを送信
-                    </Button>
-                  </Group>
-                </Stack>
+              // 送信ボタンは枠の下端（footer）にあるので form 属性で結ぶ
+              <form id="email-form" onSubmit={submitEmail}>
+                <TextInput
+                  label="新しいメールアドレス"
+                  type="email"
+                  autoComplete="email"
+                  value={nextEmail}
+                  onChange={(e) => setNextEmail(e.currentTarget.value)}
+                  required
+                />
               </form>
             ) : (
               <Text size="sm" c="dimmed">
@@ -151,13 +141,21 @@ export function AccountClient({ email, newEmail, hasPassword, notice, initialErr
               </Text>
             )}
           </Stack>
-        </Paper>
+        </SettingsSection>
 
-        <Paper withBorder p="lg">
+        <SettingsSection
+          title="パスワード"
+          footer={
+            hasPassword && (
+              <Button type="submit" form="password-form" loading={isPasswordPending}>
+                パスワードを変更
+              </Button>
+            )
+          }
+        >
           <Stack gap="md">
-            <Title order={4}>パスワード</Title>
             {hasPassword ? (
-              <form onSubmit={submitPassword}>
+              <form id="password-form" onSubmit={submitPassword}>
                 <Stack gap="sm">
                   <PasswordInput
                     label="現在のパスワード"
@@ -180,11 +178,6 @@ export function AccountClient({ email, newEmail, hasPassword, notice, initialErr
                     onChange={(e) => setPasswordConfirmation(e.currentTarget.value)}
                     required
                   />
-                  <Group justify="flex-end">
-                    <Button type="submit" loading={isPasswordPending}>
-                      パスワードを変更
-                    </Button>
-                  </Group>
                 </Stack>
               </form>
             ) : (
@@ -193,20 +186,10 @@ export function AccountClient({ email, newEmail, hasPassword, notice, initialErr
               </Text>
             )}
           </Stack>
-        </Paper>
+        </SettingsSection>
 
-        <Paper withBorder p="lg">
-          <Group justify="space-between">
-            <Title order={4}>ログアウト</Title>
-            <Button variant="default" onClick={doLogout} loading={isLogoutPending}>
-              ログアウト
-            </Button>
-          </Group>
-        </Paper>
-
-        <Paper withBorder p="lg">
+        <SettingsSection title="アカウントを削除">
           <Stack gap="md">
-            <Title order={4}>アカウントを削除</Title>
             <Text size="sm" c="dimmed">
               アカウントを削除すると、作成した店舗・スタッフ・シフト表などすべてのデータが削除され、本サービスへログインできなくなります。
             </Text>
@@ -224,7 +207,7 @@ export function AccountClient({ email, newEmail, hasPassword, notice, initialErr
               </Button>
             </Group>
           </Stack>
-        </Paper>
+        </SettingsSection>
       </Stack>
     </Container>
   )

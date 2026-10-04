@@ -2,10 +2,11 @@
 
 import { type FormEvent, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button, Group, Paper, Select, Stack, Text, TextInput, Title } from '@mantine/core'
+import { Button, Group, Select, Stack, Text, TextInput, Title } from '@mantine/core'
 import { modals } from '@mantine/modals'
 import { notifications } from '@mantine/notifications'
 import { FormErrorAlert } from '@/components/FormErrorAlert'
+import { SettingsSection } from '@/components/SettingsSection'
 import { SHIFT_CYCLE_OPTIONS, type ShiftCycle } from '@/lib/calendar/shiftCycle'
 import { START_OF_WEEK_OPTIONS } from '@/lib/calendar/weekdays'
 import { TENANT_NAME_MAX_LENGTH } from '@/lib/validation/tenants'
@@ -69,8 +70,14 @@ export function GeneralSettingsClient(props: Props) {
 
       <FormErrorAlert message={error} />
 
-      <Paper withBorder p="lg">
-        <form onSubmit={submit}>
+      <form onSubmit={submit}>
+        <SettingsSection
+          footer={
+            <Button type="submit" loading={isSaving}>
+              保存
+            </Button>
+          }
+        >
           <Stack gap="md">
             <TextInput
               label="店舗名"
@@ -97,18 +104,12 @@ export function GeneralSettingsClient(props: Props) {
               allowDeselect={false}
               required
             />
-            <Group justify="flex-end">
-              <Button type="submit" loading={isSaving}>
-                保存
-              </Button>
-            </Group>
           </Stack>
-        </form>
-      </Paper>
+        </SettingsSection>
+      </form>
 
-      <Paper withBorder p="lg">
+      <SettingsSection title="店舗を削除">
         <Stack gap="md">
-          <Title order={4}>店舗を削除</Title>
           <Stack gap={4}>
             <Text size="sm" c="dimmed">
               削除すると、この店舗に関連するすべてのデータが削除されます。
@@ -123,7 +124,7 @@ export function GeneralSettingsClient(props: Props) {
             </Button>
           </Group>
         </Stack>
-      </Paper>
+      </SettingsSection>
     </Stack>
   )
 }

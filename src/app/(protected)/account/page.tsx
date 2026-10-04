@@ -9,7 +9,7 @@ import { createClient } from '@/utils/supabase/server'
 import { AccountClient } from './_components/AccountClient'
 import { AccountUnavailable } from './_components/AccountUnavailable'
 
-export const metadata: Metadata = { title: 'アカウント' }
+export const metadata: Metadata = { title: 'アカウント情報' }
 
 export default async function AccountPage({ searchParams }: PageProps<'/account'>) {
   const params = await searchParams

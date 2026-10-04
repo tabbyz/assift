@@ -22,19 +22,16 @@ type Options = {
   cycle: ShiftCycle
   /** 明らかに守れない下限の注意に使う（在籍スタッフ） */
   activeStaffs: readonly Pick<Tables<'staffs'>, 'id' | 'max_work_week' | 'available_wdays'>[]
-  /** スタッフの編集画面から開くときは `staff`（保存後にそこへ戻る。013 §4.2） */
-  from?: 'staff'
 }
 
-/** 制約の行を画面の 1 行にする（制約ページ・スタッフの編集画面で共有） */
+/** 制約の行を画面の 1 行にする（制約ページ） */
 export function toRestrictionRowView(
   restriction: Tables<'restrictions'>,
-  { tenantId, patternNames, cycle, activeStaffs, from }: Options
+  { tenantId, patternNames, cycle, activeStaffs }: Options
 ): RestrictionRowView {
-  const href = `/tenants/${tenantId}/settings/restrictions/${restriction.id}`
   return {
     id: restriction.id,
-    href: from ? `${href}?from=${from}` : href,
+    href: `/tenants/${tenantId}/settings/restrictions/${restriction.id}`,
     description: describeRestriction(restriction, patternNames, cycle),
     kindLabel: RESTRICTION_KIND_LABELS[restriction.kind],
     hard: restriction.hard,

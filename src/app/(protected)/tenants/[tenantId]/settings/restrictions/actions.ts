@@ -22,14 +22,9 @@ const KIND_CHANGE_MESSAGE = '制約の種類は変えられません。削除し
 const REFERENCE_MESSAGE =
   'スタッフか勤務パターンが見つかりません。画面を再読み込みしてからやり直してください'
 
-/**
- * 保存・削除のあとの戻り先（013 §4.2）。スタッフの編集画面から開いたらそこへ、それ以外は制約ページへ。
- * URL はここで組む（入力から URL を受けない）
- */
-function redirectPath(tenantId: string, returnStaffId: string | null): string {
-  return returnStaffId
-    ? `/tenants/${tenantId}/settings/staffs/${returnStaffId}`
-    : `/tenants/${tenantId}/settings/restrictions`
+/** 保存・削除のあとは制約ページへ戻る */
+function listPath(tenantId: string): string {
+  return `/tenants/${tenantId}/settings/restrictions`
 }
 
 type Client = Awaited<ReturnType<typeof createClient>>
@@ -68,7 +63,6 @@ export async function createRestriction(input: {
   staffId: string | null
   hard: boolean
   input: RawRestrictionInput
-  returnStaffId: string | null
 }): Promise<ActionResult<{ redirectTo: string }>> {
   return runAction(async () => {
     const parsed = createRestrictionSchema.parse(input)
@@ -91,7 +85,7 @@ export async function createRestriction(input: {
     if (error) throwWriteError(error)
 
     revalidatePath(`/tenants/${tenantId}`, 'layout')
-    return { redirectTo: redirectPath(tenantId, parsed.returnStaffId) }
+    return { redirectTo: listPath(tenantId) }
   })
 }
 
@@ -101,7 +95,6 @@ export async function updateRestriction(input: {
   staffId: string | null
   hard: boolean
   input: RawRestrictionInput
-  returnStaffId: string | null
 }): Promise<ActionResult<{ redirectTo: string }>> {
   return runAction(async () => {
     const parsed = updateRestrictionSchema.parse(input)
@@ -138,17 +131,16 @@ export async function updateRestriction(input: {
     if (!data) fail(NOT_FOUND_MESSAGE)
 
     revalidatePath(`/tenants/${tenantId}`, 'layout')
-    return { redirectTo: redirectPath(tenantId, parsed.returnStaffId) }
+    return { redirectTo: listPath(tenantId) }
   })
 }
 
 export async function deleteRestriction(input: {
   tenantId: string
   restrictionId: string
-  returnStaffId: string | null
 }): Promise<ActionResult<{ redirectTo: string }>> {
   return runAction(async () => {
-    const { tenantId, restrictionId, returnStaffId } = deleteRestrictionSchema.parse(input)
+    const { tenantId, restrictionId } = deleteRestrictionSchema.parse(input)
     await requireUser()
     await requireTenant(tenantId)
 
@@ -164,6 +156,6 @@ export async function deleteRestriction(input: {
     if (!data) fail(NOT_FOUND_MESSAGE)
 
     revalidatePath(`/tenants/${tenantId}`, 'layout')
-    return { redirectTo: redirectPath(tenantId, returnStaffId) }
+    return { redirectTo: listPath(tenantId) }
   })
 }

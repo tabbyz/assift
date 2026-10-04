@@ -5,7 +5,7 @@ import { PATTERN_COLORS } from '@/lib/patterns/colors'
  * 色・半径・フォントはここに集約する。コンポーネント側で直接 hex を書かない。
  * primary は gray。ブランド色で chrome を塗らず、パターン色と不足の赤に役割を残す。
  * 状態がよい色は green（公開中、充足、成功通知）。chrome には使わない。
- * Button と Checkbox の既定色は dark。色を省略した filled が gray の 6 番に落ちないようにする。
+ * Button・Checkbox・Switch・Chip の既定色は dark。色を省略した filled が gray の 6 番に落ちないようにする。
  * `variant="default"` は色を見ないので、操作・集計などの副操作はそのまま残る。
  */
 /** 日付ピッカーの表示書式。ルートをまたいで同じにする（008 §10.15） */
@@ -17,6 +17,19 @@ export const theme = createTheme({
   components: {
     Button: { defaultProps: { color: 'dark' } },
     Checkbox: { defaultProps: { color: 'dark' } },
+    Switch: { defaultProps: { color: 'dark' } },
+    /*
+     * Chip の既定の角丸は xl（ピル型）。ほかの chrome と同じ控えめな角丸にする。
+     * 選択中の先頭のチェックマークは出さない（塗りで選択が分かる）。選択中はチェック分だけ左右の余白が詰まるので、未選択と同じ余白に戻す
+     */
+    Chip: {
+      defaultProps: { color: 'dark', radius: 'sm' },
+      // 関数（`vars`）は使えない: theme は Server（root layout）から Client の MantineProvider へ渡る
+      styles: {
+        iconWrapper: { display: 'none' },
+        label: { paddingInline: 'var(--chip-padding)' },
+      },
+    },
     /*
      * 通知の入れ物は既定で幅 100%・最大 440px まで常に広がる。短い成功文でも閉じるボタンが右端に寄る。
      * 幅は文の長さに合わせ、長い文だけ画面端と 440px で止める。

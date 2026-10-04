@@ -2,9 +2,12 @@
 
 import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button, Divider, Group, Paper, Stack, Text, Title } from '@mantine/core'
+import { Box, Button, Collapse, Divider, Group, Stack, Text, UnstyledButton } from '@mantine/core'
+import { useDisclosure } from '@mantine/hooks'
 import { modals } from '@mantine/modals'
 import { notifications } from '@mantine/notifications'
+import { IconChevronDown } from '@tabler/icons-react'
+import { SettingsSection } from '@/components/SettingsSection'
 import { deleteStaff, restoreStaff, retireStaff } from '../actions'
 
 type Props = {
@@ -16,6 +19,8 @@ type Props = {
 /** 編集画面の下に置く「退職処理」パネル（v1 と同じ構成） */
 export function StaffEditClient({ tenantId, staffId, retired }: Props) {
   const router = useRouter()
+  // めったに使わない取り消せない操作なので、毎回たたんだ状態で始める（開いた状態は覚えない）
+  const [opened, { toggle }] = useDisclosure(false)
   const [isRetiring, startRetire] = useTransition()
   const [isDeleting, startDelete] = useTransition()
 
@@ -60,49 +65,86 @@ export function StaffEditClient({ tenantId, staffId, retired }: Props) {
         }),
     })
 
-  return (
-    <Paper withBorder p="lg">
-      <Stack gap="md">
-        <Title order={4}>退職処理</Title>
+  // 開いたら、開閉の行が最初の項目の見出しを兼ねる（同じ見出しを 2 行続けて出さない）
+  const toggleLabel = opened
+    ? retired
+      ? 'スタッフを削除'
+      : 'スタッフを退職済みにする'
+    : retired
+      ? 'スタッフを削除する'
+      : '退職済みにする・削除する'
 
-        {!retired && (
-          <>
+  return (
+    <SettingsSection title="退職処理" padded={false}>
+      <UnstyledButton
+        onClick={toggle}
+        aria-expanded={opened}
+        aria-controls="staff-retire-panel"
+        w="100%"
+        px="lg"
+        pt="md"
+        // 開いたときは見出しの直下に説明文が続くので、見出しと説明の間隔（4px）に詰める
+        pb={opened ? 4 : 'md'}
+      >
+        <Group justify="space-between" wrap="nowrap">
+          <Text size="sm" fw={opened ? 700 : undefined}>
+            {toggleLabel}
+          </Text>
+          <IconChevronDown
+            size={16}
+            style={{
+              transform: opened ? 'rotate(180deg)' : undefined,
+              transition: 'transform 150ms ease',
+            }}
+          />
+        </Group>
+      </UnstyledButton>
+      <Collapse expanded={opened}>
+        <Box id="staff-retire-panel" px="lg" pb="lg">
+          <Stack gap="md">
+            {!retired && (
+              <>
+                <Text size="sm" c="dimmed">
+                  退職済みにすると、シフト表に表示されなくなります。
+                  <br />
+                  この操作はいつでも元に戻せます。
+                </Text>
+                <Group>
+                  <Button
+                    color="dark"
+                    variant="outline"
+                    onClick={toggleRetired}
+                    loading={isRetiring}
+                  >
+                    退職済みにする
+                  </Button>
+                </Group>
+                <Divider />
+              </>
+            )}
+
             <Stack gap={4}>
-              <Text size="sm" fw={700}>
-                スタッフを退職済みにする
-              </Text>
+              {/* 退職済みのときは開閉の行が「スタッフを削除」の見出しを兼ねる */}
+              {!retired && (
+                <Text size="sm" fw={700}>
+                  スタッフを削除
+                </Text>
+              )}
               <Text size="sm" c="dimmed">
-                退職済みにすると、シフト表に表示されなくなります。
-                <br />
-                この操作はいつでも元に戻せます。
+                削除すると、このスタッフに関連するすべてのデータが削除されます。
+              </Text>
+              <Text size="sm" c="red">
+                この操作は元には戻せません。
               </Text>
             </Stack>
             <Group>
-              <Button color="dark" variant="outline" onClick={toggleRetired} loading={isRetiring}>
-                退職済みにする
+              <Button color="red" variant="outline" onClick={confirmDelete} loading={isDeleting}>
+                削除する
               </Button>
             </Group>
-            <Divider />
-          </>
-        )}
-
-        <Stack gap={4}>
-          <Text size="sm" fw={700}>
-            スタッフを削除
-          </Text>
-          <Text size="sm" c="dimmed">
-            削除すると、このスタッフに関連するすべてのデータが削除されます。
-          </Text>
-          <Text size="sm" c="red">
-            この操作は元には戻せません。
-          </Text>
-        </Stack>
-        <Group>
-          <Button color="red" variant="outline" onClick={confirmDelete} loading={isDeleting}>
-            削除する
-          </Button>
-        </Group>
-      </Stack>
-    </Paper>
+          </Stack>
+        </Box>
+      </Collapse>
+    </SettingsSection>
   )
 }
