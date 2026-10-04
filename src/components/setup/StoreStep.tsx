@@ -15,6 +15,7 @@ import type { ShiftCycle } from '@/lib/calendar/shiftCycle'
 import { WEEKDAY_LABELS } from '@/lib/calendar/weekdays'
 import { asksStartOfWeek } from '@/lib/validation/setup'
 import { TENANT_NAME_MAX_LENGTH } from '@/lib/validation/tenants'
+import { FieldError } from './FieldError'
 import classes from './Setup.module.css'
 
 export type StoreValues = { name: string; shiftCycle: ShiftCycle; startOfWeek: number | null }
@@ -22,6 +23,8 @@ export type StoreValues = { name: string; shiftCycle: ShiftCycle; startOfWeek: n
 type Props = {
   values: StoreValues
   onChange: (values: StoreValues) => void
+  /** 「次へ」を押したあとに出す足りないもの */
+  errors: { name: string | null; startOfWeek: string | null }
   headingRef: RefObject<HTMLHeadingElement | null>
 }
 
@@ -39,7 +42,7 @@ const MAIN_DAYS = [0, 1] as const
 const OTHER_DAYS = [2, 3, 4, 5, 6] as const
 
 /** 初期設定のステップ 1: お店のこと（014 §4.1） */
-export function StoreStep({ values, onChange, headingRef }: Props) {
+export function StoreStep({ values, onChange, errors, headingRef }: Props) {
   const [showOtherDays, setShowOtherDays] = useState(
     values.startOfWeek !== null && values.startOfWeek >= 2 && values.startOfWeek <= 6
   )
@@ -67,13 +70,16 @@ export function StoreStep({ values, onChange, headingRef }: Props) {
       </Stack>
 
       <TextInput
+        id="setup-field-name"
         label="お店の名前"
         placeholder="例）さくら食堂 駅前店"
         description={`${values.name.length} / ${TENANT_NAME_MAX_LENGTH}文字`}
-        inputWrapperOrder={['label', 'input', 'description']}
+        inputWrapperOrder={['label', 'input', 'error', 'description']}
         maxLength={TENANT_NAME_MAX_LENGTH}
         value={values.name}
         onChange={(event) => set('name', event.currentTarget.value)}
+        error={errors.name}
+        classNames={{ input: classes.keepPlaceholder }}
         size="md"
         autoFocus
       />
@@ -100,7 +106,7 @@ export function StoreStep({ values, onChange, headingRef }: Props) {
       </Stack>
 
       {asksStartOfWeek(values.shiftCycle) && (
-        <Stack gap={8} role="group" aria-labelledby="setup-week-label">
+        <Stack id="setup-field-startOfWeek" gap={8} role="group" aria-labelledby="setup-week-label">
           <Text id="setup-week-label" fw={600}>
             何曜日から始まりますか？
           </Text>
@@ -130,6 +136,7 @@ export function StoreStep({ values, onChange, headingRef }: Props) {
               </Group>
             )}
           </Stack>
+          <FieldError message={errors.startOfWeek} />
         </Stack>
       )}
     </Stack>

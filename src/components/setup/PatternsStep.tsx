@@ -29,6 +29,7 @@ import {
   templateState,
 } from '@/lib/setup/templates'
 import { PATTERN_DESCRIPTION_MAX_LENGTH, PATTERN_NAME_MAX_LENGTH } from '@/lib/validation/patterns'
+import { FieldError } from './FieldError'
 import classes from './Setup.module.css'
 
 type Props = {
@@ -40,6 +41,8 @@ type Props = {
   onIndustryChange: (industry: Industry | null) => void
   /** 保存済みの勤務を表示中か（選びなおすと置き換えるので確かめる） */
   fromSaved: boolean
+  /** 「次へ」を押したあとに出す足りないもの（業種が未選択 / 働く日が 0 件） */
+  error: string | null
   headingRef: RefObject<HTMLHeadingElement | null>
 }
 
@@ -52,6 +55,7 @@ export function PatternsStep({
   industry,
   onIndustryChange,
   fromSaved,
+  error,
   headingRef,
 }: Props) {
   const [editingKey, setEditingKey] = useState<string | null>(null)
@@ -90,18 +94,21 @@ export function PatternsStep({
           </Title>
           <Text c="dimmed">近いものを選ぶと、よく使う勤務を用意します。</Text>
         </Stack>
-        <SimpleGrid cols={{ base: 1, xs: 2 }} spacing="sm">
-          {INDUSTRIES.map((value) => (
-            <UnstyledButton key={value} className={classes.industry} onClick={() => pick(value)}>
-              <Text component="span" display="block" fw={700}>
-                {INDUSTRY_LABELS[value]}
-              </Text>
-              <Text component="span" display="block" size="sm" c="dimmed">
-                {industryExample(value)}
-              </Text>
-            </UnstyledButton>
-          ))}
-        </SimpleGrid>
+        <Stack gap={8}>
+          <SimpleGrid id="setup-field-industry" cols={{ base: 1, xs: 2 }} spacing="sm">
+            {INDUSTRIES.map((value) => (
+              <UnstyledButton key={value} className={classes.industry} onClick={() => pick(value)}>
+                <Text component="span" display="block" fw={700}>
+                  {INDUSTRY_LABELS[value]}
+                </Text>
+                <Text component="span" display="block" size="sm" c="dimmed">
+                  {industryExample(value)}
+                </Text>
+              </UnstyledButton>
+            ))}
+          </SimpleGrid>
+          <FieldError message={error} />
+        </Stack>
       </Stack>
     )
   }
@@ -174,7 +181,11 @@ export function PatternsStep({
         const rows = state.rows.filter((row) => row.kind === group.kind)
         if (rows.length === 0) return null
         return (
-          <Stack key={group.kind} gap={8}>
+          <Stack
+            key={group.kind}
+            id={group.kind === 'workday' ? 'setup-field-workday' : undefined}
+            gap={8}
+          >
             <Text fw={700}>{group.title}</Text>
             {rows.map((row) =>
               editingKey === row.key ? (
@@ -194,6 +205,7 @@ export function PatternsStep({
                 />
               )
             )}
+            {group.kind === 'workday' && <FieldError message={error} />}
           </Stack>
         )
       })}

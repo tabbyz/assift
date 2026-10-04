@@ -114,6 +114,25 @@ const savedSnapshot = (state: SetupPatternsState | null) =>
   state ? JSON.stringify(selectedPatterns(state)) : null
 
 /** 初期設定のウィザード（014 §4）。ヘッダー・ステップ・主ボタン・完成イメージを持つ */
+/** 「次へ」を押したときに足りないもの。`field` は入力欄の id（`setup-field-<field>`）に対応する */
+export type SetupIssue = {
+  field: 'name' | 'startOfWeek' | 'industry' | 'workday' | 'names'
+  message: string
+}
+
+/** 足りない入力欄へスクロールし、見えている最初の入力か選択肢にフォーカスを移す */
+function focusIssue(field: SetupIssue['field']) {
+  const el = document.getElementById(`setup-field-${field}`)
+  if (!el) return
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  const target = el.matches('input, textarea')
+    ? el
+    : Array.from(el.querySelectorAll<HTMLElement>('input, textarea, button')).find(
+        (node) => node.offsetParent !== null
+      )
+  target?.focus({ preventScroll: true })
+}
+
 export function SetupWizard(props: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -167,6 +186,7 @@ export function SetupWizard(props: Props) {
 
   const go = (next: View) => {
     setResumeDismissed(true)
+    setShowIssue(false)
     setView(next)
   }
 
@@ -175,26 +195,34 @@ export function SetupWizard(props: Props) {
   }
 
   // ---------------------------------------------------------------------------
-  // 足りないもの（ボタンの上に理由を書く。押せないボタンを黙って置かない。014 §4.8）
+  // 足りないもの（014 §4.8）。「次へ」は押せるままにし、押したときに入力欄の場所で知らせる。
+  // 最初から注意を出さない（何も入れていない画面で叱られているように見える）
   // ---------------------------------------------------------------------------
-  const hint = (() => {
+  const issue = ((): SetupIssue | null => {
     if (view === 'store') {
-      if (store.name.trim() === '') return 'お店の名前を入れてください'
+      if (store.name.trim() === '') return { field: 'name', message: 'お店の名前を入れてください' }
       if (asksStartOfWeek(store.shiftCycle) && store.startOfWeek === null)
-        return '何曜日から始まるか選んでください'
+        return { field: 'startOfWeek', message: '何曜日から始まるか選んでください' }
     }
     if (view === 'patterns') {
-      if (!selected) return '業種を選んでください'
+      if (!selected) return { field: 'industry', message: '業種を選んでください' }
       if (!selected.patterns.some((row) => row.kind === 'workday'))
-        return '働く日の勤務を 1 つ以上残してください'
+        return { field: 'workday', message: '働く日の勤務を 1 つ以上残してください' }
     }
     if (view === 'staff') {
-      if (parsedNames.names.length === 0) return '名前を 1 人以上入れてください'
-      if (parsedNames.errors.length > 0) return '10文字を超える名前を直してください'
-      if (parsedNames.tooMany) return '100人ずつ入れてください'
+      if (parsedNames.names.length === 0)
+        return { field: 'names', message: '名前を 1 人以上入れてください' }
+      if (parsedNames.errors.length > 0)
+        return { field: 'names', message: '10文字を超える名前を直してください' }
+      if (parsedNames.tooMany) return { field: 'names', message: '100人ずつ入れてください' }
     }
     return null
   })()
+  // 「次へ」を押したあとだけ出す。ステップを移ったら消す
+  const [showIssue, setShowIssue] = useState(false)
+  const shownIssue = showIssue ? issue : null
+  const issueFor = (field: SetupIssue['field']) =>
+    shownIssue?.field === field ? shownIssue.message : null
 
   // ---------------------------------------------------------------------------
   // 書き込み
@@ -214,7 +242,12 @@ export function SetupWizard(props: Props) {
     return true
   }
 
-  const next = () =>
+  const next = () => {
+    if (issue) {
+      setShowIssue(true)
+      focusIssue(issue.field)
+      return
+    }
     startTransition(async () => {
       if (view === 'store') {
         if (props.mode === 'new') {
@@ -246,6 +279,7 @@ export function SetupWizard(props: Props) {
         go('done')
       }
     })
+  }
 
   const back = () => {
     if (view === 'patterns') go('store')
@@ -264,7 +298,7 @@ export function SetupWizard(props: Props) {
       })
 
     if (view === 'patterns' && dirty) {
-      if (hint) return confirmDiscard('いまの変更は保存されません。終わりますか？')
+      if (issue) return confirmDiscard('いまの変更は保存されません。終わりますか？')
       startTransition(async () => {
         if (await savePatterns()) pause()
       })
@@ -302,7 +336,6 @@ export function SetupWizard(props: Props) {
   const step = STEP_OF[view] ?? null
   const previewPatterns: PreviewPattern[] = selected?.patterns ?? []
   const previewNames = view === 'staff' || view === 'done' ? parsedNames.names : []
-  const hintId = 'setup-next-hint'
   const nextLabel = view === 'staff' ? 'これで完成' : '次へ'
   const otherTenants = props.tenants.filter((tenant) => tenant.id !== tenantId)
 
@@ -340,7 +373,12 @@ export function SetupWizard(props: Props) {
               )}
 
               {view === 'store' && (
-                <StoreStep values={store} onChange={setStore} headingRef={headingRef} />
+                <StoreStep
+                  values={store}
+                  onChange={setStore}
+                  errors={{ name: issueFor('name'), startOfWeek: issueFor('startOfWeek') }}
+                  headingRef={headingRef}
+                />
               )}
               {view === 'store' && props.mode === 'resume' && (
                 <DeleteStoreLink onDelete={confirmDelete} deleting={isPending} />
@@ -354,6 +392,7 @@ export function SetupWizard(props: Props) {
                     industry={industry}
                     onIndustryChange={setIndustry}
                     fromSaved={saved !== null}
+                    error={issueFor('industry') ?? issueFor('workday')}
                     headingRef={headingRef}
                   />
                   {patterns && (
@@ -377,6 +416,7 @@ export function SetupWizard(props: Props) {
                     text={namesText}
                     onChange={setNamesText}
                     parsed={parsedNames}
+                    error={issueFor('names')}
                     headingRef={headingRef}
                   />
                   {parsedNames.names.length > 0 && (
@@ -422,11 +462,6 @@ export function SetupWizard(props: Props) {
           {step && (
             <div className={classes.footer}>
               <Stack gap={6} maw={560} mx="auto">
-                {hint && (
-                  <Text id={hintId} size="sm" c="orange.9" ta="center">
-                    {hint}
-                  </Text>
-                )}
                 <Group gap="sm" wrap="nowrap">
                   {(view === 'patterns' || view === 'staff') && (
                     <Button variant="default" size="lg" onClick={back} disabled={isPending}>
@@ -444,14 +479,7 @@ export function SetupWizard(props: Props) {
                       キャンセル
                     </Button>
                   )}
-                  <Button
-                    size="lg"
-                    flex={1}
-                    onClick={next}
-                    loading={isPending}
-                    disabled={hint !== null}
-                    aria-describedby={hint ? hintId : undefined}
-                  >
+                  <Button size="lg" flex={1} onClick={next} loading={isPending}>
                     {nextLabel}
                   </Button>
                 </Group>

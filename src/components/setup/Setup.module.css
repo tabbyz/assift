@@ -277,3 +277,8 @@
   word-break: break-all;
   overflow: hidden;
 }
+
+/* エラーのときもプレースホルダーは灰色のまま（赤いと、入力した名前に見える） */
+.keepPlaceholder[data-error]::placeholder {
+  color: var(--mantine-color-placeholder);
+}

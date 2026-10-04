@@ -11,11 +11,13 @@ type Props = {
   text: string
   onChange: (text: string) => void
   parsed: ParsedStaffNames
+  /** 「次へ」を押したあとに出す足りないもの */
+  error: string | null
   headingRef: RefObject<HTMLHeadingElement | null>
 }
 
 /** 初期設定のステップ 3: スタッフ（014 §4.3）。入力中の名前はどこにも保存しない（§3.3） */
-export function StaffStep({ text, onChange, parsed, headingRef }: Props) {
+export function StaffStep({ text, onChange, parsed, error, headingRef }: Props) {
   return (
     <Stack gap="lg">
       <Stack gap={6}>
@@ -27,6 +29,7 @@ export function StaffStep({ text, onChange, parsed, headingRef }: Props) {
 
       <Stack gap={6}>
         <Textarea
+          id="setup-field-names"
           label="スタッフの名前"
           placeholder={'山田 花子\n佐藤 健\n鈴木 美咲'}
           value={text}
@@ -34,6 +37,8 @@ export function StaffStep({ text, onChange, parsed, headingRef }: Props) {
           autosize
           minRows={6}
           maxRows={14}
+          error={error}
+          classNames={{ input: classes.keepPlaceholder }}
           size="md"
           autoFocus
         />
