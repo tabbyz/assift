@@ -33,9 +33,9 @@ const CYCLES: { value: ShiftCycle; label: string }[] = [
   { value: 'week', label: '1週間' },
 ]
 
-/** PC は月〜日の 7 つ。スマホは月曜・日曜を大きく出し、ほかは開いて選ぶ */
-const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0] as const
-const MAIN_DAYS = [1, 0] as const
+/** PC は日〜土の 7 つ。スマホは日曜・月曜を大きく出し、ほかは開いて選ぶ */
+const WEEK_ORDER = [0, 1, 2, 3, 4, 5, 6] as const
+const MAIN_DAYS = [0, 1] as const
 const OTHER_DAYS = [2, 3, 4, 5, 6] as const
 
 /** 初期設定のステップ 1: お店のこと（014 §4.1） */
@@ -108,7 +108,7 @@ export function StoreStep({ values, onChange, headingRef }: Props) {
           <SimpleGrid cols={7} spacing={6} visibleFrom="md">
             {WEEK_ORDER.map((day) => dayButton(day, WEEKDAY_LABELS[day]))}
           </SimpleGrid>
-          {/* スマホ: 月曜・日曜を大きく。ほかは開いて選ぶ */}
+          {/* スマホ: 日曜・月曜を大きく。ほかは開いて選ぶ */}
           <Stack gap={8} hiddenFrom="md">
             <SimpleGrid cols={2} spacing={8}>
               {MAIN_DAYS.map((day) => dayButton(day, `${WEEKDAY_LABELS[day]}曜日`))}

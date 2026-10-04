@@ -105,6 +105,13 @@
   padding: 10px 14px;
 }
 
+/* 選んだ業種と「選びなおす」 */
+.industryBar {
+  padding: 8px 8px 8px 14px;
+  border-radius: var(--mantine-radius-md);
+  background: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6));
+}
+
 /* ---------------------------------------------------------------------------
  * 勤務の行（行全体がチェックのボタン + 右に鉛筆）
  * ------------------------------------------------------------------------- */
@@ -143,15 +150,22 @@
   opacity: 0.35;
 }
 
+/* シフト表のマス（`ShiftTable.module.css` の .cell。高さ 35px・13px・折り返し）に合わせる */
 .swatch {
-  flex: 0 0 34px;
-  height: 34px;
-  border-radius: var(--mantine-radius-sm);
+  flex: 0 0 48px;
+  height: 35px;
+  padding: 2px;
+  border-radius: 3px;
   border: 1px solid transparent;
   display: flex;
   align-items: center;
   justify-content: center;
+  text-align: center;
+  overflow: hidden;
+  font-size: 13px;
   font-weight: 700;
+  line-height: 1.1;
+  word-break: break-all;
 }
 
 .check {
@@ -257,4 +271,9 @@
   border-radius: 3px;
   border: 1px solid transparent;
   font-weight: 600;
+  /* 本物の表と同じく名前を全部出す（6 文字まで。幅 36px なら 2 行に収まる） */
+  font-size: 10px;
+  line-height: 1.1;
+  word-break: break-all;
+  overflow: hidden;
 }

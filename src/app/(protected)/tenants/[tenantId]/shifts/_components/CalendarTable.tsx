@@ -1,6 +1,6 @@
 'use client'
 
-import { Button, Popover, Text, UnstyledButton } from '@mantine/core'
+import { Button, Group, Popover, Text, UnstyledButton } from '@mantine/core'
 import { wday } from '@/lib/calendar/dateString'
 import type { DateRange } from '@/lib/calendar/dateRange'
 import type { DateCoverage } from '@/lib/shifts/satisfaction'
@@ -215,10 +215,13 @@ export function CalendarTable({
                   ) : coachCell?.staffId === staff.id && coachCell.date === date ? (
                     // 初めて開いたときだけ（014 §4.7）。セルを押すと案内は閉じてパターンのポップオーバーに替わる
                     // モーダル（z-index 200）より下に置く。既定の 300 だと自動作成などのモーダルの上に残る
+                    // 吹き出しはマスの左端に揃え、矢印はマスの左右中央から出す
                     <Popover
                       opened
                       position="bottom-start"
                       withArrow
+                      arrowPosition="center"
+                      arrowSize={10}
                       shadow="md"
                       withinPortal
                       zIndex={150}
@@ -228,9 +231,11 @@ export function CalendarTable({
                         <Text size="sm" fw={600}>
                           マスを押すと、勤務を入れられます
                         </Text>
-                        <Button size="compact-xs" variant="subtle" mt={6} onClick={onCoachDismiss}>
-                          わかりました
-                        </Button>
+                        <Group justify="flex-end" mt="xs">
+                          <Button size="xs" onClick={onCoachDismiss}>
+                            わかりました
+                          </Button>
+                        </Group>
                       </Popover.Dropdown>
                     </Popover>
                   ) : (

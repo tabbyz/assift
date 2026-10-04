@@ -29,7 +29,7 @@ type TableProps = {
   staffWidth: number
 }
 
-/** 見本の表。マスの色は本物の表と同じ `cellStyle`（下書きの見た目）で塗る */
+/** 見本の表。マスの色は本物の表と同じ `cellStyle`（下書きの見た目）で塗り、名前も本物と同じく全部出す */
 function PreviewTable({
   dates,
   patterns,
@@ -87,7 +87,7 @@ function PreviewTable({
                   <td key={date}>
                     {pattern && (
                       <div className={classes.cell} style={cellStyle(pattern, false)}>
-                        {pattern.name.slice(0, 1)}
+                        {pattern.name}
                       </div>
                     )}
                   </td>

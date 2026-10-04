@@ -2,7 +2,6 @@
 
 import { useState, type RefObject } from 'react'
 import {
-  Anchor,
   Button,
   Group,
   SegmentedControl,
@@ -152,14 +151,24 @@ export function PatternsStep({
         <Title order={2} fz={22} ref={headingRef} tabIndex={-1} className={classes.heading}>
           お店で使う勤務にチェックを残してください
         </Title>
-        <Text c="dimmed">
-          {industry ? `${INDUSTRY_LABELS[industry]}でよく使う勤務です。` : '保存してある勤務です。'}
-          名前や時間は鉛筆のボタンで直せます。{' '}
-          <Anchor component="button" type="button" onClick={chooseAgain}>
-            お仕事を選びなおす
-          </Anchor>
-        </Text>
+        <Text c="dimmed">名前や時間は鉛筆のボタンで直せます。</Text>
       </Stack>
+
+      {/* 業種を選び間違えたときの戻り道。文中のリンクだと気付かれないので、ボタンにして目に入る場所に置く */}
+      <Group className={classes.industryBar} justify="space-between" wrap="nowrap" gap="sm">
+        <Text size="sm">
+          {industry ? (
+            <>
+              お仕事：<b>{INDUSTRY_LABELS[industry]}</b>
+            </>
+          ) : (
+            '保存してある勤務'
+          )}
+        </Text>
+        <Button variant="default" size="compact-sm" onClick={chooseAgain}>
+          お仕事を選びなおす
+        </Button>
+      </Group>
 
       {groups.map((group) => {
         const rows = state.rows.filter((row) => row.kind === group.kind)
@@ -211,10 +220,11 @@ export function PatternsStep({
   )
 }
 
+/** シフト表のマスと同じ見た目（名前を全部出す）。表でどう見えるかを、その場で確かめられるようにする */
 function Swatch({ row }: { row: SetupPatternRow }) {
   return (
     <span className={classes.swatch} style={cellStyle(row, true)} aria-hidden>
-      {(row.name || '？').slice(0, 1)}
+      {row.name || '？'}
     </span>
   )
 }
