@@ -464,7 +464,7 @@ export function SetupWizard(props: Props) {
               <Stack gap={6} maw={560} mx="auto">
                 <Group gap="sm" wrap="nowrap">
                   {(view === 'patterns' || view === 'staff') && (
-                    <Button variant="default" size="lg" onClick={back} disabled={isPending}>
+                    <Button variant="default" size="md" onClick={back} disabled={isPending}>
                       もどる
                     </Button>
                   )}
@@ -472,14 +472,14 @@ export function SetupWizard(props: Props) {
                     <Button
                       variant="subtle"
                       color="gray"
-                      size="lg"
+                      size="md"
                       onClick={() => router.push('/tenants')}
                       disabled={isPending}
                     >
                       キャンセル
                     </Button>
                   )}
-                  <Button size="lg" flex={1} onClick={next} loading={isPending}>
+                  <Button size="md" flex={1} onClick={next} loading={isPending}>
                     {nextLabel}
                   </Button>
                 </Group>
