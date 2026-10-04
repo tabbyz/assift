@@ -107,7 +107,8 @@ export function PatternsStep({
               </UnstyledButton>
             ))}
           </SimpleGrid>
-          <FieldError message={error} />
+          {/* 大きなボタンの並びの下なので、詰めすぎず 8px 空ける */}
+          <FieldError message={error} mt={0} />
         </Stack>
       </Stack>
     )

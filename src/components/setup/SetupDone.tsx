@@ -88,7 +88,7 @@ export function SetupPaused({
           ここまで保存しました
         </Title>
         <Text c="dimmed">
-          次に assift を開くと、続きから始まります。ほかの端末から開いても大丈夫です。
+          次にassiftを開くと、続きから始まります。ほかの端末から開いても大丈夫です。
         </Text>
       </Stack>
 
