@@ -1,7 +1,8 @@
 'use client'
 
-import { Button, Menu, MenuDivider, MenuDropdown, MenuItem, MenuTarget } from '@mantine/core'
+import { Menu, MenuDivider, MenuDropdown, MenuItem, MenuTarget } from '@mantine/core'
 import { IconFileTypeCsv, IconFileTypePdf, IconLink, IconShare2 } from '@tabler/icons-react'
+import { ToolbarButton } from './ToolbarButton'
 
 type Props = { tenantId: string; start: string; onOpenShare: () => void; disabled: boolean }
 
@@ -15,14 +16,9 @@ export function ShareMenu({ tenantId, start, onOpenShare, disabled }: Props) {
   return (
     <Menu position="bottom-end" withinPortal>
       <MenuTarget>
-        <Button
-          variant="default"
-          size="compact-sm"
-          leftSection={<IconShare2 size={16} />}
-          disabled={disabled}
-        >
+        <ToolbarButton leftSection={<IconShare2 size={16} />} disabled={disabled}>
           共有
-        </Button>
+        </ToolbarButton>
       </MenuTarget>
 
       <MenuDropdown>
