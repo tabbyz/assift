@@ -176,7 +176,9 @@ export async function saveRequiredNums(input: {
         date: parsed.date,
         num,
       }))
-    const clearedPatternIds = entries.filter(([, num]) => num === '').map(([patternId]) => patternId)
+    const clearedPatternIds = entries
+      .filter(([, num]) => num === '')
+      .map(([patternId]) => patternId)
 
     const supabase = await createClient()
     if (rows.length > 0) {

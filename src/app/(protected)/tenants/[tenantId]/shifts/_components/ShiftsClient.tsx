@@ -23,12 +23,7 @@ import {
   toOverrideMap,
   type RequiredNumRow,
 } from '@/lib/shifts/requiredNums'
-import {
-  assignedCounts,
-  countAt,
-  coverageAt,
-  type DateCoverage,
-} from '@/lib/shifts/satisfaction'
+import { assignedCounts, countAt, coverageAt, type DateCoverage } from '@/lib/shifts/satisfaction'
 import type { ActionResult } from '@/lib/actions/result'
 import { formatJstMonthDayTime } from '@/lib/calendar/datetime'
 import type { LatestAssistRun } from '@/lib/queries/assistRuns'

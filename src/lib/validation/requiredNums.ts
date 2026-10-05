@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { REQUIRED_NUM_MAX, REQUIRED_NUM_MIN } from '@/lib/patterns/requiredNums'
+import { requiredNumsSchema, REQUIRED_NUM_MAX, REQUIRED_NUM_MIN } from '@/lib/patterns/requiredNums'
 import { dateStringSchema, dateTermShape, refineTerm } from './date'
 import { patternIdSchema } from './patterns'
 import { tenantIdSchema } from './tenants'
@@ -38,6 +38,17 @@ export const saveRequiredNumsSchema = z.object({
 export const setDefaultRequiredNumsSchema = refineTerm(
   z.object({ tenantId: tenantIdSchema, ...dateTermShape })
 )
+
+/**
+ * `設定 > 必要人数` の行列 1 枚（015 §3.4）。勤務 id → 曜日 → 人数。
+ * **キーが無い曜日は「まだ決めていない」**（空欄）。各マスの検査は `requiredNumsSchema` が持つ。
+ */
+export const saveDefaultRequiredNumsSchema = z.object({
+  tenantId: tenantIdSchema,
+  nums: z
+    .record(patternIdSchema, requiredNumsSchema)
+    .refine((nums) => Object.keys(nums).length > 0, { error: '勤務が見つかりません' }),
+})
 
 /** 初回に勤務ごとに 1 つだけ聞くとき（014 §3.8）は、空欄を 0 として扱う（上書きではなく基本の人数を作るため） */
 const uniformNumSchema = z.preprocess(

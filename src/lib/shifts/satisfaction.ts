@@ -28,11 +28,7 @@ export function countAt(counts: CountsByDate, date: string, patternId: string): 
  * その日・その勤務の必要人数。`null` は「まだ決めていない」（015 §3.2）。
  * 期間の外や、組み立てていない勤務も `null`（0 ではない）。
  */
-export function requiredAt(
-  required: RequiredByDate,
-  date: string,
-  patternId: string
-): RequiredNum {
+export function requiredAt(required: RequiredByDate, date: string, patternId: string): RequiredNum {
   return required.get(date)?.get(patternId) ?? null
 }
 
@@ -83,7 +79,11 @@ export function coverageAt(
     }
   }
   const requiredNum = anyRequired ? requiredTotal : null
-  return { assigned: assignedTotal, required: requiredNum, state: coverageState(assignedTotal, requiredNum) }
+  return {
+    assigned: assignedTotal,
+    required: requiredNum,
+    state: coverageState(assignedTotal, requiredNum),
+  }
 }
 
 function coverageState(assigned: number, required: RequiredNum): CoverageState {

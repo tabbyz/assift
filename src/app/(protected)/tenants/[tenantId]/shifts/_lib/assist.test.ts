@@ -28,7 +28,9 @@ function requiredByDate(
 }
 
 /** 配置済み（数だけの Map） */
-function counts(rows: { patternId: string; date: string; num: number }[]): Map<string, Map<string, number>> {
+function counts(
+  rows: { patternId: string; date: string; num: number }[]
+): Map<string, Map<string, number>> {
   const result = new Map<string, Map<string, number>>()
   for (const row of rows) {
     const byPattern = result.get(row.date) ?? new Map<string, number>()

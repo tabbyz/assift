@@ -89,7 +89,8 @@ export function RequiredNumModal({ tenantId, date, rows, onClose }: Props) {
       <Stack gap="md">
         <Alert variant="light" color="blue" icon={<IconInfoCircle size={16} />} p="xs">
           <Text size="xs">
-            ここで入れた数は<strong>この日だけ</strong>に効きます。空欄にすると基本の人数に戻ります。基本の人数は
+            ここで入れた数は<strong>この日だけ</strong>
+            に効きます。空欄にすると基本の人数に戻ります。基本の人数は
             <Anchor component={Link} href={`/tenants/${tenantId}/settings/patterns`} size="xs">
               勤務パターン設定画面
             </Anchor>

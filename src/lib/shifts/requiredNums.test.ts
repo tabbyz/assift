@@ -114,10 +114,7 @@ describe('overriddenDates', () => {
       { patternId: DINNER, date: '2026-10-12', num: 4 },
       { patternId: LUNCH, date: '2026-10-10', num: 1 },
     ])
-    expect(overriddenDates(dates, [LUNCH, DINNER], overrides)).toEqual([
-      '2026-10-10',
-      '2026-10-12',
-    ])
+    expect(overriddenDates(dates, [LUNCH, DINNER], overrides)).toEqual(['2026-10-10', '2026-10-12'])
   })
 
   it('基本と同じ値の上書きも数える（戻せることを示すため）', () => {
