@@ -18,6 +18,7 @@ import { IconChevronLeft, IconChevronRight, IconSparkles } from '@tabler/icons-r
 import type { BulkKind } from '../_lib/bulkOperations'
 import { ShareMenu } from './ShareMenu'
 import { ToolsMenu, type AssistUndo } from './ToolsMenu'
+import { ToolbarButton } from './ToolbarButton'
 import { SHIFT_CYCLE_LABELS, type ShiftCycle } from '@/lib/calendar/shiftCycle'
 import { WEEKDAY_LABELS } from '@/lib/calendar/weekdays'
 import { formatPeriodTitle } from '@/lib/calendar/periodTitle'
@@ -181,9 +182,8 @@ export function Toolbar({
 }
 
 /**
- * 「AI で作成」（012 §3.7）。共有・操作と並ぶ 3 つ目の動詞。狭い画面（390px）では「AI で作成」が収まらないので
- * 「AI」に詰める（アイコンだけでは何のボタンか分からないため、文字を残してアイコンのほうを落とす。
- * アイコン + 文字だと期間タイトルが 2 行に折り返す幅しか残らない）。読み上げ用に `aria-label` でフルの名前を残す。
+ * 「AI で作成」（012 §3.7）。共有・操作と並ぶ 3 つ目の動詞。狭い画面でアイコンが消えるのは
+ * 共有・操作と同じ（`ToolbarButton`）。文字は常に出す（アイコンだけでは何のボタンか分からない）。
  * キーが無い環境ではツールチップ「現在利用できません」で押せない
  * （`disabled` の button は mouse イベントを出さずツールチップが出ないので、`data-disabled` で見た目だけ無効にする。Mantine の指針）。
  */
@@ -201,27 +201,16 @@ function AssistButton({
     ? { 'data-disabled': true, onClick: (event: MouseEvent) => event.preventDefault() }
     : { disabled, onClick: onOpen }
 
-  const buttons = (
-    <>
-      <Button
-        variant="default"
-        size="compact-sm"
-        leftSection={<IconSparkles size={16} />}
-        visibleFrom="xs"
-        {...props}
-      >
-        AI で作成
-      </Button>
-      <Button variant="default" size="compact-sm" aria-label="AI で作成" hiddenFrom="xs" {...props}>
-        AI
-      </Button>
-    </>
+  const button = (
+    <ToolbarButton leftSection={<IconSparkles size={16} />} {...props}>
+      AI で作成
+    </ToolbarButton>
   )
 
-  if (!unavailable) return buttons
+  if (!unavailable) return button
   return (
     <Tooltip label="現在利用できません" withinPortal>
-      <span>{buttons}</span>
+      <span>{button}</span>
     </Tooltip>
   )
 }
