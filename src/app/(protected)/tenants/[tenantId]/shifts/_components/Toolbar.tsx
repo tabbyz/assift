@@ -181,8 +181,10 @@ export function Toolbar({
 }
 
 /**
- * 「AI で作成」（012 §3.7）。共有・操作と並ぶ 3 つ目の動詞。狭い画面（390px）では 3 つの文字ボタンが収まらないので
- * アイコンだけにする。キーが無い環境ではツールチップ「現在利用できません」で押せない
+ * 「AI で作成」（012 §3.7）。共有・操作と並ぶ 3 つ目の動詞。狭い画面（390px）では「AI で作成」が収まらないので
+ * 「AI」に詰める（アイコンだけでは何のボタンか分からないため、文字を残してアイコンのほうを落とす。
+ * アイコン + 文字だと期間タイトルが 2 行に折り返す幅しか残らない）。読み上げ用に `aria-label` でフルの名前を残す。
+ * キーが無い環境ではツールチップ「現在利用できません」で押せない
  * （`disabled` の button は mouse イベントを出さずツールチップが出ないので、`data-disabled` で見た目だけ無効にする。Mantine の指針）。
  */
 function AssistButton({
@@ -210,9 +212,9 @@ function AssistButton({
       >
         AI で作成
       </Button>
-      <ActionIcon variant="default" size={28} aria-label="AI で作成" hiddenFrom="xs" {...props}>
-        <IconSparkles size={16} />
-      </ActionIcon>
+      <Button variant="default" size="compact-sm" aria-label="AI で作成" hiddenFrom="xs" {...props}>
+        AI
+      </Button>
     </>
   )
 

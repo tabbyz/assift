@@ -28,3 +28,20 @@ body {
     --_input-fz: 16px;
   }
 }
+
+/*
+ * ボタンのアイコンとラベルの隙間。
+ * Mantine の既定は `--mantine-spacing-xs`（10px）で、8px グリッドの design system
+ * （Material 3 / Primer / shadcn など。いずれもアイコンと文字の間は 8px）より広い。
+ * 変数ではなく margin を直接持っているので、ここで 1 か所だけ上書きして全 Button に効かせる
+ * （`theme.components.Button.styles` では left / right の出し分けができない。
+ *   `data-position` を見られるのは CSS だけ）。
+ * 素のセレクタ（0,2,0）は Mantine 側の `:where()`（0,1,0）より強く、`styles.css` の後に読まれる。
+ */
+.mantine-Button-section[data-position='left'] {
+  margin-inline-end: 8px;
+}
+
+.mantine-Button-section[data-position='right'] {
+  margin-inline-start: 8px;
+}
