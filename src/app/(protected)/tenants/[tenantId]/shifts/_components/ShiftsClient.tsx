@@ -174,14 +174,9 @@ export function ShiftsClient(props: Props) {
 
   const assign = (cell: ActiveCell, patternId: string | null, fixed: boolean) => {
     setActiveCell(null)
-    // ヒントを出していた店だけ（既にシフトがある期間で初めて開いた端末には出さない）
-    if (coachEligible && patternId) {
-      coach.finish()
-      notifications.show({
-        message: 'できました。ほかのマスも同じように入れられます',
-        color: 'green',
-      })
-    }
+    // 案内を出していたら、最初の 1 つで閉じて次からは出さない。
+    // 「できました」の通知は出さない（入れた勤務がその場でマスに見えるので、重ねて伝えなくてよい）
+    if (coachEligible && patternId) coach.finish()
     startAssign(async () => {
       addOptimisticAssign({ ...cell, patternId, fixed })
       const result = await assignShift({ tenantId, ...cell, patternId, fixed })
