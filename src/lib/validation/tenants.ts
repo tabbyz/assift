@@ -29,11 +29,6 @@ const startOfWeekSchema = z
   .min(0, { error: 'カレンダーの週の始まりを選択してください' })
   .max(6, { error: 'カレンダーの週の始まりを選択してください' })
 
-export const createTenantSchema = z.object({
-  name: nameSchema,
-  shiftCycle: shiftCycleSchema,
-})
-
 export const updateTenantSchema = z.object({
   tenantId: tenantIdSchema,
   name: nameSchema,

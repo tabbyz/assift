@@ -25,7 +25,11 @@ import { datesBetween } from '@/lib/calendar/dateString'
 import { holidaysIn, isHolidayDate } from '@/lib/calendar/holidays'
 import { todayJst } from '@/lib/calendar/today'
 import { dayKeyFor } from '@/lib/calendar/weekdays'
-import { defaultRequiredNum, parseRequiredNums } from '@/lib/patterns/requiredNums'
+import {
+  defaultRequiredNum,
+  parseRequiredNums,
+  uniformRequiredNums,
+} from '@/lib/patterns/requiredNums'
 import { listActiveStaffsWithDefaultPatterns } from '@/lib/queries/staffs'
 import { generateShareCode } from '@/lib/shares/code'
 import { isShareEnabled } from '@/lib/shares/expiry'
@@ -39,7 +43,11 @@ import {
   startAssistSchema,
 } from '@/lib/validation/assist'
 import { saveDateNoteSchema } from '@/lib/validation/dateNotes'
-import { saveRequiredNumsSchema, setDefaultRequiredNumsSchema } from '@/lib/validation/requiredNums'
+import {
+  saveRequiredNumsSchema,
+  setDefaultRequiredNumsSchema,
+  setUniformDefaultRequiredNumsSchema,
+} from '@/lib/validation/requiredNums'
 import {
   createShareSchema,
   deleteShareSchema,
@@ -217,6 +225,43 @@ export async function setDefaultRequiredNums(input: {
     if (error) failFromFkError(error, PATTERN_NOT_FOUND_MESSAGE)
 
     refresh()
+  })
+}
+
+/**
+ * 自動作成で必要人数を聞いたとき（014 §3.8）。勤務ごとに 1 つの人数を、全曜日・祝日のデフォルトとして保存する。
+ * 期間に入れるのは続けて呼ぶ `setDefaultRequiredNums`（クライアントが続けて呼ぶ）。
+ *
+ * 勤務ごとの update は 1 トランザクションにならないが RPC にしない: 途中で止まっても、入った勤務の
+ * デフォルトが正しい値で残るだけで、もう一度押せば全部そろう（矛盾した状態が残らない）。
+ * `updatePattern` は全項目を受ける形なので使わない。休みの勤務は対象外（必要人数を持たない。006 §3.9）
+ */
+export async function setUniformDefaultRequiredNums(input: {
+  tenantId: string
+  nums: Record<string, number | ''>
+}): Promise<ActionResult> {
+  return runAction(async () => {
+    const parsed = setUniformDefaultRequiredNumsSchema.parse(input)
+    await requireUser()
+    await requireTenant(parsed.tenantId)
+
+    const supabase = await createClient()
+    const results = await Promise.all(
+      Object.entries(parsed.nums).map(([patternId, num]) =>
+        supabase
+          .from('patterns')
+          .update({ default_required_nums: uniformRequiredNums(num) })
+          .eq('tenant_id', parsed.tenantId)
+          .eq('id', patternId)
+          .eq('kind', 'workday')
+          .select('id')
+          .maybeSingle()
+      )
+    )
+    for (const { data, error } of results) {
+      if (error) throw error
+      if (!data) fail(PATTERN_NOT_FOUND_MESSAGE)
+    }
   })
 }
 

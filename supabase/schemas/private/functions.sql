@@ -28,6 +28,24 @@ begin
 end;
 $$;
 
+-- 一度入った tenants.setup_completed_at は変えられない（014 §5.1）。
+-- 取り消すと店舗が「準備中」に戻り、初期設定の画面に連れて行かれる。
+-- RPC は security invoker なので列の GRANT では絞れず、トリガで守る。service_role にも効くので、
+-- 運用でデータを直すときは、その migration の中でこのトリガを一時的に外して戻す。
+create or replace function private.guard_setup_completed_at()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if old.setup_completed_at is not null
+     and new.setup_completed_at is distinct from old.setup_completed_at then
+    raise exception 'setup_completed_at is immutable';
+  end if;
+  return new;
+end;
+$$;
+
 -- auth.users INSERT → profiles 作成。
 -- 移行スクリプトが先に profiles を作っていても失敗しないよう on conflict do nothing にする
 create or replace function private.handle_new_user()

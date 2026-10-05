@@ -32,11 +32,6 @@ type Props = {
   pairOptions: PatternOption[]
   /** 編集時の初期値と id。無ければ登録 */
   initial?: PatternFormValues & { patternId: string }
-  /**
-   * 登録後の挙動。`'reset'` はチュートリアル（入力を空にして続けて登録）、
-   * `'list'` は設定画面（一覧へ戻る）。v1 の `tutorial=true` 分岐に相当する（006 §3.5）
-   */
-  afterCreate: 'reset' | 'list'
 }
 
 const emptyValues: PatternFormValues = {
@@ -48,7 +43,7 @@ const emptyValues: PatternFormValues = {
   defaultRequiredNums: {},
 }
 
-export function PatternForm({ tenantId, pairOptions, initial, afterCreate }: Props) {
+export function PatternForm({ tenantId, pairOptions, initial }: Props) {
   const router = useRouter()
   const isEdit = Boolean(initial)
   const [values, setValues] = useState<PatternFormValues>(initial ?? emptyValues)
@@ -78,18 +73,8 @@ export function PatternForm({ tenantId, pairOptions, initial, afterCreate }: Pro
         return
       }
       setError(undefined)
-
-      if (afterCreate === 'list') {
-        notifications.show({ message: '登録しました', color: 'green' })
-        router.push(`/tenants/${tenantId}/settings/patterns`)
-        return
-      }
-      // チュートリアル: 同じ画面に留まって続けて登録できるようにする
-      setValues(emptyValues)
-      notifications.show({
-        message: `「${result.data.name}」を登録しました。続けて登録できます`,
-        color: 'green',
-      })
+      notifications.show({ message: '登録しました', color: 'green' })
+      router.push(`/tenants/${tenantId}/settings/patterns`)
     })
   }
 
@@ -98,18 +83,15 @@ export function PatternForm({ tenantId, pairOptions, initial, afterCreate }: Pro
       <SettingsSection
         footer={
           <>
-            {/* チュートリアルでは出さない（v1 の `unless @tutorial_step`） */}
-            {afterCreate === 'list' && (
-              <LinkButton
-                href={`/tenants/${tenantId}/settings/patterns`}
-                variant="subtle"
-                color="gray"
-                // 送信中に押すと、書き込みは走ったまま遷移して通知とエラー表示を取りこぼす
-                disabled={isPending}
-              >
-                キャンセル
-              </LinkButton>
-            )}
+            <LinkButton
+              href={`/tenants/${tenantId}/settings/patterns`}
+              variant="subtle"
+              color="gray"
+              // 送信中に押すと、書き込みは走ったまま遷移して通知とエラー表示を取りこぼす
+              disabled={isPending}
+            >
+              キャンセル
+            </LinkButton>
             <Button type="submit" loading={isPending}>
               {isEdit ? '更新する' : '登録する'}
             </Button>

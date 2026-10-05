@@ -32,6 +32,10 @@ export default async function TenantLayout({
   // RLS で他人の店舗も存在しない id も null になる（存在を漏らさない）
   if (!tenant) notFound()
 
+  // 準備中の店舗で描かれるのは初期設定（/setup）だけ（ほかは redirect）。ヘッダーはウィザードが持つので枠を描かない。
+  // layout はパスもウィザードの状態も知れず、「あとで続ける」を出し分けられないため（014 §3.7）
+  if (!tenant.setup_completed_at) return children
+
   return (
     <TenantShell
       tenant={{ id: tenant.id, name: tenant.name }}

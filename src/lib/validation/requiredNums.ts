@@ -34,3 +34,14 @@ export const saveRequiredNumsSchema = z.object({
 export const setDefaultRequiredNumsSchema = refineTerm(
   z.object({ tenantId: tenantIdSchema, ...dateTermShape })
 )
+
+/**
+ * 自動作成で必要人数を聞いたとき（014 §3.8）。勤務ごとに 1 つの人数を、全曜日のデフォルトとして保存する。
+ * キーは勤務パターンの id
+ */
+export const setUniformDefaultRequiredNumsSchema = z.object({
+  tenantId: tenantIdSchema,
+  nums: z
+    .record(patternIdSchema, numSchema)
+    .refine((nums) => Object.keys(nums).length > 0, { error: '勤務が見つかりません' }),
+})

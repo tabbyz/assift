@@ -43,6 +43,7 @@ import {
 } from '../_lib/assist'
 import { failure, outcome } from '../_lib/notices'
 import classes from './AssistModal.module.css'
+import { QuickRequiredNums } from './QuickRequiredNums'
 
 type Phase =
   | { kind: 'ready'; retryOf: AssistRunView | null }
@@ -302,6 +303,10 @@ type Props = {
   workdayPatternCount: number
   restrictionCount: number
   onSetDefaultRequiredNums: () => void
+  /** 必要人数もデフォルトも無いとき、その場で聞く勤務（014 §3.8）。聞かないときは null */
+  quickRequiredNumPatterns: { id: string; name: string }[] | null
+  onApplyRequiredNums: (nums: Record<string, number | ''>) => void
+  applyingRequiredNums: boolean
 }
 
 export function AssistModal(props: Props) {
@@ -360,6 +365,9 @@ function ReadyView({
   workdayPatternCount,
   restrictionCount,
   onSetDefaultRequiredNums,
+  quickRequiredNumPatterns,
+  onApplyRequiredNums,
+  applyingRequiredNums,
   retryOf,
 }: Props & { retryOf: AssistRunView | null }) {
   // 「別の案」は前の案を戻してから解くので、いまの表（前の案で埋まっている）の不足では止めない。
@@ -395,7 +403,15 @@ function ReadyView({
         </Alert>
       )}
 
-      {!hasRequiredNums && (
+      {!hasRequiredNums && quickRequiredNumPatterns && (
+        <QuickRequiredNums
+          patterns={quickRequiredNumPatterns}
+          onApply={onApplyRequiredNums}
+          loading={applyingRequiredNums}
+        />
+      )}
+
+      {!hasRequiredNums && !quickRequiredNumPatterns && (
         <Alert color="gray" variant="light" icon={<IconInfoCircle size={16} />} p="xs">
           <Group justify="space-between" gap="xs">
             <Text size="sm">必要人数が設定されていません</Text>

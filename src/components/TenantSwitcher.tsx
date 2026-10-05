@@ -3,16 +3,16 @@
 import Link from 'next/link'
 import { Button, Menu, MenuDivider, MenuDropdown, MenuItem, MenuTarget, Text } from '@mantine/core'
 import { IconCheck, IconChevronDown, IconPlus } from '@tabler/icons-react'
-import type { TenantSummary } from '@/lib/queries/tenants'
+import type { TenantListItem, TenantSummary } from '@/lib/queries/tenants'
 
-type Props = { tenant: TenantSummary; tenants: TenantSummary[] }
+type Props = { tenant: TenantSummary; tenants: TenantListItem[] }
 
 /** v1 navbar と同じく 12 文字で省略する */
 function truncate(name: string, length = 12) {
   return name.length > length ? `${name.slice(0, length)}…` : name
 }
 
-/** ヘッダーの店舗切替。店舗一覧 + 「店舗を追加」 */
+/** ヘッダーの店舗切替。店舗一覧 + 「店舗を追加」。初期設定のヘッダー（`SetupHeader`）でも使う */
 export function TenantSwitcher({ tenant, tenants }: Props) {
   return (
     <Menu position="bottom-start" withinPortal>
@@ -43,6 +43,12 @@ export function TenantSwitcher({ tenant, tenants }: Props) {
             }
           >
             {item.name}
+            {/* 初期設定の途中（014 §5.6）。開くと続きのステップに着地する */}
+            {!item.ready && (
+              <Text component="span" size="xs" c="dimmed" ml={6}>
+                準備中
+              </Text>
+            )}
           </MenuItem>
         ))}
         <MenuDivider />
