@@ -450,9 +450,24 @@ src/app/(protected)/tenants/[tenantId]/settings/required-nums/{page.tsx,actions.
 | 5 | 充足は「既定の文字色」 | 緑のまま（011 の見た目を変えない）。不足＝赤・過剰＝青 + `+1`・未設定＝灰 | フッターの色は 011 で決めたもので、今回変える理由が無い |
 | 6 | 「基本に戻す」に専用 Action | 入力を空欄にして保存するだけ | #4 の規則があれば足りる。Action を増やさない |
 
-### 10.3 残り（§8 の 5〜8）
+### 10.3 ここまで（§8 の 5〜7）
 
-5. `components/requiredNums/` の行列 + `settings/required-nums/`（page / actions / ナビ）
-6. AI シフト作成のモーダルを共有部品に差し替え、`QuickRequiredNums` を削除
-7. `ToolsMenu` を「この期間の個別の変更を元に戻す」に差し替え（`overriddenDatesInRange` はここで使う）、古い Action とスキーマを削除
+| 段階 | 成果物 |
+| --- | --- |
+| 5 | `components/requiredNums/RequiredNumsMatrix`（行列。設定と AI シフト作成で共有）/ `lib/patterns/requiredNumsMatrix`（状態と保存の形。テスト 17 件）/ `settings/required-nums/`（page・client）/ ナビに「必要人数」（勤務パターンの直後） |
+| 6 | AI シフト作成のモーダルは `AssistRequiredNums`（同じ行列を 1 列で出す）に差し替え、`QuickRequiredNums` を削除。保存は設定と同じ `saveDefaultRequiredNums` |
+| 7 | 操作メニューを「この期間の個別の変更を元に戻す（N 日）」に差し替え（`resetRequiredNums`。確認に日付を並べ、0 件なら押せない）。`setDefaultRequiredNums` / `setUniformDefaultRequiredNums` / それらのスキーマ / `defaultRequiredNum` / `uniformRequiredNums` を削除 |
+
+検証: `npm test` 689 件 / `npm run typecheck` / `npm run lint`（既存の警告 1 件のみ）。
+
+プランから変えたこと（続き）:
+
+| # | プラン | 実装 | 理由 |
+| --- | --- | --- | --- |
+| 7 | 390px は勤務ごとのカード | 行列のまま**横スクロール**（勤務名の列は左に残す） | 006 で「必要人数の 8 列だけ表内で横スクロール」を許している。スイッチ ON のときは 1 列になるので、初回の店はスクロール自体が起きない。カードは実機で詰まってから |
+| 8 | `settings/required-nums/actions.ts` に Action を置く | テナント直下の `actions.ts` へ | 設定と AI シフト作成の 2 ルートから呼ぶため（AGENTS.md「ルートをまたぐ Action はグループ直下」） |
+| 9 | `QuickRequiredNums` を共有部品に畳む | 共有の行列 + 薄い `AssistRequiredNums`（状態と「この人数で入れる」だけ） | モーダル側の文言と余白はモーダルの持ち物。行列だけを共有する |
+
+### 10.4 残り（§8 の 8）
+
 8. 移行 migration + pgTAP、`db reset` → `gen types` → 手動の通し
