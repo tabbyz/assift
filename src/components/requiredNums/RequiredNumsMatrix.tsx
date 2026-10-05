@@ -111,10 +111,12 @@ export function RequiredNumsMatrix({
             {patterns.map((pattern) => (
               <tr key={pattern.id}>
                 <th className={styles.name} scope="row">
-                  <span className={styles.swatch} style={{ backgroundColor: pattern.colorHex }} />
-                  <Text size="sm" truncate>
-                    {pattern.name}
-                  </Text>
+                  <span className={styles.nameInner}>
+                    <span className={styles.swatch} style={{ backgroundColor: pattern.colorHex }} />
+                    <Text size="sm" truncate>
+                      {pattern.name}
+                    </Text>
+                  </span>
                 </th>
                 {columns.map((column) => (
                   <td key={column} className={styles.cell}>

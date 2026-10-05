@@ -48,11 +48,18 @@
   color: var(--mantine-color-dimmed);
 }
 
+/* `th` は table-cell のまま（display: flex にすると表の列から外れて幅が崩れる） */
 .name {
+  height: 40px;
+  /* 曜日の列に幅を譲る（内容ぶんだけ） */
+  width: 1%;
+  white-space: nowrap;
+}
+
+.nameInner {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 40px;
 }
 
 .swatch {
@@ -65,6 +72,7 @@
 
 .dayHead {
   min-width: 56px;
+  max-width: 96px;
   padding-block: 6px;
   text-align: center;
 }

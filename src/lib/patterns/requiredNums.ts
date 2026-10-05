@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { DAY_KEYS, type DayKey } from '@/lib/calendar/weekdays'
+import { DAY_KEYS, DAY_KEY_LABELS, type DayKey } from '@/lib/calendar/weekdays'
 
 /** 勤務パターンのデフォルト必要人数。曜日キー → 人数（未設定のキーは持たない） */
 export type RequiredNumsByDay = Partial<Record<DayKey, number>>
@@ -56,4 +56,14 @@ export function fillRequiredNumsForward(value: RequiredNumsByDay, key: DayKey): 
     else next[later] = source
   }
   return next
+}
+
+/**
+ * 勤務パターンのフォームに出す 1 行サマリ（015 §3.4）。`日 3 ・ 土 2 ・ 祝 3`。
+ * 決めていない曜日は出さない。1 つも無ければ空文字（呼び出し側が「まだ決めていません」を出す）。
+ */
+export function formatRequiredNumsByDay(value: RequiredNumsByDay): string {
+  return DAY_KEYS.filter((key) => value[key] !== undefined)
+    .map((key) => `${DAY_KEY_LABELS[key]} ${value[key]}`)
+    .join(' ・ ')
 }

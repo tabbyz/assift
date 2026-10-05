@@ -1,19 +1,28 @@
 'use client'
 
 import { type FormEvent, useState, useTransition } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Button, Input, SegmentedControl, Select, Stack, TextInput } from '@mantine/core'
+import {
+  Anchor,
+  Button,
+  Input,
+  SegmentedControl,
+  Select,
+  Stack,
+  Text,
+  TextInput,
+} from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { FormErrorAlert } from '@/components/FormErrorAlert'
 import { PATTERN_KIND_OPTIONS, type PatternKind } from '@/lib/patterns/kinds'
 import { DEFAULT_PATTERN_COLOR } from '@/lib/patterns/colors'
-import type { RequiredNumsByDay } from '@/lib/patterns/requiredNums'
+import { formatRequiredNumsByDay, type RequiredNumsByDay } from '@/lib/patterns/requiredNums'
 import { PATTERN_DESCRIPTION_MAX_LENGTH, PATTERN_NAME_MAX_LENGTH } from '@/lib/validation/patterns'
 import { LinkButton } from '@/components/LinkButton'
 import { SettingsSection } from '@/components/SettingsSection'
 import { createPattern, updatePattern } from '../actions'
 import { ColorSwatchPicker } from './ColorSwatchPicker'
-import { RequiredNumsInput } from './RequiredNumsInput'
 
 /** ペアの選択肢（自分自身は呼び出し側で除いてある。006 §3.8） */
 export type PatternOption = { value: string; label: string }
@@ -49,6 +58,9 @@ export function PatternForm({ tenantId, pairOptions, initial }: Props) {
   const [values, setValues] = useState<PatternFormValues>(initial ?? emptyValues)
   const [error, setError] = useState<string>()
   const [isPending, startTransition] = useTransition()
+
+  // 必要人数はここでは編集しない（015 §3.4）。値は保持して、保存で消さないようにする
+  const summary = formatRequiredNumsByDay(values.defaultRequiredNums)
 
   const set = <K extends keyof PatternFormValues>(key: K, value: PatternFormValues[K]) =>
     setValues((prev) => ({ ...prev, [key]: value }))
@@ -140,10 +152,26 @@ export function PatternForm({ tenantId, pairOptions, initial }: Props) {
 
           {/* 休みパターンに必要人数は無い（保存時も {} に落とす。006 §3.9） */}
           {values.kind === 'workday' && (
-            <RequiredNumsInput
-              value={values.defaultRequiredNums}
-              onChange={(next) => set('defaultRequiredNums', next)}
-            />
+            <Input.Wrapper
+              label="必要人数"
+              description={
+                <>
+                  曜日ごとの人数は
+                  <Anchor
+                    component={Link}
+                    href={`/tenants/${tenantId}/settings/required-nums`}
+                    size="xs"
+                  >
+                    必要人数の設定
+                  </Anchor>
+                  でまとめて決めます
+                </>
+              }
+            >
+              <Text size="sm" mt={4} c={summary ? undefined : 'dimmed'}>
+                {summary || 'まだ決めていません'}
+              </Text>
+            </Input.Wrapper>
           )}
 
           {pairOptions.length > 0 && (
