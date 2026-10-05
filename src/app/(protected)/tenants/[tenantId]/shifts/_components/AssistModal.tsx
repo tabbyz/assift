@@ -25,7 +25,6 @@ import {
   IconRefresh,
   IconShieldLock,
   IconSparkles,
-  IconUsersGroup,
 } from '@tabler/icons-react'
 import type { AssistRunView } from '@/lib/assist/result'
 import { tightenRestrictionDays } from '@/lib/restrictions/describe'
@@ -43,7 +42,9 @@ import {
 } from '../_lib/assist'
 import { failure, outcome } from '../_lib/notices'
 import classes from './AssistModal.module.css'
-import { QuickRequiredNums } from './QuickRequiredNums'
+import type { RequiredNumsMatrixPattern } from '@/components/requiredNums/RequiredNumsMatrix'
+import type { RequiredNumsByDay } from '@/lib/patterns/requiredNums'
+import { AssistRequiredNums } from './AssistRequiredNums'
 
 type Phase =
   | { kind: 'ready'; retryOf: AssistRunView | null }
@@ -302,11 +303,10 @@ type Props = {
   staffCount: number
   workdayPatternCount: number
   restrictionCount: number
-  onSetDefaultRequiredNums: () => void
-  /** 必要人数もデフォルトも無いとき、その場で聞く勤務（014 §3.8）。聞かないときは null */
-  quickRequiredNumPatterns: { id: string; name: string }[] | null
-  onApplyRequiredNums: (nums: Record<string, number | ''>) => void
-  applyingRequiredNums: boolean
+  /** 必要人数が 1 つも決まっていないとき、その場で聞く勤務（014 §3.8 / 015 §3.5） */
+  requiredNumPatterns: (RequiredNumsMatrixPattern & { defaultRequiredNums: RequiredNumsByDay })[]
+  onSaveRequiredNums: (nums: Record<string, RequiredNumsByDay>) => void
+  savingRequiredNums: boolean
 }
 
 export function AssistModal(props: Props) {
@@ -364,10 +364,9 @@ function ReadyView({
   staffCount,
   workdayPatternCount,
   restrictionCount,
-  onSetDefaultRequiredNums,
-  quickRequiredNumPatterns,
-  onApplyRequiredNums,
-  applyingRequiredNums,
+  requiredNumPatterns,
+  onSaveRequiredNums,
+  savingRequiredNums,
   retryOf,
 }: Props & { retryOf: AssistRunView | null }) {
   // 「別の案」は前の案を戻してから解くので、いまの表（前の案で埋まっている）の不足では止めない。
@@ -403,29 +402,18 @@ function ReadyView({
         </Alert>
       )}
 
-      {!hasRequiredNums && quickRequiredNumPatterns && (
-        <QuickRequiredNums
-          patterns={quickRequiredNumPatterns}
-          onApply={onApplyRequiredNums}
-          loading={applyingRequiredNums}
-        />
-      )}
-
-      {!hasRequiredNums && !quickRequiredNumPatterns && (
-        <Alert color="gray" variant="light" icon={<IconInfoCircle size={16} />} p="xs">
-          <Group justify="space-between" gap="xs">
-            <Text size="sm">必要人数が設定されていません</Text>
-            <Button
-              variant="default"
-              size="compact-sm"
-              leftSection={<IconUsersGroup size={16} />}
-              onClick={onSetDefaultRequiredNums}
-            >
-              デフォルト人数をセット
-            </Button>
-          </Group>
-        </Alert>
-      )}
+      {!hasRequiredNums &&
+        (requiredNumPatterns.length > 0 ? (
+          <AssistRequiredNums
+            patterns={requiredNumPatterns}
+            onSave={onSaveRequiredNums}
+            loading={savingRequiredNums}
+          />
+        ) : (
+          <Alert color="gray" variant="light" icon={<IconInfoCircle size={16} />} p="xs">
+            <Text size="sm">勤務日のパターンがありません</Text>
+          </Alert>
+        ))}
 
       <dl className={classes.facts}>
         {fact(

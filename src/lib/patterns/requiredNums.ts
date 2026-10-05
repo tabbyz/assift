@@ -42,19 +42,6 @@ export const requiredNumsSchema = z.partialRecord(
 )
 
 /**
- * その曜日 / 祝日のデフォルト必要人数。設定が無ければ 0（v1 の `nums[key] || 0`）。
- * シフト表の「デフォルト人数をセット」（007 §3.6）と日別モーダルが使う。
- */
-export function defaultRequiredNum(value: RequiredNumsByDay, key: DayKey): number {
-  return value[key] ?? 0
-}
-
-/** 全曜日・祝日が同じ人数（自動作成のときに勤務ごとに 1 つだけ聞いた値。014 §3.8） */
-export function uniformRequiredNums(num: number): RequiredNumsByDay {
-  return Object.fromEntries(DAY_KEYS.map((key) => [key, num])) as RequiredNumsByDay
-}
-
-/**
  * ある曜日の人数を、表の右にある曜日へコピーする。
  * 空欄なら右も空欄にする。祝日列には右が無いので、渡しても変えない。
  */

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildRequiredByDate,
+  formatOverriddenDates,
   overriddenDates,
   overrideKey,
   resolveRequiredNum,
@@ -131,5 +132,20 @@ describe('overriddenDates', () => {
 describe('overrideKey', () => {
   it('勤務と日付で引ける', () => {
     expect(overrideKey(LUNCH, '2026-10-12')).toBe(`${LUNCH}:2026-10-12`)
+  })
+})
+
+describe('formatOverriddenDates', () => {
+  it('中黒で並べる', () => {
+    expect(formatOverriddenDates(['2026-10-10', '2026-10-12'])).toBe('10/10・10/12')
+  })
+
+  it('多いときは先頭いくつか + ほか N 日', () => {
+    const dates = ['01', '02', '03', '04', '05', '06', '07'].map((day) => `2026-10-${day}`)
+    expect(formatOverriddenDates(dates)).toBe('10/1・10/2・10/3・10/4・10/5 ほか 2 日')
+  })
+
+  it('0 件なら空', () => {
+    expect(formatOverriddenDates([])).toBe('')
   })
 })

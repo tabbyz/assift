@@ -18,6 +18,7 @@ import { cellKey, toShiftMap, type ShiftCell } from '@/lib/shifts/key'
 import { countShifts } from '@/lib/shifts/count'
 import {
   buildRequiredByDate,
+  formatOverriddenDates,
   overriddenDates,
   resolveRequiredNum,
   toOverrideMap,
@@ -31,8 +32,7 @@ import {
   assignShift,
   clearDraftShifts,
   setDefaultPatterns,
-  setDefaultRequiredNums,
-  setUniformDefaultRequiredNums,
+  resetRequiredNums,
   setShiftsFixed,
 } from '../actions'
 import { shiftsParsers } from '../searchParams'
@@ -47,6 +47,7 @@ import { CopyModal } from './CopyModal'
 import { CountModal } from './CountModal'
 import { DateNoteModal } from './DateNoteModal'
 import { PatternDescriptionList } from '@/components/shiftTable/PatternDescriptionList'
+import { saveDefaultRequiredNums } from '../../actions'
 import { RequiredNumModal, type RequiredNumRowInput } from './RequiredNumModal'
 import { EmptyNotice } from './EmptyNotice'
 import { useFirstVisitCoach } from './useFirstVisitCoach'
@@ -274,36 +275,31 @@ export function ShiftsClient(props: Props) {
         ),
     })
 
-  // 必要人数もデフォルトも無い店（初期設定のテンプレートは必要人数を持たない）は、自動作成でその場で聞く（014 §3.8）
-  const quickRequiredNumPatterns =
-    workdayPatterns.length > 0 &&
-    workdayPatterns.every((pattern) => Object.keys(pattern.defaultRequiredNums).length === 0)
-      ? workdayPatterns.map((pattern) => ({ id: pattern.id, name: pattern.name }))
-      : null
-
-  const applyUniformRequiredNums = (nums: Record<string, number | ''>) =>
+  /**
+   * AI シフト作成の中で必要人数を聞いたとき（015 §3.5）。保存するのは**基本の人数だけ**で、
+   * 表示中の期間へは解決で届く（焼き付けは起きない）。設定画面と同じ Action を使う
+   */
+  const saveAssistRequiredNums = (nums: Record<string, RequiredNumsByDay>) =>
     runBulk(
-      async () => {
-        const saved = await setUniformDefaultRequiredNums({ tenantId, nums })
-        if (!saved.ok) return saved
-        return setDefaultRequiredNums({ tenantId, start: range.start, end: range.end })
-      },
+      () => saveDefaultRequiredNums({ tenantId, nums }),
       () => ({ message: '必要人数を入れました', color: 'green' })
     )
 
-  const confirmSetDefaultRequiredNums = () =>
+  /** 「この期間の個別の変更を元に戻す」（015 §3.6）。確認にはどの日が戻るかを並べる */
+  const confirmResetRequiredNums = () =>
     modals.openConfirmModal({
-      title: 'デフォルト人数をセット',
+      title: 'この期間の個別の変更を元に戻す',
       children: (
         <Text size="sm">
-          現在の期間に一括でデフォルトの必要人数をセットします。よろしいですか？
+          {formatOverriddenDates(overriddenDatesInRange)} の {overriddenDatesInRange.length}{' '}
+          日分を、基本の人数に戻します。基本の人数は変わりません。
         </Text>
       ),
-      labels: { confirm: 'セットする', cancel: 'キャンセル' },
+      labels: { confirm: '元に戻す', cancel: 'キャンセル' },
       onConfirm: () =>
         runBulk(
-          () => setDefaultRequiredNums({ tenantId, start: range.start, end: range.end }),
-          () => ({ message: 'デフォルト人数を設定しました', color: 'green' })
+          () => resetRequiredNums({ tenantId, start: range.start, end: range.end }),
+          () => ({ message: '基本の人数に戻しました', color: 'green' })
         ),
     })
 
@@ -342,11 +338,8 @@ export function ShiftsClient(props: Props) {
     })
   }
 
-  /** 「この期間の個別の変更を元に戻す」の確認に並べる日（015 §3.6） */
-  const overriddenDatesInRange = useMemo(
-    () => overriddenDates(range.dates, workdayPatternIds, overrides),
-    [range.dates, workdayPatternIds, overrides]
-  )
+  // 「この期間の個別の変更を元に戻す」の確認に並べる日（015 §3.6）。高々 31 日 × 勤務数なので useMemo は要らない
+  const overriddenDatesInRange = overriddenDates(range.dates, workdayPatternIds, overrides)
 
   const needsSetup = patterns.length === 0 || staffs.length === 0
 
@@ -426,7 +419,8 @@ export function ShiftsClient(props: Props) {
           onOpenShare={() => setShareOpened(true)}
           onBulk={confirmBulk}
           onSetDefaultPatterns={confirmSetDefaultPatterns}
-          onSetDefaultRequiredNums={confirmSetDefaultRequiredNums}
+          onResetRequiredNums={confirmResetRequiredNums}
+          resetRequiredNumsCount={overriddenDatesInRange.length}
           onOpenCopy={() => setCopyOpened(true)}
           assistAvailable={props.assist.available}
           onOpenAssist={assist.openNew}
@@ -560,13 +554,14 @@ export function ShiftsClient(props: Props) {
         staffCount={staffs.length}
         workdayPatternCount={workdayPatterns.length}
         restrictionCount={props.assist.restrictionCount}
-        onSetDefaultRequiredNums={() => {
-          assist.close()
-          confirmSetDefaultRequiredNums()
-        }}
-        quickRequiredNumPatterns={quickRequiredNumPatterns}
-        onApplyRequiredNums={applyUniformRequiredNums}
-        applyingRequiredNums={isBulkPending}
+        requiredNumPatterns={workdayPatterns.map((pattern) => ({
+          id: pattern.id,
+          name: pattern.name,
+          colorHex: pattern.colorHex,
+          defaultRequiredNums: pattern.defaultRequiredNums,
+        }))}
+        onSaveRequiredNums={saveAssistRequiredNums}
+        savingRequiredNums={isBulkPending}
       />
 
       {copyOpened && (

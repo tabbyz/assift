@@ -32,10 +32,10 @@ export const saveRequiredNumsSchema = z.object({
 })
 
 /**
- * 表示期間に一括でデフォルト人数をセットする（007 §3.6）。
+ * 表示期間の「この日だけ変えた」分を元に戻す（015 §3.6）。
  * 期間の規則（両端を含めて 31 日以内）は `refineTerm` が持つ（008 §3.8）。
  */
-export const setDefaultRequiredNumsSchema = refineTerm(
+export const resetRequiredNumsSchema = refineTerm(
   z.object({ tenantId: tenantIdSchema, ...dateTermShape })
 )
 
@@ -47,25 +47,5 @@ export const saveDefaultRequiredNumsSchema = z.object({
   tenantId: tenantIdSchema,
   nums: z
     .record(patternIdSchema, requiredNumsSchema)
-    .refine((nums) => Object.keys(nums).length > 0, { error: '勤務が見つかりません' }),
-})
-
-/** 初回に勤務ごとに 1 つだけ聞くとき（014 §3.8）は、空欄を 0 として扱う（上書きではなく基本の人数を作るため） */
-const uniformNumSchema = z.preprocess(
-  (value) => (value === '' ? 0 : value),
-  z
-    .int({ error: '必要人数を入力してください' })
-    .min(REQUIRED_NUM_MIN, RANGE_ERROR)
-    .max(REQUIRED_NUM_MAX, RANGE_ERROR)
-)
-
-/**
- * 自動作成で必要人数を聞いたとき（014 §3.8）。勤務ごとに 1 つの人数を、全曜日のデフォルトとして保存する。
- * キーは勤務パターンの id
- */
-export const setUniformDefaultRequiredNumsSchema = z.object({
-  tenantId: tenantIdSchema,
-  nums: z
-    .record(patternIdSchema, uniformNumSchema)
     .refine((nums) => Object.keys(nums).length > 0, { error: '勤務が見つかりません' }),
 })

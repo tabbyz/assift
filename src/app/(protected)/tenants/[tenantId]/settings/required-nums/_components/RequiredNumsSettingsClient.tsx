@@ -9,7 +9,7 @@ import { SettingsSection } from '@/components/SettingsSection'
 import { RequiredNumsMatrix } from '@/components/requiredNums/RequiredNumsMatrix'
 import type { RequiredNumsByDay } from '@/lib/patterns/requiredNums'
 import { isUniform, toMatrix, toSavePayload } from '@/lib/patterns/requiredNumsMatrix'
-import { saveDefaultRequiredNums } from '../actions'
+import { saveDefaultRequiredNums } from '../../../actions'
 
 type Props = {
   tenantId: string

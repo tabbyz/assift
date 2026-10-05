@@ -17,7 +17,9 @@ export type AssistUndo = { label: string; onClick: () => void }
 type Props = {
   onBulk: (kind: BulkKind) => void
   onSetDefaultPatterns: () => void
-  onSetDefaultRequiredNums: () => void
+  onResetRequiredNums: () => void
+  /** 期間に「この日だけ変えた」日が何日あるか。0 なら戻すものが無いので押せない（015 §3.6） */
+  resetRequiredNumsCount: number
   onOpenCopy: () => void
   assistUndo: AssistUndo | null
   disabled: boolean
@@ -29,7 +31,8 @@ type Props = {
 export function ToolsMenu({
   onBulk,
   onSetDefaultPatterns,
-  onSetDefaultRequiredNums,
+  onResetRequiredNums,
+  resetRequiredNumsCount,
   onOpenCopy,
   assistUndo,
   disabled,
@@ -55,8 +58,14 @@ export function ToolsMenu({
         <MenuItem leftSection={<IconSquareRoundedPlus size={16} />} onClick={onSetDefaultPatterns}>
           デフォルト勤務パターンをセット
         </MenuItem>
-        <MenuItem leftSection={<IconUsersGroup size={16} />} onClick={onSetDefaultRequiredNums}>
-          デフォルト人数をセット
+        <MenuItem
+          leftSection={<IconUsersGroup size={16} />}
+          onClick={onResetRequiredNums}
+          disabled={resetRequiredNumsCount === 0}
+        >
+          {resetRequiredNumsCount === 0
+            ? 'この期間に個別の変更はありません'
+            : `この期間の個別の変更を元に戻す（${resetRequiredNumsCount} 日）`}
         </MenuItem>
 
         <MenuDivider />

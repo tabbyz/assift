@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fillRequiredNumsForward, parseRequiredNums, uniformRequiredNums } from './requiredNums'
+import { fillRequiredNumsForward, parseRequiredNums } from './requiredNums'
 
 describe('parseRequiredNums', () => {
   it('曜日キーと祝日キーを読む', () => {
@@ -65,24 +65,5 @@ describe('fillRequiredNumsForward', () => {
   it('祝日列は変えない', () => {
     const value = { holiday: 2, '0': 1 }
     expect(fillRequiredNumsForward(value, 'holiday')).toBe(value)
-  })
-})
-
-describe('uniformRequiredNums', () => {
-  it('全曜日と祝日に同じ人数', () => {
-    expect(uniformRequiredNums(2)).toEqual({
-      '0': 2,
-      '1': 2,
-      '2': 2,
-      '3': 2,
-      '4': 2,
-      '5': 2,
-      '6': 2,
-      holiday: 2,
-    })
-  })
-
-  it('保存して読み直しても同じ', () => {
-    expect(parseRequiredNums(uniformRequiredNums(1))).toEqual(uniformRequiredNums(1))
   })
 })

@@ -1,3 +1,4 @@
+import { formatMonthDay } from '@/lib/calendar/dateString'
 import { dayKeyFor, type DayKey } from '@/lib/calendar/weekdays'
 import { type RequiredNumsByDay } from '@/lib/patterns/requiredNums'
 
@@ -129,4 +130,14 @@ export function resolveRequiredRows(input: {
     }
   }
   return rows
+}
+
+/**
+ * 「元に戻す」の確認に並べる日付（015 §3.6）。`10/10・10/12`。
+ * 多い月は全部並べると確認文が読めなくなるので、先頭いくつか + 「ほか N 日」にする。
+ */
+export function formatOverriddenDates(dates: string[], max = 5): string {
+  const head = dates.slice(0, max).map(formatMonthDay).join('・')
+  const rest = dates.length - max
+  return rest > 0 ? `${head} ほか ${rest} 日` : head
 }
