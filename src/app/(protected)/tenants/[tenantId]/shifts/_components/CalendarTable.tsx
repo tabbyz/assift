@@ -3,7 +3,7 @@
 import { Button, Group, Popover, Text, UnstyledButton } from '@mantine/core'
 import { wday } from '@/lib/calendar/dateString'
 import type { DateRange } from '@/lib/calendar/dateRange'
-import type { DateCoverage } from '@/lib/shifts/satisfaction'
+import { hasCoverage, type DateCoverage } from '@/lib/shifts/satisfaction'
 import { cellKey, type ShiftMap } from '@/lib/shifts/key'
 import { DateHeaderCell, dateToneClass } from '@/components/shiftTable/DateHeaderCell'
 import { DateNoteCell } from './DateNoteCell'
@@ -57,15 +57,29 @@ type Props = {
   onCoachDismiss: () => void
 }
 
-/** 0/0（必要人数も配置も無い日）は数字を出さない。全列に出すと指標として読まれなくなる */
-function hasCoverage(coverage: DateCoverage | undefined): coverage is DateCoverage {
-  return coverage !== undefined && (coverage.required > 0 || coverage.assigned > 0)
+/** フッターに出す数字。必要人数が未設定なら `3/—`、多く入っていれば `4/3 +1`（015 §3.7） */
+function coverageText(coverage: DateCoverage): string {
+  const required = coverage.required === null ? '—' : coverage.required
+  const over =
+    coverage.state === 'over' && coverage.required !== null
+      ? ` +${coverage.assigned - coverage.required}`
+      : ''
+  return `${coverage.assigned}/${required}${over}`
 }
 
+const COVERAGE_STATE_LABELS = {
+  ok: '充足',
+  short: '不足',
+  over: '過剰',
+  unset: '必要人数は未設定',
+  none: '',
+} as const
+
+/** 色だけで状態を伝えない（015 §4.6） */
 function coverageLabel(date: string, coverage: DateCoverage | undefined): string {
   if (!hasCoverage(coverage)) return `${date} の必要人数`
-  const state = coverage.satisfied ? '充足' : '未充足'
-  return `${date} の必要人数（${coverage.assigned}/${coverage.required} ${state}）`
+  const required = coverage.required === null ? '未設定' : coverage.required
+  return `${date} の必要人数（配置 ${coverage.assigned} / 必要 ${required} ${COVERAGE_STATE_LABELS[coverage.state]}）`
 }
 
 /**
@@ -264,12 +278,12 @@ export function CalendarTable({
               <td key={date}>
                 <UnstyledButton
                   className={classes.footCell}
-                  data-short={hasCoverage(shown) && !shown.satisfied ? true : undefined}
+                  data-state={hasCoverage(shown) ? shown.state : undefined}
                   data-preview={preview ? true : undefined}
                   onClick={() => onOpenRequiredNum(date)}
                   aria-label={
                     preview
-                      ? `${coverageLabel(date, coverage)}。選んでいる一手で ${preview.assigned}/${preview.required}`
+                      ? `${coverageLabel(date, coverage)}。選んでいる一手で ${coverageText(preview)}`
                       : coverageLabel(date, coverage)
                   }
                 >

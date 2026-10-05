@@ -18,11 +18,20 @@ describe('saveRequiredNumsSchema', () => {
     expect(parsed.nums[PATTERN]).toBe(3)
   })
 
-  it('空欄（NumberInput の空）は 0 にする（v1 と同じ）', () => {
+  it('空欄（NumberInput の空）はそのまま通す = この日の上書きを消す（015 §3.2）', () => {
     const parsed = saveRequiredNumsSchema.parse({
       tenantId: TENANT,
       date: '2026-09-18',
       nums: { [PATTERN]: '' },
+    })
+    expect(parsed.nums[PATTERN]).toBe('')
+  })
+
+  it('0 は 0 人として通す（空欄とは別）', () => {
+    const parsed = saveRequiredNumsSchema.parse({
+      tenantId: TENANT,
+      date: '2026-09-18',
+      nums: { [PATTERN]: 0 },
     })
     expect(parsed.nums[PATTERN]).toBe(0)
   })

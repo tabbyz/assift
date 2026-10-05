@@ -11,18 +11,23 @@ import { useQueryStates } from 'nuqs'
 import { dateRange, nextStart, prevStart } from '@/lib/calendar/dateRange'
 import type { ShiftCycle } from '@/lib/calendar/shiftCycle'
 import { dayKeyFor } from '@/lib/calendar/weekdays'
-import { defaultRequiredNum, type RequiredNumsByDay } from '@/lib/patterns/requiredNums'
+import type { RequiredNumsByDay } from '@/lib/patterns/requiredNums'
 import type { PatternKind } from '@/lib/patterns/kinds'
 import { applyAssign, type AssignInput } from '@/lib/shifts/applyAssign'
 import { cellKey, toShiftMap, type ShiftCell } from '@/lib/shifts/key'
 import { countShifts } from '@/lib/shifts/count'
 import {
+  buildRequiredByDate,
+  overriddenDates,
+  resolveRequiredNum,
+  toOverrideMap,
+  type RequiredNumRow,
+} from '@/lib/shifts/requiredNums'
+import {
   assignedCounts,
   countAt,
   coverageAt,
-  requiredCounts,
   type DateCoverage,
-  type RequiredNumRow,
 } from '@/lib/shifts/satisfaction'
 import type { ActionResult } from '@/lib/actions/result'
 import { formatJstMonthDayTime } from '@/lib/calendar/datetime'
@@ -36,7 +41,7 @@ import {
   setShiftsFixed,
 } from '../actions'
 import { shiftsParsers } from '../searchParams'
-import { ghostCells, hasRequiredNums, previewCoverage, shortageByPattern } from '../_lib/assist'
+import { ghostCells, hasAnyRequired, previewCoverage, shortageByPattern } from '../_lib/assist'
 import { BULK_COPY, type BulkKind } from '../_lib/bulkOperations'
 import { failure, outcome, type Notice } from '../_lib/notices'
 import { AssistModal, useAssist } from './AssistModal'
@@ -82,7 +87,8 @@ type Props = {
   staffs: ShiftsStaff[]
   patterns: ShiftsPattern[]
   shifts: ShiftCell[]
-  requiredNums: RequiredNumRow[]
+  /** 必要人数の**上書き**だけ（015 §3.1。基本の人数は patterns の defaultRequiredNums） */
+  requiredOverrides: RequiredNumRow[]
   dateNotes: { date: string; note: string }[]
   shares: { enabled: ShareItem[]; expired: ShareItem[] }
   /** 自動アサイン（012） */
@@ -142,7 +148,12 @@ export function ShiftsClient(props: Props) {
     () => new Map(props.dateNotes.map((note) => [note.date, note.note])),
     [props.dateNotes]
   )
-  const required = useMemo(() => requiredCounts(props.requiredNums), [props.requiredNums])
+  // 上書き ?? 基本[曜日] ?? 未設定（015 §3.1）。基本も祝日も Client に届いているのでここで解決する
+  const overrides = useMemo(() => toOverrideMap(props.requiredOverrides), [props.requiredOverrides])
+  const required = useMemo(
+    () => buildRequiredByDate({ dates: range.dates, patterns, overrides, holidays }),
+    [range.dates, patterns, overrides, holidays]
+  )
   const assigned = useMemo(() => assignedCounts(shifts), [shifts])
   const coverageByDate = useMemo(
     () =>
@@ -316,14 +327,31 @@ export function ShiftsClient(props: Props) {
 
   const requiredNumRows = (date: string): RequiredNumRowInput[] => {
     const dayKey = dayKeyFor(date, holidays.has(date))
-    return workdayPatterns.map((pattern) => ({
-      patternId: pattern.id,
-      name: pattern.name,
-      required: countAt(required, date, pattern.id),
-      defaultNum: defaultRequiredNum(pattern.defaultRequiredNums, dayKey),
-      assigned: countAt(assigned, date, pattern.id),
-    }))
+    return workdayPatterns.map((pattern) => {
+      const resolved = resolveRequiredNum(
+        overrides,
+        pattern.defaultRequiredNums,
+        pattern.id,
+        date,
+        dayKey
+      )
+      return {
+        patternId: pattern.id,
+        name: pattern.name,
+        required: resolved.num,
+        // 「この日だけ変更（基本 3 人）」の札に出す基本の人数（015 §4.3）
+        defaultNum: pattern.defaultRequiredNums[dayKey] ?? null,
+        overridden: resolved.source === 'override',
+        assigned: countAt(assigned, date, pattern.id),
+      }
+    })
   }
+
+  /** 「この期間の個別の変更を元に戻す」の確認に並べる日（015 §3.6） */
+  const overriddenDatesInRange = useMemo(
+    () => overriddenDates(range.dates, workdayPatternIds, overrides),
+    [range.dates, workdayPatternIds, overrides]
+  )
 
   const needsSetup = patterns.length === 0 || staffs.length === 0
 
@@ -374,9 +402,10 @@ export function ShiftsClient(props: Props) {
     () => new Map(patterns.map((pattern) => [pattern.id, pattern.name])),
     [patterns]
   )
+  // 期間に 1 つでも「決まっている」必要人数があるか（015 §3.2。全部未設定なら自動アサインは走らせない）
   const requiredNumsSet = useMemo(
-    () => hasRequiredNums(props.requiredNums, new Set(workdayPatternIds)),
-    [props.requiredNums, workdayPatternIds]
+    () => hasAnyRequired(required, range.dates, workdayPatternIds),
+    [required, range.dates, workdayPatternIds]
   )
   const assistUndo =
     latestAssist && latestAssist.draftCount > 0

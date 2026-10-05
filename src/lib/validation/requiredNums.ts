@@ -9,15 +9,19 @@ const RANGE_ERROR = {
 }
 
 /**
- * 日別モーダルの 1 マス。`NumberInput` の空欄（`''`）は v1 と同じく 0 として扱う。
- * `z.preprocess` で 0 に寄せてから整数として検査する（leaf の `{ error }` は 006 §3.12 の規約）。
+ * 日別モーダルの 1 マス。**空欄（`''`）は「この日の上書きを消す」**（= 基本の人数に戻す。015 §3.2）。
+ * 0 人にしたいときは `0` を入れる。`null` を混ぜず `''` のままにするのは、`NumberInput` が空欄で返す値だから。
  */
-const numSchema = z.preprocess(
-  (value) => (value === '' ? 0 : value),
-  z
-    .int({ error: '必要人数を入力してください' })
-    .min(REQUIRED_NUM_MIN, RANGE_ERROR)
-    .max(REQUIRED_NUM_MAX, RANGE_ERROR)
+const numSchema = z.union(
+  [
+    z.literal(''),
+    z
+      .int({ error: '必要人数を入力してください' })
+      .min(REQUIRED_NUM_MIN, RANGE_ERROR)
+      .max(REQUIRED_NUM_MAX, RANGE_ERROR),
+  ],
+  // union は枝のエラーをまとめてしまうので、ここで日本語を付ける（`toActionError` は先頭 issue を出す）
+  RANGE_ERROR
 )
 
 /** 日別の必要人数。キーは勤務パターンの id */
@@ -35,6 +39,15 @@ export const setDefaultRequiredNumsSchema = refineTerm(
   z.object({ tenantId: tenantIdSchema, ...dateTermShape })
 )
 
+/** 初回に勤務ごとに 1 つだけ聞くとき（014 §3.8）は、空欄を 0 として扱う（上書きではなく基本の人数を作るため） */
+const uniformNumSchema = z.preprocess(
+  (value) => (value === '' ? 0 : value),
+  z
+    .int({ error: '必要人数を入力してください' })
+    .min(REQUIRED_NUM_MIN, RANGE_ERROR)
+    .max(REQUIRED_NUM_MAX, RANGE_ERROR)
+)
+
 /**
  * 自動作成で必要人数を聞いたとき（014 §3.8）。勤務ごとに 1 つの人数を、全曜日のデフォルトとして保存する。
  * キーは勤務パターンの id
@@ -42,6 +55,6 @@ export const setDefaultRequiredNumsSchema = refineTerm(
 export const setUniformDefaultRequiredNumsSchema = z.object({
   tenantId: tenantIdSchema,
   nums: z
-    .record(patternIdSchema, numSchema)
+    .record(patternIdSchema, uniformNumSchema)
     .refine((nums) => Object.keys(nums).length > 0, { error: '勤務が見つかりません' }),
 })

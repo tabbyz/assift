@@ -147,7 +147,15 @@ export async function assignShift(input: {
   })
 }
 
-/** 日別の必要人数。0 も行として保存する（v1 と同じ。「未設定」と区別しない） */
+/**
+ * 日別の必要人数（015 §3.1）。`required_nums` の行は**この日だけの上書き**なので:
+ *
+ * - 数字が来た勤務は upsert（0 も「0 人」として明示的に保存する）
+ * - **空欄が来た勤務は行を削除**（= 基本の人数に戻す。モーダルの「基本に戻す」）
+ *
+ * upsert と delete は別のリクエストになるが、片方だけ通っても「一部の勤務が古いまま」になるだけで、
+ * もう一度保存すればそろう（矛盾した状態は残らない）。
+ */
 export async function saveRequiredNums(input: {
   tenantId: string
   date: string
@@ -157,20 +165,37 @@ export async function saveRequiredNums(input: {
     const parsed = saveRequiredNumsSchema.parse(input)
     await requireUser()
 
-    const rows: RequiredNumRow[] = Object.entries(parsed.nums).map(([patternId, num]) => ({
-      tenant_id: parsed.tenantId,
-      pattern_id: patternId,
-      date: parsed.date,
-      num,
-    }))
-    if (rows.length === 0) return
+    const entries = Object.entries(parsed.nums)
+    if (entries.length === 0) return
+
+    const rows: RequiredNumRow[] = entries
+      .filter((entry): entry is [string, number] => entry[1] !== '')
+      .map(([patternId, num]) => ({
+        tenant_id: parsed.tenantId,
+        pattern_id: patternId,
+        date: parsed.date,
+        num,
+      }))
+    const clearedPatternIds = entries.filter(([, num]) => num === '').map(([patternId]) => patternId)
 
     const supabase = await createClient()
-    // 他店舗のパターン id を混ぜると複合 FK (pattern_id, tenant_id) が 23503 で 1 行も入れない
-    const { error } = await supabase
-      .from('required_nums')
-      .upsert(rows, { onConflict: 'pattern_id,date' })
-    if (error) failFromFkError(error, PATTERN_NOT_FOUND_MESSAGE)
+    if (rows.length > 0) {
+      // 他店舗のパターン id を混ぜると複合 FK (pattern_id, tenant_id) が 23503 で 1 行も入れない
+      const { error } = await supabase
+        .from('required_nums')
+        .upsert(rows, { onConflict: 'pattern_id,date' })
+      if (error) failFromFkError(error, PATTERN_NOT_FOUND_MESSAGE)
+    }
+    if (clearedPatternIds.length > 0) {
+      // 他店舗の行は RLS が外すので 0 行になるだけ（= 消すものが無かった）
+      const { error } = await supabase
+        .from('required_nums')
+        .delete()
+        .eq('tenant_id', parsed.tenantId)
+        .eq('date', parsed.date)
+        .in('pattern_id', clearedPatternIds)
+      if (error) throw error
+    }
 
     refresh()
   })

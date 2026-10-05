@@ -1,11 +1,12 @@
 import type { AssistLever, AssistUnfilled } from '@/lib/assist/result'
 import { cellKey, type ShiftMap } from '@/lib/shifts/key'
+import type { RequiredByDate } from '@/lib/shifts/requiredNums'
 import {
   countAt,
   coverageAt,
+  requiredAt,
   type CountsByDate,
   type DateCoverage,
-  type RequiredNumRow,
 } from '@/lib/shifts/satisfaction'
 
 /**
@@ -22,27 +23,36 @@ export type Shortage = {
 export function shortageByPattern(
   dates: string[],
   workdayPatterns: { id: string; name: string }[],
-  required: CountsByDate,
+  required: RequiredByDate,
   assigned: CountsByDate
 ): Shortage {
   const byPattern = workdayPatterns
     .map((pattern) => ({
       patternId: pattern.id,
       name: pattern.name,
-      count: dates.reduce(
-        (sum, date) =>
-          sum +
-          Math.max(0, countAt(required, date, pattern.id) - countAt(assigned, date, pattern.id)),
-        0
-      ),
+      count: dates.reduce((sum, date) => {
+        // 未設定（null）の組は枠にしない（015 §3.2）
+        const num = requiredAt(required, date, pattern.id)
+        return num === null ? sum : sum + Math.max(0, num - countAt(assigned, date, pattern.id))
+      }, 0),
     }))
     .filter((item) => item.count > 0)
   return { total: byPattern.reduce((sum, item) => sum + item.count, 0), byPattern }
 }
 
-/** 期間に出勤日パターンの必要人数が 1 件でもあるか（無ければ「デフォルト人数をセット」へ案内する） */
-export function hasRequiredNums(rows: RequiredNumRow[], workdayPatternIds: Set<string>): boolean {
-  return rows.some((row) => row.num > 0 && workdayPatternIds.has(row.patternId))
+/**
+ * 期間に「決まっている」必要人数が 1 つでもあるか（015 §3.2）。
+ * 無ければ自動アサインは走らせず、必要人数を聞く口を出す。
+ * **0 人も「決まっている」**（未設定だけが決まっていない）。
+ */
+export function hasAnyRequired(
+  required: RequiredByDate,
+  dates: string[],
+  workdayPatternIds: string[]
+): boolean {
+  return dates.some((date) =>
+    workdayPatternIds.some((patternId) => requiredAt(required, date, patternId) !== null)
+  )
 }
 
 export type AssistStage = {
@@ -169,7 +179,7 @@ export function previewCoverage(
   lever: Pick<AssistLever, 'rows'>,
   shifts: ShiftMap,
   workdayPatternIds: string[],
-  required: CountsByDate,
+  required: RequiredByDate,
   assigned: CountsByDate
 ): Map<string, DateCoverage> {
   const added: CountsByDate = new Map()

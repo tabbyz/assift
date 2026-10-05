@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import {
   Alert,
   Anchor,
+  Badge,
   Button,
   Group,
   Modal,
@@ -24,16 +25,19 @@ import { IconInfoCircle } from '@tabler/icons-react'
 import { WEEKDAY_LABELS } from '@/lib/calendar/weekdays'
 import { formatMonthDay, wday } from '@/lib/calendar/dateString'
 import { REQUIRED_NUM_MAX, REQUIRED_NUM_MIN } from '@/lib/patterns/requiredNums'
+import type { RequiredNum } from '@/lib/shifts/requiredNums'
 import { saveRequiredNums } from '../actions'
 
 /** 出勤日のパターン 1 件分。モーダルが必要とする値だけ */
 export type RequiredNumRowInput = {
   patternId: string
   name: string
-  /** 現在の必要人数（行が無ければ 0） */
-  required: number
-  /** 曜日 / 祝日のデフォルト値 */
-  defaultNum: number
+  /** 解決後の必要人数。`null` は「まだ決めていない」（015 §3.2） */
+  required: RequiredNum
+  /** その曜日 / 祝日の基本の人数。`null` なら基本も決まっていない */
+  defaultNum: RequiredNum
+  /** この日だけ変えてある（`required_nums` に行がある）か */
+  overridden: boolean
   /** アサイン済み人数 */
   assigned: number
 }
@@ -54,10 +58,11 @@ export function RequiredNumModal({ tenantId, date, rows, onClose }: Props) {
   const [nums, setNums] = useState<Record<string, number | ''>>({})
   const [isPending, startTransition] = useTransition()
 
-  const valueOf = (row: RequiredNumRowInput) => nums[row.patternId] ?? row.required
+  const valueOf = (row: RequiredNumRowInput): number | '' =>
+    nums[row.patternId] ?? row.required ?? ''
 
-  const setDefaults = () =>
-    setNums(Object.fromEntries(rows.map((row) => [row.patternId, row.defaultNum])))
+  /** 「基本に戻す」= この日の上書きを消す。空欄で保存すると行が消える（015 §3.2） */
+  const clear = (patternId: string) => setNums((current) => ({ ...current, [patternId]: '' }))
 
   const submit = () =>
     startTransition(async () => {
@@ -82,19 +87,13 @@ export function RequiredNumModal({ tenantId, date, rows, onClose }: Props) {
       size="sm"
     >
       <Stack gap="md">
-        <Group justify="flex-end">
-          <Button variant="default" size="xs" onClick={setDefaults} disabled={isPending}>
-            デフォルト人数をセット
-          </Button>
-        </Group>
-
         <Alert variant="light" color="blue" icon={<IconInfoCircle size={16} />} p="xs">
           <Text size="xs">
-            デフォルト人数は
+            ここで入れた数は<strong>この日だけ</strong>に効きます。空欄にすると基本の人数に戻ります。基本の人数は
             <Anchor component={Link} href={`/tenants/${tenantId}/settings/patterns`} size="xs">
               勤務パターン設定画面
             </Anchor>
-            で設定できます
+            で変えられます
           </Text>
         </Alert>
 
@@ -118,11 +117,32 @@ export function RequiredNumModal({ tenantId, date, rows, onClose }: Props) {
             <TableTbody>
               {rows.map((row) => (
                 <TableTr key={row.patternId}>
-                  <TableTd ta="right">{row.name}</TableTd>
+                  <TableTd ta="right">
+                    <Stack gap={2} align="flex-end">
+                      <Text size="sm">{row.name}</Text>
+                      {row.overridden && (
+                        <Group gap={4} wrap="nowrap">
+                          <Badge size="xs" variant="light" color="yellow">
+                            この日だけ変更
+                          </Badge>
+                          <Button
+                            variant="subtle"
+                            color="gray"
+                            size="compact-xs"
+                            onClick={() => clear(row.patternId)}
+                            disabled={isPending}
+                          >
+                            基本{row.defaultNum === null ? '' : ` ${row.defaultNum} 人`}に戻す
+                          </Button>
+                        </Group>
+                      )}
+                    </Stack>
+                  </TableTd>
                   <TableTd p={4}>
                     <NumberInput
                       aria-label={`${row.name} の必要人数`}
                       value={valueOf(row)}
+                      placeholder={row.defaultNum === null ? '—' : String(row.defaultNum)}
                       onChange={(value) =>
                         setNums((current) => ({
                           ...current,
