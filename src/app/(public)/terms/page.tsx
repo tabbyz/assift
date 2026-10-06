@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Container, Divider, Paper, Stack, Text, Title } from '@mantine/core'
+import { Anchor, Container, Divider, Paper, Stack, Text, Title } from '@mantine/core'
 import { LinkAnchor } from '@/components/LinkAnchor'
 import { TERMS_ARTICLES } from './_components/articles'
 import { TERMS } from './_components/terms'
@@ -62,7 +62,11 @@ export default function TermsPage() {
             {TERMS.enactedOn} 制定
           </Text>
           <Text size="sm" c="dimmed">
-            {TERMS.operator}
+            {TERMS.operator}（
+            <Anchor href={`mailto:${TERMS.contactEmail}`} size="sm" c="dimmed">
+              {TERMS.contactEmail}
+            </Anchor>
+            ）
           </Text>
         </Stack>
       </Stack>
