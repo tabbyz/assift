@@ -177,7 +177,7 @@ export const TERMS_ARTICLES: TermsArticle[] = [
         </P>
         <P>
           AI
-          の提供元は、OpenAI・Anthropic（Claude）・Google（Gemini）のいずれかです。機能や時期に合わせて、適したものを選んで使います。どの提供元でも、送ったデータが
+          の提供元は、OpenAI・Anthropic（Claude）・Google（Gemini）のいずれかです。どの提供元でも、送ったデータが
           AI の学習に使われない条件で利用しています。
         </P>
         <P>
