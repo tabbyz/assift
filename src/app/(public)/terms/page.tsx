@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Anchor, Box, Container, Divider, Paper, Stack, Text, Title } from '@mantine/core'
+import { Container, Divider, Paper, Stack, Text, Title } from '@mantine/core'
 import { LinkAnchor } from '@/components/LinkAnchor'
 import { TERMS_ARTICLES } from './_components/articles'
 import { TERMS } from './_components/terms'
@@ -7,7 +7,7 @@ import { TERMS } from './_components/terms'
 export const metadata: Metadata = { title: '利用規約' }
 
 /**
- * 利用規約（016）。ふだんの言葉で書き、冒頭の「あらまし」（各条のひとこと要約 = 目次）だけで要点が分かるようにする。
+ * 利用規約（016）。ふだんの言葉で書き、各条の本文のあとに「ひとことで」の要約を添える。
  * 本文は `_components/articles.tsx`、未確定の運営側の値は `_components/terms.ts`。
  */
 export default function TermsPage() {
@@ -30,30 +30,8 @@ export default function TermsPage() {
             assift
             を使うときの、あなたと私たちの約束ごとです。利用規約はむずかしい言葉で書かれがちですが、内容をわかったうえで使ってほしいので、なるべくふだんの言葉で書きました。
           </Text>
-          <Text>
-            まずは下の「あらまし」だけでも読んでみてください。各条の要点を 1 つずつまとめています。
-          </Text>
+          <Text>各条の終わりに、その条の要点を「ひとことで」としてまとめています。</Text>
         </Stack>
-
-        <Paper withBorder radius="md" p="lg" component="nav" aria-labelledby="terms-summary">
-          <Stack gap="md">
-            <Title order={2} size="h4" id="terms-summary">
-              あらまし
-            </Title>
-            <Stack gap="sm" component="ol" m={0} p={0} style={{ listStyle: 'none' }}>
-              {TERMS_ARTICLES.map((article, index) => (
-                <Box component="li" key={article.id}>
-                  <Anchor href={`#${article.id}`} fw={700}>
-                    第{index + 1}条 {article.title}
-                  </Anchor>
-                  <Text size="sm" c="dimmed" mt={2}>
-                    {article.summary}
-                  </Text>
-                </Box>
-              ))}
-            </Stack>
-          </Stack>
-        </Paper>
 
         {TERMS_ARTICLES.map((article, index) => (
           <Stack
@@ -66,6 +44,7 @@ export default function TermsPage() {
             <Title order={2} size="h3">
               第{index + 1}条 {article.title}
             </Title>
+            {article.body}
             <Paper bg="var(--mantine-color-gray-0)" radius="sm" px="md" py="sm">
               <Text size="sm">
                 <Text span fw={700} size="sm">
@@ -74,7 +53,6 @@ export default function TermsPage() {
                 {article.summary}
               </Text>
             </Paper>
-            {article.body}
           </Stack>
         ))}
 
