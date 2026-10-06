@@ -8,24 +8,47 @@
   flex-direction: column;
   gap: var(--mantine-spacing-md);
   --table-border-color: light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+  /* 見出しと合計の行（sticky のマスも同じ色で塗る） */
+  --table-head-bg: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6));
 }
 
 .scroll {
   overflow-x: auto;
 }
 
+/*
+ * 外枠は表に 1 本だけ引く。内側の線はマスの右・下。
+ * 外周をマスの線で描くと、sticky の列や背景付きの行で線の太さが揃わずに見える
+ */
 .table {
   border-collapse: separate;
   border-spacing: 0;
   width: 100%;
-  border-top: 1px solid var(--table-border-color);
-  border-left: 1px solid var(--table-border-color);
+  border: 1px solid var(--table-border-color);
 }
 
 .table th,
 .table td {
   border-right: 1px solid var(--table-border-color);
   border-bottom: 1px solid var(--table-border-color);
+}
+
+/* 外枠と二重に引かない */
+.table tr:last-child th,
+.table tr:last-child td {
+  border-bottom: 0;
+}
+
+.table th:last-child,
+.table td:last-child {
+  border-right: 0;
+}
+
+/* 見出しの行と合計の行は薄いグレー。`.name` / `.nameHead` の背景より後に書いて上書きする */
+.table thead th,
+.table tfoot th,
+.table tfoot td {
+  background-color: var(--table-head-bg);
 }
 
 /* 勤務名の列。横スクロールしても残す */
@@ -125,5 +148,4 @@ button.copy:active {
 .total {
   height: 32px;
   text-align: center;
-  background-color: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6));
 }
