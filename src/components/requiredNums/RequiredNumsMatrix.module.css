@@ -17,14 +17,14 @@
 }
 
 /*
- * 外枠は表に 1 本だけ引く。内側の線はマスの右・下。
- * 外周をマスの線で描くと、sticky の列や背景付きの行で線の太さが揃わずに見える
+ * **線はすべてマスから引く**（外枠も内側も）。
+ * 外枠だけ table 要素の border にすると、同じ 1px でも載る位置が変わって太さが揃わずに見える。
+ * `border-collapse: collapse` は sticky のマスで線が消えるので使わない。
  */
 .table {
   border-collapse: separate;
   border-spacing: 0;
   width: 100%;
-  border: 1px solid var(--table-border-color);
 }
 
 .table th,
@@ -33,15 +33,13 @@
   border-bottom: 1px solid var(--table-border-color);
 }
 
-/* 外枠と二重に引かない */
-.table tr:last-child th,
-.table tr:last-child td {
-  border-bottom: 0;
+/* 外枠の左辺と上辺 */
+.table tr > *:first-child {
+  border-left: 1px solid var(--table-border-color);
 }
 
-.table th:last-child,
-.table td:last-child {
-  border-right: 0;
+.table thead tr > * {
+  border-top: 1px solid var(--table-border-color);
 }
 
 /* 見出しの行と合計の行は薄いグレー。`.name` / `.nameHead` の背景より後に書いて上書きする */
