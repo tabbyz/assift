@@ -607,12 +607,12 @@ npx supabase db reset && npx supabase test db → 22 tests PASS
 | 変更 | 内容 |
 | --- | --- |
 | ルート | `shifts/{page.tsx,actions.ts,searchParams.ts,_components/,_lib/}` を `[tenantId]/` 直下へ移す（`git mv` で履歴を保つ） |
-| 振り分け | いまの `TenantPage`（準備中なら `/setup` へ）は、新しい `page.tsx` の先頭に引き継ぐ |
-| 旧 URL | `shifts/page.tsx` は残し、**`permanentRedirect()`（308）**で `/tenants/<uuid>` へ。`redirect()` は 307 なので、恒久的な移動にはこちらを使う。クエリは `start` だけでなく**まるごと素通し**する（将来増えても落とさない）。ブックマークと、v1 から移ってきた URL の両方の受け皿 |
+| 振り分け | **移動する `shifts/page.tsx` が既に持っている**（`isUuid` → `getTenant` → 準備中なら `/setup`）。いまの `[tenantId]/page.tsx` は削除するだけ |
+| 旧 URL | `shifts/page.tsx` は残し、**`redirect()`（307）**で `/tenants/<uuid>` へ。クエリは `start` だけでなく**まるごと素通し**する（将来増えても落とさない）。ブックマークと、v1 から移ってきた URL の両方の受け皿（308 にしない理由は §11.8 の 1） |
 | v1 の書き換え | `rewriteLegacyTenantUrl()` は `/tenants/<token>/shifts` → `/tenants/<uuid>`（末尾の `/shifts` を落とす）。**2 回 redirect させない** |
 | Action の置き場 | `[tenantId]/actions.ts` は空かない（シフト表の Action が入る）。いま入っている「ルートをまたぐ Action」（`deleteTenant` / `saveDefaultRequiredNums`）は 1 つ上の `(protected)/tenants/actions.ts` へ移す。設定・初期設定の共通の祖先なので AGENTS.md の規約（ルートをまたぐ Action はグループ直下）を満たす |
 | リンク | 直書きの `/shifts` は `shiftsHref()` に寄せる（`setup/page.tsx` / `setup/actions.ts` / `SetupWizard` / 旧 `TenantPage`） |
-| 現在地の判定 | `isShiftsPath()` を「`/tenants/<uuid>` 完全一致」に変える（`/settings` 配下と区別する） |
+| 現在地の判定 | `isShiftsPath()` はいま `pathname.includes('/shifts')` という緩い実装。**`/tenants/<何か>` 完全一致**（セグメント 2 つ）に変える |
 
 ### 11.3 変えないもの
 
@@ -625,7 +625,7 @@ npx supabase db reset && npx supabase test db → 22 tests PASS
 ### 11.4 やること（順序）
 
 1. `git mv` でシフト表の一式を `[tenantId]/` 直下へ。`[tenantId]/actions.ts` は先に `(protected)/tenants/actions.ts` へ退避
-2. 新 `page.tsx` に「準備中なら `/setup`」を足す。`PageProps<'/tenants/[tenantId]'>` に型を直す
+2. 旧 `[tenantId]/page.tsx` を削除。移動した page の型を `PageProps<'/tenants/[tenantId]'>` に直す
 3. `shifts/page.tsx`（redirect だけ）を新設
 4. `legacyUrl.ts` と `navigation.ts`（`shiftsHref` / `isShiftsPath`）を直し、`legacyUrl.test.ts` / `navigation.test.ts` を更新
 5. 直書きリンクを `shiftsHref()` に寄せる
@@ -666,3 +666,18 @@ npx supabase db reset && npx supabase test db → 22 tests PASS
 - **`revalidatePath('/tenants/<id>', 'layout')` と `refresh()`**: 指定は `/tenants/<id>` の layout なので、ページの位置が変わっても対象は同じ
 - **`safeNext()`**: 未ログインで `/tenants/<uuid>` を開くと `/login?next=/tenants/<uuid>` になり、ログイン後に戻る（`/` 始まりの同一オリジンなので通る）
 - **014 の「準備中は枠を描かない」**: 判定は `[tenantId]/layout.tsx` にあり、ページの位置に依存しない
+
+### 11.8 2 回目のレビュー（2026-10-06）
+
+| # | 指摘 | 直したこと |
+| --- | --- | --- |
+| 1 | **1 回目のレビューの判断を訂正。** 旧 URL を `permanentRedirect()`（308）にすると決めていたが、**308 はブラウザに恒久的にキャッシュされる**。`/tenants/<uuid>` はログイン必須で検索エンジンが見ないため 308 の利点（SEO の集約）が無く、あとで `/shifts` を別の意味に使いたくなったときに、キャッシュを持つブラウザが戻ってこない | `redirect()`（307）にした。恒久的に残す受け皿なので、サーバーへの往復 1 回は許容する |
+| 2 | 「`TenantPage` の振り分けを新しい page に引き継ぐ」と書いていたが、**移動する `shifts/page.tsx` が既に同じ判定を持っている**（`isUuid` → `getTenant` → `setup_completed_at`）。旧 `page.tsx` は捨てるだけでよい | §11.2 / §11.4 の手順 2 を「削除する」に直した |
+| 3 | `isShiftsPath()` を「`/tenants/<uuid>` 完全一致」と書いたが、現在の実装は `pathname.includes('/shifts')` で、テストの fixture も `/tenants/t/shifts`（uuid ではない）。uuid 判定を足すとテストが落ちる | **セグメント 2 つの完全一致**（`/tenants/<何か>`）に変える、と明記した |
+
+検証して問題が無かったもの:
+
+- **`[tenantId]/layout.tsx`**: 準備中の店舗は `children` をそのまま返す（枠を描かない）。シフト表が `/tenants/<uuid>` に来ても、page が先に `/setup` へ送るので枠なしで描かれることはない（layout と page は並行だが、描かれるのは redirect 後）
+- **`(protected)/tenants/page.tsx`（店舗一覧）と `actions.ts` の同居**: `actions.ts` はルートではないので衝突しない
+- **`loading.tsx`**: `shifts/` には無い（`settings/` にはあるが移動しない）
+- **metadata**: 移動する page の `title: 'シフト表'` はそのまま。layout の template で `シフト表 | 店舗名` になる（店舗のトップでも画面の名前が出るほうが分かりやすい）
