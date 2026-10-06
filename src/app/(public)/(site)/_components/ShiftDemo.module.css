@@ -1,0 +1,55 @@
+/*
+ * LP の触れるデモ（016 §3.3）。表そのものは `ShiftTable.module.css`（アプリと同じ）で描き、
+ * ここには LP の枠に収めるための差分だけを書く。
+ */
+
+.demo {
+  overflow: hidden;
+  border-radius: 14px;
+  background-color: var(--mantine-color-body);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 6%),
+    0 18px 40px -24px rgb(0 0 0 / 25%);
+  font-family: var(--mantine-font-family);
+  font-size: var(--mantine-font-size-sm);
+  line-height: var(--mantine-line-height);
+}
+
+/* アプリの期間ツールバーと同じ面（gray-0） */
+.toolbar {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--mantine-color-default-border);
+  background-color: var(--mantine-color-gray-0);
+}
+
+.result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--mantine-color-default-border);
+}
+
+.result[data-tone='ok'] {
+  background-color: var(--mantine-color-green-0);
+}
+
+.result[hidden] {
+  display: none;
+}
+
+/*
+ * 列幅を枠いっぱいに広げる。アプリの表は列幅が固定（日付 56px）で、LP の広い枠だと左に寄って小さく見える。
+ * 7 列を枠の幅から割り、狭い画面ではアプリと同じ 56px で止めて横にスクロールする
+ */
+.scroll {
+  overflow-x: auto;
+  container-type: inline-size;
+  -webkit-overflow-scrolling: touch;
+}
+
+.scroll .table {
+  --name-col-width: 112px;
+  --date-col-width: max(56px, calc((100cqi - var(--name-col-width) - 2px) / 7));
+}
