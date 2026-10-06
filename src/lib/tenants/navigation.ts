@@ -50,12 +50,14 @@ export function settingsHref(tenantId: string) {
   return `/tenants/${tenantId}/settings/staffs`
 }
 
+/** シフト表は店舗のトップ（005 §11。`/shifts` は旧 URL の受け皿として残っている） */
 export function shiftsHref(tenantId: string) {
-  return `/tenants/${tenantId}/shifts`
+  return `/tenants/${tenantId}`
 }
 
+/** `/tenants/<id>` 丁度（配下の `/settings` などは含めない） */
 export function isShiftsPath(pathname: string): boolean {
-  return pathname.includes('/shifts')
+  return /^\/tenants\/[^/]+$/.test(pathname)
 }
 
 export function isSettingsPath(pathname: string): boolean {

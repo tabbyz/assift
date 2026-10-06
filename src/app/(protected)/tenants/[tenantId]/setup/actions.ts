@@ -8,6 +8,7 @@ import type { ActionResult } from '@/lib/actions/result'
 import { runAction } from '@/lib/actions/run'
 import type { ShiftCycle } from '@/lib/calendar/shiftCycle'
 import { type SetupPatternsInput, toRpcPatterns } from '@/lib/setup/patternsState'
+import { shiftsHref } from '@/lib/tenants/navigation'
 import {
   completeSetupSchema,
   saveSetupPatternsSchema,
@@ -24,7 +25,7 @@ import { createClient } from '@/utils/supabase/server'
  */
 type SetupResult = ActionResult<{ redirectTo: string | null }>
 
-const shiftsPath = (tenantId: string) => `/tenants/${tenantId}/shifts`
+const shiftsPath = (tenantId: string) => shiftsHref(tenantId)
 
 /**
  * RPC の `raise exception` を画面の文言に写す（`shifts/actions.ts` の `RPC_MESSAGES` と同じ形）。
@@ -116,7 +117,7 @@ export async function completeSetup(input: {
     if (error && !error.message.includes(SETUP_COMPLETED)) failFromRpc(error)
 
     // revalidatePath しない。Server Action の revalidatePath は表示中のページ（/setup）をその場で描き直し、
-    // 完了済みの /setup は /shifts へ redirect するので、完成の画面を飛ばしてしまう。
+    // 完了済みの /setup はシフト表へ redirect するので、完成の画面を飛ばしてしまう。
     // シフト表へはクライアントが全体の読み込みで移る（店舗の枠が「準備中 → TenantShell」に変わるため。014 実装ログ）
     return { redirectTo: shiftsPath(tenantId) }
   })

@@ -681,3 +681,28 @@ npx supabase db reset && npx supabase test db → 22 tests PASS
 - **`(protected)/tenants/page.tsx`（店舗一覧）と `actions.ts` の同居**: `actions.ts` はルートではないので衝突しない
 - **`loading.tsx`**: `shifts/` には無い（`settings/` にはあるが移動しない）
 - **metadata**: 移動する page の `title: 'シフト表'` はそのまま。layout の template で `シフト表 | 店舗名` になる（店舗のトップでも画面の名前が出るほうが分かりやすい）
+
+### 11.9 実装ログ（2026-10-06）
+
+| 段階 | やったこと |
+| --- | --- |
+| 1 | `[tenantId]/actions.ts`（`deleteTenant` / `saveDefaultRequiredNums`）を `(protected)/tenants/actions.ts` へ退避。呼び出し 3 件の相対パスを直した |
+| 2 | 旧 `[tenantId]/page.tsx` を削除し、`shifts/` の `page.tsx` / `actions.ts` / `searchParams.ts` / `_components/` / `_lib/` を `git mv` で `[tenantId]/` 直下へ |
+| 3 | `shifts/page.tsx` を新設（307 でクエリごと `shiftsHref()` へ） |
+| 4 | `navigation.ts`（`shiftsHref` は店舗のトップ、`isShiftsPath` はセグメント 2 つの完全一致）/ `legacyUrl.ts`（末尾の `/shifts` を落とす）とそれぞれのテスト |
+| 5 | 直書きの `/shifts` を `shiftsHref()` に寄せた（`SetupWizard` / `setup/actions.ts` / `setup/page.tsx`） |
+| 6 | `AGENTS.md` のディレクトリ図・Action の置き場・初期設定の段落を更新 |
+
+検証（ローカル。ブラウザとリクエスト）:
+
+| 見たもの | 結果 |
+| --- | --- |
+| `/tenants/<uuid>` | 200 でシフト表（redirect なし）。`?start=2026-11-01` も効く |
+| `/tenants/<uuid>/shifts?start=2026-11-01&view=week` | `/tenants/<uuid>?start=2026-11-01&view=week` へ（**クエリをまるごと引き継ぐ**） |
+| v1 の `/tenants/<22 文字トークン>/shifts?start_date=2026-10-01` | `308` 1 回で `/tenants/<uuid>?start=2026-10-01` に着地（`/shifts` を経由しない） |
+| 準備中の店舗（`setup_completed_at` が null） | `/tenants/<uuid>` も `/tenants/<uuid>/shifts` も `/setup` へ |
+| 設定（`/settings/required-nums`） | 200。ヘッダー・設定ナビのリンクも新 URL |
+| エクスポート | CSV 200（`text/csv; charset=Shift_JIS`）/ PDF 200（`application/pdf`） |
+| `npm run build` | 成功。ルートに `/tenants/[tenantId]` と `/tenants/[tenantId]/shifts`（受け皿）が並ぶ |
+
+`npm test` 699 件 / `typecheck` / `lint`（既存の警告 1 件のみ）。

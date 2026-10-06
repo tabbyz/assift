@@ -18,7 +18,9 @@ describe('isLinkActive', () => {
 
 describe('path kinds', () => {
   it('シフト表と設定を取り違えない', () => {
-    expect(isShiftsPath('/tenants/t/shifts')).toBe(true)
+    expect(isShiftsPath('/tenants/t')).toBe(true)
+    // 旧 URL は redirect されるので、ここでは現在地として扱わない
+    expect(isShiftsPath('/tenants/t/shifts')).toBe(false)
     expect(isShiftsPath('/tenants/t/settings/staffs')).toBe(false)
     expect(isSettingsPath('/tenants/t/settings/staffs')).toBe(true)
     expect(isSettingsPath('/tenants/t/shifts')).toBe(false)

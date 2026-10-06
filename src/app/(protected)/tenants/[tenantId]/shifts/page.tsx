@@ -1,122 +1,26 @@
-import type { Metadata } from 'next'
-import { notFound, redirect } from 'next/navigation'
-import { dateRange, defaultStart } from '@/lib/calendar/dateRange'
-import { holidaysIn } from '@/lib/calendar/holidays'
-import { todayJst } from '@/lib/calendar/today'
-import { isAssistAvailable } from '@/lib/assist/llm/client'
-import { requestOrigin } from '@/lib/auth/requestOrigin'
-import { parseRequiredNums } from '@/lib/patterns/requiredNums'
-import { getLatestAssistRun } from '@/lib/queries/assistRuns'
-import { listDateNotes } from '@/lib/queries/dateNotes'
-import { listPatterns } from '@/lib/queries/patterns'
-import { listRequiredNums } from '@/lib/queries/requiredNums'
-import { listRestrictions } from '@/lib/queries/restrictions'
-import { listShares, type ShareRow } from '@/lib/queries/shares'
-import { listShifts } from '@/lib/queries/shifts'
-import { listActiveStaffsWithPatternIds } from '@/lib/queries/staffs'
-import { getTenant } from '@/lib/queries/tenants'
-import { isUuid } from '@/utils/uuid'
-import type { ShareItem } from './_components/ShareModal'
-import { ShiftsClient } from './_components/ShiftsClient'
-import { loadShiftsSearchParams } from './searchParams'
+import { redirect } from 'next/navigation'
+import { shiftsHref } from '@/lib/tenants/navigation'
 
-export const metadata: Metadata = { title: 'シフト表' }
-
-export default async function ShiftsPage({
+/**
+ * 旧 URL の受け皿（005 §11）。シフト表は店舗のトップ（`/tenants/<uuid>`）に移した。
+ *
+ * ブックマークと、v1 の店舗 URL から書き換わってきたリンクが着地する。
+ * **308 ではなく 307**（`redirect()`）: ログイン必須のページで検索エンジンが見ないため 308 の利点が無く、
+ * 恒久キャッシュが残るとあとで `/shifts` を別の意味に使えなくなる（§11.8 の 1）。
+ * クエリは `?start=` に限らずまるごと引き継ぐ。
+ */
+export default async function ShiftsRedirectPage({
   params,
   searchParams,
 }: PageProps<'/tenants/[tenantId]/shifts'>) {
-  const { tenantId } = await params
-  // layout と page は並行に描画されるので、layout の notFound() は page のクエリを止めない。
-  // uuid でない tenantId をそのまま投げると Postgres が 22P02 を出してログが汚れる（006 §3.11）
-  if (!isUuid(tenantId)) notFound()
+  const [{ tenantId }, query] = await Promise.all([params, searchParams])
 
-  const [{ start }, tenant] = await Promise.all([
-    loadShiftsSearchParams(searchParams),
-    getTenant(tenantId),
-  ])
-  if (!tenant) notFound()
-  // 準備中の店舗は初期設定の続きへ（014 §3.7）
-  if (!tenant.setup_completed_at) redirect(`/tenants/${tenantId}/setup`)
+  const search = new URLSearchParams()
+  for (const [key, value] of Object.entries(query)) {
+    if (Array.isArray(value)) value.forEach((item) => search.append(key, item))
+    else if (value !== undefined) search.set(key, value)
+  }
 
-  // 共有の公開期限も同じ「今日」で判定する（Client に渡して発行ボタンの可否にも使う。009 §3.2）
-  const today = todayJst()
-  // 不正な ?start= は parser が null にするので、JST 今日の月初に落とす（007 §3.1）
-  const requestedStart = start ?? defaultStart(today)
-  const range = dateRange(tenant.shift_cycle, tenant.start_of_week, requestedStart)
-
-  const [
-    staffs,
-    patterns,
-    shiftRows,
-    requiredNums,
-    dateNotes,
-    shares,
-    origin,
-    restrictions,
-    latestAssist,
-  ] = await Promise.all([
-    listActiveStaffsWithPatternIds(tenantId),
-    listPatterns(tenantId),
-    listShifts(tenantId, range.start, range.end),
-    listRequiredNums(tenantId, range.start, range.end),
-    listDateNotes(tenantId, range.start, range.end),
-    listShares(tenantId, today),
-    requestOrigin(),
-    // 自動アサイン（012 §4.2）。表の描画には使わず、モーダルの「制約 n 件」だけに使う
-    listRestrictions(tenantId),
-    getLatestAssistRun(tenantId, range.start, range.end),
-  ])
-
-  // 共有 URL はクエリではなくここで組む（クエリは DB の列だけを返す。009 §5.3）
-  const toShareItem = (share: ShareRow): ShareItem => ({
-    id: share.id,
-    url: `${origin}/share/${share.code}`,
-    startDate: share.startDate,
-    endDate: share.endDate,
-    createdAt: share.createdAt,
-  })
-
-  // 退職者の行はクエリではなくここで落とす（007 §5.8）
-  const activeStaffIds = new Set(staffs.map((staff) => staff.id))
-
-  return (
-    <ShiftsClient
-      tenantId={tenantId}
-      cycle={tenant.shift_cycle}
-      startOfWeek={tenant.start_of_week}
-      start={requestedStart}
-      today={today}
-      holidays={holidaysIn(range.dates)}
-      staffs={staffs.map((staff) => ({
-        id: staff.id,
-        name: staff.name,
-        availableWdays: staff.available_wdays,
-        patternIds: staff.patternIds,
-      }))}
-      patterns={patterns.map((pattern) => ({
-        id: pattern.id,
-        name: pattern.name,
-        description: pattern.description,
-        colorHex: pattern.color_hex,
-        kind: pattern.kind,
-        pairPatternId: pattern.pair_pattern_id,
-        // jsonb はアプリ層の型に直してから Client に渡す（006 §3.9）
-        defaultRequiredNums: parseRequiredNums(pattern.default_required_nums),
-      }))}
-      shifts={shiftRows.filter((shift) => activeStaffIds.has(shift.staffId))}
-      requiredOverrides={requiredNums}
-      dateNotes={dateNotes}
-      shares={{
-        enabled: shares.enabled.map(toShareItem),
-        expired: shares.expired.map(toShareItem),
-      }}
-      assist={{
-        available: isAssistAvailable(),
-        notes: tenant.assist_notes ?? '',
-        restrictionCount: restrictions.length,
-        latest: latestAssist,
-      }}
-    />
-  )
+  const suffix = search.size > 0 ? `?${search}` : ''
+  redirect(`${shiftsHref(tenantId)}${suffix}`)
 }
