@@ -21,13 +21,12 @@ export default function TermsPage() {
         <Stack gap="xs">
           <Title order={1}>利用規約</Title>
           <Text size="sm" c="dimmed">
-            制定 {TERMS.enactedOn} / 最終更新 {TERMS.updatedOn}
+            制定：{TERMS.enactedOn}／最終更新：{TERMS.updatedOn}
           </Text>
         </Stack>
 
         <Text>
-          assift
-          を使う前に、知っておいてほしいことをまとめました。各条の終わりには、その条の要約を添えています。
+          assiftを使う前に、知っておいてほしいことをまとめました。各条の終わりには、その条の要約を添えています。
         </Text>
 
         {TERMS_ARTICLES.map((article, index) => (
@@ -56,7 +55,7 @@ export default function TermsPage() {
         <Divider />
         <Stack gap={4}>
           <Text size="sm" c="dimmed">
-            {TERMS.enactedOn} 制定
+            {TERMS.enactedOn}制定
           </Text>
           <Text size="sm" c="dimmed">
             {TERMS.operator}（
