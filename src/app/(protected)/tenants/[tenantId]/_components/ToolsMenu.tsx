@@ -1,6 +1,6 @@
 'use client'
 
-import { Button, Menu, MenuDivider, MenuDropdown, MenuItem, MenuTarget } from '@mantine/core'
+import { Menu, MenuDivider, MenuDropdown, MenuItem, MenuTarget } from '@mantine/core'
 import {
   IconArrowBackUp,
   IconCopy,
@@ -9,6 +9,7 @@ import {
   IconUsersGroup,
 } from '@tabler/icons-react'
 import type { BulkKind } from '../_lib/bulkOperations'
+import { ToolbarButton } from './ToolbarButton'
 import { BulkMenuItems } from './BulkMenuItems'
 
 /** 直近の自動アサインを元に戻す（012 §4.5）。その実行の下書きが残っている間だけ出す */
@@ -40,14 +41,9 @@ export function ToolsMenu({
   return (
     <Menu position="bottom-end" withinPortal>
       <MenuTarget>
-        <Button
-          variant="default"
-          size="compact-sm"
-          leftSection={<IconTool size={16} />}
-          disabled={disabled}
-        >
+        <ToolbarButton leftSection={<IconTool size={16} />} disabled={disabled}>
           操作
-        </Button>
+        </ToolbarButton>
       </MenuTarget>
 
       <MenuDropdown>

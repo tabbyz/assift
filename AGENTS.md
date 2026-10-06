@@ -47,7 +47,8 @@ src/
   app/
     layout.tsx                    MantineProvider > ModalsProvider > NuqsAdapter > children + Notifications
     (public)/                     認証不要
-      share/[code]/               公開シフト表（未ログインで開く。読み取りは service_role）
+      (site)/                     LP（/）と、今後足す静的ページ。layout がヘッダー・フッター・LP の書体（016）
+      share/[code]/               公開シフト表（未ログインで開く。読み取りは service_role）。(site) の枠を被せない
     (auth)/                       login, signup, password/*
     (protected)/                  layout で未ログインを弾く
       tenants/
@@ -64,13 +65,14 @@ src/
   components/                     横断 UI（SortableList = 上下ボタンの並べ替え一覧 など）
     restrictions/                 制約の行（説明・種類・強さの札・編集）。制約ページとスタッフの編集画面で共有（013）
     setup/                        初期設定のウィザード（ステップ・ヘッダー・完成イメージ）。/tenants/new と /tenants/<id>/setup で共有（014）
-    shiftTable/                   シフト表の見た目（CSS Modules / DateHeaderCell / PatternDescriptionList / cellStyle）。保護ルートと公開ページで共有
+    shiftTable/                   シフト表の見た目（CSS Modules / DateHeaderCell / PatternDescriptionList / cellStyle）とセル・ポップオーバー（ShiftCell / PatternPopover / holdToToggle）。保護ルート・公開ページ・LP のデモで共有
   lib/
     actions/                      result / run / error / guards
     migration/v1Ids.ts            v1 の ID → uuid v5（旧 URL 解決と 012 が共有）
     tenants/                      旧 URL の書き換え・直近店舗 cookie の純関数
     queries/                      読み取り（Server から呼ぶ）。publicShare.ts だけが service_role（下記）
     <domain>/                     ドメインロジック（calendar, patterns, shifts, pdf, csv ...）
+    billing/                      料金の規則（pricing。10 人まで無料、11 人目から 1 人 100 円）。LP と将来の課金が共有
     calendar/                     dateString（YYYY-MM-DD の道具。dayjs はここだけ）/ dateRange / today / weekdays / holidays（server-only）
     shifts/                       key（セルの Map）/ applyAssign（楽観更新。assign_shift と同じ規則）/ satisfaction（必要人数の充足）/ count（集計）/ planDefaultPatterns（デフォルト勤務パターンの行を組む純関数）/ table（エクスポートが共有する表の型）
     shares/                       expiry（公開期限。v1 の DATE_LIMIT = 6）/ code（8 文字のコード）
@@ -429,7 +431,7 @@ Prettier: `{ "semi": false, "singleQuote": true, "tabWidth": 2, "trailingComma":
   スキーマを触ったら `npx supabase db reset` と `gen types` も行う
 - push したらすぐ PR を作る。Supabase のブランチ DB の環境変数は、PR を作ったときに Vercel へ同期される
 - Vercel のプレビューでは seed のユーザー（`dev@example.com` / `password`）でログインできる。
-  メールのリンクと Google ログインはプレビューでは使えない（メールテンプレートが Site URL = localhost を使うため。本番は 016 で設定する）
+  メールのリンクと Google ログインはプレビューでは使えない（メールテンプレートが Site URL = localhost を使うため。本番はカットオーバーで設定する）
 
 ## コミット
 
