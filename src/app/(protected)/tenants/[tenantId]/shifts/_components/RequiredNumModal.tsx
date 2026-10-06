@@ -95,10 +95,12 @@ export function RequiredNumModal({ tenantId, date, rows, onClose }: Props) {
               <TableTr>
                 <TableTh />
                 {/* シフト表のフッター「配置 / 必要人数」と同じ並びにする */}
-                <TableTh ta="center" w="26%">
-                  アサイン済
+                {/* 見出しもフッターの「配置 / 必要人数」に合わせる（狭い幅で折り返さない） */}
+                <TableTh ta="center" w="22%">
+                  配置
                 </TableTh>
-                <TableTh ta="center" w="30%">
+                {/* 「基本(2)に戻す」が 1 行に収まる幅 */}
+                <TableTh ta="center" w="38%">
                   必要人数
                 </TableTh>
               </TableTr>
@@ -107,50 +109,48 @@ export function RequiredNumModal({ tenantId, date, rows, onClose }: Props) {
               {rows.map((row) => (
                 <TableTr key={row.patternId}>
                   <TableTd>
-                    <Stack gap={2}>
-                      <Text size="sm">{row.name}</Text>
-                      {row.overridden && (
-                        <Group gap={6} wrap="wrap">
-                          <Text size="xs" c="dimmed">
-                            この日だけ変更
-                            {row.defaultNum === null ? '' : `（基本 ${row.defaultNum} 人）`}
-                          </Text>
-                          <Anchor
-                            component="button"
-                            type="button"
-                            size="xs"
-                            c="dimmed"
-                            underline="always"
-                            onClick={() => clear(row.patternId)}
-                            disabled={isPending}
-                          >
-                            基本に戻す
-                          </Anchor>
-                        </Group>
-                      )}
-                    </Stack>
+                    <Text size="sm">{row.name}</Text>
                   </TableTd>
                   <TableTd ta="center">{row.assigned}</TableTd>
                   <TableTd p={4}>
-                    <NumberInput
-                      aria-label={`${row.name} の必要人数`}
-                      value={valueOf(row)}
-                      placeholder={row.defaultNum === null ? '—' : String(row.defaultNum)}
-                      onChange={(value) =>
-                        setNums((current) => ({
-                          ...current,
-                          [row.patternId]: value === '' ? '' : Number(value),
-                        }))
-                      }
-                      min={REQUIRED_NUM_MIN}
-                      max={REQUIRED_NUM_MAX}
-                      clampBehavior="strict"
-                      allowDecimal={false}
-                      allowNegative={false}
-                      hideControls
-                      size="sm"
-                      styles={{ input: { textAlign: 'center', paddingInline: 4 } }}
-                    />
+                    <Stack gap={2}>
+                      <NumberInput
+                        aria-label={`${row.name} の必要人数`}
+                        value={valueOf(row)}
+                        placeholder={row.defaultNum === null ? '—' : String(row.defaultNum)}
+                        onChange={(value) =>
+                          setNums((current) => ({
+                            ...current,
+                            [row.patternId]: value === '' ? '' : Number(value),
+                          }))
+                        }
+                        min={REQUIRED_NUM_MIN}
+                        max={REQUIRED_NUM_MAX}
+                        clampBehavior="strict"
+                        allowDecimal={false}
+                        allowNegative={false}
+                        hideControls
+                        size="sm"
+                        styles={{ input: { textAlign: 'center', paddingInline: 4 } }}
+                      />
+                      {/* この日だけ変えてある勤務だけ。押すと空欄になり、保存で上書きが消える */}
+                      {row.overridden && (
+                        <Anchor
+                          component="button"
+                          type="button"
+                          size="xs"
+                          c="dimmed"
+                          ta="center"
+                          style={{ whiteSpace: 'nowrap' }}
+                          onClick={() => clear(row.patternId)}
+                          disabled={isPending}
+                        >
+                          {row.defaultNum === null
+                            ? '未設定に戻す'
+                            : `基本(${row.defaultNum})に戻す`}
+                        </Anchor>
+                      )}
+                    </Stack>
                   </TableTd>
                 </TableTr>
               ))}
