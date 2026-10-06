@@ -23,6 +23,16 @@ const nextConfig: NextConfig = {
    * バンドルすると `.wasm` の位置（パッケージの隣）を解決できなくなる
    */
   serverExternalPackages: ['highs'],
+  /**
+   * 005 のチュートリアル（`tutorial/*`）は 014 で `/setup` に置き換えた。v1 の旧 URL（proxy が `/tenants/<uuid>/tutorial/...` に
+   * 書き換える）も含めて、店舗のトップ（完了ならシフト表、途中なら初期設定）へ送る。
+   * 実行順は redirects → proxy なので、v1 のトークン URL は「ここで /tenants/<token>」→「proxy が uuid へ」の 2 回の移動になる
+   */
+  async redirects() {
+    return [
+      { source: '/tenants/:id/tutorial/:path*', destination: '/tenants/:id', permanent: true },
+    ]
+  },
   experimental: {
     optimizePackageImports: ['@mantine/core', '@mantine/hooks'],
   },

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { DAY_KEYS, type DayKey } from '@/lib/calendar/weekdays'
+import { DAY_KEYS, DAY_KEY_LABELS, type DayKey } from '@/lib/calendar/weekdays'
 
 /** 勤務パターンのデフォルト必要人数。曜日キー → 人数（未設定のキーは持たない） */
 export type RequiredNumsByDay = Partial<Record<DayKey, number>>
@@ -42,14 +42,6 @@ export const requiredNumsSchema = z.partialRecord(
 )
 
 /**
- * その曜日 / 祝日のデフォルト必要人数。設定が無ければ 0（v1 の `nums[key] || 0`）。
- * シフト表の「デフォルト人数をセット」（007 §3.6）と日別モーダルが使う。
- */
-export function defaultRequiredNum(value: RequiredNumsByDay, key: DayKey): number {
-  return value[key] ?? 0
-}
-
-/**
  * ある曜日の人数を、表の右にある曜日へコピーする。
  * 空欄なら右も空欄にする。祝日列には右が無いので、渡しても変えない。
  */
@@ -64,4 +56,14 @@ export function fillRequiredNumsForward(value: RequiredNumsByDay, key: DayKey): 
     else next[later] = source
   }
   return next
+}
+
+/**
+ * 勤務パターンのフォームに出す 1 行サマリ（015 §3.4）。`日 3 ・ 土 2 ・ 祝 3`。
+ * 決めていない曜日は出さない。1 つも無ければ空文字（呼び出し側が「まだ決めていません」を出す）。
+ */
+export function formatRequiredNumsByDay(value: RequiredNumsByDay): string {
+  return DAY_KEYS.filter((key) => value[key] !== undefined)
+    .map((key) => `${DAY_KEY_LABELS[key]} ${value[key]}`)
+    .join(' ・ ')
 }

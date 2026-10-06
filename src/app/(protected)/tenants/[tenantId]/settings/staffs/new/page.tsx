@@ -28,7 +28,6 @@ export default async function NewStaffPage({
       <StaffForm
         tenantId={tenantId}
         patterns={patterns.map((pattern) => ({ id: pattern.id, name: pattern.name }))}
-        afterCreate="list"
       />
     </Stack>
   )

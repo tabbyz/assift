@@ -1,5 +1,5 @@
 import { datesBetween, wday } from '@/lib/calendar/dateString'
-import type { RequiredNumRow } from '@/lib/shifts/satisfaction'
+import type { RequiredNumRow } from '@/lib/shifts/requiredNums'
 import type {
   AssistInput,
   AssistPatternInput,

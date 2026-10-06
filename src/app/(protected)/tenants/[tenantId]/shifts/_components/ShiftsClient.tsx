@@ -11,19 +11,20 @@ import { useQueryStates } from 'nuqs'
 import { dateRange, nextStart, prevStart } from '@/lib/calendar/dateRange'
 import type { ShiftCycle } from '@/lib/calendar/shiftCycle'
 import { dayKeyFor } from '@/lib/calendar/weekdays'
-import { defaultRequiredNum, type RequiredNumsByDay } from '@/lib/patterns/requiredNums'
+import type { RequiredNumsByDay } from '@/lib/patterns/requiredNums'
 import type { PatternKind } from '@/lib/patterns/kinds'
 import { applyAssign, type AssignInput } from '@/lib/shifts/applyAssign'
 import { cellKey, toShiftMap, type ShiftCell } from '@/lib/shifts/key'
 import { countShifts } from '@/lib/shifts/count'
 import {
-  assignedCounts,
-  countAt,
-  coverageAt,
-  requiredCounts,
-  type DateCoverage,
+  buildRequiredByDate,
+  formatOverriddenDates,
+  overriddenDates,
+  resolveRequiredNum,
+  toOverrideMap,
   type RequiredNumRow,
-} from '@/lib/shifts/satisfaction'
+} from '@/lib/shifts/requiredNums'
+import { assignedCounts, countAt, coverageAt, type DateCoverage } from '@/lib/shifts/satisfaction'
 import type { ActionResult } from '@/lib/actions/result'
 import { formatJstMonthDayTime } from '@/lib/calendar/datetime'
 import type { LatestAssistRun } from '@/lib/queries/assistRuns'
@@ -31,11 +32,11 @@ import {
   assignShift,
   clearDraftShifts,
   setDefaultPatterns,
-  setDefaultRequiredNums,
+  resetRequiredNums,
   setShiftsFixed,
 } from '../actions'
 import { shiftsParsers } from '../searchParams'
-import { ghostCells, hasRequiredNums, previewCoverage, shortageByPattern } from '../_lib/assist'
+import { ghostCells, hasAnyRequired, previewCoverage, shortageByPattern } from '../_lib/assist'
 import { BULK_COPY, type BulkKind } from '../_lib/bulkOperations'
 import { failure, outcome, type Notice } from '../_lib/notices'
 import { AssistModal, useAssist } from './AssistModal'
@@ -46,8 +47,10 @@ import { CopyModal } from './CopyModal'
 import { CountModal } from './CountModal'
 import { DateNoteModal } from './DateNoteModal'
 import { PatternDescriptionList } from '@/components/shiftTable/PatternDescriptionList'
+import { saveDefaultRequiredNums } from '../../actions'
 import { RequiredNumModal, type RequiredNumRowInput } from './RequiredNumModal'
-import { SetupNotice } from './SetupNotice'
+import { EmptyNotice } from './EmptyNotice'
+import { useFirstVisitCoach } from './useFirstVisitCoach'
 import { ShareModal, type ShareItem } from './ShareModal'
 import { Toolbar } from './Toolbar'
 import classes from '@/components/shiftTable/ShiftTable.module.css'
@@ -80,7 +83,8 @@ type Props = {
   staffs: ShiftsStaff[]
   patterns: ShiftsPattern[]
   shifts: ShiftCell[]
-  requiredNums: RequiredNumRow[]
+  /** 必要人数の**上書き**だけ（015 §3.1。基本の人数は patterns の defaultRequiredNums） */
+  requiredOverrides: RequiredNumRow[]
   dateNotes: { date: string; note: string }[]
   shares: { enabled: ShareItem[]; expired: ShareItem[] }
   /** 自動アサイン（012） */
@@ -140,7 +144,12 @@ export function ShiftsClient(props: Props) {
     () => new Map(props.dateNotes.map((note) => [note.date, note.note])),
     [props.dateNotes]
   )
-  const required = useMemo(() => requiredCounts(props.requiredNums), [props.requiredNums])
+  // 上書き ?? 基本[曜日] ?? 未設定（015 §3.1）。基本も祝日も Client に届いているのでここで解決する
+  const overrides = useMemo(() => toOverrideMap(props.requiredOverrides), [props.requiredOverrides])
+  const required = useMemo(
+    () => buildRequiredByDate({ dates: range.dates, patterns, overrides, holidays }),
+    [range.dates, patterns, overrides, holidays]
+  )
   const assigned = useMemo(() => assignedCounts(shifts), [shifts])
   const coverageByDate = useMemo(
     () =>
@@ -163,8 +172,18 @@ export function ShiftsClient(props: Props) {
     void setQuery({ start: nextValue })
   }
 
+  const coach = useFirstVisitCoach(tenantId)
+  // 表示中の期間が空で、入れられるスタッフと勤務があるときだけ、最初のスタッフの期間初日に出す
+  const coachEligible =
+    coach.active && shifts.size === 0 && staffs.length > 0 && patterns.length > 0
+  const coachCell =
+    coachEligible && !activeCell ? { staffId: staffs[0].id, date: range.dates[0] } : null
+
   const assign = (cell: ActiveCell, patternId: string | null, fixed: boolean) => {
     setActiveCell(null)
+    // 案内を出していたら、最初の 1 つで閉じて次からは出さない。
+    // 「できました」の通知は出さない（入れた勤務がその場でマスに見えるので、重ねて伝えなくてよい）
+    if (coachEligible && patternId) coach.finish()
     startAssign(async () => {
       addOptimisticAssign({ ...cell, patternId, fixed })
       const result = await assignShift({ tenantId, ...cell, patternId, fixed })
@@ -256,19 +275,31 @@ export function ShiftsClient(props: Props) {
         ),
     })
 
-  const confirmSetDefaultRequiredNums = () =>
+  /**
+   * AI シフト作成の中で必要人数を聞いたとき（015 §3.5）。保存するのは**基本の人数だけ**で、
+   * 表示中の期間へは解決で届く（焼き付けは起きない）。設定画面と同じ Action を使う
+   */
+  const saveAssistRequiredNums = (nums: Record<string, RequiredNumsByDay>) =>
+    runBulk(
+      () => saveDefaultRequiredNums({ tenantId, nums }),
+      () => ({ message: '必要人数を入れました', color: 'green' })
+    )
+
+  /** 「この期間の個別の変更を元に戻す」（015 §3.6）。確認にはどの日が戻るかを並べる */
+  const confirmResetRequiredNums = () =>
     modals.openConfirmModal({
-      title: 'デフォルト人数をセット',
+      title: 'この期間の個別の変更を元に戻す',
       children: (
         <Text size="sm">
-          現在の期間に一括でデフォルトの必要人数をセットします。よろしいですか？
+          {formatOverriddenDates(overriddenDatesInRange)} の {overriddenDatesInRange.length}{' '}
+          日分を、基本の人数に戻します。基本の人数は変わりません。
         </Text>
       ),
-      labels: { confirm: 'セットする', cancel: 'キャンセル' },
+      labels: { confirm: '元に戻す', cancel: 'キャンセル' },
       onConfirm: () =>
         runBulk(
-          () => setDefaultRequiredNums({ tenantId, start: range.start, end: range.end }),
-          () => ({ message: 'デフォルト人数を設定しました', color: 'green' })
+          () => resetRequiredNums({ tenantId, start: range.start, end: range.end }),
+          () => ({ message: '基本の人数に戻しました', color: 'green' })
         ),
     })
 
@@ -287,14 +318,28 @@ export function ShiftsClient(props: Props) {
 
   const requiredNumRows = (date: string): RequiredNumRowInput[] => {
     const dayKey = dayKeyFor(date, holidays.has(date))
-    return workdayPatterns.map((pattern) => ({
-      patternId: pattern.id,
-      name: pattern.name,
-      required: countAt(required, date, pattern.id),
-      defaultNum: defaultRequiredNum(pattern.defaultRequiredNums, dayKey),
-      assigned: countAt(assigned, date, pattern.id),
-    }))
+    return workdayPatterns.map((pattern) => {
+      const resolved = resolveRequiredNum(
+        overrides,
+        pattern.defaultRequiredNums,
+        pattern.id,
+        date,
+        dayKey
+      )
+      return {
+        patternId: pattern.id,
+        name: pattern.name,
+        required: resolved.num,
+        // 「この日だけ変更（基本 3 人）」の札に出す基本の人数（015 §4.3）
+        defaultNum: pattern.defaultRequiredNums[dayKey] ?? null,
+        overridden: resolved.source === 'override',
+        assigned: countAt(assigned, date, pattern.id),
+      }
+    })
   }
+
+  // 「この期間の個別の変更を元に戻す」の確認に並べる日（015 §3.6）。高々 31 日 × 勤務数なので useMemo は要らない
+  const overriddenDatesInRange = overriddenDates(range.dates, workdayPatternIds, overrides)
 
   const needsSetup = patterns.length === 0 || staffs.length === 0
 
@@ -345,9 +390,10 @@ export function ShiftsClient(props: Props) {
     () => new Map(patterns.map((pattern) => [pattern.id, pattern.name])),
     [patterns]
   )
+  // 期間に 1 つでも「決まっている」必要人数があるか（015 §3.2。全部未設定なら自動アサインは走らせない）
   const requiredNumsSet = useMemo(
-    () => hasRequiredNums(props.requiredNums, new Set(workdayPatternIds)),
-    [props.requiredNums, workdayPatternIds]
+    () => hasAnyRequired(required, range.dates, workdayPatternIds),
+    [required, range.dates, workdayPatternIds]
   )
   const assistUndo =
     latestAssist && latestAssist.draftCount > 0
@@ -373,7 +419,8 @@ export function ShiftsClient(props: Props) {
           onOpenShare={() => setShareOpened(true)}
           onBulk={confirmBulk}
           onSetDefaultPatterns={confirmSetDefaultPatterns}
-          onSetDefaultRequiredNums={confirmSetDefaultRequiredNums}
+          onResetRequiredNums={confirmResetRequiredNums}
+          resetRequiredNumsCount={overriddenDatesInRange.length}
           onOpenCopy={() => setCopyOpened(true)}
           assistAvailable={props.assist.available}
           onOpenAssist={assist.openNew}
@@ -388,7 +435,7 @@ export function ShiftsClient(props: Props) {
         />
 
         {needsSetup && (
-          <SetupNotice
+          <EmptyNotice
             tenantId={tenantId}
             hasPattern={patterns.length > 0}
             hasStaff={staffs.length > 0}
@@ -427,6 +474,8 @@ export function ShiftsClient(props: Props) {
                 // 期間移動中は無効にしない: メニューには「スタッフ情報を編集」もあり、007 では移動中も開けた
                 bulkDisabled={isBulkPending}
                 popoverPatterns={popoverPatterns}
+                coachCell={coachCell}
+                onCoachDismiss={coach.finish}
               />
             </Box>
             <PatternDescriptionList patterns={patterns} />
@@ -505,10 +554,14 @@ export function ShiftsClient(props: Props) {
         staffCount={staffs.length}
         workdayPatternCount={workdayPatterns.length}
         restrictionCount={props.assist.restrictionCount}
-        onSetDefaultRequiredNums={() => {
-          assist.close()
-          confirmSetDefaultRequiredNums()
-        }}
+        requiredNumPatterns={workdayPatterns.map((pattern) => ({
+          id: pattern.id,
+          name: pattern.name,
+          colorHex: pattern.colorHex,
+          defaultRequiredNums: pattern.defaultRequiredNums,
+        }))}
+        onSaveRequiredNums={saveAssistRequiredNums}
+        savingRequiredNums={isBulkPending}
       />
 
       {copyOpened && (

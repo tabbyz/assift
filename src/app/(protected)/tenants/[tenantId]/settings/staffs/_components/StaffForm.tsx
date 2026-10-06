@@ -20,8 +20,6 @@ import {
 type Props = {
   tenantId: string
   patterns: StaffPatternOption[]
-  /** 006 §3.5。`'reset'` はチュートリアル、`'list'` は設定画面 */
-  afterCreate: 'reset' | 'list'
 }
 
 /** v1 の新規フォームは全曜日・全パターンにチェックが入った状態 */
@@ -34,8 +32,8 @@ function emptyConditions(patterns: StaffPatternOption[]): StaffConditionValues {
   }
 }
 
-/** スタッフの新規登録（設定画面・チュートリアル）。2 つのセクションを「追加」1 回で送る。編集は `StaffEditForms` */
-export function StaffForm({ tenantId, patterns, afterCreate }: Props) {
+/** スタッフの新規登録（設定画面）。2 つのセクションを「追加」1 回で送る。編集は `StaffEditForms` */
+export function StaffForm({ tenantId, patterns }: Props) {
   const router = useRouter()
   const [name, setName] = useState('')
   const [conditions, setConditions] = useState(() => emptyConditions(patterns))
@@ -51,18 +49,8 @@ export function StaffForm({ tenantId, patterns, afterCreate }: Props) {
         return
       }
       setError(undefined)
-
-      if (afterCreate === 'list') {
-        notifications.show({ message: '登録しました', color: 'green' })
-        router.push(`/tenants/${tenantId}/settings/staffs`)
-        return
-      }
-      setName('')
-      setConditions(emptyConditions(patterns))
-      notifications.show({
-        message: `「${result.data.name}」を登録しました。続けて登録できます`,
-        color: 'green',
-      })
+      notifications.show({ message: '登録しました', color: 'green' })
+      router.push(`/tenants/${tenantId}/settings/staffs`)
     })
   }
 
@@ -81,18 +69,15 @@ export function StaffForm({ tenantId, patterns, afterCreate }: Props) {
 
         {/* 2 つのセクションをまとめて送るので、どちらの枠にも入れずフォームの最後に置く */}
         <Group justify="flex-end" gap="xs">
-          {/* チュートリアルでは出さない（v1 の `unless @tutorial_step`） */}
-          {afterCreate === 'list' && (
-            <LinkButton
-              href={`/tenants/${tenantId}/settings/staffs`}
-              variant="subtle"
-              color="gray"
-              // 送信中に押すと、書き込みは走ったまま遷移して通知とエラー表示を取りこぼす
-              disabled={isPending}
-            >
-              キャンセル
-            </LinkButton>
-          )}
+          <LinkButton
+            href={`/tenants/${tenantId}/settings/staffs`}
+            variant="subtle"
+            color="gray"
+            // 送信中に押すと、書き込みは走ったまま遷移して通知とエラー表示を取りこぼす
+            disabled={isPending}
+          >
+            キャンセル
+          </LinkButton>
           <Button type="submit" loading={isPending}>
             追加
           </Button>

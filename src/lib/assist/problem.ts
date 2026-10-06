@@ -3,7 +3,7 @@ import type { DayKey } from '@/lib/calendar/weekdays'
 import type { PatternKind } from '@/lib/patterns/kinds'
 import { normalizeWdays, type RestrictionKind } from '@/lib/restrictions/kinds'
 import { cellKey } from '@/lib/shifts/key'
-import type { RequiredNumRow } from '@/lib/shifts/satisfaction'
+import type { RequiredNumRow } from '@/lib/shifts/requiredNums'
 
 /**
  * 自動アサインの問題（012 §5.2）。DB の行 → `buildProblem()` → `Problem`。

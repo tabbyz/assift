@@ -3,7 +3,9 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { datesBetween } from '@/lib/calendar/dateString'
 import { holidaysIn } from '@/lib/calendar/holidays'
 import { isDayKey, type DayKey } from '@/lib/calendar/weekdays'
+import { parseRequiredNums } from '@/lib/patterns/requiredNums'
 import { pageAll } from '@/lib/queries/pageAll'
+import { resolveRequiredRows, toOverrideMap } from '@/lib/shifts/requiredNums'
 import type { Database } from '@/types/database'
 import { contextRange, requiredNumsRange, type AssistInput } from './problem'
 
@@ -37,7 +39,7 @@ export async function loadAssistInput(
       .order('position', { ascending: true }),
     supabase
       .from('patterns')
-      .select('id, name, kind, pair_pattern_id')
+      .select('id, name, kind, pair_pattern_id, default_required_nums')
       .eq('tenant_id', tenantId)
       .order('position', { ascending: true }),
     supabase
@@ -45,7 +47,7 @@ export async function loadAssistInput(
       .select('id, kind, days, pattern1_id, pattern2_id, staff_id, hard, wdays')
       .eq('tenant_id', tenantId)
       .order('position', { ascending: true }),
-    // パターン数 × 32 日。パターンが多い店舗で max_rows を超えうるので pageAll（AGENTS.md）
+    // 必要人数の**上書き**だけ（015 §3.1。基本の人数は patterns から解決する）
     pageAll((from, to, withCount) =>
       supabase
         .from('required_nums')
@@ -72,6 +74,9 @@ export async function loadAssistInput(
   if (staffs.error) throw staffs.error
   if (patterns.error) throw patterns.error
   if (restrictions.error) throw restrictions.error
+
+  // 必要人数は「ペアの着地日」まで要るので期間より 1 日広い（problem.requiredNumsRange）
+  const requiredDates = datesBetween(requiredRange.start, requiredRange.end)
 
   return {
     period,
@@ -108,11 +113,22 @@ export async function loadAssistInput(
       hard: row.hard,
       wdays: row.wdays,
     })),
-    requiredNums: requiredNums.map((row) => ({
-      patternId: row.pattern_id,
-      date: row.date,
-      num: row.num,
-    })),
+    // 上書き ?? 基本[曜日] で解決し、未設定（null）の組は行にしない = 枠にしない（015 §5.3）
+    requiredNums: resolveRequiredRows({
+      dates: requiredDates,
+      patterns: patterns.data.map((pattern) => ({
+        id: pattern.id,
+        defaultRequiredNums: parseRequiredNums(pattern.default_required_nums),
+      })),
+      overrides: toOverrideMap(
+        requiredNums.map((row) => ({
+          patternId: row.pattern_id,
+          date: row.date,
+          num: row.num,
+        }))
+      ),
+      holidays: new Set(holidaysIn(requiredDates)),
+    }),
     // 退職者の行は buildProblem が在籍スタッフで落とす
     shifts: shifts.map((row) => ({
       staffId: row.staff_id,

@@ -12,7 +12,6 @@ const valid = {
   colorHex: '#FF5722',
   kind: 'workday',
   pairPatternId: null,
-  defaultRequiredNums: { '0': 1, holiday: 2 },
 }
 
 const message = (input: unknown, schema = createPatternSchema) => {
@@ -59,16 +58,10 @@ describe('createPatternSchema', () => {
     expect(message({ ...valid, kind: null })).toBe('パターン区分を選択してください')
   })
 
-  it('必要人数の上限は 99', () => {
-    expect(message({ ...valid, defaultRequiredNums: { '0': 100 } })).toBe(
-      '必要人数は0〜99で入力してください'
-    )
-  })
-
-  it('NumberInput の空欄（文字列）は英語を出さない', () => {
-    expect(message({ ...valid, defaultRequiredNums: { '0': '' } })).toBe(
-      '必要人数を入力してください'
-    )
+  it('必要人数はこのスキーマでは扱わない（015 §3.4。渡しても無視する）', () => {
+    const r = createPatternSchema.safeParse({ ...valid, defaultRequiredNums: { '0': 100 } })
+    expect(r.success).toBe(true)
+    expect(r.data).not.toHaveProperty('defaultRequiredNums')
   })
 })
 

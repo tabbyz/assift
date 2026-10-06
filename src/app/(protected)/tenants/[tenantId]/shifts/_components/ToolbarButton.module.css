@@ -1,0 +1,19 @@
+/*
+ * ツールバーのボタン（AI で作成・共有・操作）。
+ *
+ * 狭い画面ではアイコンを隠して文字だけにする。幅を稼ぐのが目的だが、
+ * **3 つとも同じ規則にする**（ボタンによってアイコンが出たり消えたりすると、
+ * 同じ並びの中で揃っていないように見える）。
+ * ブレークポイントは Mantine の `hiddenFrom="xs"` と同じ式にする。
+ */
+@media (max-width: calc($mantine-breakpoint-xs - 0.0625em)) {
+  /* `.root .icon` の 2 段で、Mantine 側の `.mantine-Button-section`（1 段）より強くする */
+  .root .icon {
+    display: none;
+  }
+
+  /* アイコンが消えるぶん、左右の余白を揃え直す（`[data-with-left-section]` が左だけ 2/3 に詰めている） */
+  .root {
+    padding-inline: var(--button-padding-x);
+  }
+}

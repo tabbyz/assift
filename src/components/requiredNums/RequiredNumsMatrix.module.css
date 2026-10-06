@@ -1,0 +1,149 @@
+/*
+ * 勤務 × 曜日の必要人数（015 §3.4）。
+ * 狭い幅では横スクロールにし、勤務名の列だけ左に残す（006 で「必要人数の 8 列だけ表内で横スクロール」を許している）。
+ * スイッチ ON のときは列が 1 本になるので、スマホでもスクロールは要らない。
+ */
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-md);
+  --table-border-color: light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+  /* 見出しと合計の行（sticky のマスも同じ色で塗る） */
+  --table-head-bg: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6));
+}
+
+.scroll {
+  overflow-x: auto;
+}
+
+/*
+ * **線はすべてマスから引く**（外枠も内側も）。
+ * 外枠だけ table 要素の border にすると、同じ 1px でも載る位置が変わって太さが揃わずに見える。
+ * `border-collapse: collapse` は sticky のマスで線が消えるので使わない。
+ */
+.table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+}
+
+.table th,
+.table td {
+  border-right: 1px solid var(--table-border-color);
+  border-bottom: 1px solid var(--table-border-color);
+}
+
+/* 外枠の左辺と上辺 */
+.table tr > *:first-child {
+  border-left: 1px solid var(--table-border-color);
+}
+
+.table thead tr > * {
+  border-top: 1px solid var(--table-border-color);
+}
+
+/* 見出しの行と合計の行は薄いグレー。`.name` / `.nameHead` の背景より後に書いて上書きする */
+.table thead th,
+.table tfoot th,
+.table tfoot td {
+  background-color: var(--table-head-bg);
+}
+
+/* 勤務名の列。横スクロールしても残す */
+.name,
+.nameHead {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 108px;
+  max-width: 160px;
+  padding: 0 8px;
+  text-align: left;
+  font-weight: 400;
+  background-color: var(--mantine-color-body);
+}
+
+.nameHead {
+  padding-block: 6px;
+  font-size: var(--mantine-font-size-xs);
+  color: var(--mantine-color-dimmed);
+}
+
+/* `th` は table-cell のまま（display: flex にすると表の列から外れて幅が崩れる） */
+.name {
+  height: 40px;
+  /* 曜日の列に幅を譲る（内容ぶんだけ） */
+  width: 1%;
+  white-space: nowrap;
+}
+
+.nameInner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.swatch {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  border: 1px solid light-dark(rgba(0, 0, 0, 0.15), rgba(255, 255, 255, 0.25));
+}
+
+.dayHead {
+  min-width: 56px;
+  max-width: 96px;
+  padding-block: 6px;
+  text-align: center;
+}
+
+.dayHeadInner {
+  position: relative;
+  display: block;
+}
+
+/* 「以降の曜日にコピー」。常に出すと数字より目立つので、その列に触れたときだけ */
+.copy {
+  position: absolute;
+  top: 50%;
+  right: -6px;
+  transform: translateY(-50%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dayHead:hover .copy,
+.copy:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 押下中の transform で縦位置の translateY(-50%) が消えると、ボタンが下に落ちる */
+button.copy:active {
+  transform: translateY(-50%);
+}
+
+.cell {
+  padding: 0;
+}
+
+/* セルの枠が入力欄の枠。入力の線を残すと二重に見える */
+.field :global(.mantine-Input-input) {
+  --input-bd: transparent;
+  --input-height: 40px;
+  border-radius: 0;
+  background-color: transparent;
+  text-align: center;
+  padding-inline: 4px;
+}
+
+.field :global(.mantine-Input-input):focus {
+  --input-bd: transparent;
+  background-color: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6));
+}
+
+.total {
+  height: 32px;
+  text-align: center;
+}

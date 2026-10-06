@@ -347,3 +347,142 @@ $$;
 
 revoke execute on function public.rollback_assist_run(uuid, uuid) from public;
 grant execute on function public.rollback_assist_run(uuid, uuid) to authenticated;
+
+-- 初期設定のステップ 2: 勤務をまとめて保存する（014 §5.2）。
+--
+-- 店舗の勤務を全部消して入れ直す（置き換え）。置き換えてよいのは「準備中で、スタッフが 1 人もいない」店舗だけ。
+-- スタッフがいなければシフトも無い（shifts は staffs への FK を持つ）ので、消えて困るデータが無い。
+-- この前提をアプリに任せず、先頭で検査する（完了済み / スタッフあり は例外）。
+--
+-- 店舗の行を for update でロックする: 「これで完成」と同時に走ったり 2 タブから呼ばれたりしたとき、
+-- 後の方は前の方の確定を待ってから検査する（ロックが無いと、どちらも準備中を見てから書き始める）。
+--
+-- p_patterns は [{ id, name, description, color_hex, kind, pair_id }]。id は Server Action が振る
+-- （ペアを id で書けるようにするため）。position は配列の順。
+-- ペアは insert のあとに update で張る（同じ insert の中で自分を参照させない）。
+create or replace function public.save_setup_patterns(
+  p_tenant_id uuid,
+  p_patterns  jsonb
+)
+returns integer
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_completed_at timestamptz;
+  v_expected     integer := coalesce(jsonb_array_length(p_patterns), 0);
+  v_count        integer;
+begin
+  select setup_completed_at into v_completed_at
+    from public.tenants where id = p_tenant_id
+     for update;
+  if not found then
+    raise exception 'save_setup_patterns: tenant not found';
+  end if;
+  if v_completed_at is not null then
+    raise exception 'save_setup_patterns: setup completed';
+  end if;
+  if exists (select 1 from public.staffs where tenant_id = p_tenant_id) then
+    raise exception 'save_setup_patterns: has staffs';
+  end if;
+  if v_expected = 0 then
+    raise exception 'save_setup_patterns: no patterns';
+  end if;
+
+  delete from public.patterns where tenant_id = p_tenant_id;
+
+  insert into public.patterns (id, tenant_id, name, description, color_hex, kind, position)
+  select (r.value ->> 'id')::uuid,
+         p_tenant_id,
+         r.value ->> 'name',
+         nullif(r.value ->> 'description', ''),
+         r.value ->> 'color_hex',
+         (r.value ->> 'kind')::public.pattern_kind,
+         (r.ord - 1)::integer
+    from jsonb_array_elements(p_patterns) with ordinality as r(value, ord);
+
+  get diagnostics v_count = row_count;
+  if v_count <> v_expected then
+    raise exception 'save_setup_patterns: % of % rows inserted', v_count, v_expected;
+  end if;
+
+  update public.patterns p
+     set pair_pattern_id = (r.value ->> 'pair_id')::uuid
+    from jsonb_array_elements(p_patterns) as r(value)
+   where p.tenant_id = p_tenant_id
+     and p.id = (r.value ->> 'id')::uuid
+     and r.value ->> 'pair_id' is not null;
+
+  return v_count;
+end;
+$$;
+
+revoke execute on function public.save_setup_patterns(uuid, jsonb) from public;
+grant execute on function public.save_setup_patterns(uuid, jsonb) to authenticated;
+
+-- 初期設定のステップ 3: スタッフを作って完了を記録する（014 §5.2）。
+--
+-- スタッフの作成・全勤務の staff_patterns・完了日時を 1 トランザクションにする。
+-- 分けると、途中で失敗したときに「スタッフはいるが準備中」の店舗が残り、再開時にスタッフが二重になる。
+-- 検査とロックは save_setup_patterns と同じ。二度押しの 2 回目はロックを待ってから 'setup completed' になる
+-- （ロックが無いと完了日時の update でトリガに当たり 'immutable' になる）。
+--
+-- スタッフの曜日・週の上限は DB の既定値（全曜日・週 5）。選べる勤務は全部（いまの新規フォームと同じ）。
+create or replace function public.complete_setup(
+  p_tenant_id   uuid,
+  p_staff_names text[]
+)
+returns integer
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_completed_at timestamptz;
+  v_expected     integer := coalesce(array_length(p_staff_names, 1), 0);
+  v_count        integer;
+begin
+  select setup_completed_at into v_completed_at
+    from public.tenants where id = p_tenant_id
+     for update;
+  if not found then
+    raise exception 'complete_setup: tenant not found';
+  end if;
+  if v_completed_at is not null then
+    raise exception 'complete_setup: setup completed';
+  end if;
+  if exists (select 1 from public.staffs where tenant_id = p_tenant_id) then
+    raise exception 'complete_setup: has staffs';
+  end if;
+  if not exists (select 1 from public.patterns where tenant_id = p_tenant_id) then
+    raise exception 'complete_setup: no patterns';
+  end if;
+  if v_expected = 0 then
+    raise exception 'complete_setup: no staffs';
+  end if;
+
+  insert into public.staffs (tenant_id, name, position)
+  select p_tenant_id, n.name, (n.ord - 1)::integer
+    from unnest(p_staff_names) with ordinality as n(name, ord);
+
+  get diagnostics v_count = row_count;
+  if v_count <> v_expected then
+    raise exception 'complete_setup: % of % staffs inserted', v_count, v_expected;
+  end if;
+
+  insert into public.staff_patterns (tenant_id, staff_id, pattern_id)
+  select p_tenant_id, s.id, p.id
+    from public.staffs s
+   cross join public.patterns p
+   where s.tenant_id = p_tenant_id
+     and p.tenant_id = p_tenant_id;
+
+  update public.tenants set setup_completed_at = now() where id = p_tenant_id;
+
+  return v_count;
+end;
+$$;
+
+revoke execute on function public.complete_setup(uuid, text[]) from public;
+grant execute on function public.complete_setup(uuid, text[]) to authenticated;

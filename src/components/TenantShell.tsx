@@ -27,7 +27,7 @@ import { useDisclosure } from '@mantine/hooks'
 import { IconUserCircle } from '@tabler/icons-react'
 import { LogoutMenuItem, LogoutNavLink } from '@/components/LogoutMenuItem'
 import { TenantSwitcher } from '@/components/TenantSwitcher'
-import type { TenantSummary } from '@/lib/queries/tenants'
+import type { TenantListItem, TenantSummary } from '@/lib/queries/tenants'
 import {
   isLinkActive,
   isSettingsPath,
@@ -40,7 +40,7 @@ import classes from './TenantShell.module.css'
 
 type Props = {
   tenant: TenantSummary
-  tenants: TenantSummary[]
+  tenants: TenantListItem[]
   email: string
   children: ReactNode
 }

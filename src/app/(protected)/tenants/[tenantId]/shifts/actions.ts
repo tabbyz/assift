@@ -22,10 +22,8 @@ import {
 import { HIGHS_VERSION } from '@/lib/assist/solver/highs'
 import { dateRange } from '@/lib/calendar/dateRange'
 import { datesBetween } from '@/lib/calendar/dateString'
-import { holidaysIn, isHolidayDate } from '@/lib/calendar/holidays'
+import { holidaysIn } from '@/lib/calendar/holidays'
 import { todayJst } from '@/lib/calendar/today'
-import { dayKeyFor } from '@/lib/calendar/weekdays'
-import { defaultRequiredNum, parseRequiredNums } from '@/lib/patterns/requiredNums'
 import { listActiveStaffsWithDefaultPatterns } from '@/lib/queries/staffs'
 import { generateShareCode } from '@/lib/shares/code'
 import { isShareEnabled } from '@/lib/shares/expiry'
@@ -39,7 +37,7 @@ import {
   startAssistSchema,
 } from '@/lib/validation/assist'
 import { saveDateNoteSchema } from '@/lib/validation/dateNotes'
-import { saveRequiredNumsSchema, setDefaultRequiredNumsSchema } from '@/lib/validation/requiredNums'
+import { saveRequiredNumsSchema, resetRequiredNumsSchema } from '@/lib/validation/requiredNums'
 import {
   createShareSchema,
   deleteShareSchema,
@@ -139,7 +137,15 @@ export async function assignShift(input: {
   })
 }
 
-/** 日別の必要人数。0 も行として保存する（v1 と同じ。「未設定」と区別しない） */
+/**
+ * 日別の必要人数（015 §3.1）。`required_nums` の行は**この日だけの上書き**なので:
+ *
+ * - 数字が来た勤務は upsert（0 も「0 人」として明示的に保存する）
+ * - **空欄が来た勤務は行を削除**（= 基本の人数に戻す。モーダルの「基本に戻す」）
+ *
+ * upsert と delete は別のリクエストになるが、片方だけ通っても「一部の勤務が古いまま」になるだけで、
+ * もう一度保存すればそろう（矛盾した状態は残らない）。
+ */
 export async function saveRequiredNums(input: {
   tenantId: string
   date: string
@@ -149,74 +155,73 @@ export async function saveRequiredNums(input: {
     const parsed = saveRequiredNumsSchema.parse(input)
     await requireUser()
 
-    const rows: RequiredNumRow[] = Object.entries(parsed.nums).map(([patternId, num]) => ({
-      tenant_id: parsed.tenantId,
-      pattern_id: patternId,
-      date: parsed.date,
-      num,
-    }))
-    if (rows.length === 0) return
+    const entries = Object.entries(parsed.nums)
+    if (entries.length === 0) return
+
+    const rows: RequiredNumRow[] = entries
+      .filter((entry): entry is [string, number] => entry[1] !== '')
+      .map(([patternId, num]) => ({
+        tenant_id: parsed.tenantId,
+        pattern_id: patternId,
+        date: parsed.date,
+        num,
+      }))
+    const clearedPatternIds = entries
+      .filter(([, num]) => num === '')
+      .map(([patternId]) => patternId)
 
     const supabase = await createClient()
-    // 他店舗のパターン id を混ぜると複合 FK (pattern_id, tenant_id) が 23503 で 1 行も入れない
-    const { error } = await supabase
-      .from('required_nums')
-      .upsert(rows, { onConflict: 'pattern_id,date' })
-    if (error) failFromFkError(error, PATTERN_NOT_FOUND_MESSAGE)
+    if (rows.length > 0) {
+      // 他店舗のパターン id を混ぜると複合 FK (pattern_id, tenant_id) が 23503 で 1 行も入れない
+      const { error } = await supabase
+        .from('required_nums')
+        .upsert(rows, { onConflict: 'pattern_id,date' })
+      if (error) failFromFkError(error, PATTERN_NOT_FOUND_MESSAGE)
+    }
+    if (clearedPatternIds.length > 0) {
+      // 他店舗の行は RLS が外すので 0 行になるだけ（= 消すものが無かった）
+      const { error } = await supabase
+        .from('required_nums')
+        .delete()
+        .eq('tenant_id', parsed.tenantId)
+        .eq('date', parsed.date)
+        .in('pattern_id', clearedPatternIds)
+      if (error) throw error
+    }
 
     refresh()
   })
 }
 
 /**
- * 表示期間に一括でデフォルト人数をセットする（v1 の `RequiredNumsController#set_default`）。
+ * 表示期間の「この日だけ変えた」分を元に戻す（015 §3.6）。上書き行を消すだけで、基本の人数は変えない。
  *
- * 対象は出勤日のパターンだけ（006 §10.6）。祝日は `holiday` キーを優先する。
- * v1 は「期間の行を全削除 → 再生成」だったが、upsert 1 回にする（007 §3.6）。
- * 休みに変えたパターンの既存行は消さない（判定に使わないので害が無い）。
+ * v1 の「デフォルト人数をセット」（期間 × 勤務を全部 upsert する操作）の置き換え。
+ * 焼き付けが要らなくなったので、残るのは「手で変えた分を捨てる」操作だけになった。
  */
-export async function setDefaultRequiredNums(input: {
+export async function resetRequiredNums(input: {
   tenantId: string
   start: string
   end: string
-}): Promise<ActionResult> {
+}): Promise<ActionResult<{ affected: number }>> {
   return runAction(async () => {
-    const parsed = setDefaultRequiredNumsSchema.parse(input)
+    const parsed = resetRequiredNumsSchema.parse(input)
     await requireUser()
+    await requireTenant(parsed.tenantId)
 
     const supabase = await createClient()
-    // 店舗の確認と読み取りは独立なので並行に。見えない店舗なら読み取りは空で、書き込む前に requireTenant が投げる
-    const [, { data: patterns, error: patternsError }] = await Promise.all([
-      requireTenant(parsed.tenantId),
-      supabase
-        .from('patterns')
-        .select('id, default_required_nums')
-        .eq('tenant_id', parsed.tenantId)
-        .eq('kind', 'workday'),
-    ])
-    if (patternsError) throw patternsError
-    if (patterns.length === 0) fail('勤務日のパターンがありません')
-
-    const dates = datesBetween(parsed.start, parsed.end)
-    const rows: RequiredNumRow[] = []
-    for (const pattern of patterns) {
-      const defaults = parseRequiredNums(pattern.default_required_nums)
-      for (const date of dates) {
-        rows.push({
-          tenant_id: parsed.tenantId,
-          pattern_id: pattern.id,
-          date,
-          num: defaultRequiredNum(defaults, dayKeyFor(date, isHolidayDate(date))),
-        })
-      }
-    }
-
-    const { error } = await supabase
+    // 他店舗の行は RLS が外すので、消えるのは自店舗の行だけ
+    const { data, error } = await supabase
       .from('required_nums')
-      .upsert(rows, { onConflict: 'pattern_id,date' })
-    if (error) failFromFkError(error, PATTERN_NOT_FOUND_MESSAGE)
+      .delete()
+      .eq('tenant_id', parsed.tenantId)
+      .gte('date', parsed.start)
+      .lte('date', parsed.end)
+      .select('pattern_id')
+    if (error) throw error
 
     refresh()
+    return { affected: data.length }
   })
 }
 

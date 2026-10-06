@@ -419,9 +419,21 @@ button.cell:focus-visible .cellPlus {
   color: var(--mantine-color-green-9);
 }
 
-.footCell[data-short='true'] {
+.footCell[data-state='short'] {
   font-weight: 700;
   color: var(--mantine-color-red-9);
+}
+
+/* 多く入っている日（015 §3.7）。不足の赤と見分けられるよう青にし、`+1` の符号も添える */
+.footCell[data-state='over'] {
+  font-weight: 700;
+  color: var(--mantine-color-blue-9);
+}
+
+/* 必要人数をまだ決めていない日（015 §3.2）。`3/—` */
+.footCell[data-state='unset'] {
+  font-weight: 500;
+  color: var(--mantine-color-dimmed);
 }
 
 /*

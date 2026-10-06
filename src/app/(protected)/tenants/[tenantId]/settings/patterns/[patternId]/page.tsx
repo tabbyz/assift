@@ -2,7 +2,6 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { Stack, Title } from '@mantine/core'
 import { SettingsBreadcrumbs } from '@/components/SettingsBreadcrumbs'
-import { parseRequiredNums } from '@/lib/patterns/requiredNums'
 import { getPattern, listPatterns } from '@/lib/queries/patterns'
 import { isUuid } from '@/utils/uuid'
 import { PatternEditClient } from '../_components/PatternEditClient'
@@ -47,9 +46,7 @@ export default async function EditPatternPage({
           colorHex: pattern.color_hex,
           kind: pattern.kind,
           pairPatternId: pattern.pair_pattern_id,
-          defaultRequiredNums: parseRequiredNums(pattern.default_required_nums),
         }}
-        afterCreate="list"
       />
 
       <PatternEditClient tenantId={tenantId} patternId={pattern.id} />

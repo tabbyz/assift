@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { requiredCounts } from '@/lib/shifts/satisfaction'
+import type { RequiredByDate, RequiredNum } from '@/lib/shifts/requiredNums'
 import { toShiftMap } from '@/lib/shifts/key'
 import {
   currentStage,
   formatElapsed,
   ghostCells,
-  hasRequiredNums,
+  hasAnyRequired,
   leverEffect,
   leverSlots,
   previewCoverage,
@@ -14,19 +14,45 @@ import {
   unfilledGrid,
 } from './assist'
 
+/** 解決済みの必要人数（`buildRequiredByDate()` の出力と同じ形） */
+function requiredByDate(
+  rows: { patternId: string; date: string; num: RequiredNum }[]
+): RequiredByDate {
+  const result: RequiredByDate = new Map()
+  for (const row of rows) {
+    const byPattern = result.get(row.date) ?? new Map<string, RequiredNum>()
+    byPattern.set(row.patternId, row.num)
+    result.set(row.date, byPattern)
+  }
+  return result
+}
+
+/** 配置済み（数だけの Map） */
+function counts(
+  rows: { patternId: string; date: string; num: number }[]
+): Map<string, Map<string, number>> {
+  const result = new Map<string, Map<string, number>>()
+  for (const row of rows) {
+    const byPattern = result.get(row.date) ?? new Map<string, number>()
+    byPattern.set(row.patternId, row.num)
+    result.set(row.date, byPattern)
+  }
+  return result
+}
+
 describe('shortageByPattern', () => {
   const patterns = [
     { id: 'e', name: '早番' },
     { id: 'l', name: '遅番' },
   ]
-  const required = requiredCounts([
+  const required = requiredByDate([
     { patternId: 'e', date: '2026-10-01', num: 2 },
     { patternId: 'e', date: '2026-10-02', num: 1 },
     { patternId: 'l', date: '2026-10-01', num: 1 },
   ])
 
   it('必要人数 − 配置済み を足し、超過は負にしない。不足 0 のパターンは出さない', () => {
-    const assigned = requiredCounts([
+    const assigned = counts([
       { patternId: 'e', date: '2026-10-01', num: 1 },
       { patternId: 'l', date: '2026-10-01', num: 3 },
     ])
@@ -35,14 +61,46 @@ describe('shortageByPattern', () => {
       byPattern: [{ patternId: 'e', name: '早番', count: 2 }],
     })
   })
+
+  it('未設定（null）の組は枠にしない（015 §3.2）', () => {
+    const unset = requiredByDate([
+      { patternId: 'e', date: '2026-10-01', num: null },
+      { patternId: 'l', date: '2026-10-01', num: 1 },
+    ])
+    expect(shortageByPattern(['2026-10-01'], patterns, unset, new Map())).toEqual({
+      total: 1,
+      byPattern: [{ patternId: 'l', name: '遅番', count: 1 }],
+    })
+  })
 })
 
-describe('hasRequiredNums', () => {
-  it('出勤日パターンの 1 以上の行があるか', () => {
-    const workday = new Set(['e'])
-    expect(hasRequiredNums([{ patternId: 'e', date: '2026-10-01', num: 0 }], workday)).toBe(false)
-    expect(hasRequiredNums([{ patternId: 'off', date: '2026-10-01', num: 2 }], workday)).toBe(false)
-    expect(hasRequiredNums([{ patternId: 'e', date: '2026-10-01', num: 1 }], workday)).toBe(true)
+describe('hasAnyRequired', () => {
+  const dates = ['2026-10-01']
+
+  it('出勤日パターンに「決まっている」人数があるか。0 人も決まっている（015 §3.2）', () => {
+    expect(
+      hasAnyRequired(requiredByDate([{ patternId: 'e', date: '2026-10-01', num: 0 }]), dates, ['e'])
+    ).toBe(true)
+    expect(
+      hasAnyRequired(requiredByDate([{ patternId: 'e', date: '2026-10-01', num: 1 }]), dates, ['e'])
+    ).toBe(true)
+  })
+
+  it('全部未設定なら false', () => {
+    expect(
+      hasAnyRequired(requiredByDate([{ patternId: 'e', date: '2026-10-01', num: null }]), dates, [
+        'e',
+      ])
+    ).toBe(false)
+    expect(hasAnyRequired(new Map(), dates, ['e'])).toBe(false)
+  })
+
+  it('休みのパターンしか決まっていなければ false', () => {
+    expect(
+      hasAnyRequired(requiredByDate([{ patternId: 'off', date: '2026-10-01', num: 2 }]), dates, [
+        'e',
+      ])
+    ).toBe(false)
   })
 })
 
@@ -152,13 +210,13 @@ describe('previewCoverage', () => {
     }
     // s1 の 10/1 は手で埋めたあと（点線にならない）
     const shifts = toShiftMap([{ staffId: 's1', date: '2026-10-01', patternId: 'd', fixed: false }])
-    const required = requiredCounts([
+    const required = requiredByDate([
       { patternId: 'e', date: '2026-10-01', num: 1 },
       { patternId: 'n', date: '2026-10-02', num: 2 },
     ])
-    const assigned = requiredCounts([{ patternId: 'n', date: '2026-10-02', num: 1 }])
+    const assigned = counts([{ patternId: 'n', date: '2026-10-02', num: 1 }])
     expect([...previewCoverage(lever, shifts, ['e', 'n'], required, assigned)]).toEqual([
-      ['2026-10-02', { assigned: 2, required: 2, satisfied: true }],
+      ['2026-10-02', { assigned: 2, required: 2, state: 'ok' }],
     ])
   })
 })

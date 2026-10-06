@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { saveRequiredNumsSchema, setDefaultRequiredNumsSchema } from './requiredNums'
+import { resetRequiredNumsSchema, saveRequiredNumsSchema } from './requiredNums'
 
 const TENANT = '22222222-2222-2222-2222-222222222222'
 const PATTERN = '33333333-3333-3333-3333-000000000001'
@@ -14,11 +14,20 @@ describe('saveRequiredNumsSchema', () => {
     expect(parsed.nums[PATTERN]).toBe(3)
   })
 
-  it('空欄（NumberInput の空）は 0 にする（v1 と同じ）', () => {
+  it('空欄（NumberInput の空）はそのまま通す = この日の上書きを消す（015 §3.2）', () => {
     const parsed = saveRequiredNumsSchema.parse({
       tenantId: TENANT,
       date: '2026-09-18',
       nums: { [PATTERN]: '' },
+    })
+    expect(parsed.nums[PATTERN]).toBe('')
+  })
+
+  it('0 は 0 人として通す（空欄とは別）', () => {
+    const parsed = saveRequiredNumsSchema.parse({
+      tenantId: TENANT,
+      date: '2026-09-18',
+      nums: { [PATTERN]: 0 },
     })
     expect(parsed.nums[PATTERN]).toBe(0)
   })
@@ -51,10 +60,10 @@ describe('saveRequiredNumsSchema', () => {
   })
 })
 
-describe('setDefaultRequiredNumsSchema', () => {
+describe('resetRequiredNumsSchema', () => {
   it('表示期間を通す', () => {
     expect(
-      setDefaultRequiredNumsSchema.parse({
+      resetRequiredNumsSchema.parse({
         tenantId: TENANT,
         start: '2026-09-01',
         end: '2026-09-30',
@@ -64,7 +73,7 @@ describe('setDefaultRequiredNumsSchema', () => {
 
   it('1 日でも通す', () => {
     expect(() =>
-      setDefaultRequiredNumsSchema.parse({
+      resetRequiredNumsSchema.parse({
         tenantId: TENANT,
         start: '2026-09-01',
         end: '2026-09-01',
@@ -74,13 +83,13 @@ describe('setDefaultRequiredNumsSchema', () => {
 
   it('31 日ちょうどは通し、32 日は弾く', () => {
     expect(() =>
-      setDefaultRequiredNumsSchema.parse({
+      resetRequiredNumsSchema.parse({
         tenantId: TENANT,
         start: '2026-10-01',
         end: '2026-10-31',
       })
     ).not.toThrow()
-    const result = setDefaultRequiredNumsSchema.safeParse({
+    const result = resetRequiredNumsSchema.safeParse({
       tenantId: TENANT,
       start: '2026-10-01',
       end: '2026-11-01',
@@ -90,7 +99,7 @@ describe('setDefaultRequiredNumsSchema', () => {
   })
 
   it('end が start より前なら弾く', () => {
-    const result = setDefaultRequiredNumsSchema.safeParse({
+    const result = resetRequiredNumsSchema.safeParse({
       tenantId: TENANT,
       start: '2026-09-30',
       end: '2026-09-01',
