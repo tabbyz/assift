@@ -161,6 +161,8 @@ export function PatternForm({ tenantId, pairOptions, initial }: Props) {
                     component={Link}
                     href={`/tenants/${tenantId}/settings/required-nums`}
                     size="xs"
+                    underline="always"
+                    c="var(--mantine-color-text)"
                   >
                     必要人数の設定
                   </Anchor>

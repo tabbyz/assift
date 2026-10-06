@@ -95,12 +95,11 @@ export function RequiredNumModal({ tenantId, date, rows, onClose }: Props) {
               <TableTr>
                 <TableTh />
                 {/* シフト表のフッター「配置 / 必要人数」と同じ並びにする */}
-                {/* 見出しもフッターの「配置 / 必要人数」に合わせる（狭い幅で折り返さない） */}
-                <TableTh ta="center" w="22%">
+                {/* 見出しもフッターの「配置 / 必要人数」に合わせる（狭い幅で折り返さない）。2 列は同じ幅 */}
+                <TableTh ta="center" w="30%">
                   配置
                 </TableTh>
-                {/* 「基本(2)に戻す」が 1 行に収まる幅 */}
-                <TableTh ta="center" w="38%">
+                <TableTh ta="center" w="30%">
                   必要人数
                 </TableTh>
               </TableTr>
@@ -161,7 +160,13 @@ export function RequiredNumModal({ tenantId, date, rows, onClose }: Props) {
         <Text size="xs" c="dimmed">
           ここで入れた数は<strong>この日だけ</strong>に効きます。空欄にすると基本の人数に戻ります。
           基本の人数は
-          <Anchor component={Link} href={`/tenants/${tenantId}/settings/required-nums`} size="xs">
+          <Anchor
+            component={Link}
+            href={`/tenants/${tenantId}/settings/required-nums`}
+            size="xs"
+            underline="always"
+            c="var(--mantine-color-text)"
+          >
             必要人数の設定
           </Anchor>
           で変えられます。
