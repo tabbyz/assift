@@ -25,13 +25,10 @@ export default function TermsPage() {
           </Text>
         </Stack>
 
-        <Stack gap="sm">
-          <Text>
-            assift
-            を使うときの、あなたと私たちの約束ごとです。利用規約はむずかしい言葉で書かれがちですが、内容をわかったうえで使ってほしいので、なるべくふだんの言葉で書きました。
-          </Text>
-          <Text>各条の終わりに、その条の要点を「ひとことで」としてまとめています。</Text>
-        </Stack>
+        <Text>
+          assift
+          を使う前に、知っておいてほしいことをまとめました。各条の終わりには、その条の要点を「ひとことで」として添えています。
+        </Text>
 
         {TERMS_ARTICLES.map((article, index) => (
           <Stack
