@@ -59,13 +59,7 @@ export function RequiredNumsSettingsClient({ tenantId, patterns }: Props) {
         <SettingsSection>
           <Text size="sm" c="dimmed">
             出勤日の勤務がありません。先に
-            <Anchor
-              component={Link}
-              href={`/tenants/${tenantId}/settings/patterns`}
-              size="sm"
-              underline="always"
-              c="var(--mantine-color-text)"
-            >
+            <Anchor component={Link} href={`/tenants/${tenantId}/settings/patterns`} size="sm">
               勤務パターン
             </Anchor>
             を登録してください。
