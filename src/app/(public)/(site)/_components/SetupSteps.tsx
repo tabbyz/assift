@@ -12,7 +12,7 @@ export function SetupSteps() {
         <SectionHeading
           kicker="はじめ方"
           title="3ステップで、|すぐ使える"
-          description="選んだ業種と貼り付けた名前から、最初のシフト表ができあがります。"
+          description="ひな形を選んで、スタッフの名前を貼るだけ。登録したその日から、シフト表を作れます。"
         />
         <SimpleGrid cols={{ base: 1, sm: 3 }} spacing={20}>
           <Step num={1} title="業種を選ぶ">
