@@ -1,10 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import {
-  HOLD_CANCEL_PX,
-  consumeHoldClick,
-  markHoldToggle,
-  movedPastHold,
-} from './holdToToggle'
+import { HOLD_CANCEL_PX, consumeHoldClick, markHoldToggle, movedPastHold } from './holdToToggle'
 
 describe('movedPastHold', () => {
   const origin = { x: 100, y: 200 }

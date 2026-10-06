@@ -7,6 +7,8 @@ export const metadata: Metadata = { title: 'ページが見つかりません' }
 /**
  * 404。`notFound()` を投げた layout / page がここに落ちる
  * （layout が投げた場合、その層の not-found では受けられないのでルートに置く）。
+ *
+ * 戻り先は `/`。未ログインの訪問者（共有 URL を削った人など）は LP が、ログイン済みは LP の redirect が店舗へ送る（016）。
  */
 export default function NotFound() {
   return (
@@ -16,7 +18,7 @@ export default function NotFound() {
         <Text c="dimmed" ta="center">
           URL が間違っているか、削除された可能性があります。
         </Text>
-        <LinkButton href="/tenants">店舗へ戻る</LinkButton>
+        <LinkButton href="/">トップへ戻る</LinkButton>
       </Stack>
     </Container>
   )
