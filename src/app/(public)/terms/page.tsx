@@ -7,7 +7,7 @@ import { TERMS } from './_components/terms'
 export const metadata: Metadata = { title: '利用規約' }
 
 /**
- * 利用規約（016）。ふだんの言葉で書き、各条の本文のあとに「ひとことで」の要約を添える。
+ * 利用規約（016）。ふだんの言葉で書き、各条の本文のあとに要約を添える。
  * 本文は `_components/articles.tsx`、未確定の運営側の値は `_components/terms.ts`。
  */
 export default function TermsPage() {
@@ -27,7 +27,7 @@ export default function TermsPage() {
 
         <Text>
           assift
-          を使う前に、知っておいてほしいことをまとめました。各条の終わりには、その条の要点を「ひとことで」として添えています。
+          を使う前に、知っておいてほしいことをまとめました。各条の終わりには、その条の要約を添えています。
         </Text>
 
         {TERMS_ARTICLES.map((article, index) => (
@@ -45,7 +45,7 @@ export default function TermsPage() {
             <Paper bg="var(--mantine-color-gray-0)" radius="sm" px="md" py="sm">
               <Text size="sm">
                 <Text span fw={700} size="sm">
-                  ひとことで：
+                  要約：
                 </Text>
                 {article.summary}
               </Text>
