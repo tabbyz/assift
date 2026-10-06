@@ -4,6 +4,7 @@ import {
   IconClock,
   IconListCheck,
   IconUsers,
+  IconUsersGroup,
   type Icon,
 } from '@tabler/icons-react'
 
@@ -23,12 +24,18 @@ export function primaryLinks(tenantId: string): TenantLink[] {
 /**
  * 設定の項目。触る頻度の順（運用で触るマスタが先頭）。
  * 店舗情報は末尾（名前・周期・削除で、いちばん触らない）。
- * 4 件しかないので区切り線で群に分けない（線のほうが目立って、並びの意味より強く見える）
+ * 必要人数は勤務パターンの直後（勤務ごとの数なので、勤務の話が続く。015 §3.4）。
+ * 5 件しかないので区切り線で群に分けない（線のほうが目立って、並びの意味より強く見える）
  */
 export function settingsLinks(tenantId: string): TenantLink[] {
   return [
     { href: `/tenants/${tenantId}/settings/staffs`, label: 'スタッフ', icon: IconUsers },
     { href: `/tenants/${tenantId}/settings/patterns`, label: '勤務パターン', icon: IconClock },
+    {
+      href: `/tenants/${tenantId}/settings/required-nums`,
+      label: '必要人数',
+      icon: IconUsersGroup,
+    },
     {
       href: `/tenants/${tenantId}/settings/restrictions`,
       label: '自動アサイン制約',

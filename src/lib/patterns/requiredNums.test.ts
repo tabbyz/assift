@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fillRequiredNumsForward, parseRequiredNums, uniformRequiredNums } from './requiredNums'
+import { fillRequiredNumsForward, formatRequiredNumsByDay, parseRequiredNums } from './requiredNums'
 
 describe('parseRequiredNums', () => {
   it('曜日キーと祝日キーを読む', () => {
@@ -68,21 +68,16 @@ describe('fillRequiredNumsForward', () => {
   })
 })
 
-describe('uniformRequiredNums', () => {
-  it('全曜日と祝日に同じ人数', () => {
-    expect(uniformRequiredNums(2)).toEqual({
-      '0': 2,
-      '1': 2,
-      '2': 2,
-      '3': 2,
-      '4': 2,
-      '5': 2,
-      '6': 2,
-      holiday: 2,
-    })
+describe('formatRequiredNumsByDay', () => {
+  it('決めた曜日だけを曜日の順に並べる', () => {
+    expect(formatRequiredNumsByDay({ '6': 2, '0': 3, holiday: 3 })).toBe('日 3 ・ 土 2 ・ 祝 3')
   })
 
-  it('保存して読み直しても同じ', () => {
-    expect(parseRequiredNums(uniformRequiredNums(1))).toEqual(uniformRequiredNums(1))
+  it('0 も出す（0 人）', () => {
+    expect(formatRequiredNumsByDay({ '1': 0 })).toBe('月 0')
+  })
+
+  it('1 つも無ければ空', () => {
+    expect(formatRequiredNumsByDay({})).toBe('')
   })
 })

@@ -4,7 +4,6 @@ import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  Alert,
   Anchor,
   Button,
   Group,
@@ -20,20 +19,23 @@ import {
   Text,
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { IconInfoCircle } from '@tabler/icons-react'
 import { WEEKDAY_LABELS } from '@/lib/calendar/weekdays'
 import { formatMonthDay, wday } from '@/lib/calendar/dateString'
 import { REQUIRED_NUM_MAX, REQUIRED_NUM_MIN } from '@/lib/patterns/requiredNums'
+import type { RequiredNum } from '@/lib/shifts/requiredNums'
+import { requiredNumInputValue, requiredNumPayload } from '../_lib/requiredNumInputs'
 import { saveRequiredNums } from '../actions'
 
 /** 出勤日のパターン 1 件分。モーダルが必要とする値だけ */
 export type RequiredNumRowInput = {
   patternId: string
   name: string
-  /** 現在の必要人数（行が無ければ 0） */
-  required: number
-  /** 曜日 / 祝日のデフォルト値 */
-  defaultNum: number
+  /** 解決後の必要人数。`null` は「まだ決めていない」（015 §3.2） */
+  required: RequiredNum
+  /** その曜日 / 祝日の基本の人数。`null` なら基本も決まっていない */
+  defaultNum: RequiredNum
+  /** この日だけ変えてある（`required_nums` に行がある）か */
+  overridden: boolean
   /** アサイン済み人数 */
   assigned: number
 }
@@ -54,14 +56,15 @@ export function RequiredNumModal({ tenantId, date, rows, onClose }: Props) {
   const [nums, setNums] = useState<Record<string, number | ''>>({})
   const [isPending, startTransition] = useTransition()
 
-  const valueOf = (row: RequiredNumRowInput) => nums[row.patternId] ?? row.required
+  const valueOf = (row: RequiredNumRowInput): number | '' =>
+    requiredNumInputValue(row, nums[row.patternId])
 
-  const setDefaults = () =>
-    setNums(Object.fromEntries(rows.map((row) => [row.patternId, row.defaultNum])))
+  /** 「基本に戻す」= この日の上書きを消す。空欄で保存すると行が消える（015 §3.2） */
+  const clear = (patternId: string) => setNums((current) => ({ ...current, [patternId]: '' }))
 
   const submit = () =>
     startTransition(async () => {
-      const payload = Object.fromEntries(rows.map((row) => [row.patternId, valueOf(row)]))
+      const payload = requiredNumPayload(rows, nums)
       const result = await saveRequiredNums({ tenantId, date, nums: payload })
       if (!result.ok) {
         notifications.show({ message: result.error, color: 'red' })
@@ -78,26 +81,10 @@ export function RequiredNumModal({ tenantId, date, rows, onClose }: Props) {
     <Modal
       opened
       onClose={onClose}
-      title={`${formatMonthDay(date)} (${WEEKDAY_LABELS[wday(date)]})`}
+      title={`必要人数 - ${formatMonthDay(date)} (${WEEKDAY_LABELS[wday(date)]})`}
       size="sm"
     >
       <Stack gap="md">
-        <Group justify="flex-end">
-          <Button variant="default" size="xs" onClick={setDefaults} disabled={isPending}>
-            デフォルト人数をセット
-          </Button>
-        </Group>
-
-        <Alert variant="light" color="blue" icon={<IconInfoCircle size={16} />} p="xs">
-          <Text size="xs">
-            デフォルト人数は
-            <Anchor component={Link} href={`/tenants/${tenantId}/settings/patterns`} size="xs">
-              勤務パターン設定画面
-            </Anchor>
-            で設定できます
-          </Text>
-        </Alert>
-
         {rows.length === 0 ? (
           <Text c="dimmed" size="sm">
             勤務日のパターンが登録されていません
@@ -107,51 +94,84 @@ export function RequiredNumModal({ tenantId, date, rows, onClose }: Props) {
             <TableThead>
               <TableTr>
                 <TableTh />
+                {/* シフト表のフッター「配置 / 必要人数」と同じ並びにする */}
+                {/* 見出しもフッターの「配置 / 必要人数」に合わせる（狭い幅で折り返さない）。2 列は同じ幅 */}
                 <TableTh ta="center" w="30%">
-                  必要人数
+                  配置
                 </TableTh>
                 <TableTh ta="center" w="30%">
-                  アサイン済
+                  必要人数
                 </TableTh>
               </TableTr>
             </TableThead>
             <TableTbody>
               {rows.map((row) => (
                 <TableTr key={row.patternId}>
-                  <TableTd ta="right">{row.name}</TableTd>
-                  <TableTd p={4}>
-                    <NumberInput
-                      aria-label={`${row.name} の必要人数`}
-                      value={valueOf(row)}
-                      onChange={(value) =>
-                        setNums((current) => ({
-                          ...current,
-                          [row.patternId]: value === '' ? '' : Number(value),
-                        }))
-                      }
-                      min={REQUIRED_NUM_MIN}
-                      max={REQUIRED_NUM_MAX}
-                      clampBehavior="strict"
-                      allowDecimal={false}
-                      allowNegative={false}
-                      hideControls
-                      size="sm"
-                      styles={{ input: { textAlign: 'center', paddingInline: 4 } }}
-                    />
+                  <TableTd>
+                    <Text size="sm">{row.name}</Text>
                   </TableTd>
                   <TableTd ta="center">{row.assigned}</TableTd>
+                  <TableTd p={4}>
+                    <Stack gap={2}>
+                      <NumberInput
+                        aria-label={`${row.name} の必要人数`}
+                        value={valueOf(row)}
+                        placeholder={row.defaultNum === null ? '—' : String(row.defaultNum)}
+                        onChange={(value) =>
+                          setNums((current) => ({
+                            ...current,
+                            [row.patternId]: value === '' ? '' : Number(value),
+                          }))
+                        }
+                        min={REQUIRED_NUM_MIN}
+                        max={REQUIRED_NUM_MAX}
+                        clampBehavior="strict"
+                        allowDecimal={false}
+                        allowNegative={false}
+                        hideControls
+                        size="sm"
+                        styles={{ input: { textAlign: 'center', paddingInline: 4 } }}
+                      />
+                      {/* この日だけ変えてある勤務だけ。押すと空欄になり、保存で上書きが消える */}
+                      {row.overridden && (
+                        <Anchor
+                          component="button"
+                          type="button"
+                          size="xs"
+                          c="dimmed"
+                          ta="center"
+                          style={{ whiteSpace: 'nowrap' }}
+                          onClick={() => clear(row.patternId)}
+                          disabled={isPending}
+                        >
+                          {row.defaultNum === null
+                            ? '未設定に戻す'
+                            : `基本(${row.defaultNum})に戻す`}
+                        </Anchor>
+                      )}
+                    </Stack>
+                  </TableTd>
                 </TableTr>
               ))}
             </TableTbody>
           </Table>
         )}
 
+        <Text size="xs" c="dimmed">
+          ここで入れた数は<strong>この日だけ</strong>に効きます。空欄にすると基本の人数に戻ります。
+          基本の人数は
+          <Anchor component={Link} href={`/tenants/${tenantId}/settings/required-nums`} size="xs">
+            必要人数の設定
+          </Anchor>
+          で変えられます。
+        </Text>
+
         <Group justify="flex-end" gap="xs">
           <Button variant="subtle" color="gray" onClick={onClose} disabled={isPending}>
             キャンセル
           </Button>
           <Button onClick={submit} loading={isPending} disabled={rows.length === 0}>
-            必要人数を保存
+            保存
           </Button>
         </Group>
       </Stack>

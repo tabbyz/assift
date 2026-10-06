@@ -35,7 +35,8 @@ type Props = {
   onOpenShare: () => void
   onBulk: (kind: BulkKind) => void
   onSetDefaultPatterns: () => void
-  onSetDefaultRequiredNums: () => void
+  onResetRequiredNums: () => void
+  resetRequiredNumsCount: number
   onOpenCopy: () => void
   /** 自動アサイン（012 §4.1）。キーが無ければ「現在利用できません」 */
   assistAvailable: boolean
@@ -59,7 +60,8 @@ export function Toolbar({
   onOpenShare,
   onBulk,
   onSetDefaultPatterns,
-  onSetDefaultRequiredNums,
+  onResetRequiredNums,
+  resetRequiredNumsCount,
   onOpenCopy,
   assistAvailable,
   onOpenAssist,
@@ -171,7 +173,8 @@ export function Toolbar({
         <ToolsMenu
           onBulk={onBulk}
           onSetDefaultPatterns={onSetDefaultPatterns}
-          onSetDefaultRequiredNums={onSetDefaultRequiredNums}
+          onResetRequiredNums={onResetRequiredNums}
+          resetRequiredNumsCount={resetRequiredNumsCount}
           onOpenCopy={onOpenCopy}
           assistUndo={assistUndo}
           disabled={disabled}

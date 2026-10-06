@@ -7,13 +7,11 @@ import { notifications } from '@mantine/notifications'
 import { FormErrorAlert } from '@/components/FormErrorAlert'
 import { PATTERN_KIND_OPTIONS, type PatternKind } from '@/lib/patterns/kinds'
 import { DEFAULT_PATTERN_COLOR } from '@/lib/patterns/colors'
-import type { RequiredNumsByDay } from '@/lib/patterns/requiredNums'
 import { PATTERN_DESCRIPTION_MAX_LENGTH, PATTERN_NAME_MAX_LENGTH } from '@/lib/validation/patterns'
 import { LinkButton } from '@/components/LinkButton'
 import { SettingsSection } from '@/components/SettingsSection'
 import { createPattern, updatePattern } from '../actions'
 import { ColorSwatchPicker } from './ColorSwatchPicker'
-import { RequiredNumsInput } from './RequiredNumsInput'
 
 /** ペアの選択肢（自分自身は呼び出し側で除いてある。006 §3.8） */
 export type PatternOption = { value: string; label: string }
@@ -24,7 +22,6 @@ export type PatternFormValues = {
   colorHex: string
   kind: PatternKind
   pairPatternId: string | null
-  defaultRequiredNums: RequiredNumsByDay
 }
 
 type Props = {
@@ -40,7 +37,6 @@ const emptyValues: PatternFormValues = {
   colorHex: DEFAULT_PATTERN_COLOR,
   kind: 'workday',
   pairPatternId: null,
-  defaultRequiredNums: {},
 }
 
 export function PatternForm({ tenantId, pairOptions, initial }: Props) {
@@ -137,14 +133,6 @@ export function PatternForm({ tenantId, pairOptions, initial }: Props) {
               aria-label="パターン区分"
             />
           </Input.Wrapper>
-
-          {/* 休みパターンに必要人数は無い（保存時も {} に落とす。006 §3.9） */}
-          {values.kind === 'workday' && (
-            <RequiredNumsInput
-              value={values.defaultRequiredNums}
-              onChange={(next) => set('defaultRequiredNums', next)}
-            />
-          )}
 
           {pairOptions.length > 0 && (
             <Select

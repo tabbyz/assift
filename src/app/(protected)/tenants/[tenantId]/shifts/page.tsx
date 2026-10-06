@@ -105,7 +105,7 @@ export default async function ShiftsPage({
         defaultRequiredNums: parseRequiredNums(pattern.default_required_nums),
       }))}
       shifts={shiftRows.filter((shift) => activeStaffIds.has(shift.staffId))}
-      requiredNums={requiredNums}
+      requiredOverrides={requiredNums}
       dateNotes={dateNotes}
       shares={{
         enabled: shares.enabled.map(toShareItem),

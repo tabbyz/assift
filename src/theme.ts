@@ -31,6 +31,15 @@ export const theme = createTheme({
       },
     },
     /*
+     * リンクは **本文色 + 下線**。
+     * Mantine の既定は `--mantine-color-anchor`（= primary の 6 番）で、この店は primaryColor が gray なので
+     * `--mantine-color-dimmed` と**同じ #868e96** になり、説明文の中に置くと押せると分からない。
+     * 白地でのコントラストも 3.5:1 しかなく、小さい文字の 4.5:1 に届かない。
+     * ブランド色を増やさない方針（このファイル冒頭）なので、色ではなく下線でリンクだと示す。
+     * 役割のある色（削除の赤など）は呼び出し側の `c` が優先されるのでそのまま残る
+     */
+    Anchor: { defaultProps: { underline: 'always', c: 'var(--mantine-color-text)' } },
+    /*
      * 通知の入れ物は既定で幅 100%・最大 440px まで常に広がる。短い成功文でも閉じるボタンが右端に寄る。
      * 幅は文の長さに合わせ、長い文だけ画面端と 440px で止める。
      */
