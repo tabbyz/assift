@@ -3,7 +3,7 @@
  */
 export const TERMS = {
   /** 運営者の名称 */
-  operator: 'assift運営事務局',
+  operator: 'assift運営',
   /** 問い合わせ先 */
   contactEmail: 'support@assift.com',
   /** 制定日 / 最終更新日 */
