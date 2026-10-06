@@ -51,13 +51,16 @@ src/
       share/[code]/               公開シフト表（未ログインで開く。読み取りは service_role）。(site) の枠を被せない
     (auth)/                       login, signup, password/*
     (protected)/                  layout で未ログインを弾く
-      tenants/[tenantId]/
-        <feature>/
-          page.tsx                Server。searchParams → queries → Client へ props
-          actions.ts              書き込みがあるとき。'use server'
-          searchParams.ts         URL 状態があるときだけ（nuqs parser + createLoader）
-          _components/            このルート専用 Client UI
-          _lib/                   このルート専用ロジック（Vitest 対象）
+      tenants/
+        actions.ts                店舗配下でルートをまたぐ Action（deleteTenant / saveDefaultRequiredNums）
+        [tenantId]/               **シフト表が店舗のトップ**（005 §11。page / actions / searchParams / _components / _lib）
+          shifts/page.tsx         旧 URL の受け皿。307 で店舗のトップへ（クエリごと）
+          <feature>/
+            page.tsx              Server。searchParams → queries → Client へ props
+            actions.ts            書き込みがあるとき。'use server'
+            searchParams.ts       URL 状態があるときだけ（nuqs parser + createLoader）
+            _components/          このルート専用 Client UI
+            _lib/                 このルート専用ロジック（Vitest 対象）
     api/tenants/[tenantId]/shifts/{pdf,csv}/route.ts   エクスポート（Route Handler。下記）
   components/                     横断 UI（SortableList = 上下ボタンの並べ替え一覧 など）
     restrictions/                 制約の行（説明・種類・強さの札・編集）。制約ページとスタッフの編集画面で共有（013）
@@ -99,10 +102,11 @@ supabase/
 ページ専用は `_components/` / `_lib/`、横断 UI は `src/components/`、読み取りは `lib/queries/`、書き込みは各ルートの `actions.ts`。
 
 ルートをまたいで使う Action は、そのグループ直下に置く（`(protected)/actions.ts` の `logout` はヘッダーとアカウント画面の両方から呼ぶ。
-`tenants/[tenantId]/actions.ts` の `deleteTenant` は店舗情報と初期設定の両方から呼ぶ）。
+`tenants/actions.ts` の `deleteTenant` は店舗情報と初期設定の両方から、`saveDefaultRequiredNums` は必要人数の設定と
+AI シフト作成の両方から呼ぶ。`[tenantId]/actions.ts` はシフト表のもの）。
 
 初期設定（014）: 店舗は `tenants.setup_completed_at` が null のあいだ「準備中」。`[tenantId]/layout.tsx` は枠（`TenantShell`）を描かず、
-`shifts/page.tsx` と `settings/layout.tsx` が `/setup` へ送る。完了はデータ（勤務・スタッフの有無）ではなくこの列で決める。
+`[tenantId]/page.tsx`（シフト表）と `settings/layout.tsx` が `/setup` へ送る。完了はデータ（勤務・スタッフの有無）ではなくこの列で決める。
 `/setup` からシフト表へは**全体の読み込み**（`window.location.assign`）で移る（クライアント遷移だと枠の無い layout が使い回される）。
 
 ## コード規約

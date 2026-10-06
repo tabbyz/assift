@@ -10,7 +10,7 @@ import { SettingsSection } from '@/components/SettingsSection'
 import { SHIFT_CYCLE_OPTIONS, type ShiftCycle } from '@/lib/calendar/shiftCycle'
 import { START_OF_WEEK_OPTIONS } from '@/lib/calendar/weekdays'
 import { TENANT_NAME_MAX_LENGTH } from '@/lib/validation/tenants'
-import { deleteTenant } from '../../../actions'
+import { deleteTenant } from '../../../../actions'
 import { updateTenant } from '../actions'
 
 type Props = {

@@ -6,8 +6,15 @@ import { getSupabasePublicEnv } from './env'
 /** 未ログインでは開けないパス（前方一致） */
 const PROTECTED_PREFIXES = ['/tenants', '/account', '/api/tenants']
 
-/** ログイン済みなら店舗へ送るパス（完全一致） */
-const GUEST_ONLY_PATHS = ['/login', '/signup']
+/**
+ * ログイン済みなら店舗へ送るパス（完全一致）。
+ *
+ * `/` は仮の LP（タイトル + ログインボタン）なので、ログイン済みの人に見せる意味が無く、
+ * 「ログイン」ボタンを押しても `/login` から弾き返されるだけだった（005 §スコープ外の申し送り）。
+ * **本物の LP を作るときはここから外し**、LP 側で CTA を出し分ける（未ログイン = ログイン / 新規登録、
+ * ログイン済み = シフト表へ）。ログイン済みでも LP を読めるほうが自然なため
+ */
+const GUEST_ONLY_PATHS = ['/', '/login', '/signup']
 
 function isProtectedPath(pathname: string) {
   return PROTECTED_PREFIXES.some(

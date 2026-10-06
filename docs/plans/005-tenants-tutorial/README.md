@@ -591,3 +591,118 @@ npx supabase db reset && npx supabase test db → 22 tests PASS
   続けてスタッフを 1 名足して **56 → 63**（全 7 パターンが付く）を DB で確認。v1 の `Pattern#after_create` と同じ挙動
 - `staff_patterns` の複合 FK: 自テナント id に他テナントの `staff_id` を混ぜると `23503` で拒否される（psql で実測）
 - `revalidatePath` を消した副作用: 10.8 の 1 で `router.refresh()` を外したあとも、一覧・ヘッダーの更新は通し検証で PASS
+
+## 11. 追補: シフト表を店舗のトップに置く（2026-10-06）
+
+### 11.1 課題
+
+シフト表はこのサービスの主画面なのに、URL は `/tenants/<uuid>/shifts` と 1 段深い。
+`/tenants/<uuid>` のほうは実体を持たず、`setup_completed_at` を見て `/shifts` か `/setup` へ飛ばすだけの中継になっている
+（`[tenantId]/page.tsx`）。主画面の上に空の中継が被さった形で、ブックマークや共有で渡る URL も 1 段長い。
+
+### 11.2 決めたこと
+
+**シフト表を `/tenants/<uuid>` に置く。** `/shifts` は旧 URL として redirect だけ残す。
+
+| 変更 | 内容 |
+| --- | --- |
+| ルート | `shifts/{page.tsx,actions.ts,searchParams.ts,_components/,_lib/}` を `[tenantId]/` 直下へ移す（`git mv` で履歴を保つ） |
+| 振り分け | **移動する `shifts/page.tsx` が既に持っている**（`isUuid` → `getTenant` → 準備中なら `/setup`）。いまの `[tenantId]/page.tsx` は削除するだけ |
+| 旧 URL | `shifts/page.tsx` は残し、**`redirect()`（307）**で `/tenants/<uuid>` へ。クエリは `start` だけでなく**まるごと素通し**する（将来増えても落とさない）。ブックマークと、v1 から移ってきた URL の両方の受け皿（308 にしない理由は §11.8 の 1） |
+| v1 の書き換え | `rewriteLegacyTenantUrl()` は `/tenants/<token>/shifts` → `/tenants/<uuid>`（末尾の `/shifts` を落とす）。**2 回 redirect させない** |
+| Action の置き場 | `[tenantId]/actions.ts` は空かない（シフト表の Action が入る）。いま入っている「ルートをまたぐ Action」（`deleteTenant` / `saveDefaultRequiredNums`）は 1 つ上の `(protected)/tenants/actions.ts` へ移す。設定・初期設定の共通の祖先なので AGENTS.md の規約（ルートをまたぐ Action はグループ直下）を満たす |
+| リンク | 直書きの `/shifts` は `shiftsHref()` に寄せる（`setup/page.tsx` / `setup/actions.ts` / `SetupWizard` / 旧 `TenantPage`） |
+| 現在地の判定 | `isShiftsPath()` はいま `pathname.includes('/shifts')` という緩い実装。**`/tenants/<何か>` 完全一致**（セグメント 2 つ）に変える |
+
+### 11.3 変えないもの
+
+- **エクスポートの `/api/tenants/<uuid>/shifts/{pdf,csv}`**。これは Route Handler の置き場であって画面の URL ではない。
+  変えると 010 の `outputFileTracingIncludes` のグロブまで波及する
+- 公開シフト表 `/share/<code>`（店舗 URL とは別系統）
+- 直近店舗の cookie（`tenantIdFromPathname()` は `/tenants/<uuid>` 以下ならどれでも拾う。`/shifts` が無くなっても動く）
+- `(protected)/tenants/[tenantId]/layout.tsx`（店舗の解決と枠）と `settings/` / `setup/`
+
+### 11.4 やること（順序）
+
+1. `git mv` でシフト表の一式を `[tenantId]/` 直下へ。`[tenantId]/actions.ts` は先に `(protected)/tenants/actions.ts` へ退避
+2. 旧 `[tenantId]/page.tsx` を削除。移動した page の型を `PageProps<'/tenants/[tenantId]'>` に直す
+3. `shifts/page.tsx`（redirect だけ）を新設
+4. `legacyUrl.ts` と `navigation.ts`（`shiftsHref` / `isShiftsPath`）を直し、`legacyUrl.test.ts` / `navigation.test.ts` を更新
+5. 直書きリンクを `shiftsHref()` に寄せる
+6. `AGENTS.md` を更新: ディレクトリ図と、初期設定（014）の段落の「`shifts/page.tsx` と `settings/layout.tsx` が `/setup` へ送る」（過去のプランの記述は履歴なので触らない）
+7. `lint` / `typecheck` / `test` / `build`、ブラウザで通し確認
+
+### 11.5 検証（ブラウザ）
+
+| 見るもの | 期待 |
+| --- | --- |
+| `/tenants/<uuid>` | シフト表が出る（redirect しない）。`?start=` も効く |
+| `/tenants/<uuid>/shifts?start=2026-11-01` | `/tenants/<uuid>?start=2026-11-01` へ redirect |
+| 準備中の店舗で `/tenants/<uuid>` | `/setup` へ |
+| v1 の `/tenants/<22 文字トークン>/shifts?start_date=…` | `/tenants/<uuid>?start=…` へ 1 回で着地 |
+| 設定からの「← シフト表画面へ」、ヘッダーのシフト表、初期設定の完了 | 新 URL へ飛ぶ |
+| エクスポート（PDF / CSV） | これまでどおり落ちる |
+
+### 11.6 リスクと対応
+
+- **移動の規模が大きい**（30 ファイル超）。`git mv` で履歴を保ち、1 コミットにまとめる
+- **`actions.ts` の衝突**。退避を先にやらないと `git mv` が上書きする。手順 1 の順序を守る
+- **リンクの取りこぼし**。`grep -rn "/shifts"` で残りを洗い、`shiftsHref()` 以外の直書きを無くす
+- **Next のルート型**（`PageProps<'/tenants/[tenantId]'>`）は `next typegen` で再生成される。`npm run typecheck` が先に走らせる
+
+### 11.7 プランのレビュー（2026-10-06）
+
+| # | 指摘 | 直したこと |
+| --- | --- | --- |
+| 1 | 旧 URL の redirect を `redirect()` と書いていた。Next の `redirect()` は **307（一時）** なので、恒久的な移動では毎回サーバーに来るうえ、意図も伝わらない | `permanentRedirect()`（308）にした（§11.2） |
+| 2 | 引き継ぐクエリを `?start=` と書いていた | **クエリはまるごと素通し**に（将来 `?view=` などが増えても落とさない） |
+| 3 | 「テストを更新」が曖昧だった | `legacyUrl.test.ts`（`/tenants/<token>/shifts` の期待値）と `navigation.test.ts`（`isShiftsPath`）と明記 |
+| 4 | AGENTS.md はディレクトリ図だけ直す、と書いていたが、初期設定の段落にも `shifts/page.tsx` が出てくる（AGENTS.md:103） | 両方直す、に変更 |
+
+検証して問題が無かったもの（変更不要と確認した）:
+
+- **proxy の `PROTECTED_PREFIXES`**: `/tenants` の前方一致なので、`/shifts` の有無に関係なく守られる
+- **直近店舗の cookie**: `tenantIdFromPathname()` は `/tenants/<uuid>` とその配下にマッチするので、`/shifts` が消えても記録される
+- **`revalidatePath('/tenants/<id>', 'layout')` と `refresh()`**: 指定は `/tenants/<id>` の layout なので、ページの位置が変わっても対象は同じ
+- **`safeNext()`**: 未ログインで `/tenants/<uuid>` を開くと `/login?next=/tenants/<uuid>` になり、ログイン後に戻る（`/` 始まりの同一オリジンなので通る）
+- **014 の「準備中は枠を描かない」**: 判定は `[tenantId]/layout.tsx` にあり、ページの位置に依存しない
+
+### 11.8 2 回目のレビュー（2026-10-06）
+
+| # | 指摘 | 直したこと |
+| --- | --- | --- |
+| 1 | **1 回目のレビューの判断を訂正。** 旧 URL を `permanentRedirect()`（308）にすると決めていたが、**308 はブラウザに恒久的にキャッシュされる**。`/tenants/<uuid>` はログイン必須で検索エンジンが見ないため 308 の利点（SEO の集約）が無く、あとで `/shifts` を別の意味に使いたくなったときに、キャッシュを持つブラウザが戻ってこない | `redirect()`（307）にした。恒久的に残す受け皿なので、サーバーへの往復 1 回は許容する |
+| 2 | 「`TenantPage` の振り分けを新しい page に引き継ぐ」と書いていたが、**移動する `shifts/page.tsx` が既に同じ判定を持っている**（`isUuid` → `getTenant` → `setup_completed_at`）。旧 `page.tsx` は捨てるだけでよい | §11.2 / §11.4 の手順 2 を「削除する」に直した |
+| 3 | `isShiftsPath()` を「`/tenants/<uuid>` 完全一致」と書いたが、現在の実装は `pathname.includes('/shifts')` で、テストの fixture も `/tenants/t/shifts`（uuid ではない）。uuid 判定を足すとテストが落ちる | **セグメント 2 つの完全一致**（`/tenants/<何か>`）に変える、と明記した |
+
+検証して問題が無かったもの:
+
+- **`[tenantId]/layout.tsx`**: 準備中の店舗は `children` をそのまま返す（枠を描かない）。シフト表が `/tenants/<uuid>` に来ても、page が先に `/setup` へ送るので枠なしで描かれることはない（layout と page は並行だが、描かれるのは redirect 後）
+- **`(protected)/tenants/page.tsx`（店舗一覧）と `actions.ts` の同居**: `actions.ts` はルートではないので衝突しない
+- **`loading.tsx`**: `shifts/` には無い（`settings/` にはあるが移動しない）
+- **metadata**: 移動する page の `title: 'シフト表'` はそのまま。layout の template で `シフト表 | 店舗名` になる（店舗のトップでも画面の名前が出るほうが分かりやすい）
+
+### 11.9 実装ログ（2026-10-06）
+
+| 段階 | やったこと |
+| --- | --- |
+| 1 | `[tenantId]/actions.ts`（`deleteTenant` / `saveDefaultRequiredNums`）を `(protected)/tenants/actions.ts` へ退避。呼び出し 3 件の相対パスを直した |
+| 2 | 旧 `[tenantId]/page.tsx` を削除し、`shifts/` の `page.tsx` / `actions.ts` / `searchParams.ts` / `_components/` / `_lib/` を `git mv` で `[tenantId]/` 直下へ |
+| 3 | `shifts/page.tsx` を新設（307 でクエリごと `shiftsHref()` へ） |
+| 4 | `navigation.ts`（`shiftsHref` は店舗のトップ、`isShiftsPath` はセグメント 2 つの完全一致）/ `legacyUrl.ts`（末尾の `/shifts` を落とす）とそれぞれのテスト |
+| 5 | 直書きの `/shifts` を `shiftsHref()` に寄せた（`SetupWizard` / `setup/actions.ts` / `setup/page.tsx`） |
+| 6 | `AGENTS.md` のディレクトリ図・Action の置き場・初期設定の段落を更新 |
+
+検証（ローカル。ブラウザとリクエスト）:
+
+| 見たもの | 結果 |
+| --- | --- |
+| `/tenants/<uuid>` | 200 でシフト表（redirect なし）。`?start=2026-11-01` も効く |
+| `/tenants/<uuid>/shifts?start=2026-11-01&view=week` | `/tenants/<uuid>?start=2026-11-01&view=week` へ（**クエリをまるごと引き継ぐ**） |
+| v1 の `/tenants/<22 文字トークン>/shifts?start_date=2026-10-01` | `308` 1 回で `/tenants/<uuid>?start=2026-10-01` に着地（`/shifts` を経由しない） |
+| 準備中の店舗（`setup_completed_at` が null） | `/tenants/<uuid>` も `/tenants/<uuid>/shifts` も `/setup` へ |
+| 設定（`/settings/required-nums`） | 200。ヘッダー・設定ナビのリンクも新 URL |
+| エクスポート | CSV 200（`text/csv; charset=Shift_JIS`）/ PDF 200（`application/pdf`） |
+| `npm run build` | 成功。ルートに `/tenants/[tenantId]` と `/tenants/[tenantId]/shifts`（受け皿）が並ぶ |
+
+`npm test` 699 件 / `typecheck` / `lint`（既存の警告 1 件のみ）。
