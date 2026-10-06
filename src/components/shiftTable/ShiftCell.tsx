@@ -3,15 +3,15 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type Ref } from 'react'
 import { UnstyledButton, type ElementProps } from '@mantine/core'
 import { IconPlus } from '@tabler/icons-react'
-import { cellStyle, ghostStyle, type CellPattern } from '@/components/shiftTable/cellStyle'
-import classes from '@/components/shiftTable/ShiftTable.module.css'
+import { cellStyle, ghostStyle, type CellPattern } from './cellStyle'
+import classes from './ShiftTable.module.css'
 import {
   HOLD_FEEDBACK_DELAY_MS,
   HOLD_TO_TOGGLE_MS,
   consumeHoldClick,
   markHoldToggle,
   movedPastHold,
-} from '../_lib/holdToToggle'
+} from './holdToToggle'
 
 type Props = ElementProps<'button', 'onClick'> & {
   /** アサイン済みのパターン。無ければ空のセル */
