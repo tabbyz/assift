@@ -7,7 +7,6 @@ import { reorderRows } from '@/lib/actions/reorder'
 import type { ActionResult } from '@/lib/actions/result'
 import { runAction } from '@/lib/actions/run'
 import type { PatternKind } from '@/lib/patterns/kinds'
-import type { RequiredNumsByDay } from '@/lib/patterns/requiredNums'
 import { nextPosition } from '@/lib/queries/positions'
 import {
   createPatternSchema,
@@ -25,17 +24,21 @@ export type PatternInput = {
   colorHex: string
   kind: PatternKind
   pairPatternId: string | null
-  defaultRequiredNums: RequiredNumsByDay
 }
 
-/** 説明は空欄を null で持つ（DB の CHECK は null を通す）。休みパターンに必要人数は持たせない（006 §3.9） */
+/**
+ * 説明は空欄を null で持つ（DB の CHECK は null を通す）。
+ *
+ * **必要人数（`default_required_nums`）はこのフォームでは書かない**（015 §3.4。決めるのは
+ * `設定 > 必要人数` の 1 枚だけ）。唯一の例外が「休みに変えたら空にする」（006 §3.9）で、
+ * 休みの勤務は必要人数を持たないため、そのときだけ `{}` を書く。
+ */
 function toColumns(parsed: {
   name: string
   description: string
   colorHex: string
   kind: PatternKind
   pairPatternId: string | null
-  defaultRequiredNums: RequiredNumsByDay
 }) {
   return {
     name: parsed.name,
@@ -43,7 +46,7 @@ function toColumns(parsed: {
     color_hex: parsed.colorHex,
     kind: parsed.kind,
     pair_pattern_id: parsed.pairPatternId,
-    default_required_nums: parsed.kind === 'dayoff' ? {} : parsed.defaultRequiredNums,
+    ...(parsed.kind === 'dayoff' ? { default_required_nums: {} } : {}),
   }
 }
 

@@ -1,23 +1,12 @@
 'use client'
 
 import { type FormEvent, useState, useTransition } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import {
-  Anchor,
-  Button,
-  Input,
-  SegmentedControl,
-  Select,
-  Stack,
-  Text,
-  TextInput,
-} from '@mantine/core'
+import { Button, Input, SegmentedControl, Select, Stack, TextInput } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { FormErrorAlert } from '@/components/FormErrorAlert'
 import { PATTERN_KIND_OPTIONS, type PatternKind } from '@/lib/patterns/kinds'
 import { DEFAULT_PATTERN_COLOR } from '@/lib/patterns/colors'
-import { formatRequiredNumsByDay, type RequiredNumsByDay } from '@/lib/patterns/requiredNums'
 import { PATTERN_DESCRIPTION_MAX_LENGTH, PATTERN_NAME_MAX_LENGTH } from '@/lib/validation/patterns'
 import { LinkButton } from '@/components/LinkButton'
 import { SettingsSection } from '@/components/SettingsSection'
@@ -33,7 +22,6 @@ export type PatternFormValues = {
   colorHex: string
   kind: PatternKind
   pairPatternId: string | null
-  defaultRequiredNums: RequiredNumsByDay
 }
 
 type Props = {
@@ -49,7 +37,6 @@ const emptyValues: PatternFormValues = {
   colorHex: DEFAULT_PATTERN_COLOR,
   kind: 'workday',
   pairPatternId: null,
-  defaultRequiredNums: {},
 }
 
 export function PatternForm({ tenantId, pairOptions, initial }: Props) {
@@ -58,9 +45,6 @@ export function PatternForm({ tenantId, pairOptions, initial }: Props) {
   const [values, setValues] = useState<PatternFormValues>(initial ?? emptyValues)
   const [error, setError] = useState<string>()
   const [isPending, startTransition] = useTransition()
-
-  // 必要人数はここでは編集しない（015 §3.4）。値は保持して、保存で消さないようにする
-  const summary = formatRequiredNumsByDay(values.defaultRequiredNums)
 
   const set = <K extends keyof PatternFormValues>(key: K, value: PatternFormValues[K]) =>
     setValues((prev) => ({ ...prev, [key]: value }))
@@ -149,30 +133,6 @@ export function PatternForm({ tenantId, pairOptions, initial }: Props) {
               aria-label="パターン区分"
             />
           </Input.Wrapper>
-
-          {/* 休みパターンに必要人数は無い（保存時も {} に落とす。006 §3.9） */}
-          {values.kind === 'workday' && (
-            <Input.Wrapper
-              label="必要人数"
-              description={
-                <>
-                  曜日ごとの人数は
-                  <Anchor
-                    component={Link}
-                    href={`/tenants/${tenantId}/settings/required-nums`}
-                    size="xs"
-                  >
-                    必要人数の設定
-                  </Anchor>
-                  でまとめて決めます
-                </>
-              }
-            >
-              <Text size="sm" mt={4} c={summary ? undefined : 'dimmed'}>
-                {summary || 'まだ決めていません'}
-              </Text>
-            </Input.Wrapper>
-          )}
 
           {pairOptions.length > 0 && (
             <Select

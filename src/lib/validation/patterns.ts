@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import { PATTERN_KINDS } from '@/lib/patterns/kinds'
-import { requiredNumsSchema } from '@/lib/patterns/requiredNums'
 import { tenantIdSchema } from './tenants'
 
 /** v1 の Pattern::NAME_MAX_LENGTH / DESCRIPTION_MAX_LENGTH。DB の CHECK 制約と同じ */
@@ -44,7 +43,8 @@ export const patternInputSchema = z.object({
     .regex(/^#[0-9A-Fa-f]{6}$/, { error: 'カラーを選択してください' }),
   kind: z.enum(PATTERN_KINDS, { error: 'パターン区分を選択してください' }),
   pairPatternId: z.guid({ error: 'ペア勤務パターンが正しくありません' }).nullable(),
-  defaultRequiredNums: requiredNumsSchema,
+  // 必要人数（`default_required_nums`）はこのフォームでは扱わない。
+  // 決めるのは `設定 > 必要人数` の 1 枚だけ（015 §3.4）。ここが書くのは「休みに変えたら空にする」だけ
 })
 
 export const createPatternSchema = patternInputSchema.extend({ tenantId: tenantIdSchema })
