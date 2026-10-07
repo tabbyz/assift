@@ -614,4 +614,51 @@ Stripe のサブスクリプションは 有効 795 / 未払い 155 / 期日経�
 
 ## 12. 実装ログ
 
-（実装後に追記する）
+### 2026-10-07 実装（Stripe のテストモードでの確認を除く）
+
+作ったもの（§6 のとおり。差分だけ書く）:
+
+- スキーマ: `billing_subscriptions` / `staff_count_history`、`profiles.stripe_subscription_id` の削除、`plan_change_logs` の削除、
+  門番と履歴のトリガ（`private.guard_staff_limit` / `record_staff_count` / `record_tenant_delete`）、`private.staff_limit`、`start_trial()`。
+  差分 migration は `20261007214824_billing.sql`（`restrict_anon_grants.sql` を追記）。pg-delta が `restrictions_wdays_check` の drop / add を
+  毎回出す既知の揺れも含む（中身は同じ）
+- `lib/billing/`: §6 の一覧に加えて `limit`（上限の例外 → `code: 'staff_limit'`）/ `subscriptionRow`（Stripe → 写しの純関数）/
+  `history`（区間の開始以前の最後の 1 行 + 区間内だけを読む。全部読むと年単位で `max_rows` に切られる）/ `cancel`（期間末の解約・schedule の終わらせ方）/
+  `customer`（Customer の作成と保存。service_role を `lib/billing/` に閉じるため Action から出した）/ `migration`（引き継ぎの区分と CSV）
+- 画面: `/account/billing`・`/account/billing/subscribe`、上限のモーダル（`openStaffLimitModal`）、トライアル / 支払い失敗の帯（`TenantShell` の `banner`）、
+  シフト表のロック、スタッフ設定の `Alert`、アカウント画面のリンクと退会の文言、ヘッダーのアカウントメニューに「プランとお支払い」
+- スクリプト: `npm run stripe:setup` / `npm run stripe:migrate-v1`（`tsx --conditions=react-server`。`assist:eval` と同じ）
+- 規約「料金」に請求日（翌月 1 日）・申し込んだ月の扱い・無料トライアルの段落、特商法の支払い時期を「翌月 1 日」、LP にトライアルの 1 行（§9.1-6）
+- 001 の `plan_change_logs` の記述に、019 で取りやめた旨を注記
+
+プランから変えたこと:
+
+- **Checkout の `payment_method_types` → `allowed_payment_method_types`**。SDK が固定する最新の API（`2026-09-30.endive`）で前者が廃止されていた
+- **上限の例外を画面へ渡す口**: `ActionFailure` に `code?: 'staff_limit'` を足した（`ActionError` の第 2 引数）。文言は Action で日本語に差し替え、
+  クライアントは `code` を見てモーダルを開く。モーダルの中身（トライアルを使えるか・上限）は開いてから `getUpgradeOffer()` で読む（どの画面からでも同じ内容にするため）
+- `startTrial` / `getUpgradeOffer` / `openPortal` は店舗の画面・スタッフ設定・初期設定・プランの画面から呼ぶので `(protected)/actions.ts` に置いた。
+  `startCheckout` / `cancelDuringMigration` は `account/billing/actions.ts`
+- **初期設定で上限を超えたとき**は、保存の前ではなく「完成させる」を押したときにモーダルを出す（貼った名前の数と残りの枠を画面で数えるより、
+  DB の門番の結果に寄せたほうが他の店舗の人数も正しく数えられる）。トライアルを始めたらそのまま完了をやり直す
+- **申し込み直後の送信**は `customer.subscription.created` の Webhook で同期のあとに 1 回（§4.2）。`checkout.session.completed` だけでは Subscription がまだ無いことがある
+- **切り替え待ちの間に解約した契約の `cancel_at`**: schedule を `end_behavior: cancel` にしても Subscription の `cancel_at` に出ない場合に備え、
+  schedule の最後の phase の終わりを写す（`subscriptionRow`）
+- **移行の schedule の phase 1 の長さは 1 日**にして release する（1 か月にすると、その間ポータルで解約できない）。release 後も price とクーポンが
+  Subscription に残ることはテストモードで確かめる（下記）
+- ロックは表だけでなくツールバー（共有・エクスポート・AI 作成のボタン）も覆う。発行済みの共有ページとエクスポートの URL は動くが、
+  ロック中は画面から新しく共有・出力できない。止めないほうがよければ、ロックを表の部分だけにする
+
+検証（このセッション）:
+
+- `npm run lint`（既存の warning 1 件のみ）/ `npm run typecheck` / `npm test`（82 ファイル・761 件）/ `npx supabase test db`（213 件。うち billing 38 件）/ `npm run build`
+- ブラウザ（Playwright・seed のユーザー）: 無料プランの「プランとお支払い」・申し込みの確認画面（Stripe 未設定でボタンが押せない）、
+  在籍 10 人で 11 人目を追加 → モーダル →「無料で試す」→ そのまま追加され、トライアルの帯が出る、トライアルを過去にするとシフト表がロックされる
+
+**まだ確かめていないこと**（Stripe のテスト用の鍵が要る。カットオーバーの前に必ず行う）:
+
+1. §9.3 のテストクロックの筋書き（anchor・申し込んだ月の端数期間の請求・`last` の集計・期間末の解約・支払い失敗 → 解約）。結果で §11-4 を確定する
+2. Webhook（ローカルで `stripe listen`）と `/api/cron/billing-usage`（`CRON_SECRET` を付けて手で叩く）
+3. `stripe:setup` をテストモードで流す（Meter・Price・Coupon・ポータル）
+4. `stripe:migrate-v1` をテストモードで v1 相当の Subscription（旧 metered price）に流す: acacia での schedule の作成・更新、
+   phase 1 の `discounts`（通らなければ旧来の `coupon`）、release 後に price とクーポンが残ること、下書きの確定で請求やメールが走らないこと、
+   回収不能で `unpaid` → `active` に戻ること、`cancelDuringMigration()` で期間末に終わること

@@ -17,6 +17,7 @@ import { modals } from '@mantine/modals'
 import { notifications } from '@mantine/notifications'
 import { IconInfoCircle } from '@tabler/icons-react'
 import { FormErrorAlert } from '@/components/FormErrorAlert'
+import { LinkButton } from '@/components/LinkButton'
 import { SettingsSection } from '@/components/SettingsSection'
 import { PASSWORD_MIN_LENGTH } from '@/lib/validation/auth'
 import { deleteAccount, updateEmail, updatePassword } from '../actions'
@@ -77,7 +78,14 @@ export function AccountClient({ email, newEmail, hasPassword, notice, initialErr
   const confirmDelete = () =>
     modals.openConfirmModal({
       title: 'アカウントを削除',
-      children: <Text size="sm">本当にアカウントを削除しますか？この操作は取り消せません。</Text>,
+      children: (
+        <Stack gap="xs">
+          <Text size="sm">本当にアカウントを削除しますか？この操作は取り消せません。</Text>
+          <Text size="sm" c="dimmed">
+            有料プランをご利用中の場合は解約され、今の請求期間の分（期間中に在籍スタッフが最も多かったときの人数）を期間の終わりに請求します。
+          </Text>
+        </Stack>
+      ),
       labels: { confirm: '削除する', cancel: 'キャンセル' },
       confirmProps: { color: 'red' },
       onConfirm: () =>
@@ -186,6 +194,15 @@ export function AccountClient({ email, newEmail, hasPassword, notice, initialErr
               </Text>
             )}
           </Stack>
+        </SettingsSection>
+
+        <SettingsSection title="プランとお支払い">
+          <Group justify="space-between" wrap="wrap" gap="sm">
+            <Text size="sm">現在のプラン・料金・お支払い方法を確認できます。</Text>
+            <LinkButton href="/account/billing" variant="default">
+              プランとお支払い
+            </LinkButton>
+          </Group>
         </SettingsSection>
 
         <SettingsSection title="アカウントを削除">

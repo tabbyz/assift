@@ -73,3 +73,166 @@ begin
   return new;
 end;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- 課金（019）: 在籍スタッフの上限と、人数の履歴
+-- ---------------------------------------------------------------------------
+
+-- 利用者（店舗のオーナー）の全店舗の在籍スタッフ数
+create or replace function private.active_staff_count(p_owner uuid)
+returns integer
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select count(*)::integer
+    from public.staffs s
+    join public.tenants t on t.id = s.tenant_id
+   where t.owner_id = p_owner
+     and s.retired_at is null;
+$$;
+
+-- 在籍スタッフの上限（019 §5.1）。null = 上限なし。lib/billing/entitlement.ts と同じ規則（上から順に）:
+--   1. サブスクリプションが active / trialing / past_due → なし
+--   2. トライアル中（trial_end > now()）→ なし
+--   3. 個別契約（max_staffs_count > 10）→ その値
+--   4. それ以外 → 10（FREE_STAFF_LIMIT）
+create or replace function private.staff_limit(p_owner uuid)
+returns integer
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select case
+    when exists (
+      select 1 from public.billing_subscriptions b
+       where b.user_id = p_owner and b.status in ('active', 'trialing', 'past_due')
+    ) then null
+    when exists (
+      select 1 from public.profiles p where p.id = p_owner and p.trial_end > now()
+    ) then null
+    else greatest(10, coalesce((select p.max_staffs_count from public.profiles p where p.id = p_owner), 10))
+  end;
+$$;
+
+-- 在籍が 1 人増える変更（追加・復帰）を、上限を超えるなら止める（019 §5.3）。
+-- Action ごとに確かめると抜ける（PostgREST の INSERT・UPDATE・初期設定の RPC）ので DB で止める。
+-- 移行スクリプト・service_role（auth.uid() が null）は止めない
+create or replace function private.guard_staff_limit()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_owner uuid;
+  v_limit integer;
+begin
+  if auth.uid() is null then
+    return new;
+  end if;
+  -- 在籍が増えない変更は見ない（退職のまま足す・在籍のまま更新する）
+  if new.retired_at is not null then
+    return new;
+  end if;
+  if tg_op = 'UPDATE' and old.retired_at is null then
+    return new;
+  end if;
+
+  select t.owner_id into v_owner from public.tenants t where t.id = new.tenant_id;
+  if v_owner is null then
+    return new;
+  end if;
+
+  -- 同時に 2 件足されて上限を超えないよう、利用者の単位で直列にする
+  perform 1 from public.profiles p where p.id = v_owner for update;
+
+  v_limit := private.staff_limit(v_owner);
+  -- 行トリガは同じ文で先に処理した行を見るので、複数行の INSERT でも上限の行で止まる
+  if v_limit is not null and private.active_staff_count(v_owner) + 1 > v_limit then
+    raise exception 'staff_limit_exceeded' using errcode = 'P0001';
+  end if;
+  return new;
+end;
+$$;
+
+-- 履歴に 1 行足す。前の行と同じ数なら足さない。利用者が既にいない（退会の cascade の途中）なら何もしない
+create or replace function private.append_staff_count(p_owner uuid, p_count integer)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not exists (select 1 from public.profiles p where p.id = p_owner) then
+    return;
+  end if;
+  if p_count is not distinct from (
+    select h.active_count from public.staff_count_history h
+     where h.user_id = p_owner
+     order by h.changed_at desc, h.id desc
+     limit 1
+  ) then
+    return;
+  end if;
+  insert into public.staff_count_history (user_id, active_count) values (p_owner, p_count);
+end;
+$$;
+
+-- スタッフの追加・退職・復帰・削除で在籍数を記録する（AFTER）。
+-- 店舗の削除の cascade で消えるときは店舗の行がもう無いので何もしない（private.record_tenant_delete が記録する）
+create or replace function private.record_staff_count()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_owner uuid;
+begin
+  select t.owner_id into v_owner
+    from public.tenants t
+   where t.id = case when tg_op = 'DELETE' then old.tenant_id else new.tenant_id end;
+  if v_owner is null then
+    return null;
+  end if;
+  perform private.append_staff_count(v_owner, private.active_staff_count(v_owner));
+  return null;
+end;
+$$;
+
+-- 店舗の削除（BEFORE）。この店舗の在籍スタッフを除いた数を記録する。
+-- 記録しないと減少が残らず、次の期間の「開始時点の人数」が多いまま請求される（019 §5.3）
+create or replace function private.record_tenant_delete()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform private.append_staff_count(
+    old.owner_id,
+    private.active_staff_count(old.owner_id)
+      - (select count(*)::integer from public.staffs s where s.tenant_id = old.id and s.retired_at is null)
+  );
+  return old;
+end;
+$$;
+
+-- トライアルの終わり（019 §7）: 始めた日（JST）から 2 か月後の月末まで。返すのはその次の瞬間（翌月 1 日 0:00 JST）。
+-- lib/billing/trial.ts と同じ計算
+create or replace function private.trial_end_from(p_now timestamptz)
+returns timestamptz
+language sql
+stable
+set search_path = ''
+as $$
+  select (date_trunc('month', p_now at time zone 'Asia/Tokyo') + interval '3 months') at time zone 'Asia/Tokyo';
+$$;
+
+revoke execute on function private.active_staff_count(uuid) from public;
+revoke execute on function private.staff_limit(uuid) from public;
+revoke execute on function private.append_staff_count(uuid, integer) from public;
+revoke execute on function private.trial_end_from(timestamptz) from public;

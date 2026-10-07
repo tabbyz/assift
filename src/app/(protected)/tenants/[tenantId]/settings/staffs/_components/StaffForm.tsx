@@ -6,6 +6,7 @@ import { Button, Group, Stack } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { FormErrorAlert } from '@/components/FormErrorAlert'
 import { LinkButton } from '@/components/LinkButton'
+import { openStaffLimitModal } from '@/components/billing/StaffLimitModal'
 import { SettingsSection } from '@/components/SettingsSection'
 import { WEEKDAY_VALUES } from '@/lib/calendar/weekdays'
 import { createStaff } from '../actions'
@@ -42,9 +43,19 @@ export function StaffForm({ tenantId, patterns }: Props) {
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    submitStaff()
+  }
+
+  const submitStaff = () =>
     startTransition(async () => {
       const result = await createStaff({ tenantId, name, ...conditions })
       if (!result.ok) {
+        // 在籍の上限（019 §5.3）。トライアルを始めたらそのまま追加をやり直す
+        if (result.code === 'staff_limit') {
+          setError(undefined)
+          openStaffLimitModal({ onTrialStarted: () => submitStaff() })
+          return
+        }
         setError(result.error)
         return
       }
@@ -52,7 +63,6 @@ export function StaffForm({ tenantId, patterns }: Props) {
       notifications.show({ message: '登録しました', color: 'green' })
       router.push(`/tenants/${tenantId}/settings/staffs`)
     })
-  }
 
   return (
     <form onSubmit={submit}>

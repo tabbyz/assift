@@ -65,7 +65,8 @@ export const config = {
     // 静的アセットと画像・フォントは対象外。
     // prefetch を除外してはいけない: セッション cookie を書けるのはここだけで、
     // 除外するとトークン更新（refresh token rotation）が prefetch のレンダリング中に起きて
-    // 新しい token を保存できず、次の遷移でログアウトしてしまう
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|ttf|woff2?)$).*)',
+    // 新しい token を保存できず、次の遷移でログアウトしてしまう。
+    // Stripe の Webhook と cron は対象外（ログイン状態と無関係。署名 / CRON_SECRET でルート自身が守る。019 §5.9）
+    '/((?!_next/static|_next/image|favicon.ico|api/stripe|api/cron|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|ttf|woff2?)$).*)',
   ],
 }

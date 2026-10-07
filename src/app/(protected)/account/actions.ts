@@ -7,6 +7,7 @@ import type { ActionResult } from '@/lib/actions/result'
 import { runAction } from '@/lib/actions/run'
 import { authErrorMessage, currentPasswordErrorMessage } from '@/lib/auth/authErrorMessage'
 import { GOOGLE_ONLY_ACCOUNT_MESSAGE } from '@/lib/auth/notices'
+import { cancelSubscriptionsForAccountDeletion } from '@/lib/billing/cancel'
 import { verifyPassword } from '@/lib/auth/verifyPassword'
 import { createPrivilegedClient } from '@/lib/supabase/createPrivilegedClient'
 import { updateEmailSchema, updatePasswordSchema } from '@/lib/validation/auth'
@@ -56,10 +57,20 @@ export async function updatePassword(input: {
  * アカウント削除。auth.users の削除が profiles → tenants → 全データへ cascade する（001 §4.3）。
  * service_role を使う唯一のユーザー文脈の操作（AGENTS.md の例外。004 §3.6）。
  * 渡す id は requireUser() で得た自分のものだけで、入力からは受け取らない。
+ *
+ * 有料プランは先に期間の終わりで解約し、今の期間の最大人数を送っておく（019 §5.8）。
+ * Stripe が失敗したら退会も止める（請求できないまま消さない）
  */
 export async function deleteAccount(): Promise<ActionResult<{ redirectTo: string }>> {
   return runAction(async () => {
     const user = await requireUser()
+    try {
+      // Stripe の Customer が無ければ何もしない（Stripe が未設定でも退会できる）
+      await cancelSubscriptionsForAccountDeletion(user.id)
+    } catch (error) {
+      console.error(`[billing] 退会前の解約に失敗しました (user: ${user.id})`, error)
+      fail('有料プランの解約に失敗しました。時間をおいてもう一度お試しください')
+    }
     const { error } = await createPrivilegedClient().auth.admin.deleteUser(user.id)
     if (error) fail(authErrorMessage(error, 'アカウントの削除に失敗しました'))
 

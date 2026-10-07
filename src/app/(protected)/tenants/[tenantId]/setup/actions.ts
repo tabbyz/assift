@@ -6,6 +6,7 @@ import { fail } from '@/lib/actions/error'
 import { requireTenant, requireUser } from '@/lib/actions/guards'
 import type { ActionResult } from '@/lib/actions/result'
 import { runAction } from '@/lib/actions/run'
+import { throwIfStaffLimit } from '@/lib/billing/limit'
 import type { ShiftCycle } from '@/lib/calendar/shiftCycle'
 import { type SetupPatternsInput, toRpcPatterns } from '@/lib/setup/patternsState'
 import { shiftsHref } from '@/lib/tenants/navigation'
@@ -43,6 +44,8 @@ const RPC_MESSAGES: { match: string; message: string }[] = [
 const SETUP_COMPLETED = 'setup completed'
 
 function failFromRpc(error: { message: string }): never {
+  // 在籍の上限（019 §5.3）。画面は code を見て案内のモーダルを開く
+  throwIfStaffLimit(error)
   const known = RPC_MESSAGES.find((entry) => error.message.includes(entry.match))
   if (known) fail(known.message)
   throw error

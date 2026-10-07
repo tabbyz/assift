@@ -62,9 +62,12 @@ src/
             _components/          このルート専用 Client UI
             _lib/                 このルート専用ロジック（Vitest 対象）
     api/tenants/[tenantId]/shifts/{pdf,csv}/route.ts   エクスポート（Route Handler。下記）
+    api/stripe/webhook/route.ts   Stripe の Webhook（POST。署名で守る。019）
+    api/cron/billing-usage/route.ts  毎日の同期と最大人数の送信（GET。CRON_SECRET で守る。vercel.json の crons）
   components/                     横断 UI（SortableList = 上下ボタンの並べ替え一覧 など）
     restrictions/                 制約の行（説明・種類・強さの札・編集）。制約ページとスタッフの編集画面で共有（013）
     setup/                        初期設定のウィザード（ステップ・ヘッダー・完成イメージ）。/tenants/new と /tenants/<id>/setup で共有（014）
+    billing/                      上限のモーダル（openStaffLimitModal）・トライアル / 支払い失敗の帯・シフト表のロック・ポータルのボタン（019）
     shiftTable/                   シフト表の見た目（CSS Modules / DateHeaderCell / PatternDescriptionList / cellStyle）とセル・ポップオーバー（ShiftCell / PatternPopover / holdToToggle）。保護ルート・公開ページ・LP のデモで共有
   lib/
     actions/                      result / run / error / guards
@@ -72,7 +75,9 @@ src/
     tenants/                      旧 URL の書き換え・直近店舗 cookie の純関数
     queries/                      読み取り（Server から呼ぶ）。publicShare.ts だけが service_role（下記）
     <domain>/                     ドメインロジック（calendar, patterns, shifts, pdf, csv ...）
-    billing/                      料金の規則（pricing。10 人まで無料、11 人目から 1 人 100 円）。LP と将来の課金が共有
+    billing/                      課金（019）。pricing（10 人まで無料、11 人目から 1 人 100 円。LP と共有）/ entitlement（上限の規則。SQL の staff_limit と同じ）/
+                                  trial / peak（請求期間の最大人数）/ limit（上限の例外 → code: 'staff_limit'）/ checkout / usage（Meter への送信）/
+                                  subscriptionRow（Stripe → 写しの純関数）/ migration（v1 の引き継ぎの区分）。server-only: stripe（SDK）/ sync / report / cancel / history
     calendar/                     dateString（YYYY-MM-DD の道具。dayjs はここだけ）/ dateRange / today / weekdays / holidays（server-only）
     shifts/                       key（セルの Map）/ applyAssign（楽観更新。assign_shift と同じ規則）/ satisfaction（必要人数の充足）/ count（集計）/ planDefaultPatterns（デフォルト勤務パターンの行を組む純関数）/ table（エクスポートが共有する表の型）
     shares/                       expiry（公開期限。v1 の DATE_LIMIT = 6）/ code（8 文字のコード）
@@ -90,6 +95,7 @@ src/
     auth/current.ts               getAuthUser / currentUser
     supabase/{server,client,proxy,env}.ts
 assets/fonts/                     PDF に埋め込む Noto Sans JP（public/ に置かない。下記）
+scripts/stripe/                   setup（Product / Meter / Price / Coupon / Portal。冪等）/ migrate-v1-subscriptions（カットオーバーで 1 回）
 supabase/
   config.toml
   schemas/                        宣言的スキーマ（正）。RPC は schemas/public/functions.sql
@@ -102,6 +108,7 @@ supabase/
 ページ専用は `_components/` / `_lib/`、横断 UI は `src/components/`、読み取りは `lib/queries/`、書き込みは各ルートの `actions.ts`。
 
 ルートをまたいで使う Action は、そのグループ直下に置く（`(protected)/actions.ts` の `logout` はヘッダーとアカウント画面の両方から呼ぶ。
+同じファイルの `getUpgradeOffer` / `startTrial` / `openPortal` は上限のモーダル・店舗の帯・プランの画面から呼ぶ。
 `tenants/actions.ts` の `deleteTenant` は店舗情報と初期設定の両方から、`saveDefaultRequiredNums` は必要人数の設定と
 AI シフト作成の両方から呼ぶ。`[tenantId]/actions.ts` はシフト表のもの）。
 
@@ -146,7 +153,7 @@ AI シフト作成の両方から呼ぶ。`[tenantId]/actions.ts` はシフト�
 
 | ファイル    | 役割                                                                                             |
 | ----------- | ------------------------------------------------------------------------------------------------ |
-| `result.ts` | `ActionResult<T>`（client から import 可）                                                       |
+| `result.ts` | `ActionResult<T>`（client から import 可）。失敗に `code`（`'staff_limit'`）が付くことがある     |
 | `run.ts`    | `runAction(fn)`: try/catch → `ActionFailure`。`unstable_rethrow` で redirect/notFound は再スロー |
 | `error.ts`  | `ActionError` / `fail` / `toActionError`（Zod は先頭 issue の日本語）                            |
 | `guards.ts` | `requireUser` / `requireAdmin` 等。失敗は `throw new ActionError(...)`                           |
@@ -177,6 +184,11 @@ startTransition(async () => {
 
 流れ: `runAction` → guard → Zod → `createClient()`（anon + RLS）→ `revalidatePath` / `refresh`。
 
+画面が文言以外で分岐するときだけ `new ActionError(message, code)` を投げ、`ActionFailure.code` に載せる。
+いまは在籍スタッフの上限（019）だけ: DB の門番（`staffs` のトリガ）が `staff_limit_exceeded` を投げ、Action は
+`throwIfStaffLimit(error)`（`lib/billing/limit.ts`）で日本語 + `code: 'staff_limit'` に写す。クライアントは `openStaffLimitModal({ onTrialStarted })` を開く。
+スタッフを増やす経路（追加・復帰・初期設定）を足したら、Action とクライアントの両方にこれを足す。
+
 書き込み後の再描画は 2 通りに分ける（007 §3.5）。
 
 | 使うもの                                    | 対象                                                           | 理由                                                                                                                                           |
@@ -199,9 +211,23 @@ service_role を渡すため）。したがって `publicShare.ts` と同じく�
 
 唯一の例外は `account/actions.ts` の `deleteAccount()`（`auth.admin.deleteUser` は service_role でしか呼べない）。渡す id は `requireUser()` の戻り値だけにし、入力から受け取らない。例外を足すときはここに追記する。
 
+課金（019）の例外は `lib/billing/` に閉じる: Webhook / cron / 申し込み（`startCheckout()`）/ 退会が、`profiles.stripe_customer_id`・
+`profiles.trial_end`（申し込みでトライアルを使ったとみなすとき）・`billing_subscriptions` を service_role で書き、`staff_count_history` を読む。
+中のクエリはすべて `.eq('user_id', …)` / `.eq('id', …)` で 1 人に絞る（`publicShare.ts` と同じ規律）。`profiles.stripe_customer_id` は
+利用者が書ける口を作らない（書けると他人の Customer を指してポータルを開ける）。Stripe の Customer は入力から受け取らず、常に DB の値を使う。
+
+Stripe の API の版は SDK が固定する最新（`lib/billing/stripe.ts`）。旧 metered の明細を含む v1 の Subscription を触る呼び出し
+（移行スクリプト・`cancelDuringMigration()`・退会時の schedule の更新。`lib/billing/cancel.ts`）だけ、リクエストごとに
+`{ apiVersion: LEGACY_API_VERSION }`（`2025-02-24.acacia`）を渡す（basil 以降は meter の無い metered price を扱えない）。
+
 ## Route Handler（`src/app/api/`）
 
-ファイルを返す GET だけを置く（現在は PDF / CSV のエクスポート。010）。書き込みは Server Action のまま。
+ファイルを返す GET（PDF / CSV のエクスポート。010）と、外から呼ばれる入口（Stripe の Webhook・cron。019）だけを置く。画面からの書き込みは Server Action のまま。
+
+- **Webhook（`api/stripe/webhook`、POST）**: 生 body（`request.text()`）と `stripe-signature` で `constructEventAsync`。失敗は 400。
+  イベントの中身は使わず、Customer の id で `syncCustomer()` を呼んで Stripe から取り直す（順不同・重複に強い）。同期の失敗は 500（Stripe が再送する）
+- **cron（`api/cron/billing-usage`、GET）**: `Authorization: Bearer ${CRON_SECRET}` が無ければ 401。`vercel.json` の `crons`（毎日 23 時台 JST）
+- どちらもログイン状態と無関係なので proxy の matcher から外してある（下記）。以下の決まりはエクスポートのもの
 
 - **`ActionResult` を返さない。** ブラウザが直接開く GET なので `notifications.show()` の出番が無い。
   未ログインは `401` + `text/plain`、見えない店舗・uuid でない id は **`notFound()`**（404。存在を漏らさない）、
@@ -248,6 +274,7 @@ service_role を渡すため）。したがって `publicShare.ts` と同じく�
 2. `updateSession()`: Supabase の cookie 更新 + 保護ルートの未ログイン redirect
 3. 開いている `/tenants/<uuid>` を直近店舗の cookie に記録
 
+- `config.matcher` から外すのは静的アセットと `api/stripe`・`api/cron`（ログイン状態と無関係で、セッションの更新が要らない）だけ
 - **`config.matcher` から prefetch を除外しない。** セッション cookie を書けるのは proxy だけで、除外するとトークン更新が Server Component の描画中に起き、新しい refresh token を保存できずに次の遷移でログアウトする（`enable_refresh_token_rotation = true`）
 - proxy のコード内では RSC / prefetch のヘッダが剥がされていて prefetch を判別できない。先読みで困る導線は、リンク側に `prefetch={false}` を付けて塞ぐ（他店舗を指す `TenantSwitcher`、006 で作るページへのリンク）
 - URL 由来の文字列で定数マップを引くときは `lookup()`（`src/utils/record.ts`）。素の添字はプロトタイプ上の値を返す
@@ -338,7 +365,9 @@ PK は uuid（`gen_random_uuid()`）。v1 から移行する行は `uuidv5('<tab
 
 複数行を 1 文で書き換える必要があるときだけ足す（現在は並べ替えの `reorder_positions`、シフトのアサインの `assign_shift`、
 一括操作の `set_shifts_fixed` / `clear_draft_shifts`、コピーの `copy_shifts`、自動アサインを元に戻す `rollback_assist_run`、
-初期設定の `save_setup_patterns` / `complete_setup`）。単純な CRUD は PostgREST のまま。
+初期設定の `save_setup_patterns` / `complete_setup`、トライアルを始める `start_trial`）。単純な CRUD は PostgREST のまま。
+`start_trial` は 1 行の更新だが例外: `profiles` に `authenticated` の UPDATE を付けない（`trial_end` や `stripe_customer_id` を書き換えさせない）ため、
+引数を取らない `security definer` の RPC にしている（019 §5.2）。
 
 一括の書き込みでも、1 文で書けるなら RPC にしない。ただし **PostgREST の UPDATE / DELETE は別テーブルの条件で絞れない**
 （「在籍スタッフの行だけ」は `staffs` との join）。そこで id を URL に並べて分割するのは回避策の積み重ねになるので、RPC にする（008 §10.13）。

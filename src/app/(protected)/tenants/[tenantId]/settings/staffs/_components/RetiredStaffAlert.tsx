@@ -3,6 +3,7 @@
 import { useTransition } from 'react'
 import { Alert, Button, Group, Text } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
+import { openStaffLimitModal } from '@/components/billing/StaffLimitModal'
 import { restoreStaff } from '../actions'
 
 /** 退職者の編集画面の上に出す帯（v1 の notification.is-warning） */
@@ -13,6 +14,8 @@ export function RetiredStaffAlert({ tenantId, staffId }: { tenantId: string; sta
     startTransition(async () => {
       const result = await restoreStaff({ tenantId, staffId })
       if (!result.ok) {
+        // 在籍の上限（019 §5.3）。トライアルを始めたらそのまま復帰をやり直す
+        if (result.code === 'staff_limit') return openStaffLimitModal({ onTrialStarted: restore })
         notifications.show({ message: result.error, color: 'red' })
         return
       }

@@ -31,6 +31,10 @@ export function Pricing() {
             <Text className={classes.micro}>
               機能はどの人数でも同じです。数えるのは在籍しているスタッフです。
             </Text>
+            <Text className={classes.micro}>
+              {FREE_STAFF_LIMIT + 1}
+              人目を追加するときに、2か月後の月末まで人数の制限なく無料で試せます（カードの登録は不要です）。
+            </Text>
           </Stack>
           <PriceCalculator />
         </SimpleGrid>

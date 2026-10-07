@@ -1,8 +1,13 @@
 import { ZodError } from 'zod'
+import type { ActionErrorCode } from './result'
 
 /** ユーザーに見せてよいメッセージを持つ業務エラー。guard や Action 内で throw する */
 export class ActionError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    /** 画面が分岐に使う種類（`ActionFailure.code` にそのまま載る） */
+    readonly code?: ActionErrorCode
+  ) {
     super(message)
     this.name = 'ActionError'
   }
