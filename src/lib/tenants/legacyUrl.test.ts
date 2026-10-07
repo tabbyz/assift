@@ -22,14 +22,14 @@ describe('rewriteLegacyTenantUrl', () => {
 
   it('start_date を start に読み替える', () => {
     expect(rewrite(`/tenants/${TOKEN}/shifts`, '?start_date=2026-10-01')).toEqual({
-      pathname: `/tenants/${ID}/shifts`,
+      pathname: `/tenants/${ID}`,
       search: '?start=2026-10-01',
     })
   })
 
   it('start_date 以外のクエリはそのまま残す', () => {
     expect(rewrite(`/tenants/${TOKEN}/shifts`, '?encoding=utf8&start_date=2026-10-01')).toEqual({
-      pathname: `/tenants/${ID}/shifts`,
+      pathname: `/tenants/${ID}`,
       search: '?encoding=utf8&start=2026-10-01',
     })
   })

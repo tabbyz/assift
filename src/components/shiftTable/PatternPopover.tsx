@@ -9,7 +9,7 @@ import {
   UnstyledButton,
 } from '@mantine/core'
 import { IconX } from '@tabler/icons-react'
-import { choiceStyle } from '@/components/shiftTable/cellStyle'
+import { choiceStyle } from './cellStyle'
 import classes from './PatternPopover.module.css'
 
 export type PopoverPattern = { id: string; name: string; colorHex: string }

@@ -471,7 +471,11 @@ function ReadyView({
       <div className={classes.privacy}>
         <IconShieldLock size={14} aria-hidden />
         <span>
-          スタッフ名・勤務条件・この期間のシフトを AI（OpenAI）に送ります（学習には使われません）
+          スタッフ名・勤務条件・この期間のシフト・指示を AI
+          の提供元に送ります（学習には使われません）。
+          <Anchor href="/privacy#processors" target="_blank" inherit>
+            詳しく
+          </Anchor>
         </span>
       </div>
 

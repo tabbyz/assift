@@ -10,6 +10,7 @@ import type { ActionResult } from '@/lib/actions/result'
 import type { ShiftCycle } from '@/lib/calendar/shiftCycle'
 import type { TenantListItem } from '@/lib/queries/tenants'
 import { parseStaffNames } from '@/lib/setup/parseStaffNames'
+import { shiftsHref } from '@/lib/tenants/navigation'
 import {
   fromSavedPatterns,
   type SavedPattern,
@@ -439,7 +440,7 @@ export function SetupWizard(props: Props) {
                   storeName={store.name}
                   patternCount={previewPatterns.length}
                   staffCount={parsedNames.names.length}
-                  onOpen={() => openShifts(`/tenants/${props.tenant.id}/shifts`)}
+                  onOpen={() => openShifts(shiftsHref(props.tenant.id))}
                   headingRef={headingRef}
                 />
               )}

@@ -5,7 +5,7 @@ import { lookup } from '@/utils/record'
  * v1 の店舗 URL（22 文字トークン）を v2 の uuid URL に書き換える（005 §3.1）。
  *
  * v1: `/tenants/JuFZPcSXmXOaVvCmbb1JVw/shifts?start_date=2026-10-01`
- * v2: `/tenants/<uuid>/shifts?start=2026-10-01`
+ * v2: `/tenants/<uuid>?start=2026-10-01`（シフト表は店舗のトップ。005 §11）
  *
  * layout は配下のパスやクエリを知れないので、パスとクエリの両方を見られる proxy から使う。
  */
@@ -51,7 +51,8 @@ export function rewriteLegacyTenantUrl(
     return { pathname: `/api/tenants/${tenantId}/shifts/${exportKind}`, search: nextSearch }
   }
 
-  const suffix = rest ? `/${rest}` : ''
+  // v1 のシフト表は `/shifts`。v2 は店舗のトップなので落とす（`/shifts` へ送ると redirect が 2 回になる）
+  const suffix = rest && rest !== 'shifts' ? `/${rest}` : ''
   return { pathname: `/tenants/${tenantId}${suffix}`, search: nextSearch }
 }
 

@@ -3,9 +3,10 @@ import { notFound, redirect } from 'next/navigation'
 import { SetupWizard } from '@/components/setup/SetupWizard'
 import { todayJst } from '@/lib/calendar/today'
 import { getSetupState, getTenant, listTenants } from '@/lib/queries/tenants'
+import { shiftsHref } from '@/lib/tenants/navigation'
 import { getAuthUser } from '@/utils/auth/current'
 import { isUuid } from '@/utils/uuid'
-import { deleteTenant } from '../actions'
+import { deleteTenant } from '../../actions'
 import { completeSetup, saveSetupPatterns, updateSetupTenant } from './actions'
 
 export const metadata: Metadata = { title: '初期設定' }
@@ -25,7 +26,7 @@ export default async function SetupPage({ params }: PageProps<'/tenants/[tenantI
     getAuthUser(),
   ])
   if (!tenant) notFound()
-  if (tenant.setup_completed_at) redirect(`/tenants/${tenantId}/shifts`)
+  if (tenant.setup_completed_at) redirect(shiftsHref(tenantId))
 
   const { step, patterns } = await getSetupState(tenantId)
 

@@ -1,0 +1,692 @@
+/*
+ * LP（016）。Mantine に無いものだけをここに書く: スタンプの傾き・面の角丸・2 行固定の見出し・文節の折り返し・
+ * スマホの枠・黒い CTA の面。色は Mantine の変数から取り、パターン色は `cellStyle()` が inline で当てる。
+ *
+ * トーン（016 §2）: 白黒が基本。色を持つのはシフト表のマスだけ。面は大きな角丸の薄いグレー、黒い面は最後の CTA だけ。
+ */
+
+.site {
+  --site-panel: var(--mantine-color-gray-1);
+  --site-radius-lg: 28px;
+  --site-radius-md: 18px;
+  --site-section-gap: 104px;
+
+  /* 見出し・本文とも LP の書体。表（デモ）だけはアプリと同じシステムフォントに戻す（ShiftDemo） */
+  --mantine-font-family:
+    var(--font-site), -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Yu Gothic UI', Meiryo,
+    sans-serif;
+  --mantine-font-family-headings: var(--mantine-font-family);
+
+  min-height: 100dvh;
+  font-family: var(--mantine-font-family);
+  font-size: 15.5px;
+  line-height: 1.85;
+  background-color: var(--mantine-color-body);
+}
+
+/*
+ * 文節。この中では折り返さず、文節の切れ目でだけ折り返す。
+ * `word-break: auto-phrase` は Chrome だけなので使わない（016 §4.4）
+ */
+.nb {
+  display: inline-block;
+}
+
+/* ---- ヘッダー ---- */
+
+.header {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 10;
+  background-color: color-mix(in srgb, var(--mantine-color-body) 88%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.headerInner {
+  height: 68px;
+}
+
+.navLink {
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--mantine-color-dimmed);
+  text-decoration: none;
+}
+
+.navLink:hover {
+  color: var(--mantine-color-text);
+}
+
+.loginLink {
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--mantine-color-text);
+  text-decoration: none;
+}
+
+@media (max-width: 52em) {
+  .nav {
+    display: none;
+  }
+}
+
+/* ---- ロゴ ---- */
+
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  color: var(--mantine-color-text);
+  text-decoration: none;
+}
+
+.mark {
+  display: grid;
+  grid-template-columns: repeat(2, 9px);
+  gap: 2px;
+}
+
+.mark span {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}
+
+/* ---- ヒーロー ---- */
+
+.hero {
+  position: relative;
+  padding-block: 64px 48px;
+}
+
+/*
+ * 見出しはどの画面幅でも 2 行。行の中では折り返さず、長い方の行（10 文字）が画面に収まるよう
+ * 文字の大きさを画面幅から決める（016 §4.4）。左右の余白は Container の padding（md = 16px × 2 / 24px × 2）
+ */
+.heroTitle {
+  margin: 8px 0 0;
+  font-size: min(82px, calc((100vw - 48px) / 10.4));
+  font-weight: 900;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+@media (max-width: 36em) {
+  .heroTitle {
+    font-size: calc((100vw - 32px) / 10.4);
+  }
+}
+
+.heroLine {
+  display: block;
+  white-space: nowrap;
+}
+
+.lead {
+  max-width: 34em;
+  font-size: 17px;
+  color: var(--mantine-color-dimmed);
+}
+
+@media (max-width: 36em) {
+  .lead br {
+    display: none;
+  }
+}
+
+.micro {
+  font-size: 13.5px;
+  color: var(--mantine-color-dimmed);
+}
+
+/* ヒーロー右のスタンプ。広い画面だけ */
+.heroStamps {
+  position: absolute;
+  top: 72px;
+  right: var(--mantine-spacing-md);
+  display: grid;
+  gap: 14px;
+  justify-items: end;
+}
+
+.heroStamps > :nth-child(1) {
+  margin-right: 64px;
+  transform: rotate(-5deg);
+}
+
+.heroStamps > :nth-child(2) {
+  transform: rotate(3deg);
+}
+
+.heroStamps > :nth-child(3) {
+  margin-right: 36px;
+  transform: rotate(-2deg);
+}
+
+.heroStamps > :nth-child(4) {
+  margin-right: 104px;
+  transform: rotate(6deg);
+}
+
+@media (max-width: 65em) {
+  .heroStamps {
+    display: none;
+  }
+}
+
+/* ---- スタンプ（シフト表のマス） ---- */
+
+.stamp {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 56px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Yu Gothic UI', Meiryo, sans-serif;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.stamp[data-fixed='true'] {
+  font-weight: 700;
+}
+
+.stamp[data-size='lg'] {
+  min-width: 92px;
+  height: 52px;
+  border-radius: 6px;
+  font-size: 18px;
+}
+
+.stamp[data-floating='true'] {
+  box-shadow: 0 10px 24px -14px rgb(0 0 0 / 35%);
+}
+
+/* ---- セクション共通 ---- */
+
+.section {
+  padding-bottom: var(--site-section-gap);
+}
+
+.kicker {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--mantine-color-dimmed);
+}
+
+.sectionTitle {
+  font-size: clamp(28px, 4vw, 44px);
+  font-weight: 900;
+  line-height: 1.4;
+}
+
+.panel {
+  border-radius: var(--site-radius-lg);
+  background-color: var(--site-panel);
+}
+
+@media (max-width: 36em) {
+  .panel {
+    border-radius: var(--site-radius-md);
+  }
+}
+
+/* ---- デモ ---- */
+
+.tray {
+  padding: 20px;
+}
+
+@media (max-width: 36em) {
+  .tray {
+    padding: 10px;
+  }
+}
+
+/* ---- できること ---- */
+
+.card {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 10px;
+  min-width: 0;
+  padding: 32px;
+}
+
+@media (max-width: 36em) {
+  .card {
+    padding: 24px 22px;
+  }
+}
+
+.cardTitle {
+  font-size: 21px;
+  font-weight: 900;
+  line-height: 1.4;
+}
+
+.figure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 132px;
+  margin-top: 18px;
+  padding: 24px 16px;
+  border-radius: var(--site-radius-md);
+  background-color: var(--mantine-color-body);
+}
+
+.figureCaption {
+  margin-top: 8px;
+  font-size: 11.5px;
+  text-align: center;
+  color: var(--mantine-color-dimmed);
+}
+
+.coverageRow {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 54px));
+  gap: 4px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.coverageRow small {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--mantine-color-dimmed);
+}
+
+.coverageCell {
+  padding: 8px 0;
+  border-radius: 4px;
+  background-color: var(--site-panel);
+  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--mantine-color-green-9);
+}
+
+.coverageCell[data-short='true'] {
+  color: var(--mantine-color-red-9);
+}
+
+.aiNote {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background-color: var(--site-panel);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.linkPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  height: 44px;
+  padding: 0 8px 0 16px;
+  border-radius: 999px;
+  background-color: var(--site-panel);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  color: var(--mantine-color-dimmed);
+}
+
+.linkPill > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.linkPillButton {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background-color: var(--mantine-color-dark-8);
+  color: var(--mantine-color-white);
+  font-family: var(--mantine-font-family);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.fileTag {
+  padding: 4px 10px;
+  border: 1.5px solid var(--mantine-color-gray-3);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* ---- スタッフの画面 ---- */
+
+.checkDot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin-top: 2px;
+  border-radius: 999px;
+  background-color: var(--mantine-color-dark-8);
+  color: var(--mantine-color-white);
+}
+
+.staffArt {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 48px 24px;
+}
+
+.staffArt > .stamp:nth-of-type(1) {
+  position: absolute;
+  top: 14%;
+  left: 9%;
+  transform: rotate(-8deg);
+}
+
+.staffArt > .stamp:nth-of-type(2) {
+  position: absolute;
+  right: 8%;
+  bottom: 16%;
+  transform: rotate(7deg);
+}
+
+@media (max-width: 36em) {
+  .staffArt {
+    padding: 28px 12px;
+  }
+
+  .staffArt > .stamp {
+    display: none;
+  }
+}
+
+/* スタッフが開く共有ページの例（静的な絵）。アプリの画面なので白い面で描く */
+.phone {
+  position: relative;
+  width: 100%;
+  max-width: 280px;
+  padding: 10px;
+  border-radius: 36px;
+  background-color: var(--mantine-color-dark-8);
+  box-shadow: 0 30px 60px -30px rgb(0 0 0 / 45%);
+}
+
+.phoneScreen {
+  overflow: hidden;
+  border-radius: 27px;
+  background-color: var(--mantine-color-white);
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Yu Gothic UI', Meiryo, sans-serif;
+  line-height: 1.3;
+}
+
+.phoneHead {
+  padding: 18px 14px 10px;
+  border-bottom: 1px solid var(--mantine-color-gray-3);
+}
+
+.phoneRow {
+  display: grid;
+  grid-template-columns: 44px repeat(4, minmax(0, 1fr));
+  align-items: center;
+  gap: 3px;
+  padding: 1.5px 8px;
+  font-size: 12px;
+}
+
+.phoneRow[data-head='true'] {
+  margin-bottom: 3px;
+  padding-block: 6px;
+  border-bottom: 2px solid var(--mantine-color-gray-3);
+  background-color: var(--mantine-color-gray-0);
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--mantine-color-dimmed);
+}
+
+.phoneRow[data-head='true'] b {
+  display: block;
+  font-size: 15px;
+  color: var(--mantine-color-black);
+}
+
+.phoneRow [data-tone='saturday'],
+.phoneRow [data-tone='saturday'] b {
+  color: var(--mantine-color-blue-8);
+}
+
+.phoneRow [data-tone='holiday'],
+.phoneRow [data-tone='holiday'] b {
+  color: var(--mantine-color-red-8);
+}
+
+.phoneCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.phoneFoot {
+  padding: 10px 14px 18px;
+  font-size: 11px;
+  color: var(--mantine-color-dimmed);
+}
+
+/* ---- はじめ方 ---- */
+
+.step {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 28px;
+}
+
+.stepNum {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 6px;
+  border-radius: 999px;
+  background-color: var(--mantine-color-dark-8);
+  color: var(--mantine-color-white);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.tag {
+  padding: 4px 12px;
+  border-radius: 999px;
+  background-color: var(--mantine-color-body);
+  font-size: 12.5px;
+  color: var(--mantine-color-dimmed);
+}
+
+.tag[data-active='true'] {
+  background-color: var(--mantine-color-dark-8);
+  color: var(--mantine-color-white);
+  font-weight: 700;
+}
+
+/* ---- 料金 ---- */
+
+.priceBig {
+  font-size: clamp(64px, 9vw, 104px);
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.priceBig small {
+  margin-left: 4px;
+  font-size: 0.36em;
+  letter-spacing: 0;
+}
+
+.priceRuleStrong {
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.calc {
+  padding: 32px;
+}
+
+@media (max-width: 36em) {
+  .calc {
+    padding: 24px 20px;
+  }
+}
+
+.calcValue {
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.total {
+  padding: 20px 22px;
+  border-radius: var(--site-radius-md);
+  background-color: var(--mantine-color-body);
+}
+
+.totalValue {
+  font-size: 36px;
+  font-weight: 900;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.totalValue small {
+  margin-left: 2px;
+  font-size: 0.5em;
+}
+
+/* ---- よくある質問 ---- */
+
+.faqItem {
+  border: 0;
+  border-radius: var(--site-radius-md);
+  background-color: var(--site-panel);
+}
+
+.faqItem[data-active] {
+  background-color: var(--site-panel);
+}
+
+.faqControl {
+  padding: 8px 12px;
+}
+
+.faqLabel {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+/* ---- 最後の CTA ---- */
+
+.finalBox {
+  position: relative;
+  overflow: hidden;
+  padding: 80px 56px;
+  border-radius: var(--site-radius-lg);
+  background-color: var(--mantine-color-dark-8);
+  color: var(--mantine-color-white);
+}
+
+@media (max-width: 36em) {
+  .finalBox {
+    padding: 48px 24px;
+    border-radius: var(--site-radius-md);
+  }
+}
+
+/* 「来月のシフト表から、」（10 文字）が 1 行に収まる大きさ。左右の余白（Container + 箱の padding）を引いて決める */
+.finalTitle {
+  position: relative;
+  font-size: clamp(24px, calc((100vw - 176px) / 10.6), 54px);
+  font-weight: 900;
+  line-height: 1.3;
+  color: inherit;
+}
+
+@media (max-width: 36em) {
+  .finalTitle {
+    font-size: calc((100vw - 96px) / 10.6);
+  }
+}
+
+.finalMicro {
+  position: relative;
+  font-size: 13.5px;
+  color: color-mix(in srgb, var(--mantine-color-white) 70%, transparent);
+}
+
+/* 箱の子として並べると Stack の gap が空くので、箱そのものは消して子だけを絶対配置する */
+.finalStamps {
+  display: contents;
+}
+
+.finalStamps > * {
+  position: absolute;
+  min-width: 84px;
+  height: 48px;
+  font-size: 17px;
+  box-shadow: 0 12px 28px -14px rgb(0 0 0 / 60%);
+}
+
+.finalStamps > :nth-child(1) {
+  top: 22%;
+  right: 12%;
+  transform: rotate(8deg);
+}
+
+.finalStamps > :nth-child(2) {
+  right: 22%;
+  bottom: 20%;
+  transform: rotate(-6deg);
+}
+
+.finalStamps > :nth-child(3) {
+  right: 5%;
+  bottom: 34%;
+  transform: rotate(-3deg);
+}
+
+@media (max-width: 56em) {
+  .finalStamps {
+    display: none;
+  }
+}
