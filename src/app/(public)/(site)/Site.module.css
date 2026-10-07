@@ -253,17 +253,18 @@
   }
 }
 
-.trayTag {
-  display: inline-flex;
-  align-items: center;
-  height: 26px;
-  margin: 2px 6px 16px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background-color: var(--mantine-color-dark-8);
-  color: var(--mantine-color-white);
-  font-size: 12.5px;
+/* デモの見出し。塗らない（塗ると「AIで作成」と同じ黒い塊になり、押せそうに見える。016 §7） */
+.trayHead {
+  display: grid;
+  gap: 6px;
+  max-width: 36em;
+  padding: 4px 6px 18px;
+}
+
+.trayTitle {
+  font-size: clamp(19px, 2.2vw, 24px);
   font-weight: 700;
+  line-height: 1.5;
 }
 
 .trayNote {

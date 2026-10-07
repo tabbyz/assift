@@ -53,3 +53,38 @@
   --name-col-width: 112px;
   --date-col-width: max(56px, calc((100cqi - var(--name-col-width) - 2px) / 7));
 }
+
+/*
+ * 最初の 2 手の案内（016 §7）。押してほしい物のまわりに広がる波紋。
+ * `box-shadow` で描く（セルの枠は `border` なので重ならない）。色は chrome と同じ墨で、新しい色は足さない
+ */
+.pulse {
+  animation: hintPulse 1.8s ease-out infinite;
+}
+
+@keyframes hintPulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--mantine-color-dark-9) 45%, transparent);
+  }
+
+  80%,
+  100% {
+    box-shadow: 0 0 0 10px color-mix(in srgb, var(--mantine-color-dark-9) 0%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse {
+    animation: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mantine-color-dark-9) 25%, transparent);
+  }
+}
+
+/* 吹き出し。白地 + しっぽ（Popover の矢印）で、黒いボタンと形を変える。押せる物ではない */
+.hint {
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+}

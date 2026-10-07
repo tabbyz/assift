@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from 'react'
 import { Button, Group, Popover, Text } from '@mantine/core'
 import { useReducedMotion } from '@mantine/hooks'
 import { IconArrowBackUp, IconShare2, IconSparkles } from '@tabler/icons-react'
@@ -38,6 +38,8 @@ type Props = {
 
 type ActiveCell = { staffId: string; date: string }
 type Message = { title: string; detail?: string; tone: 'ok' | 'info' }
+/** 最初の 2 手の案内（016 §7）。「AIで作成」→ AI が入れたマス の順に指し、ユーザーが自分で触ったら消す */
+type Hint = { kind: 'assist' } | { kind: 'cell'; key: string } | null
 
 const patternsById = new Map(DEMO_PATTERNS.map((p) => [p.id, p]))
 const isWorkday = (patternId: string) => patternsById.get(patternId)?.kind === 'workday'
@@ -46,6 +48,8 @@ const WORK_PATTERN_IDS = DEMO_PATTERNS.filter((p) => p.kind === 'workday').map((
 const noPair = () => null
 /** AI のマスを 1 つずつ出す間隔 */
 const STEP_MS = 60
+/** 吹き出しの重なり。サイトのヘッダー（z-index: 10）の下をくぐらせる */
+const HINT_Z_INDEX = 5
 
 function dateLabel(date: string): string {
   return `${formatMonthDay(date)}（${WEEKDAY_LABELS[wday(date)]}）`
@@ -57,6 +61,7 @@ function dateLabel(date: string): string {
  * - マスを押す → `PatternPopover`（下書き / 確定・パターン）。アサイン済みの長押しで下書き ⇔ 確定
  * - AIで作成 → 不足の枠をデモ用の貪欲法で 1 マスずつ埋める（実物はソルバー。012）。入ったマスには点（012 §3.8）
  * - 元に戻す（AI が入れて、まだ触っていないマスだけ消す）/ すべて確定 / 共有（文言だけ）
+ * - 最初は「AIで作成」を波紋と吹き出しで指し、押したら AI が入れたマスへ移る（016 §7）
  */
 export function ShiftDemo({ dates, holidays, title }: Props) {
   const holidaySet = useMemo(() => new Set(holidays), [holidays])
@@ -69,6 +74,7 @@ export function ShiftDemo({ dates, holidays, title }: Props) {
   const [aiCells, setAiCells] = useState<Set<string>>(() => new Set())
   const [running, setRunning] = useState(false)
   const [message, setMessage] = useState<Message | null>(null)
+  const [hint, setHint] = useState<Hint>({ kind: 'assist' })
   const reduceMotion = useReducedMotion()
   const timer = useRef<number | null>(null)
 
@@ -106,6 +112,7 @@ export function ShiftDemo({ dates, holidays, title }: Props) {
 
   const openCell = (cell: ActiveCell) => {
     if (running) return
+    setHint(null)
     if (activeCell?.staffId === cell.staffId && activeCell.date === cell.date) {
       setActiveCell(null)
       return
@@ -123,6 +130,9 @@ export function ShiftDemo({ dates, holidays, title }: Props) {
 
   const runAssist = () => {
     setActiveCell(null)
+    // 案内の 1 手目から押されたときだけ 2 手目へ進む
+    const guided = hint?.kind === 'assist'
+    setHint(null)
     const plan = planDemoAssist({
       dates,
       staffs: DEMO_STAFFS,
@@ -154,6 +164,8 @@ export function ShiftDemo({ dates, holidays, title }: Props) {
         detail,
         tone: 'ok',
       })
+      const first = firstCell(plan.adds)
+      if (guided && first) setHint({ kind: 'cell', key: cellKey(first.staffId, first.date) })
     }
 
     const put = (index: number) => {
@@ -189,6 +201,7 @@ export function ShiftDemo({ dates, holidays, title }: Props) {
 
   const undoAssist = () => {
     setActiveCell(null)
+    setHint(null)
     const count = aiCells.size
     setShifts((prev) => {
       const next = new Map(prev)
@@ -201,6 +214,7 @@ export function ShiftDemo({ dates, holidays, title }: Props) {
 
   const fixAll = () => {
     setActiveCell(null)
+    setHint(null)
     setShifts((prev) => {
       const next: ShiftMap = new Map()
       for (const [key, cell] of prev) next.set(key, { ...cell, fixed: true })
@@ -216,6 +230,7 @@ export function ShiftDemo({ dates, holidays, title }: Props) {
 
   const share = () => {
     setActiveCell(null)
+    setHint(null)
     setMessage({
       title: '共有のURLを発行しました（デモ）。',
       detail: 'スタッフはログインせずにスマホで開けます',
@@ -241,14 +256,17 @@ export function ShiftDemo({ dates, holidays, title }: Props) {
           </Text>
         </div>
         <Group gap={6}>
-          <Button
-            size="compact-sm"
-            leftSection={<IconSparkles size={16} />}
-            onClick={runAssist}
-            disabled={running}
-          >
-            AIで作成
-          </Button>
+          <HintBubble opened={hint?.kind === 'assist'} label="まずはここを押してみてください">
+            <Button
+              size="compact-sm"
+              leftSection={<IconSparkles size={16} />}
+              onClick={runAssist}
+              disabled={running}
+              className={hint?.kind === 'assist' ? classes.pulse : undefined}
+            >
+              AIで作成
+            </Button>
+          </HintBubble>
           {aiCells.size > 0 && !running && (
             <Button
               size="compact-sm"
@@ -340,6 +358,7 @@ export function ShiftDemo({ dates, holidays, title }: Props) {
                     .filter(Boolean)
                     .join(' ')
                   const isActive = activeCell?.staffId === staff.id && activeCell.date === date
+                  const hinted = hint?.kind === 'cell' && hint.key === key
 
                   const button = (
                     <ShiftCell
@@ -355,6 +374,7 @@ export function ShiftDemo({ dates, holidays, title }: Props) {
                           ? () => assign(cell, shift.patternId, !shift.fixed)
                           : undefined
                       }
+                      className={hinted ? classes.pulse : undefined}
                     />
                   )
 
@@ -382,6 +402,10 @@ export function ShiftDemo({ dates, holidays, title }: Props) {
                             />
                           </Popover.Dropdown>
                         </Popover>
+                      ) : hinted ? (
+                        <HintBubble opened label="マスを押すと直せます">
+                          {button}
+                        </HintBubble>
                       ) : (
                         button
                       )}
@@ -417,5 +441,59 @@ export function ShiftDemo({ dates, holidays, title }: Props) {
 
       <PatternDescriptionList patterns={DEMO_PATTERNS} />
     </div>
+  )
+}
+
+/** いちばん左（早い日付）のマス。狭い画面では表が横にスクロールするので、見えている側を指す */
+function firstCell<T extends ActiveCell>(cells: T[]): T | undefined {
+  return cells.reduce<T | undefined>(
+    (best, cell) =>
+      !best ||
+      cell.date < best.date ||
+      (cell.date === best.date && staffIndex(cell.staffId) < staffIndex(best.staffId))
+        ? cell
+        : best,
+    undefined
+  )
+}
+
+function staffIndex(staffId: string): number {
+  return DEMO_STAFFS.findIndex((s) => s.id === staffId)
+}
+
+/**
+ * 案内の吹き出し。白地 + しっぽで、ボタンと形を変える（黒い塊にしない）。
+ * 押せる物ではないので役割（dialog）を付けず、フォーカスも奪わない。
+ * 指す先が横スクロールで隠れたら吹き出しも隠す（`hideDetached`）
+ */
+function HintBubble({
+  opened,
+  label,
+  children,
+}: {
+  opened: boolean
+  label: string
+  children: ReactElement
+}) {
+  return (
+    <Popover
+      opened={opened}
+      position="bottom-start"
+      withArrow
+      arrowPosition="center"
+      shadow="md"
+      withRoles={false}
+      trapFocus={false}
+      returnFocus={false}
+      closeOnEscape={false}
+      closeOnClickOutside={false}
+      hideDetached
+      zIndex={HINT_Z_INDEX}
+    >
+      <Popover.Target>{children}</Popover.Target>
+      <Popover.Dropdown className={classes.hint} aria-live="polite">
+        {label}
+      </Popover.Dropdown>
+    </Popover>
   )
 }
