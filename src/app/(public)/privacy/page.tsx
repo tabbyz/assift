@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Anchor, Container, Divider, Paper, Stack, Text, Title } from '@mantine/core'
+import { FooterLinks } from '@/components/FooterLinks'
 import { LinkAnchor } from '@/components/LinkAnchor'
 import { TERMS } from '../terms/_components/terms'
 import { PRIVACY } from './_components/privacy'
@@ -68,6 +69,9 @@ export default function PrivacyPage() {
             ）
           </Text>
         </Stack>
+        <footer>
+          <FooterLinks />
+        </footer>
       </Stack>
     </Container>
   )

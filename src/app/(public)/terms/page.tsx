@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Anchor, Container, Divider, Paper, Stack, Text, Title } from '@mantine/core'
+import { FooterLinks } from '@/components/FooterLinks'
 import { LinkAnchor } from '@/components/LinkAnchor'
 import { TERMS_ARTICLES } from './_components/articles'
 import { TERMS } from './_components/terms'
@@ -63,6 +64,9 @@ export default function TermsPage() {
             ）
           </Text>
         </Stack>
+        <footer>
+          <FooterLinks />
+        </footer>
       </Stack>
     </Container>
   )

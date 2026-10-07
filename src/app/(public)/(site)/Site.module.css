@@ -711,15 +711,3 @@
     display: none;
   }
 }
-
-/* ---- フッター ---- */
-
-.footerLink {
-  font-size: 13px;
-  color: var(--mantine-color-dimmed);
-  text-decoration: none;
-}
-
-.footerLink:hover {
-  color: var(--mantine-color-text);
-}

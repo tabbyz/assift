@@ -143,3 +143,9 @@ v1 にあって v2 では未決定のもの:
 ### 2026-10-07（日付は末尾だけ）
 
 - 見出しの下の「制定：…／最終更新：…」をやめ、ページ末尾の「◯年◯月◯日制定」の下に、改定したときだけ「◯年◯月◯日改定」を出す（`updatedOn` が `enactedOn` と違うとき）。`/terms` と `/privacy` で同じ
+
+### 2026-10-07（フッターのリンクを共通に）
+
+- `src/components/FooterLinks.tsx`（利用規約・プライバシーポリシー・© assift。中央寄せ）を作り、LP の `SiteFooter` と `/terms`・`/privacy` の末尾で使う
+- LP のフッターからロゴを外した（ヘッダーにある）。`Site.module.css` の `.footerLink` は `FooterLinks.module.css` へ移した
+- 1280px / 375px で 3 ページを表示して確認
