@@ -57,7 +57,8 @@ export default function LawPage() {
             </TableTbody>
           </Table>
           <Text size="sm" c="dimmed">
-            所在地・電話番号の開示は、上記のメールアドレスへご請求ください。電子メールでお知らせします。
+            {LAW.sellerName ? '所在地・電話番号' : '氏名・所在地・電話番号'}
+            の開示は、上記のメールアドレスへご請求ください。電子メールでお知らせします。
           </Text>
         </Stack>
 
