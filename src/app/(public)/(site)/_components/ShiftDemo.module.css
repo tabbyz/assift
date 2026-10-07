@@ -22,21 +22,49 @@
   background-color: var(--mantine-color-gray-0);
 }
 
+/*
+ * 状況の行（016 §8）。最初から置いて高さを 2 行で固定し、中身だけを入れ替える。
+ * 結果が出るたびに帯を差し込むと、表が 100px 前後下がっていた。文は 1 行ずつで、長いものは省略（…）で切る
+ */
 .result {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 12px;
-  padding: 9px 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'title undo'
+    'detail detail';
+  align-content: center;
+  column-gap: 12px;
+  height: 58px;
+  padding: 0 12px;
   border-bottom: 1px solid var(--mantine-color-default-border);
+  line-height: 1.5;
 }
 
 .result[data-tone='ok'] {
   background-color: var(--mantine-color-green-0);
 }
 
-.result[hidden] {
-  display: none;
+.resultTitle,
+.resultDetail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resultTitle {
+  grid-area: title;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.resultDetail {
+  grid-area: detail;
+  font-size: 13px;
+  color: var(--mantine-color-dimmed);
+}
+
+.undo {
+  grid-area: undo;
 }
 
 /*

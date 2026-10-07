@@ -1,9 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from 'react'
-import { Button, Group, Popover, Text } from '@mantine/core'
+import { Anchor, Button, Group, Popover, Text } from '@mantine/core'
 import { useReducedMotion } from '@mantine/hooks'
-import { IconArrowBackUp, IconShare2, IconSparkles } from '@tabler/icons-react'
+import { IconShare2, IconSparkles } from '@tabler/icons-react'
 import { formatMonthDay, wday } from '@/lib/calendar/dateString'
 import { applyAssign } from '@/lib/shifts/applyAssign'
 import { cellKey, type ShiftMap } from '@/lib/shifts/key'
@@ -16,6 +16,7 @@ import { ShiftCell } from '@/components/shiftTable/ShiftCell'
 import tableClasses from '@/components/shiftTable/ShiftTable.module.css'
 import { theme } from '@/theme'
 import { planDemoAssist } from '../_lib/demoAssist'
+import { countShortSlots, describeShortages } from '../_lib/demoStatus'
 import {
   DEMO_PATTERNS,
   DEMO_RULES,
@@ -38,7 +39,10 @@ type Props = {
 
 type ActiveCell = { staffId: string; date: string }
 type Message = { title: string; detail?: string; tone: 'ok' | 'info' }
-/** 最初の 2 手の案内（016 §7）。「AIで作成」→ AI が入れたマス の順に指し、ユーザーが自分で触ったら消す */
+/**
+ * 最初の 2 手の案内（016 §7）。「AIで作成」→ AI が入れたマス の順に指し、ユーザーが自分で触ったら消す。
+ * 1 手目の文は状況の行に出す（吹き出しにすると、その下の「◯枠が足りません」を隠す。016 §8）
+ */
 type Hint = { kind: 'assist' } | { kind: 'cell'; key: string } | null
 
 const patternsById = new Map(DEMO_PATTERNS.map((p) => [p.id, p]))
@@ -61,7 +65,8 @@ function dateLabel(date: string): string {
  * - マスを押す → `PatternPopover`（下書き / 確定・パターン）。アサイン済みの長押しで下書き ⇔ 確定
  * - AIで作成 → 不足の枠をデモ用の貪欲法で 1 マスずつ埋める（実物はソルバー。012）。入ったマスには点（012 §3.8）
  * - 元に戻す（AI が入れて、まだ触っていないマスだけ消す）/ すべて確定 / 共有（文言だけ）
- * - 最初は「AIで作成」を波紋と吹き出しで指し、押したら AI が入れたマスへ移る（016 §7）
+ * - 最初は「AIで作成」を波紋で指し、押したら AI が入れたマスへ吹き出しで移る（016 §7）
+ * - 結果は高さ固定の「状況の行」に出す。触る前は不足の枠数。元に戻すはこの行のリンク（016 §8。表とボタンをずらさない）
  */
 export function ShiftDemo({ dates, holidays, title }: Props) {
   const holidaySet = useMemo(() => new Set(holidays), [holidays])
@@ -155,10 +160,8 @@ export function ShiftDemo({ dates, holidays, title }: Props) {
       setRunning(false)
       const detail =
         plan.shortages.length > 0
-          ? `${plan.shortages
-              .map((s) => `${dateLabel(s.date)}${patternsById.get(s.patternId)?.name}${s.count}枠`)
-              .join('、')}は、条件に合うスタッフがいません`
-          : '出られない曜日・週の勤務日数・遅番の翌日の早番を考えて入れました'
+          ? describeShortages(plan.shortages, (id) => patternsById.get(id)?.name)
+          : '出られない日と勤務の上限を守って入れました'
       setMessage({
         title: `${plan.adds.length} / ${total}枠を下書きで配置しました。`,
         detail,
@@ -239,6 +242,17 @@ export function ShiftDemo({ dates, holidays, title }: Props) {
   }
 
   const hasDraft = [...shifts.values()].some((s) => !s.fixed)
+  const shortSlots = countShortSlots(dates, WORK_PATTERN_IDS, required, counts)
+  const status: Message = message ?? {
+    title: shortSlots > 0 ? `${shortSlots}枠が足りません` : '足りない枠はありません',
+    detail:
+      hint?.kind === 'assist'
+        ? 'まずは「AIで作成」を押してみてください'
+        : shortSlots > 0
+          ? 'マスを押すか、「AIで作成」で埋められます'
+          : 'マスを押すと、勤務を入れ替えられます',
+    tone: 'info',
+  }
 
   return (
     <div
@@ -256,27 +270,15 @@ export function ShiftDemo({ dates, holidays, title }: Props) {
           </Text>
         </div>
         <Group gap={6}>
-          <HintBubble opened={hint?.kind === 'assist'} label="まずはここを押してみてください">
-            <Button
-              size="compact-sm"
-              leftSection={<IconSparkles size={16} />}
-              onClick={runAssist}
-              disabled={running}
-              className={hint?.kind === 'assist' ? classes.pulse : undefined}
-            >
-              AIで作成
-            </Button>
-          </HintBubble>
-          {aiCells.size > 0 && !running && (
-            <Button
-              size="compact-sm"
-              variant="default"
-              leftSection={<IconArrowBackUp size={16} />}
-              onClick={undoAssist}
-            >
-              元に戻す
-            </Button>
-          )}
+          <Button
+            size="compact-sm"
+            leftSection={<IconSparkles size={16} />}
+            onClick={runAssist}
+            disabled={running}
+            className={hint?.kind === 'assist' ? classes.pulse : undefined}
+          >
+            AIで作成
+          </Button>
           <Button
             size="compact-sm"
             variant="default"
@@ -297,19 +299,31 @@ export function ShiftDemo({ dates, holidays, title }: Props) {
         </Group>
       </Group>
 
-      <div className={classes.result} data-tone={message?.tone} role="status" hidden={!message}>
-        {message && (
-          <>
-            <Text component="span" fz={13} fw={650}>
-              {message.title}
-            </Text>
-            {message.detail && (
-              <Text component="span" fz={13} c="dimmed">
-                {message.detail}
-              </Text>
-            )}
-          </>
+      <div
+        className={classes.result}
+        data-tone={status.tone}
+        role="status"
+        // 触る前の不足の数はマスを押すたびに変わる。読み上げは操作の結果だけにする
+        aria-live={message ? 'polite' : 'off'}
+      >
+        <span className={classes.resultTitle} title={status.title}>
+          {status.title}
+        </span>
+        {aiCells.size > 0 && !running && (
+          <Anchor
+            component="button"
+            type="button"
+            className={classes.undo}
+            fz={13}
+            fw={650}
+            onClick={undoAssist}
+          >
+            元に戻す
+          </Anchor>
         )}
+        <span className={classes.resultDetail} title={status.detail}>
+          {status.detail}
+        </span>
       </div>
 
       <div className={classes.scroll}>
