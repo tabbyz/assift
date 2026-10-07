@@ -3,7 +3,7 @@ import { Group, Text } from '@mantine/core'
 import classes from './FooterLinks.module.css'
 
 /**
- * フッターのリンク（利用規約・プライバシーポリシー・著作権表示）。LP・利用規約・プライバシーポリシーで共有する（017）。
+ * フッターのリンク（利用規約・プライバシーポリシー・特商法表記・著作権表示）。LP と各規約ページで共有する（017 / 018）。
  * ロゴは各ページのヘッダーにあるので持たない
  */
 export function FooterLinks() {
@@ -14,6 +14,9 @@ export function FooterLinks() {
       </Link>
       <Link href="/privacy" className={classes.link}>
         プライバシーポリシー
+      </Link>
+      <Link href="/law" className={classes.link}>
+        特定商取引法に基づく表記
       </Link>
       <Text component="span" fz={13} c="dimmed">
         © assift
