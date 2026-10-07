@@ -23,8 +23,10 @@ import { PatternPopover } from '@/components/shiftTable/PatternPopover'
 import { ShiftCell } from '@/components/shiftTable/ShiftCell'
 import tableClasses from '@/components/shiftTable/ShiftTable.module.css'
 import { theme } from '@/theme'
+import { DemoShareCard } from './DemoShareCard'
 import { planDemoAssist } from '../_lib/demoAssist'
 import { countShortSlots, describeShortages } from '../_lib/demoStatus'
+import { STAFF_VIEW_ID } from '../_lib/sectionIds'
 import {
   DEMO_PATTERNS,
   DEMO_RULES,
@@ -74,7 +76,7 @@ function dateLabel(date: string): string {
  *
  * - マスを押す → `PatternPopover`（下書き / 確定・パターン）。アサイン済みの長押しで下書き ⇔ 確定
  * - AIで作成 → 不足の枠をデモ用の貪欲法で 1 マスずつ埋める（実物はソルバー。012）。入ったマスには点（012 §3.8）
- * - 元に戻す（AI が入れて、まだ触っていないマスだけ消す）/ すべて確定 / 共有（文言だけ）
+ * - 元に戻す（AI が入れて、まだ触っていないマスだけ消す）/ すべて確定 / 共有（枠の上にカード。016 §13）
  * - 最初は「AIで作成」を波紋で指し、押したら AI が入れたマスへ吹き出しで移る（016 §7）
  * - 枠の上のラベルの右端に「最初からやり直す」（案内も初めから。触るまでは隠す）
  * - 結果は高さ固定の「状況の行」に出す。触る前は不足の枠数。元に戻すはこの行のリンク（016 §8。表とボタンをずらさない）
@@ -91,8 +93,10 @@ export function ShiftDemo({ dates, holidays, title, label }: Props) {
   const [running, setRunning] = useState(false)
   const [message, setMessage] = useState<Message | null>(null)
   const [hint, setHint] = useState<Hint>({ kind: 'assist' })
+  const [sharing, setSharing] = useState(false)
   const reduceMotion = useReducedMotion()
   const timer = useRef<number | null>(null)
+  const shareButton = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     return () => {
@@ -245,11 +249,25 @@ export function ShiftDemo({ dates, holidays, title, label }: Props) {
   const share = () => {
     setActiveCell(null)
     setHint(null)
+    // カードを閉じたあとも何をしたかが残るように、状況の行にも出す（読み上げもこちらが担う）
     setMessage({
       title: '共有のURLを発行しました（デモ）。',
       detail: 'スタッフはログインせずにスマホで開けます',
       tone: 'info',
     })
+    setSharing(true)
+  }
+
+  const closeShare = () => {
+    setSharing(false)
+    shareButton.current?.focus()
+  }
+
+  const showStaffView = () => {
+    setSharing(false)
+    document
+      .getElementById(STAFF_VIEW_ID)
+      ?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' })
   }
 
   const hasDraft = [...shifts.values()].some((s) => !s.fixed)
@@ -275,6 +293,7 @@ export function ShiftDemo({ dates, holidays, title, label }: Props) {
     setAiCells(new Set())
     setMessage(null)
     setHint({ kind: 'assist' })
+    setSharing(false)
   }
   // 案内の 1 手目は、ユーザーが何か触ると消える。残っている間は開いたときのまま
   const pristine = hint?.kind === 'assist'
@@ -334,6 +353,7 @@ export function ShiftDemo({ dates, holidays, title, label }: Props) {
               すべて確定
             </Button>
             <Button
+              ref={shareButton}
               size="compact-sm"
               variant="default"
               leftSection={<IconShare2 size={16} />}
@@ -503,6 +523,7 @@ export function ShiftDemo({ dates, holidays, title, label }: Props) {
         </div>
 
         <PatternDescriptionList patterns={DEMO_PATTERNS} />
+        {sharing && <DemoShareCard onClose={closeShare} onShowStaffView={showStaffView} />}
       </div>
       <p className={classes.note}>保存されないデモ用のデータです</p>
     </>

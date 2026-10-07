@@ -4,6 +4,7 @@ import { dayOfMonth, formatMonthDay, wday } from '@/lib/calendar/dateString'
 import { WEEKDAY_LABELS } from '@/lib/calendar/weekdays'
 import { cellStyle } from '@/components/shiftTable/cellStyle'
 import { DEMO_PATTERNS, DEMO_STORE_NAME } from '../_lib/demoData'
+import { STAFF_VIEW_ID } from '../_lib/sectionIds'
 import { SectionHeading } from './SectionHeading'
 import { Stamp } from './Stamp'
 import classes from '../Site.module.css'
@@ -45,7 +46,12 @@ function tone(date: string, holidays: Set<string>): string | undefined {
 export function StaffView({ dates, holidays }: Props) {
   const holidaySet = new Set(holidays)
   return (
-    <section className={classes.section}>
+    <section
+      id={STAFF_VIEW_ID}
+      className={classes.section}
+      // デモの共有カードから送られてくる。sticky のヘッダーに見出しが隠れないようにずらす
+      style={{ scrollMarginTop: 'var(--site-anchor-offset)' }}
+    >
       <Container size={1120} px={{ base: 'md', sm: 'lg' }}>
         <SimpleGrid cols={{ base: 1, md: 2 }} spacing={20}>
           <Stack justify="center" gap={0} pr={{ md: 24 }}>
