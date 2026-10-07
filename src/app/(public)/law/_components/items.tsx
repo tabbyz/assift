@@ -48,12 +48,12 @@ export const LAW_ITEMS: LawItem[] = [
       </>
     ),
   },
-  { label: 'その他の費用', value: '銀行振込の手数料、インターネットの通信料' },
-  { label: '支払い方法', value: 'クレジットカード、銀行振込' },
+  { label: 'その他の費用', value: 'インターネットの通信料' },
+  { label: '支払い方法', value: 'クレジットカード' },
   {
     label: '支払い時期',
     value: '毎月末に締め、翌月にご請求',
-    note: 'クレジットカードの引き落とし日は、各カード会社の規定によります。銀行振込は、請求書に記載した期日までにお振り込みください',
+    note: 'クレジットカードの引き落とし日は、各カード会社の規定によります',
   },
   { label: '提供時期', value: 'お申し込み後、すぐにご利用いただけます' },
   { label: '契約期間', value: '1か月ごと（自動更新）' },
@@ -70,6 +70,6 @@ export const LAW_ITEMS: LawItem[] = [
   {
     label: '動作環境',
     value: '主要なブラウザの最新版',
-    note: 'Google Chrome、Safari、Microsoft Edge、Firefox。パソコン・スマートフォン・タブレットで使えます',
+    note: 'Google Chrome、Safari、Microsoft Edge。パソコン・スマートフォン・タブレットで使えます',
   },
 ]
