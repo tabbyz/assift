@@ -3,10 +3,11 @@
 import { useEffect, useId, useRef } from 'react'
 import { Button, CloseButton, Text } from '@mantine/core'
 import { IconArrowDown, IconCopy } from '@tabler/icons-react'
+import { DEMO_SHARE_CODE } from '../_lib/demoData'
 import classes from './ShiftDemo.module.css'
 
-/** デモの共有 URL（見た目だけ。コードは実物と同じ 8 文字・同じ字の集合から選んだ固定値） */
-const DEMO_SHARE_URL = 'assift.com/share/a8Kx3mQp'
+/** デモの共有 URL（見た目だけ。コードは本物と重ならない固定値。`DEMO_SHARE_CODE`） */
+const DEMO_SHARE_URL = `assift.com/share/${DEMO_SHARE_CODE}`
 
 type Props = {
   onClose: () => void
