@@ -1,6 +1,14 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactElement,
+  type ReactNode,
+} from 'react'
 import { Anchor, Button, Group, Popover, Text } from '@mantine/core'
 import { useReducedMotion } from '@mantine/hooks'
 import { IconRefresh, IconShare2, IconSparkles } from '@tabler/icons-react'
@@ -35,6 +43,8 @@ type Props = {
   holidays: string[]
   /** ツールバーの期間タイトル（`formatPeriodTitle`） */
   title: string
+  /** 枠の上のラベル（「さわれるデモ」）。右端に「最初からやり直す」を並べる */
+  label: ReactNode
 }
 
 type ActiveCell = { staffId: string; date: string }
@@ -66,10 +76,10 @@ function dateLabel(date: string): string {
  * - AIで作成 → 不足の枠をデモ用の貪欲法で 1 マスずつ埋める（実物はソルバー。012）。入ったマスには点（012 §3.8）
  * - 元に戻す（AI が入れて、まだ触っていないマスだけ消す）/ すべて確定 / 共有（文言だけ）
  * - 最初は「AIで作成」を波紋で指し、押したら AI が入れたマスへ吹き出しで移る（016 §7）
- * - 枠の下に注記と「最初からやり直す」（案内も初めから）
+ * - 枠の上のラベルの右端に「最初からやり直す」（案内も初めから。触るまでは隠す）
  * - 結果は高さ固定の「状況の行」に出す。触る前は不足の枠数。元に戻すはこの行のリンク（016 §8。表とボタンをずらさない）
  */
-export function ShiftDemo({ dates, holidays, title }: Props) {
+export function ShiftDemo({ dates, holidays, title, label }: Props) {
   const holidaySet = useMemo(() => new Set(holidays), [holidays])
   const required = useMemo(() => demoRequired(dates, holidaySet), [dates, holidaySet])
   const notes = useMemo(() => demoNotes(dates), [dates])
@@ -271,6 +281,26 @@ export function ShiftDemo({ dates, holidays, title }: Props) {
 
   return (
     <>
+      <Group className={classes.head} justify="space-between" gap={8} wrap="nowrap">
+        {label}
+        {/*
+         * 触るまでは隠す。消さずに見えなくするだけにして、出たときに行の高さが変わらないようにする（016 §11）。
+         * `visibility: hidden` の間はフォーカスも読み上げも届かない
+         */}
+        <Button
+          size="compact-sm"
+          variant="subtle"
+          color="gray"
+          fz={13}
+          px={6}
+          className={classes.restart}
+          data-hidden={pristine || undefined}
+          leftSection={<IconRefresh size={14} />}
+          onClick={restart}
+        >
+          最初からやり直す
+        </Button>
+      </Group>
       <div
         className={classes.demo}
         // 表はアプリと同じシステムフォントで描く（LP の書体を持ち込まない）
@@ -474,30 +504,7 @@ export function ShiftDemo({ dates, holidays, title }: Props) {
 
         <PatternDescriptionList patterns={DEMO_PATTERNS} />
       </div>
-      <Group
-        className={classes.footer}
-        justify="space-between"
-        gap={8}
-        wrap="nowrap"
-        preventGrowOverflow={false}
-      >
-        <Text fz={12} c="dimmed" miw={0} className={classes.footerNote}>
-          保存されないデモ用のデータです
-        </Text>
-        <Button
-          size="compact-sm"
-          variant="subtle"
-          color="gray"
-          fz={13}
-          px={6}
-          className={classes.restart}
-          leftSection={<IconRefresh size={14} />}
-          onClick={restart}
-          disabled={pristine}
-        >
-          最初からやり直す
-        </Button>
-      </Group>
+      <p className={classes.note}>保存されないデモ用のデータです</p>
     </>
   )
 }
