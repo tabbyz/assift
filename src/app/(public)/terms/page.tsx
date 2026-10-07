@@ -18,12 +18,7 @@ export default function TermsPage() {
           assift
         </LinkAnchor>
 
-        <Stack gap="xs">
-          <Title order={1}>利用規約</Title>
-          <Text size="sm" c="dimmed">
-            制定：{TERMS.enactedOn}／最終更新：{TERMS.updatedOn}
-          </Text>
-        </Stack>
+        <Title order={1}>利用規約</Title>
 
         <Text>assiftの利用条件を定めています。各条の終わりには、その条の要約を添えています。</Text>
 
@@ -55,6 +50,11 @@ export default function TermsPage() {
           <Text size="sm" c="dimmed">
             {TERMS.enactedOn}制定
           </Text>
+          {TERMS.updatedOn !== TERMS.enactedOn && (
+            <Text size="sm" c="dimmed">
+              {TERMS.updatedOn}改定
+            </Text>
+          )}
           <Text size="sm" c="dimmed">
             {TERMS.operator}（
             <Anchor href={`mailto:${TERMS.contactEmail}`} size="sm" c="dimmed">

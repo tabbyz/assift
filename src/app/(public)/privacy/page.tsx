@@ -19,14 +19,9 @@ export default function PrivacyPage() {
           assift
         </LinkAnchor>
 
-        <Stack gap="xs">
-          <Title order={1} fz={{ base: 28, xs: 34 }}>
-            プライバシーポリシー
-          </Title>
-          <Text size="sm" c="dimmed">
-            制定：{PRIVACY.enactedOn}／最終更新：{PRIVACY.updatedOn}
-          </Text>
-        </Stack>
+        <Title order={1} fz={{ base: 28, xs: 34 }}>
+          プライバシーポリシー
+        </Title>
 
         <Text>
           assiftにおける個人情報の取り扱いについて定めています。各項の終わりに要約を添えていますが、要約と本文の内容が異なって読める場合は、本文を優先します。
@@ -60,6 +55,11 @@ export default function PrivacyPage() {
           <Text size="sm" c="dimmed">
             {PRIVACY.enactedOn}制定
           </Text>
+          {PRIVACY.updatedOn !== PRIVACY.enactedOn && (
+            <Text size="sm" c="dimmed">
+              {PRIVACY.updatedOn}改定
+            </Text>
+          )}
           <Text size="sm" c="dimmed">
             {TERMS.operator}（
             <Anchor href={`mailto:${TERMS.contactEmail}`} size="sm" c="dimmed">
