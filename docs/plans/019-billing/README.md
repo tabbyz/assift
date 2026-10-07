@@ -230,7 +230,7 @@ create table public.billing_subscriptions (
   stripe_subscription_id text        not null unique,
   status                 text        not null,          -- Stripe の status をそのまま
   price_lookup_key       text,                          -- assift_monthly。lookup_key の無い v1 の price（freemium-monthly）は price の id
-  discount_percent       smallint,                      -- 旧料金のクーポン（50）。null = なし（§2.4）
+  discount_percent       smallint,                      -- 旧料金のクーポン（50）。null = なし（§2.4）。切り替え待ち（has_schedule）の間は schedule の phase 1 の割引を写す
   cancel_at              timestamptz,                   -- 解約予定（期間の終わり）
   current_period_start   timestamptz not null,          -- basil 以降は subscription item の値
   current_period_end     timestamptz not null,
@@ -290,14 +290,14 @@ URL は**利用者単位**（全店舗の合計で数えるので店舗の外）
 | 画面 | 中身 |
 | --- | --- |
 | 11 人目で止まったとき（モーダル） | トライアル未使用: 「10 人を超えるスタッフは有料プランで使えます。**◯月◯日まで無料で、人数の制限なく試せます**（カードの登録は要りません）」→「無料で試す」（`start_trial` → そのまま元の操作をやり直す）/「料金を見る」。使用済み: 「有料プランに申し込むと 11 人目から追加できます」→ 申し込みへ |
-| `/account/billing`「プランとお支払い」 | 今のプラン（無料 / トライアル中（◯月◯日まで）/ 有料 / 有料（旧料金: 11 人目から 1 人 50 円。`discount_percent` で判定）/ 個別契約）、**いまの在籍数・今の請求期間の最大人数・今の請求期間の料金の見込み**（`monthlyPriceYen`。旧料金の契約は期間が月末 23:59:59 で区切られるので「今月」とは書かない）、状態の注意（支払い失敗）、**解約予定なら「◯月◯日で終了予定」と「解約を取り消す」（ポータルで取り消せる。旧料金の人はここで取り消せば旧料金が続く）**、ボタン「有料プランに申し込む」または「お支払い方法・請求書・解約」（ポータル）。旧料金の人はポータルへ進む前に「解約すると旧料金には戻れません」を出す |
+| `/account/billing`「プランとお支払い」 | 今のプラン（無料 / トライアル中（◯月◯日まで）/ 有料 / 有料（旧料金: 11 人目から 1 人 50 円。`discount_percent` で判定）/ 個別契約）、**いまの在籍数・今の請求期間の最大人数・今の請求期間の料金の見込み**（`monthlyPriceYen`。旧料金の契約は期間が月末 23:59:59 で区切られるので「今月」とは書かない）、状態の注意（支払い失敗）、**解約予定なら「◯月◯日で終了予定」と「解約を取り消す」（ポータルで取り消せる。旧料金の人はここで取り消せば旧料金が続く。切り替え待ちの間に解約した人は、ポータルでは取り消せないので問い合わせを案内する。§5.5）**、ボタン「有料プランに申し込む」または「お支払い方法・請求書・解約」（ポータル）。旧料金の人はポータルへ進む前に「解約すると旧料金には戻れません」を出す |
 | `/account/billing/subscribe`「お申し込み内容の確認」 | 特商法 12 条の 6 の最終確認（018 §6）: 料金（人数で変わること・料金表・いまの人数での見込み）、支払い時期（毎月末締め・翌月 1 日に請求）、提供時期（すぐ）、契約期間（1 か月ごと自動更新）、解約（いつでも。その月の末日まで使え、日割りなし）、返金なし、規約・特商法へのリンク。トライアル中なら「トライアルの終わる ◯月◯日までは請求しません」。ボタン「カード情報の入力へ」 |
 | 支払い失敗の帯 | サブスクリプションが `past_due` の間、店舗の画面の上に「お支払いができませんでした。カードを更新してください。更新がないまま再試行が尽きると有料プランが終了します」+「カードを更新」（ポータル）。旧料金の人には「終了すると旧料金には戻れません」も添える。Stripe の支払い失敗のメールと二重に知らせる |
 | トライアル中の帯 | 店舗の画面の上に「無料トライアル中: あと N 日（◯月◯日まで）。続けて使うには有料プランへ」+ 申し込みへのリンク。残り 7 日からは色を変える |
 | アカウント画面 | 「プランとお支払い」へのリンク。退会の確認に「有料プランは解約され、今の請求期間の分を期間の終わりに請求します」を足す（§5.8） |
 | スタッフの設定 | 無料プランで 10 人に達したら `Alert`（v1 の `_upper_limit`）「無料プランは在籍 10 人までです」+ トライアル / 申し込みへのリンク。追加ボタンは押せるまま（押したら上のモーダル） |
 | 初期設定のスタッフ | 貼った名前が残りの枠を超えたら、保存の前に同じモーダル |
-| シフト表 | **在籍が上限（§5.1。無料なら 10 人、個別契約ならその人数）を超えている**（トライアル終了・解約・支払い失敗の後）とき、v1 の lock panel と同じく表の上に重ねる: 「無料プランの上限（10 人）を超えています。有料プランに申し込むか、スタッフを退職にしてください」+ 2 つのボタン。共有ページ・エクスポートは止めない（決定）。ロックは画面だけで、書き込みの Action は止めない（スタッフを増やす操作は §5.3 の門番が止める） |
+| シフト表 | **在籍が上限（§5.1。無料なら 10 人、個別契約ならその人数）を超えている**（トライアル終了・解約・支払い失敗の後）とき、v1 の lock panel と同じく表の上に重ねる: 「ご利用中のプランの上限（◯人）を超えています。有料プランに申し込むか、スタッフを退職にしてください」+ 2 つのボタン（個別契約の人には申し込みではなく問い合わせを案内する）。共有ページ・エクスポートは止めない（決定）。ロックは画面だけで、書き込みの Action は止めない（スタッフを増やす操作は §5.3 の門番が止める） |
 | ヘッダー | 出さない（v1 の `_plan_status` は設定メニューにあったが、v2 は課金の画面に寄せる） |
 
 - 文言の数字は `lib/billing/pricing` から引く（`monthlyPriceYen(count, discountPercent)`。割引は Stripe と同じく小計に掛けて 1 円未満を切り捨てる）。トライアルの日付は `lib/billing/trial.ts`
@@ -310,7 +310,7 @@ URL は**利用者単位**（全店舗の合計で数えるので店舗の外）
 | `startTrial()` | `requireUser()` → RPC `start_trial()`。使用済みなら fail。`revalidatePath('/tenants', 'layout')` |
 | `startCheckout()` | `requireUser()` → 同期して**既に有料なら fail**（二重契約を防ぐ）→ Customer が無ければ作る（`email`、`preferred_locales: ['ja']`、`metadata.assift_user_id`）→ `profiles.stripe_customer_id` を保存（service_role）→ Checkout Session（`mode: subscription`、`price` = `assift_monthly`、クーポンなし（`allow_promotion_codes` も付けない）、`payment_method_types: ['card']`、`locale: 'ja'`、`client_reference_id`、§4.3 の anchor、`success_url` / `cancel_url`、`expires_at` 30 分）→ `{ redirectTo: session.url }` |
 | `openPortal()` | **DB の `profiles.stripe_customer_id`** でポータルの Session を作って `{ redirectTo }`（入力から Customer を受け取らない）。`has_schedule` の間はポータルで解約できないので、解約は下の Action で受ける（§8.2） |
-| `cancelDuringMigration()` | `has_schedule` の間（v1 からの切り替え待ち）だけ「プランとお支払い」に出す解約ボタン。schedule を release してから `cancel_at_period_end: true`（release も旧 metered の明細を含むので API `2025-02-24.acacia` で呼ぶ）。問い合わせを経ずに解約できるようにする（決定。§11-11） |
+| `cancelDuringMigration()` | `has_schedule` の間（v1 からの切り替え待ち）だけ「プランとお支払い」に出す解約ボタン。**schedule は release せず**、phase 1（新料金 + クーポン）を消して `end_behavior: cancel` に更新する（今の期間の終わりで終わる。旧 metered の明細を含むので API `2025-02-24.acacia` で呼ぶ）。問い合わせを経ずに解約できるようにする（決定。§11-11）。<br>release してから `cancel_at_period_end` にすると、ポータルで解約を取り消せてしまい、**旧 metered の price のまま schedule も無い契約**が残る（v1 の rake が止まった後は利用量が 0 になり、以後ずっと無料になる）。切り替え待ちの数日の間の解約の取り消しは問い合わせで受け、phase 1 を付け直す |
 
 - 認証系と同じく `redirect()` せず `{ redirectTo }` を返し、クライアントが `window.location.assign`（外部 URL）
 - それでも同じ Customer に有効な Subscription が 2 件できたら、同期関数が**新しいほう（誤って作られたほう）を即時解約**し、ログに出す
@@ -343,13 +343,14 @@ URL は**利用者単位**（全店舗の合計で数えるので店舗の外）
   - **送信は利用者をまたいで並行**（並行数 10 程度）。同じ利用者への同時送信は 1 本まで（§4.2）なので、1 人の中は順に送る。429 は待って再試行する
   - ルートに `maxDuration` を指定する。件数が増えて収まらなくなったら、ページごとに分けて続きから実行できる形にする
 - 1 人ずつ try/catch してログに出し、全体は止めない
+- **見張り**: 旧 `freemium-monthly` の price のまま schedule が付いていない有効な契約を見つけたらログに出す（起きないはずの状態。利用量が送られず無料になってしまう）
 
 ### 5.8 退会
 
 即時解約は従量分が捨てられ、猶予中の送信も載らない（§3）。そこで退会では**期間末の解約**にする。
 
 1. 有料プランなら、今の期間の最大人数を `timestamp = min(今, 期間の終わり − 1 分)` で送る（以降は履歴が消えるので、これがその期間の最後の値になる）
-2. `cancel_at_period_end: true`（schedule が付いていれば先に release）
+2. `cancel_at_period_end: true`。schedule が付いていれば release せず、`cancelDuringMigration()` と同じく schedule を `end_behavior: cancel` にする
 3. `auth.admin.deleteUser`
 
 期間末に Stripe が通常の請求書（1 で送った人数）を出して Subscription が終わる。Customer は消さない（請求書を残す）。
@@ -358,7 +359,7 @@ Stripe が失敗したら退会も止める（請求できないまま消さな�
 ### 5.9 AGENTS.md に足すこと
 
 - `createPrivilegedClient()` の用途に「Stripe の Webhook / cron / 申し込みで `profiles.stripe_customer_id`・`profiles.trial_end`（申し込みでトライアルを使ったとみなすとき。§7.1）・`billing_subscriptions` を書くとき」（`lib/billing/` に閉じる）
-- 旧 metered の明細を含む Subscription を触る呼び出し（移行スクリプト・`cancelDuringMigration()`・退会時の release）だけ API `2025-02-24.acacia` を指定する、という例外
+- 旧 metered の明細を含む Subscription を触る呼び出し（移行スクリプト・`cancelDuringMigration()`・退会時の schedule の更新）だけ API `2025-02-24.acacia` を指定する、という例外
 - `src/app/api/` は「ファイルを返す GET だけ」→ Webhook（POST）と cron（GET）を足し、それぞれの認証（署名 / `CRON_SECRET`）を書く
 - proxy の `config.matcher` から `/api/stripe` と `/api/cron` を外す（ログイン状態と無関係で、Supabase のセッション更新は要らない。
   prefetch を外さない決まりは、セッション cookie を書くページのためのもので、これらには当たらない）
@@ -414,7 +415,7 @@ hosted Checkout なので publishable key は要らない。未設定なら申�
 | 人数 | **無制限** | 20 人の店舗が実際の人数で運用できないと、試したことにならない |
 | 始まる時点 | **11 人目で止まったとき**（モーダルの「無料で試す」）。登録時ではない | 10 人以下の店舗は無料で足りるので、トライアルを無駄に消費しない。必要になった瞬間から数える |
 | 長さ | **始めた日から 2 か月後の月末まで**（61〜92 日。v1 と同じ）。全員同じ。v1 で使った人（`trial_end` が埋まっている）は対象外 | v1 で約束していた長さを変えない（v1 の利用者に不利な変更にしない）。全員そろえれば、v1 から来た人かを見分ける列と分岐が要らない。シフト表は月単位なので、月末で終わればいつでも「次の月のシフトを作り終えたところで終わる」決断の瞬間になる（10/10 に始めると 12/31 まで。1 月のシフトを作り終えた直後） |
-| 回数 | 1 アカウント 1 回（`trial_end is null` のときだけ始められる）。**トライアルを使わずに申し込んだ人も、申し込んだ時点で使ったものとみなす**（同期関数が Subscription を初めて写すとき、`trial_end` が null なら今の時刻を入れる） | 「申し込む → 解約 → トライアルで 2 か月無料」の抜け道を塞ぐ |
+| 回数 | 1 アカウント 1 回（`trial_end is null` のときだけ始められる）。**トライアルを使わずに申し込んだ人も、申し込んだ時点で使ったものとみなす**（同期関数が Subscription を初めて写すとき、`trial_end` が null なら **Subscription の開始時刻**を入れる。Webhook が遅れても、請求の区間（§4.2）がずれないように今の時刻にはしない） | 「申し込む → 解約 → トライアルで 2 か月無料」の抜け道を塞ぐ |
 | トライアル中に申し込む | できる。**トライアルの終わりまでは請求しない**（§4.2 の区間がトライアルの終わりから始まる） | 「今のうちにカードを登録しておく」を損なく選べる。終了日にロックされる人を減らす |
 | 終わったとき | 無料プランに戻る。10 人を超えていればロック（§5.4）。データは消さない | |
 | 知らせ | トライアル中は店舗の画面に残り日数の帯（§5.4）。メールは送らない（送るなら Supabase のメール基盤とは別に作る必要があるので後回し） | |
@@ -450,7 +451,7 @@ v1 は「カード登録から 2 か月後の月末まで、カード必須」�
 | `trial_end` | そのまま（埋まっていればトライアル使用済み。未来ならその日までトライアル中として扱う） |
 | `usage_records` | **移行しない**。カットオーバーで取る v1 のダンプ（暗号化し、保管期間を決めて残す。001 §5.4）に残る |
 | `max_staffs_count` | **Subscription が無く、11 以上**のユーザー（個別契約）だけその値。ほかは null |
-| `stripe_subscription_id` | 入れない。移行の後に `syncCustomer` を全員に回して `billing_subscriptions` を作る |
+| `stripe_subscription_id` | 入れない。移行の後に全員を同期して `billing_subscriptions` を作る（一覧でまとめて取る。§5.7・§8.3） |
 | 在籍スタッフ数 | 全員に `staff_count_history` を 1 行（移行時点の数）。インポートの間は `staffs` / `tenants` のトリガを止める（`session_replication_role = replica`。止めないとスタッフ 1 行ごとに履歴ができる）。門番は `auth.uid()` が null なら止めないので影響しない |
 
 移行の検証に足す: 無料扱いなのに在籍が 10 人を超える利用者の数（v1 の `over_limit?`。v2 では lock panel が出る）。多ければカットオーバーの前に連絡する。
@@ -487,7 +488,7 @@ Stripe のサブスクリプションは 有効 795 / 未払い 155 / 期日経�
 - 下書きの無効化: サブスクリプションの下書きは削除できず、無効にできるのは確定した請求書だけ。`auto_advance: false` にしてから確定し（請求は走らない）、
   すぐ無効にする。テストモードで、確定の時点でメールや請求が走らないことを確かめる
 - 「回収不能」で `unpaid` から `active` に戻ることは、テストモードで確かめる（状態の判定が「最新の請求書だけを見る」設定のときの動き。§9.3）
-- **schedule の作成・更新・release は API `2025-02-24.acacia` を指定する**（basil 以降は meter の無い metered price を扱えない。移行ガイド）。
+- **schedule の作成・更新は API `2025-02-24.acacia` を指定する**（basil 以降は meter の無い metered price を扱えない。移行ガイド）。
   stripe-node はリクエストごとに `apiVersion` を上書きできるので、このスクリプトと `cancelDuringMigration()` の該当の呼び出しだけ acacia にする
 - v1 の Subscription は `classic` のまま。請求日もそのまま（月末 23:59:59 JST 前後。v1 から変えない）
 - 旧料金に移す 392 件の Customer に `preferred_locales: ['ja']` を設定する（v1 は設定していないので、支払い失敗のメールやポータルが英語になりうる）
@@ -573,7 +574,7 @@ Stripe のサブスクリプションは 有効 795 / 未払い 155 / 期日経�
 12. 旧料金の Subscription から割引を外す（§8.5）→ 次の請求書から新料金
 13. v1 の `unpaid` の Subscription（期限切れのカード・下書きが溜まった状態）を作り、下書きを無効 → 最後の請求書を回収不能 → `active` に戻る → schedule を付ける →
     期間の終わりの請求が失敗 → `past_due`・支払い失敗のメール・アプリの帯 → カードを更新すると旧料金のまま続く / 更新しないとリトライ後に解約
-14. schedule が付いた Subscription を `cancelDuringMigration()` で解約 → 期間の終わりに終わる・新料金に切り替わらない
+14. schedule が付いた Subscription を `cancelDuringMigration()` で解約 → schedule が残ったまま期間の終わりに終わる・新料金に切り替わらない・ポータルで取り消せない
 
 ---
 
