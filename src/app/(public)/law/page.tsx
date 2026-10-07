@@ -34,20 +34,32 @@ export default function LawPage() {
           特定商取引法に基づく表記
         </Title>
 
-        <Table layout="fixed" verticalSpacing="md" horizontalSpacing="sm">
-          <TableTbody>
-            {LAW_ITEMS.map((item) => (
-              <TableTr key={item.label}>
-                <TableTh w={{ base: 104, xs: 200 }} style={{ verticalAlign: 'top' }}>
-                  {item.label}
-                </TableTh>
-                <TableTd>
-                  <Stack gap="xs">{item.body}</Stack>
-                </TableTd>
-              </TableTr>
-            ))}
-          </TableTbody>
-        </Table>
+        <Stack gap="sm">
+          <Table layout="fixed" fz="md" verticalSpacing="md" horizontalSpacing="xs">
+            <TableTbody>
+              {LAW_ITEMS.map((item) => (
+                <TableTr key={item.label}>
+                  <TableTh w={{ base: 120, xs: 180 }} fz="sm" style={{ verticalAlign: 'top' }}>
+                    {item.label}
+                  </TableTh>
+                  <TableTd>
+                    <Stack gap={4}>
+                      <Text inherit>{item.value}</Text>
+                      {item.note && (
+                        <Text size="sm" c="dimmed">
+                          {item.note}
+                        </Text>
+                      )}
+                    </Stack>
+                  </TableTd>
+                </TableTr>
+              ))}
+            </TableTbody>
+          </Table>
+          <Text size="sm" c="dimmed">
+            所在地・電話番号の開示は、上記のメールアドレスへご請求ください。電子メールでお知らせします。
+          </Text>
+        </Stack>
 
         <Divider />
         <Stack gap={4}>
