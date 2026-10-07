@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from 'react'
 import { Anchor, Button, Group, Popover, Text } from '@mantine/core'
 import { useReducedMotion } from '@mantine/hooks'
-import { IconShare2, IconSparkles } from '@tabler/icons-react'
+import { IconRefresh, IconShare2, IconSparkles } from '@tabler/icons-react'
 import { formatMonthDay, wday } from '@/lib/calendar/dateString'
 import { applyAssign } from '@/lib/shifts/applyAssign'
 import { cellKey, type ShiftMap } from '@/lib/shifts/key'
@@ -66,6 +66,7 @@ function dateLabel(date: string): string {
  * - AIで作成 → 不足の枠をデモ用の貪欲法で 1 マスずつ埋める（実物はソルバー。012）。入ったマスには点（012 §3.8）
  * - 元に戻す（AI が入れて、まだ触っていないマスだけ消す）/ すべて確定 / 共有（文言だけ）
  * - 最初は「AIで作成」を波紋で指し、押したら AI が入れたマスへ吹き出しで移る（016 §7）
+ * - 枠の下に注記と「最初からやり直す」（案内も初めから）
  * - 結果は高さ固定の「状況の行」に出す。触る前は不足の枠数。元に戻すはこの行のリンク（016 §8。表とボタンをずらさない）
  */
 export function ShiftDemo({ dates, holidays, title }: Props) {
@@ -254,207 +255,250 @@ export function ShiftDemo({ dates, holidays, title }: Props) {
     tone: 'info',
   }
 
+  /** 店・期間はそのままで、表・結果・案内を開いたときに戻す */
+  const restart = () => {
+    if (timer.current !== null) window.clearTimeout(timer.current)
+    timer.current = null
+    setRunning(false)
+    setActiveCell(null)
+    setShifts(demoInitialShifts(dates))
+    setAiCells(new Set())
+    setMessage(null)
+    setHint({ kind: 'assist' })
+  }
+  // 案内の 1 手目は、ユーザーが何か触ると消える。残っている間は開いたときのまま
+  const pristine = hint?.kind === 'assist'
+
   return (
-    <div
-      className={classes.demo}
-      // 表はアプリと同じシステムフォントで描く（LP の書体を持ち込まない）
-      style={{ '--mantine-font-family': theme.fontFamily } as CSSProperties}
-    >
-      <Group className={classes.toolbar} justify="space-between" gap="xs">
-        <div>
-          <Text fz={12} c="dimmed" lh={1.4}>
-            {DEMO_STORE_NAME}
-          </Text>
-          <Text fz={16} fw={650} lh={1.4}>
-            {title}
-          </Text>
-        </div>
-        <Group gap={6}>
-          <Button
-            size="compact-sm"
-            leftSection={<IconSparkles size={16} />}
-            onClick={runAssist}
-            disabled={running}
-            className={hint?.kind === 'assist' ? classes.pulse : undefined}
-          >
-            AIで作成
-          </Button>
-          <Button
-            size="compact-sm"
-            variant="default"
-            onClick={fixAll}
-            disabled={running || !hasDraft}
-          >
-            すべて確定
-          </Button>
-          <Button
-            size="compact-sm"
-            variant="default"
-            leftSection={<IconShare2 size={16} />}
-            onClick={share}
-            disabled={running}
-          >
-            共有
-          </Button>
-        </Group>
-      </Group>
-
+    <>
       <div
-        className={classes.result}
-        data-tone={status.tone}
-        role="status"
-        // 触る前の不足の数はマスを押すたびに変わる。読み上げは操作の結果だけにする
-        aria-live={message ? 'polite' : 'off'}
+        className={classes.demo}
+        // 表はアプリと同じシステムフォントで描く（LP の書体を持ち込まない）
+        style={{ '--mantine-font-family': theme.fontFamily } as CSSProperties}
       >
-        <span className={classes.resultTitle} title={status.title}>
-          {status.title}
-        </span>
-        {aiCells.size > 0 && !running && (
-          <Anchor
-            component="button"
-            type="button"
-            className={classes.undo}
-            fz={13}
-            fw={650}
-            onClick={undoAssist}
-          >
-            元に戻す
-          </Anchor>
-        )}
-        <span className={classes.resultDetail} title={status.detail}>
-          {status.detail}
-        </span>
-      </div>
+        <Group className={classes.toolbar} justify="space-between" gap="xs">
+          <div>
+            <Text fz={12} c="dimmed" lh={1.4}>
+              {DEMO_STORE_NAME}
+            </Text>
+            <Text fz={16} fw={650} lh={1.4}>
+              {title}
+            </Text>
+          </div>
+          <Group gap={6}>
+            <Button
+              size="compact-sm"
+              leftSection={<IconSparkles size={16} />}
+              onClick={runAssist}
+              disabled={running}
+              className={hint?.kind === 'assist' ? classes.pulse : undefined}
+            >
+              AIで作成
+            </Button>
+            <Button
+              size="compact-sm"
+              variant="default"
+              onClick={fixAll}
+              disabled={running || !hasDraft}
+            >
+              すべて確定
+            </Button>
+            <Button
+              size="compact-sm"
+              variant="default"
+              leftSection={<IconShare2 size={16} />}
+              onClick={share}
+              disabled={running}
+            >
+              共有
+            </Button>
+          </Group>
+        </Group>
 
-      <div className={classes.scroll}>
-        <table className={`${tableClasses.table} ${classes.table}`}>
-          <thead>
-            <tr className={tableClasses.dateRow}>
-              <th scope="col" aria-label="スタッフ" />
-              {dates.map((date) => {
-                const note = notes.get(date)
-                return (
-                  <th key={date} scope="col">
-                    <div
-                      className={[tableClasses.dateHead, dateToneClass(date, holidaySet.has(date))]
-                        .filter(Boolean)
-                        .join(' ')}
-                    >
-                      <div className={tableClasses.dateMain}>
-                        <DateHeaderCell date={date} />
+        <div
+          className={classes.result}
+          data-tone={status.tone}
+          role="status"
+          // 触る前の不足の数はマスを押すたびに変わる。読み上げは操作の結果だけにする
+          aria-live={message ? 'polite' : 'off'}
+        >
+          <span className={classes.resultTitle} title={status.title}>
+            {status.title}
+          </span>
+          {aiCells.size > 0 && !running && (
+            <Anchor
+              component="button"
+              type="button"
+              className={classes.undo}
+              fz={13}
+              fw={650}
+              onClick={undoAssist}
+            >
+              元に戻す
+            </Anchor>
+          )}
+          <span className={classes.resultDetail} title={status.detail}>
+            {status.detail}
+          </span>
+        </div>
+
+        <div className={classes.scroll}>
+          <table className={`${tableClasses.table} ${classes.table}`}>
+            <thead>
+              <tr className={tableClasses.dateRow}>
+                <th scope="col" aria-label="スタッフ" />
+                {dates.map((date) => {
+                  const note = notes.get(date)
+                  return (
+                    <th key={date} scope="col">
+                      <div
+                        className={[
+                          tableClasses.dateHead,
+                          dateToneClass(date, holidaySet.has(date)),
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                      >
+                        <div className={tableClasses.dateMain}>
+                          <DateHeaderCell date={date} />
+                        </div>
+                        <div className={tableClasses.noteCell}>{note}</div>
                       </div>
-                      <div className={tableClasses.noteCell}>{note}</div>
+                    </th>
+                  )
+                })}
+              </tr>
+            </thead>
+
+            <tbody>
+              {DEMO_STAFFS.map((staff) => (
+                <tr key={staff.id}>
+                  <th scope="row">
+                    <div className={tableClasses.menuButton}>
+                      <span className={tableClasses.staffNameText}>{staff.name}</span>
+                      <span className={tableClasses.workdays}>
+                        {workdaysByStaff.get(staff.id) ?? 0}日
+                      </span>
                     </div>
                   </th>
-                )
-              })}
-            </tr>
-          </thead>
+                  {dates.map((date) => {
+                    const cell = { staffId: staff.id, date }
+                    const key = cellKey(staff.id, date)
+                    const shift = shifts.get(key)
+                    const pattern = shift ? patternsById.get(shift.patternId) : undefined
+                    const fixedLabel = pattern ? (shift?.fixed ? '確定' : '下書き') : ''
+                    const label = [staff.name, dateLabel(date), pattern?.name, fixedLabel]
+                      .filter(Boolean)
+                      .join(' ')
+                    const isActive = activeCell?.staffId === staff.id && activeCell.date === date
+                    const hinted = hint?.kind === 'cell' && hint.key === key
 
-          <tbody>
-            {DEMO_STAFFS.map((staff) => (
-              <tr key={staff.id}>
-                <th scope="row">
-                  <div className={tableClasses.menuButton}>
-                    <span className={tableClasses.staffNameText}>{staff.name}</span>
-                    <span className={tableClasses.workdays}>
-                      {workdaysByStaff.get(staff.id) ?? 0}日
-                    </span>
-                  </div>
+                    const button = (
+                      <ShiftCell
+                        pattern={pattern}
+                        fixed={shift?.fixed ?? false}
+                        enabled={staff.availableWdays.includes(wday(date))}
+                        label={label}
+                        marked={Boolean(pattern) && aiCells.has(key)}
+                        onClick={() => openCell(cell)}
+                        holdKey={`demo:${key}`}
+                        onToggleFixed={
+                          pattern && shift && !running
+                            ? () => assign(cell, shift.patternId, !shift.fixed)
+                            : undefined
+                        }
+                        className={hinted ? classes.pulse : undefined}
+                      />
+                    )
+
+                    return (
+                      <td key={date}>
+                        {isActive ? (
+                          <Popover
+                            opened
+                            position="bottom-end"
+                            shadow="md"
+                            withinPortal
+                            trapFocus
+                            returnFocus
+                            onDismiss={() => setActiveCell(null)}
+                          >
+                            <Popover.Target>{button}</Popover.Target>
+                            <Popover.Dropdown p="xs">
+                              <PatternPopover
+                                patterns={DEMO_PATTERNS}
+                                selectedPatternId={shift?.patternId ?? null}
+                                fixed={draftFixed}
+                                onFixedChange={(fixed) => changeDraftFixed(cell, fixed)}
+                                onAssign={(patternId) => assign(cell, patternId, draftFixed)}
+                                onClose={() => setActiveCell(null)}
+                              />
+                            </Popover.Dropdown>
+                          </Popover>
+                        ) : hinted ? (
+                          <HintBubble opened label="マスを押すと直せます">
+                            {button}
+                          </HintBubble>
+                        ) : (
+                          button
+                        )}
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))}
+            </tbody>
+
+            <tfoot>
+              <tr className={tableClasses.footRow}>
+                <th className={tableClasses.footLabel} scope="row">
+                  配置 / 必要人数
                 </th>
                 {dates.map((date) => {
-                  const cell = { staffId: staff.id, date }
-                  const key = cellKey(staff.id, date)
-                  const shift = shifts.get(key)
-                  const pattern = shift ? patternsById.get(shift.patternId) : undefined
-                  const fixedLabel = pattern ? (shift?.fixed ? '確定' : '下書き') : ''
-                  const label = [staff.name, dateLabel(date), pattern?.name, fixedLabel]
-                    .filter(Boolean)
-                    .join(' ')
-                  const isActive = activeCell?.staffId === staff.id && activeCell.date === date
-                  const hinted = hint?.kind === 'cell' && hint.key === key
-
-                  const button = (
-                    <ShiftCell
-                      pattern={pattern}
-                      fixed={shift?.fixed ?? false}
-                      enabled={staff.availableWdays.includes(wday(date))}
-                      label={label}
-                      marked={Boolean(pattern) && aiCells.has(key)}
-                      onClick={() => openCell(cell)}
-                      holdKey={`demo:${key}`}
-                      onToggleFixed={
-                        pattern && shift && !running
-                          ? () => assign(cell, shift.patternId, !shift.fixed)
-                          : undefined
-                      }
-                      className={hinted ? classes.pulse : undefined}
-                    />
-                  )
-
+                  const coverage = coverageAt(date, WORK_PATTERN_IDS, required, counts)
                   return (
                     <td key={date}>
-                      {isActive ? (
-                        <Popover
-                          opened
-                          position="bottom-end"
-                          shadow="md"
-                          withinPortal
-                          trapFocus
-                          returnFocus
-                          onDismiss={() => setActiveCell(null)}
-                        >
-                          <Popover.Target>{button}</Popover.Target>
-                          <Popover.Dropdown p="xs">
-                            <PatternPopover
-                              patterns={DEMO_PATTERNS}
-                              selectedPatternId={shift?.patternId ?? null}
-                              fixed={draftFixed}
-                              onFixedChange={(fixed) => changeDraftFixed(cell, fixed)}
-                              onAssign={(patternId) => assign(cell, patternId, draftFixed)}
-                              onClose={() => setActiveCell(null)}
-                            />
-                          </Popover.Dropdown>
-                        </Popover>
-                      ) : hinted ? (
-                        <HintBubble opened label="マスを押すと直せます">
-                          {button}
-                        </HintBubble>
-                      ) : (
-                        button
-                      )}
+                      <div
+                        className={tableClasses.footCell}
+                        data-state={hasCoverage(coverage) ? coverage.state : undefined}
+                      >
+                        {hasCoverage(coverage) ? `${coverage.assigned}/${coverage.required}` : ' '}
+                      </div>
                     </td>
                   )
                 })}
               </tr>
-            ))}
-          </tbody>
+            </tfoot>
+          </table>
+        </div>
 
-          <tfoot>
-            <tr className={tableClasses.footRow}>
-              <th className={tableClasses.footLabel} scope="row">
-                配置 / 必要人数
-              </th>
-              {dates.map((date) => {
-                const coverage = coverageAt(date, WORK_PATTERN_IDS, required, counts)
-                return (
-                  <td key={date}>
-                    <div
-                      className={tableClasses.footCell}
-                      data-state={hasCoverage(coverage) ? coverage.state : undefined}
-                    >
-                      {hasCoverage(coverage) ? `${coverage.assigned}/${coverage.required}` : ' '}
-                    </div>
-                  </td>
-                )
-              })}
-            </tr>
-          </tfoot>
-        </table>
+        <PatternDescriptionList patterns={DEMO_PATTERNS} />
       </div>
-
-      <PatternDescriptionList patterns={DEMO_PATTERNS} />
-    </div>
+      <Group
+        className={classes.footer}
+        justify="space-between"
+        gap={8}
+        wrap="nowrap"
+        preventGrowOverflow={false}
+      >
+        <Text fz={12} c="dimmed" miw={0} className={classes.footerNote}>
+          保存されないデモ用のデータです
+        </Text>
+        <Button
+          size="compact-sm"
+          variant="subtle"
+          color="gray"
+          fz={13}
+          px={6}
+          className={classes.restart}
+          leftSection={<IconRefresh size={14} />}
+          onClick={restart}
+          disabled={pristine}
+        >
+          最初からやり直す
+        </Button>
+      </Group>
+    </>
   )
 }
 

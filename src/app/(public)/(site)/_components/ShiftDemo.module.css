@@ -15,6 +15,20 @@
   line-height: var(--mantine-line-height);
 }
 
+/* 枠の下の注記と「最初からやり直す」 */
+.footer {
+  padding: 10px 2px 0 6px;
+}
+
+/* 狭い画面で折り返すときは、文の切れ目で 2 行に分ける */
+.footerNote {
+  text-wrap: pretty;
+}
+
+.restart {
+  flex: none;
+}
+
 /* アプリの期間ツールバーと同じ面（gray-0） */
 .toolbar {
   padding: 10px 12px;

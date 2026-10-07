@@ -30,7 +30,6 @@ export function DemoSection({ dates, holidays, title }: Props) {
             </Text>
           </div>
           <ShiftDemo dates={dates} holidays={holidays} title={title} />
-          <p className={classes.trayNote}>デモ用のデータです。保存されません</p>
         </div>
       </Container>
     </section>
