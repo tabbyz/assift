@@ -17,9 +17,7 @@ export function Hero() {
         </Title>
         <Text className={classes.lead} mt={26}>
           <Phrases>
-            {
-              'スタッフの都合や|勤務の上限を守って、|AIが下書きを作ります。\nあとは内容を確認して、|URLでスタッフに送るだけ。'
-            }
+            {'お店とスタッフの希望を|AIがシフト表に。\nスタッフには|URLを送るだけ。'}
           </Phrases>
         </Text>
         <Group gap="md" mt={36}>
