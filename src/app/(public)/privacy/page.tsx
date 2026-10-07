@@ -29,7 +29,7 @@ export default function PrivacyPage() {
         </Stack>
 
         <Text>
-          assiftでの個人情報の扱いについてまとめました。各項の終わりには、その項の要約を添えています。要約と本文の意味が違って読めるときは、本文のほうが正式な内容です。
+          assiftにおける個人情報の取り扱いについて定めています。各項の終わりに要約を添えていますが、要約と本文の内容が異なって読める場合は、本文が優先します。
         </Text>
 
         {PRIVACY_SECTIONS.map((section, index) => (
