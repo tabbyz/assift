@@ -20,10 +20,12 @@ type Props = {
  * - 画面全体ではなくデモの枠の上にだけ重ねる（LP で画面が暗くなると、本当に何かを発行したように見えて身構える）
  * - URL は開いても 404 なので、コピーは見た目だけにする（押せない。読み上げにも出さない）。
  *   代わりに「スタッフの画面を見る」で、すぐ下の `StaffView`（スタッフが開くページの例）へつなぐ
+ * - 枠の上下中央に出す。画面の外にはみ出したら、はみ出した分だけスクロールする
  * - 閉じるのは ×・枠の外・Esc。開いたら主ボタンへフォーカスを移す
  */
 export function DemoShareCard({ onClose, onShowStaffView }: Props) {
   const titleId = useId()
+  const card = useRef<HTMLDivElement>(null)
   const primary = useRef<HTMLButtonElement>(null)
   // 親の再描画ごとに onClose が作り直されても、フォーカスを奪い直さない
   const close = useRef(onClose)
@@ -32,7 +34,15 @@ export function DemoShareCard({ onClose, onShowStaffView }: Props) {
   })
 
   useEffect(() => {
-    primary.current?.focus()
+    // 枠の上下中央に出すので、スマホ（表が縦に長い）では画面の外にはみ出すことがある。
+    // そのときだけ、カードが画面の中央に来るように寄せる（'nearest' だと画面の端に張り付く）
+    const rect = card.current?.getBoundingClientRect()
+    if (rect && (rect.top < 0 || rect.bottom > window.innerHeight)) {
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      card.current?.scrollIntoView({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' })
+    }
+    // スクロールはこちらで済ませたので、フォーカスでは動かさない
+    primary.current?.focus({ preventScroll: true })
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') close.current()
     }
@@ -43,7 +53,7 @@ export function DemoShareCard({ onClose, onShowStaffView }: Props) {
   return (
     <div className={classes.shareLayer}>
       <div className={classes.shareBackdrop} onClick={onClose} aria-hidden="true" />
-      <div className={classes.shareCard} role="dialog" aria-labelledby={titleId}>
+      <div ref={card} className={classes.shareCard} role="dialog" aria-labelledby={titleId}>
         <div className={classes.shareHead}>
           <Text id={titleId} fz={15} fw={650} lh={1.4}>
             共有のURLを発行しました

@@ -153,11 +153,8 @@
   inset: 0;
   z-index: 6;
   display: grid;
-  /*
-   * 枠の上端に寄せる。中央だとスマホ（表が縦に長い）では押した「共有」から離れ、画面の外に出ることがある。
-   * 上端ならツールバーを覆う位置、つまり押した指のすぐ近くに出る
-   */
-  place-items: start center;
+  /* 枠の上下中央。スマホで画面の外にはみ出したときは、開いたときに DemoShareCard がスクロールして見せる */
+  place-items: center;
   padding: 12px;
 }
 
