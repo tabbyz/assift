@@ -4,6 +4,8 @@
  */
 
 .demo {
+  /* 共有のカード（.shareLayer）を枠の中に重ねる */
+  position: relative;
   overflow: hidden;
   border-radius: 14px;
   background-color: var(--mantine-color-body);
@@ -139,4 +141,96 @@
   font-weight: 700;
   white-space: nowrap;
   pointer-events: none;
+}
+
+/*
+ * 「共有」のカード（016 §13）。画面全体ではなく、デモの枠の上にだけ重ねる。
+ * 枠は .scroll の外なので、表を横にスクロールしていても見えている枠の中に出る。
+ * 吹き出し（HINT_Z_INDEX = 5）より上、サイトのヘッダー（10）より下
+ */
+.shareLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  /* 枠の上下中央。スマホで画面の外にはみ出したときは、開いたときに DemoShareCard がスクロールして見せる */
+  place-items: center;
+  padding: 12px;
+}
+
+.shareBackdrop {
+  position: absolute;
+  inset: 0;
+  background-color: color-mix(in srgb, var(--mantine-color-body) 70%, transparent);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+.shareCard {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  width: min(360px, 100%);
+  padding: 14px 16px 16px;
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: 12px;
+  background-color: var(--mantine-color-body);
+  box-shadow: 0 16px 40px -16px rgb(0 0 0 / 30%);
+  animation: shareIn 0.18s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shareCard {
+    animation: none;
+  }
+}
+
+@keyframes shareIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.shareHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* 実物の URL 欄（ShareModal の .urlField）と同じ形。コピーは見た目だけ */
+.shareUrlField {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding-inline: 12px 6px;
+  border: 1px solid var(--mantine-color-gray-4);
+  border-radius: var(--mantine-radius-sm);
+}
+
+.shareUrl {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.shareCopy {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding-inline: 10px;
+  border-radius: var(--mantine-radius-sm);
+  background-color: var(--mantine-color-gray-1);
+  color: var(--mantine-color-gray-7);
+  font-size: 12.5px;
+  font-weight: 600;
+  user-select: none;
 }

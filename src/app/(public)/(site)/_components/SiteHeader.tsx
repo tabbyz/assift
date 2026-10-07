@@ -4,7 +4,11 @@ import { LinkButton } from '@/components/LinkButton'
 import { Logo } from './Logo'
 import classes from '../Site.module.css'
 
-/** LP のヘッダー。ページ内の行き先は素の `<a>`（同じページの見出しへ飛ぶだけ） */
+/**
+ * LP と静的ページ（規約・ポリシー・特商法表記）のヘッダー。
+ * LP の見出しへの行き先は `/#…`。LP の上ではその見出しへスクロールし、ほかのページからは LP へ移る
+ * （`#price` だけにすると `/terms` の「料金」条へ飛んでしまう）
+ */
 export function SiteHeader() {
   return (
     <header className={classes.header}>
@@ -13,15 +17,15 @@ export function SiteHeader() {
           <Logo />
           <Group gap={26} wrap="nowrap">
             <Group component="nav" aria-label="ページ内" gap={26} className={classes.nav}>
-              <a href="#features" className={classes.navLink}>
+              <Link href="/#features" className={classes.navLink}>
                 できること
-              </a>
-              <a href="#price" className={classes.navLink}>
+              </Link>
+              <Link href="/#price" className={classes.navLink}>
                 料金
-              </a>
-              <a href="#faq" className={classes.navLink}>
+              </Link>
+              <Link href="/#faq" className={classes.navLink}>
                 よくある質問
-              </a>
+              </Link>
             </Group>
             <Link href="/login" className={classes.loginLink}>
               ログイン

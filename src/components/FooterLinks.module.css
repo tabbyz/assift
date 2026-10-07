@@ -1,9 +1,17 @@
+/* 行の高さは置かれたページに任せない（LP は本文の line-height が大きく、折り返したときの行間が広がる） */
 .link {
   font-size: 13px;
+  line-height: 1.6;
   color: var(--mantine-color-dimmed);
   text-decoration: none;
 }
 
 .link:hover {
   color: var(--mantine-color-text);
+}
+
+.copyright {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--mantine-color-dimmed);
 }

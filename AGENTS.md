@@ -47,7 +47,7 @@ src/
   app/
     layout.tsx                    MantineProvider > ModalsProvider > NuqsAdapter > children + Notifications
     (public)/                     認証不要
-      (site)/                     LP（/）と、今後足す静的ページ。layout がヘッダー・フッター・LP の書体（016）
+      (site)/                     LP（/）と静的ページ（terms / privacy / law）。layout がヘッダー・フッター・LP の書体（016 / 018）
       share/[code]/               公開シフト表（未ログインで開く。読み取りは service_role）。(site) の枠を被せない
     (auth)/                       login, signup, password/*
     (protected)/                  layout で未ログインを弾く

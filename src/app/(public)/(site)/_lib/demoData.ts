@@ -48,6 +48,13 @@ export const DEMO_PATTERNS: DemoPattern[] = [
 
 export const DEMO_STORE_NAME = 'カフェ 青葉台店'
 
+/**
+ * デモの共有カードに出すコード（016 §13）。本物と同じ英数字 8 文字の形にするが、**発行では作られない文字（`0`）を混ぜる**。
+ * 発行に使う 55 文字だけで組むと、どこかの店の本物の共有と重なりうる（URL を打ち込んだ人が他店の表を見られる）。
+ * v1 のコードも `0 O 1 l I i j` を置き換えていたので、v1 から移したコードとも重ならない
+ */
+export const DEMO_SHARE_CODE = 'a8Kx3mQ0'
+
 export type DemoStaff = {
   id: string
   name: string
