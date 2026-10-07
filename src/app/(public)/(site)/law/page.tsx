@@ -11,8 +11,6 @@ import {
   Text,
   Title,
 } from '@mantine/core'
-import { FooterLinks } from '@/components/FooterLinks'
-import { LinkAnchor } from '@/components/LinkAnchor'
 import { LAW } from './_components/law'
 import { LAW_ITEMS } from './_components/items'
 
@@ -26,10 +24,6 @@ export default function LawPage() {
   return (
     <Container size={720} py="xl">
       <Stack gap="xl">
-        <LinkAnchor href="/" c="inherit" underline="never" fw={700} size="lg" w="fit-content">
-          assift
-        </LinkAnchor>
-
         <Title order={1} fz={{ base: 22, xs: 34 }}>
           特定商取引法に基づく表記
         </Title>
@@ -73,9 +67,6 @@ export default function LawPage() {
             </Text>
           )}
         </Stack>
-        <footer>
-          <FooterLinks />
-        </footer>
       </Stack>
     </Container>
   )

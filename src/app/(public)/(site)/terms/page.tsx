@@ -1,7 +1,5 @@
 import type { Metadata } from 'next'
 import { Anchor, Container, Divider, Paper, Stack, Text, Title } from '@mantine/core'
-import { FooterLinks } from '@/components/FooterLinks'
-import { LinkAnchor } from '@/components/LinkAnchor'
 import { TERMS_ARTICLES } from './_components/articles'
 import { TERMS } from './_components/terms'
 
@@ -15,10 +13,6 @@ export default function TermsPage() {
   return (
     <Container size={720} py="xl">
       <Stack gap="xl">
-        <LinkAnchor href="/" c="inherit" underline="never" fw={700} size="lg" w="fit-content">
-          assift
-        </LinkAnchor>
-
         <Title order={1}>利用規約</Title>
 
         <Text>assiftの利用条件を定めています。各条の終わりには、その条の要約を添えています。</Text>
@@ -29,7 +23,7 @@ export default function TermsPage() {
             id={article.id}
             component="section"
             gap="sm"
-            style={{ scrollMarginTop: 'var(--mantine-spacing-md)' }}
+            style={{ scrollMarginTop: 'var(--site-anchor-offset)' }}
           >
             <Title order={2} size="h3">
               第{index + 1}条 {article.title}
@@ -64,9 +58,6 @@ export default function TermsPage() {
             ）
           </Text>
         </Stack>
-        <footer>
-          <FooterLinks />
-        </footer>
       </Stack>
     </Container>
   )

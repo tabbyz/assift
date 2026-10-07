@@ -10,6 +10,9 @@
   --site-radius-lg: 28px;
   --site-radius-md: 18px;
   --site-section-gap: 104px;
+  --site-header-height: 68px;
+  /* sticky のヘッダーに見出しが隠れないよう、ページ内リンクの行き先（規約の各条など）をずらす量 */
+  --site-anchor-offset: calc(var(--site-header-height) + var(--mantine-spacing-md));
 
   /* 見出し・本文とも LP の書体。表（デモ）だけはアプリと同じシステムフォントに戻す（ShiftDemo） */
   --mantine-font-family:
@@ -44,7 +47,7 @@
 }
 
 .headerInner {
-  height: 68px;
+  height: var(--site-header-height);
 }
 
 .navLink {

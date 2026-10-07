@@ -107,3 +107,11 @@
   - 行間は、`Group` の `gap` が行の間にも効くのと、LP の本文の `line-height` が大きいため
 - `FooterLinks`: © をリンクの行から外して常に下の行に置き、折り返した行の間は 6px（列の間は `lg`）。リンクと © の `line-height` を CSS Module で固定し、置かれたページに左右されないようにした
 - 375px / 430px で LP と `/law` を確認
+
+### 2026-10-07（静的ページを `(site)` に移す）
+
+- `/terms`・`/privacy`・`/law` を `(public)/` 直下から `(public)/(site)/` へ移した（URL は変わらない）。LP と同じヘッダー（ロゴ・ログイン・無料ではじめる）・フッター・書体になる。AGENTS.md の「`(site)/` は LP と、今後足す静的ページ」に合わせた
+- 各ページが手書きしていたロゴのリンクと `<footer><FooterLinks /></footer>` を外した（layout の `SiteHeader` / `SiteFooter` が出す）
+- `SiteHeader` のページ内リンクを `#features` → `/#features` にした（`next/link`）。`#price` のままだと `/terms` の「料金」条へ飛んでしまう
+- ヘッダーが sticky なので、規約・ポリシーのページ内リンク（`/terms#price` など）の行き先が隠れないよう、`scrollMarginTop` を `--site-anchor-offset`（ヘッダーの高さ 68px + `md`）にした。ヘッダーの高さは `--site-header-height` に置いた
+- 確認: `/terms` のヘッダー「料金」→ LP の料金へ移る。`/terms#price` の見出しはヘッダーの 16px 下に出る。375px で `/law`・`/privacy` が横にはみ出さない
