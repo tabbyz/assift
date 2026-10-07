@@ -2,16 +2,17 @@ import type { Metadata } from 'next'
 import { Anchor, Container, Divider, Paper, Stack, Text, Title } from '@mantine/core'
 import { FooterLinks } from '@/components/FooterLinks'
 import { LinkAnchor } from '@/components/LinkAnchor'
-import { TERMS_ARTICLES } from './_components/articles'
-import { TERMS } from './_components/terms'
+import { TERMS } from '../terms/_components/terms'
+import { PRIVACY } from './_components/privacy'
+import { PRIVACY_SECTIONS } from './_components/sections'
 
-export const metadata: Metadata = { title: '利用規約' }
+export const metadata: Metadata = { title: 'プライバシーポリシー' }
 
 /**
- * 利用規約（016）。ふだんの言葉で書き、各条の本文のあとに要約を添える。
- * 本文は `_components/articles.tsx`、未確定の運営側の値は `_components/terms.ts`。
+ * プライバシーポリシー（017）。利用規約（016）と同じ形で、各項の本文のあとに要約を添える。
+ * 本文は `_components/sections.tsx`、未確定の運営側の値は `_components/privacy.ts`。
  */
-export default function TermsPage() {
+export default function PrivacyPage() {
   return (
     <Container size={720} py="xl">
       <Stack gap="xl">
@@ -19,28 +20,32 @@ export default function TermsPage() {
           assift
         </LinkAnchor>
 
-        <Title order={1}>利用規約</Title>
+        <Title order={1} fz={{ base: 28, xs: 34 }}>
+          プライバシーポリシー
+        </Title>
 
-        <Text>assiftの利用条件を定めています。各条の終わりには、その条の要約を添えています。</Text>
+        <Text>
+          assiftにおける個人情報の取り扱いについて定めています。各項の終わりに要約を添えていますが、要約と本文の内容が異なって読める場合は、本文を優先します。
+        </Text>
 
-        {TERMS_ARTICLES.map((article, index) => (
+        {PRIVACY_SECTIONS.map((section, index) => (
           <Stack
-            key={article.id}
-            id={article.id}
+            key={section.id}
+            id={section.id}
             component="section"
             gap="sm"
             style={{ scrollMarginTop: 'var(--mantine-spacing-md)' }}
           >
             <Title order={2} size="h3">
-              第{index + 1}条 {article.title}
+              {index + 1}. {section.title}
             </Title>
-            {article.body}
+            {section.body}
             <Paper bg="var(--mantine-color-gray-0)" radius="sm" px="md" py="sm">
               <Text size="sm">
                 <Text span fw={700} size="sm">
                   要約：
                 </Text>
-                {article.summary}
+                {section.summary}
               </Text>
             </Paper>
           </Stack>
@@ -49,11 +54,11 @@ export default function TermsPage() {
         <Divider />
         <Stack gap={4}>
           <Text size="sm" c="dimmed">
-            {TERMS.enactedOn}制定
+            {PRIVACY.enactedOn}制定
           </Text>
-          {TERMS.updatedOn !== TERMS.enactedOn && (
+          {PRIVACY.updatedOn !== PRIVACY.enactedOn && (
             <Text size="sm" c="dimmed">
-              {TERMS.updatedOn}改定
+              {PRIVACY.updatedOn}改定
             </Text>
           )}
           <Text size="sm" c="dimmed">
