@@ -18,7 +18,7 @@ export function Hero() {
         <Text className={classes.lead} mt={26}>
           <Phrases>
             {
-              'スタッフの都合や|勤務の上限を守って、|AIが下書きを作ります。\nあとは内容を確認して、|URLで送るだけ。'
+              'スタッフの都合や|勤務の上限を守って、|AIが下書きを作ります。\nあとは内容を確認して、|URLでスタッフに送るだけ。'
             }
           </Phrases>
         </Text>
