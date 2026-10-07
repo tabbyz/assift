@@ -142,7 +142,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
         </P>
         <P>
           店舗の方へ：スタッフには、assiftを利用していることをお伝えください。また、健康状態など、シフトの作成に必要のない情報は入力しないでください（
-          <Anchor href="/terms#staff-info">利用規約「スタッフの情報を入れるとき」</Anchor>）。
+          <Anchor href="/terms#staff-info">利用規約「スタッフの情報を入力する場合」</Anchor>）。
         </P>
       </>
     ),

@@ -25,9 +25,7 @@ export default function TermsPage() {
           </Text>
         </Stack>
 
-        <Text>
-          assiftを使う前に、知っておいてほしいことをまとめました。各条の終わりには、その条の要約を添えています。
-        </Text>
+        <Text>assiftの利用条件を定めています。各条の終わりには、その条の要約を添えています。</Text>
 
         {TERMS_ARTICLES.map((article, index) => (
           <Stack
