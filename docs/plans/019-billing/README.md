@@ -8,7 +8,7 @@
 > 番号: データ移行・カットオーバーより先に入れる。v1 には課金中の利用者がいるので、**カットオーバーの時点で課金が動いていないと請求が止まる**。
 > 移行（001 §5）には本プランの §8 を足す。
 
-**状態: プラン（未実装）。2026-10-07 に §11 の 1〜3・5〜14 を決定（同日に 2 を「リリース時に有料プランの人だけ」、1・3 を簡素化のため見直し、v1 の Stripe の実数で §8 を具体化）。4 はテストクロックの結果待ち。**
+**状態: プラン（未実装）。2026-10-07 に §11 の 1〜3・5〜14 を決定（同日に 2 を「リリース時に有料プランの人だけ」、1・3 を簡素化のため見直し、v1 の Stripe の実数で §8 を具体化）。4 はテストクロックの結果待ち。同日にプランのレビューを反映。**
 
 ---
 
@@ -165,10 +165,11 @@ Meter に `max` が無いので、**最大値はアプリが計算し、Meter �
 2. 請求の対象になる区間 = `[max(期間の開始, トライアルの終了), 期間の終わり)`。その区間の最大人数 = `max(区間の開始時点の人数, 区間内の履歴の人数)`。
    区間が空（期間がまるごとトライアル中）なら 0。TS の純関数 `billableStaffPeak()`（`lib/billing/peak.ts`。Vitest）
 3. 送るタイミング:
-   - **毎日の cron（23 時台 JST）**: 有料プランの全員について、今の期間のここまでの最大人数を `timestamp = 今` で送る。
+   - **毎日の cron（23 時台 JST）**: 有料プランの全員について、今の期間のここまでの最大人数を `timestamp = min(今, 期間の終わり − 1 分)` で送る
+     （v1 から引き継ぐ契約は期間の終わりが 23:59:59 JST なので、23 時台の終わりに走ったときに次の期間へはみ出さないようにする）。
      期間の最終日の送信がそのまま請求に効く（期間の終わり = 1 日 0:00 JST より前に届く）。
      最終日の送信より後（最後の 1 時間以内）に増やした人数は請求に載らない。誤差として受け入れ、設計の単純さを取る（決定。§11-8）
-   - 申し込み直後（同期のとき）と退会のとき（§5.8）に 1 回
+   - 申し込み直後（同期のとき）と退会のとき（§5.8）に 1 回（時刻は同じく `min(今, 期間の終わり − 1 分)`）
 4. `identifier = <subscription id>:<期間の開始>:<人数>`。同じ値の二重送信を Stripe が捨てる（一意性は 24 時間以上。`last` なので重複しても請求は変わらない）
 5. 同じ顧客への同時送信は 1 本まで（429）。cron は 1 人ずつ順に送り、429 は待って再試行する
 6. cron が 1 日落ちても、前日までに送った値が残る（その日の増員だけが載らない）。最終日に落ちたときだけ請求が少なくなる（利用者に有利な側に倒れる）
@@ -184,6 +185,14 @@ Meter に `max` が無いので、**最大値はアプリが計算し、Meter �
 - 申し込んだ月の残り（申し込み〜月末）: 規約どおり「その月の最大人数」で請求する方針。`proration_behavior` の既定で初回の端数期間の従量分が
   1 日の請求書に載ることを**テストクロックで確かめる**（§9.3-1）。載らなければ `proration_behavior` と文言を見直す（§11-4）
 - v1 から引き継ぐ Subscription は請求日を動かさない（§8.2）
+
+### 4.4 税とメール
+
+- 価格は**税込**（018 §5。免税事業者）。Stripe の price に税率を付けず、Stripe Tax も使わない。請求書の下部（Dashboard の請求書設定）に
+  「表示の金額は税込です」と入れる。**適格請求書は出さない**（登録番号が無い）。課税事業者になるときは Tax Rate と登録番号を足す（別マイルストーン）
+- Stripe から送るメール（Dashboard）: 支払い成功の領収書 / 支払い失敗（カード更新のリンク付き）/ **3D セキュアの認証が必要な支払いのリンク** /
+  カードの有効期限切れの予告。言語は Customer の `preferred_locales`（§5.5・§8.2）
+- v1 の画面にあった「3D セキュア非対応のカードは使えません」の注記は出さない（Checkout とメールのリンクが認証を扱う）
 
 ---
 
@@ -218,7 +227,7 @@ create table public.billing_subscriptions (
   user_id                uuid primary key references public.profiles (id) on delete cascade,
   stripe_subscription_id text        not null unique,
   status                 text        not null,          -- Stripe の status をそのまま
-  price_lookup_key       text,                          -- assift_monthly / 旧 freemium-monthly
+  price_lookup_key       text,                          -- assift_monthly。lookup_key の無い v1 の price（freemium-monthly）は price の id
   discount_percent       smallint,                      -- 旧料金のクーポン（50）。null = なし（§2.4）
   cancel_at              timestamptz,                   -- 解約予定（期間の終わり）
   current_period_start   timestamptz not null,          -- basil 以降は subscription item の値
@@ -241,6 +250,11 @@ create index on public.staff_count_history (user_id, changed_at);
   pgTAP に「他人の行が見えない / authenticated は書けない / anon は 42501」を足す
 - `profiles` に `authenticated` の UPDATE は付けない。トライアルの開始は RPC `start_trial()`（`security definer`、`trial_end is null` のときだけ、
   期間は始めた日から 2 か月後の月末まで。`auth.uid()` の行だけ）
+  - `set search_path = ''`（関数の中は `public.profiles` のように完全修飾）。`auth.uid()` が null なら `raise`。引数は取らない（他人の行を指せない）
+  - `execute` は `authenticated` だけ（`anon` は `unmanaged/restrict_anon_grants.sql` で外れる）
+- 門番と履歴のトリガ関数（§5.3）は `private` に置き、`security definer` + `set search_path = ''`（`authenticated` は `staff_count_history` に書けないため）
+- **`profiles.stripe_customer_id` は利用者が書ける口を作らない**（`grant update` も RPC も作らない）。書けると他人の Customer を指してポータルを開き、
+  他人の請求書・カード情報を見られる。書くのはサーバーの `startCheckout()`（Stripe が返した Customer の id。service_role）と移行スクリプトだけ
 - `plan_change_logs`（v1 の `usage_records`）は**移行せず、表ごと消す**（差分 migration で drop。型・pgTAP の `rls_tenant_isolation.sql` からも外す）。
   v2 には上限を選ぶ仕組みが無く使い道が無い。v1 の請求の記録は Stripe の請求書にあり、元のデータはカットオーバーで取る v1 のダンプに残る（§8.1）。
   001 §5.2・§7 の「`usage_records` は `plan_change_logs` として移行する」を上書きする（実装時に 001 にも注記する）
@@ -254,6 +268,7 @@ Action ごとに確かめると抜けるので、**`staffs` の BEFORE INSERT / 
 - 在籍が 1 人増える変更のときだけ、店舗のオーナーの全店舗の在籍数を数え、`private.staff_limit(owner)` を超えるなら
   `raise exception using errcode = 'P0001', message = 'staff_limit_exceeded'`（画面の文言は Action 側で日本語に差し替える）
 - 同時に 2 件足されて 11 人になるのを防ぐため、数える前に `profiles` のオーナー行を `for update` で取る
+- 複数行の INSERT（初期設定でまとめて追加）でも行ごとに数える。PostgreSQL の行トリガは、同じ文で先に処理した行の変更を見るので、11 行目で止まる（pgTAP で固定する）
 - `auth.uid()` が null（移行スクリプト・service_role）のときは止めない
 - 同じトリガ関数の AFTER 版が `staff_count_history` に 1 行足す（前の行と同じ数なら足さない）。店舗の削除（cascade）も拾う
 - 止めたときの表示: `createStaff` / 復帰 / 初期設定の Action が上の message を見て `{ ok: false, code: 'staff_limit' }` を返し、
@@ -284,21 +299,24 @@ URL は**利用者単位**（全店舗の合計で数えるので店舗の外）
 | Action | 内容 |
 | --- | --- |
 | `startTrial()` | `requireUser()` → RPC `start_trial()`。使用済みなら fail。`revalidatePath('/tenants', 'layout')` |
-| `startCheckout()` | `requireUser()` → 同期して**既に有料なら fail**（二重契約を防ぐ）→ Customer が無ければ作る（`email`、`preferred_locales: ['ja']`、`metadata.user_id`）→ `profiles.stripe_customer_id` を保存（service_role）→ Checkout Session（`mode: subscription`、`price` = `assift_monthly`、クーポンなし（`allow_promotion_codes` も付けない）、`payment_method_types: ['card']`、`locale: 'ja'`、`client_reference_id`、§4.3 の anchor、`success_url` / `cancel_url`、`expires_at` 30 分）→ `{ redirectTo: session.url }` |
-| `openPortal()` | ポータルの Session を作って `{ redirectTo }`。`has_schedule` の間はポータルで解約できないので、解約は下の Action で受ける（§8.2） |
+| `startCheckout()` | `requireUser()` → 同期して**既に有料なら fail**（二重契約を防ぐ）→ Customer が無ければ作る（`email`、`preferred_locales: ['ja']`、`metadata.assift_user_id`）→ `profiles.stripe_customer_id` を保存（service_role）→ Checkout Session（`mode: subscription`、`price` = `assift_monthly`、クーポンなし（`allow_promotion_codes` も付けない）、`payment_method_types: ['card']`、`locale: 'ja'`、`client_reference_id`、§4.3 の anchor、`success_url` / `cancel_url`、`expires_at` 30 分）→ `{ redirectTo: session.url }` |
+| `openPortal()` | **DB の `profiles.stripe_customer_id`** でポータルの Session を作って `{ redirectTo }`（入力から Customer を受け取らない）。`has_schedule` の間はポータルで解約できないので、解約は下の Action で受ける（§8.2） |
 | `cancelDuringMigration()` | `has_schedule` の間（v1 からの切り替え待ち）だけ「プランとお支払い」に出す解約ボタン。schedule を release してから `cancel_at_period_end: true`（release も旧 metered の明細を含むので API `2025-02-24.acacia` で呼ぶ）。問い合わせを経ずに解約できるようにする（決定。§11-11） |
 
 - 認証系と同じく `redirect()` せず `{ redirectTo }` を返し、クライアントが `window.location.assign`（外部 URL）
-- それでも同じ Customer に有効な Subscription が 2 件できたら、同期関数が新しいほうを残して古いほうを解約し、ログに出す
-  （Meter は Customer 単位で集計するので、2 件あると二重請求になる）
+- それでも同じ Customer に有効な Subscription が 2 件できたら、同期関数が**新しいほう（誤って作られたほう）を即時解約**し、ログに出す
+  （Meter は Customer 単位で集計するので、2 件あると二重請求になる）。古いほうを残すのは、旧料金のクーポンが付いた契約を失わないため
+- Checkout から戻ったときの `session_id` は信用しない。同期は常に、ログイン中の利用者の `profiles.stripe_customer_id` で Stripe から取り直す
 
 ### 5.6 Webhook と同期（`src/app/api/stripe/webhook/route.ts`、`lib/billing/sync.ts`）
 
 - `POST` だけ。`await request.text()` の生 body と `stripe-signature` で `constructEventAsync`。失敗は 400
-- 受けるイベント: `checkout.session.completed` / `customer.subscription.{created,updated,deleted}` / `invoice.paid` / `invoice.payment_failed`
+- 受けるイベント: `checkout.session.completed` / `customer.subscription.{created,updated,deleted}` / `invoice.paid` / `invoice.payment_failed` /
+  `invoice.payment_action_required`（3D セキュアの認証待ち。支払い失敗の帯を正しく出すため）
 - どれも**中身を使わず** `syncCustomer(customerId)` を呼ぶだけ。同期関数は Stripe から Customer の Subscription を取り直し、
   `billing_subscriptions` を upsert / delete する（順不同・重複に強い。冪等）。クーポンの有無（`discount_percent`）もここで写す
-- Customer → 利用者は `profiles.stripe_customer_id` で引く（無ければ `metadata.user_id`）。利用者が居なければ（退会済み）何もしない
+- Customer → 利用者は `profiles.stripe_customer_id` で引く（無ければ `metadata.assift_user_id`）。**`metadata.user_id` は見ない**（v1 が作った Customer に v1 の数字の id が入っている）。
+  利用者が居なければ（退会済み）何もしない
 - 書き込みは `createPrivilegedClient()`。中のクエリはすべて `.eq('user_id', …)` / `.eq('id', …)` で 1 人に絞る（`publicShare.ts` と同じ規律）
 - **preview には Webhook が届かない**（PR ごとの URL・Deployment Protection・PR ごとのブランチ DB）。Webhook に頼らず動くよう、
   `/account/billing` の描画時（`synced_at` が古いとき）と Checkout から戻ったときにも `syncCustomer` を呼ぶ。
@@ -326,6 +344,8 @@ Stripe が失敗したら退会も止める（請求できないまま消さな�
 
 - `createPrivilegedClient()` の用途に「Stripe の Webhook / cron / 申し込みで `profiles.stripe_customer_id` を書くとき」（`lib/billing/` に閉じる）
 - `src/app/api/` は「ファイルを返す GET だけ」→ Webhook（POST）と cron（GET）を足し、それぞれの認証（署名 / `CRON_SECRET`）を書く
+- proxy の `config.matcher` から `/api/stripe` と `/api/cron` を外す（ログイン状態と無関係で、Supabase のセッション更新は要らない。
+  prefetch を外さない決まりは、セッション cookie を書くページのためのもので、これらには当たらない）
 - ディレクトリ表の `billing/`: pricing に peak / entitlement / trial / sync / stripe（クライアント）を足す
 - RPC の一覧に `start_trial`
 
@@ -363,7 +383,7 @@ hosted Checkout なので publishable key は要らない。未設定なら申�
 - Vitest: `entitlement`（状態 × トライアル × 個別契約）、`trial`（月末・年またぎ・閏年）、`peak`（区間の前の行・区間内の増減・行なし・
   トライアルが期間の途中で終わる・期間がまるごとトライアル）、`pricing`（Stripe の tiers と同じ表。50% 引きで v1 の料金と一致する）、`checkout`（anchor の値）、
   `usage`（identifier）
-- pgTAP: 無料で 11 人目の INSERT / 復帰が P0001、トライアル中・有料・個別契約なら通る、他人の店舗のスタッフ数は数えない、service_role は止めない、
+- pgTAP: 無料で 11 人目の INSERT / 復帰が P0001、15 行をまとめて INSERT すると P0001（1 行も入らない）、トライアル中・有料・個別契約なら通る、他人の店舗のスタッフ数は数えない、service_role は止めない、
   履歴が増減で 1 行ずつ増え、同じ数では増えない、`start_trial` は 1 回だけ・他人の行は変えない・anon は 42501、2 表の RLS
 
 ---
@@ -454,6 +474,7 @@ Stripe のサブスクリプションは 有効 795 / 未払い 155 / 期日経�
 - **schedule の作成・更新・release は API `2025-02-24.acacia` を指定する**（basil 以降は meter の無い metered price を扱えない。移行ガイド）。
   stripe-node はリクエストごとに `apiVersion` を上書きできるので、このスクリプトと `cancelDuringMigration()` の該当の呼び出しだけ acacia にする
 - v1 の Subscription は `classic` のまま。請求日もそのまま（月末 23:59:59 JST 前後。v1 から変えない）
+- 旧料金に移す 392 件の Customer に `preferred_locales: ['ja']` を設定する（v1 は設定していないので、支払い失敗のメールやポータルが英語になりうる）
 - schedule が付いている間（カットオーバーから最初の期間の終わりまで）は**ポータルで解約できない**。`billing_subscriptions.has_schedule` を立て、
   その間は「プランとお支払い」の解約ボタンを `cancelDuringMigration()` に向ける（§5.5）。切り替わった後は release されて通常に戻る
 - 切り替えの請求書（phase の切り替え）にも猶予中の利用量が載る（§3）ので、新しい price の最初の期間からは §4.2 の送信がそのまま効く
@@ -464,7 +485,7 @@ Stripe のサブスクリプションは 有効 795 / 未払い 155 / 期日経�
 
 1. `--dry-run`: 区分ごとの一覧を CSV に出す（利用者・Customer・Subscription・状態・上限・期間の終わり・最後の編集・するはずの操作）。
    件数が §8.2.1 と合い、旧料金に移す 392 件（345 + 47）の今月の請求見込みの合計が v1 の管理画面の売上と大きく違わないことを確かめる
-2. `--apply --limit 5`: 区分ごとに数件だけ適用し、Dashboard で schedule の中身（次の期間から `assift_monthly` + クーポン）・無効にした下書き・`active` に戻ったことを目で確かめる
+2. `--apply --limit 5`: 区分ごとに数件だけ適用し、Customer の言語が日本語になったこと、Dashboard で schedule の中身（次の期間から `assift_monthly` + クーポン）・無効にした下書き・`active` に戻ったことを目で確かめる
 3. `--apply`: 残りを流す。冪等にする（schedule が既にあれば作らない、解約済みは飛ばす）。途中で止まっても再実行できる
 4. 結果の CSV を v1 のダンプと一緒に保管する
 
