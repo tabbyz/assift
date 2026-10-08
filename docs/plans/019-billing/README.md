@@ -556,8 +556,8 @@ Stripe のサブスクリプションは 有効 795 / 未払い 155 / 期日経�
 
 ### 9.2 ローカル
 
-- `stripe listen --forward-to localhost:3000/api/stripe/webhook` の出す secret を `.env.local` に。クラウドのセッションで Stripe CLI が使えなければ、
-  Webhook の確認はローカルの PC で行い、ここでは同期関数（ページ描画時）で確かめる
+- `stripe listen --forward-to localhost:3000/api/stripe/webhook` の出す secret を `.env.local` に。クラウドのセッションでは外から Webhook を受けられないので、
+  自分で署名したイベントを送って確かめる（§9.4-3）
 - cron は `curl -H "Authorization: Bearer $CRON_SECRET" localhost:3000/api/cron/billing-usage`
 
 ### 9.3 テストクロックで確かめる筋書き
@@ -579,6 +579,92 @@ Stripe のサブスクリプションは 有効 795 / 未払い 155 / 期日経�
 14. schedule が付いた Subscription を `cancelDuringMigration()` で解約 → schedule が残ったまま期間の終わりに終わる・新料金に切り替わらない・ポータルで取り消せない
 15. トライアルを使わずに申し込む → `trial_end` に Subscription の開始時刻が入る → 解約して期間が終わる → 11 人目で止まってもトライアルは案内されない（申し込みの案内になる）
 
+
+### 9.4 クラウドのセッションで確かめる（引き継ぎ用の手順。2026-10-08）
+
+実装（§12）のあと、Stripe と実際にやり取りする部分はまだ一度も動かしていない。新しいセッションで「019 の Stripe の確認をして」と頼まれたら、
+この節を上から順に進め、結果を §12 に追記する。
+
+#### 前提（ユーザーが済ませること）
+
+| 項目 | 内容 |
+| --- | --- |
+| Stripe のサンドボックス | v1 と同じアカウントに**新しいサンドボックス**（例: `assift-v2-dev`）を作る。**従来のテストモードは使わない**: 一部の設定を本番と共有しており、「再試行が尽きたら解約」に変えると本番も変わりうる（カットオーバー前に本番の `unpaid` 134 件が解約され、救う 47 件を失う） |
+| サンドボックスの設定 | 事業者名（公開情報）が入っている / 「すべての再試行が失敗したら」を**サブスクリプションをキャンセル**にする（シナリオ 6・13 で使う） |
+| 鍵 | サンドボックスのシークレットキー（`sk_test_`）をクラウド環境の環境変数 `STRIPE_SECRET_KEY` に入れる。チャットには貼らない |
+| ネットワーク | `*.stripe.com` / `*.stripe.network` / `*.stripecdn.com` を許可済み（2026-10-08） |
+
+#### 0. 始める前に
+
+- **`STRIPE_SECRET_KEY` が `sk_test_` か `rk_test_` で始まることを確かめる。** それ以外（live）なら何もせずユーザーに伝える。値そのものは表示しない（`${STRIPE_SECRET_KEY:0:8}` だけ見る）
+- `curl -s -o /dev/null -w '%{http_code}' https://api.stripe.com/v1/balance -u "$STRIPE_SECRET_KEY:"` が 200 になること（ネットワークと鍵）
+- DB が要るので AGENTS.md「クラウドのセッション」のとおり `supabase start`（使わないサービスを外す）→ `.env.local` を作る。
+  `.env.local` には Supabase の 3 つに加えて `STRIPE_SECRET_KEY`（環境変数の値）・`STRIPE_WEBHOOK_SECRET`（適当な `whsec_` で始まる文字列を作る）・`CRON_SECRET`（`openssl rand -hex 32`）を書く。コミットしない
+- このセッションは**外から Webhook を受けられない**。Stripe CLI も要らない: Webhook の確認は、Stripe から取った実際のイベント（`stripe.events.list`）の本文に
+  `stripe.webhooks.generateTestHeaderString({ payload, secret })` で署名を付け、ローカルの `/api/stripe/webhook` に POST して行う
+
+#### 1. 初期設定（`npm run stripe:setup`）
+
+- 2 回流して 2 回目が「既存」だけになる（冪等）
+- 見る: Meter の集計が `last`・customer_mapping が `stripe_customer_id`、Price の `lookup_key: assift_monthly`・tiers が 10 人まで 0 円 / 以降 100 円・税込（`inclusive`）、
+  Coupon `assift_v1_legacy` が 50%・forever、ポータルの設定（請求書・支払い方法・宛名・期間末の解約・プラン変更なし）
+- ポータルの作成が事業者名などの不足で失敗したら、エラーの内容をユーザーに伝える
+
+#### 2. 画面から申し込む（Checkout）
+
+- `npm run dev` → seed のユーザーでログイン → 在籍を 11 人にする（DB に直接 INSERT すると門番は `auth.uid()` が null なので止めない）→ 申し込みの確認画面 →
+  Playwright で Checkout にテストカード `4242 4242 4242 4242` を入れて申し込む
+- 見る: 戻り先 `/account/billing?checkout=success` で同期され「有料プラン」になる（Webhook が届かなくても描画時の同期で写る）、
+  `billing_subscriptions` の期間が「今 〜 今月末日 15:00 UTC」、`profiles.trial_end` に Subscription の開始時刻が入る（トライアル未使用の場合）
+- 「お支払い方法・請求書・解約」でポータルが開く（日本語）。ポータルで解約 → 再読み込みで「◯月◯日で終了予定」
+- 申し込み済みの状態で確認画面を開くと `/account/billing` に戻される、`startCheckout` を直接呼んでも「有料プランをご利用中です」
+
+#### 3. Webhook と cron の入口
+
+- Webhook: 署名なし → 400、違う署名 → 400、正しい署名で `customer.subscription.updated` → 204 で `billing_subscriptions.synced_at` が進む、
+  `customer.subscription.created` → 204 で Meter にイベントが 1 件届く（ダッシュボードの Meter の画面か `billing.meters.listEventSummaries`）
+- cron: `Authorization` なし → 401、正しい Bearer → 200 で `{ sync: { synced, failed }, usage: { sent, failed } }`。`failed` が 0
+- 同じ日に 2 回呼んでも Meter のイベントが二重に数えられない（identifier が同じ・`last`）
+
+#### 4. テストクロック（§9.3 の筋書き）
+
+Checkout で作った Customer にはテストクロックを付けられないので、**確認用のスクリプトを `scripts/stripe/verify/` に書いて**行う（本番コードは変えない）。
+
+- Customer は `test_clock` 付きで作り、`profiles.stripe_customer_id` にその id を入れた利用者（seed とは別に作る）に結び付ける
+- Subscription は Checkout と同じ中身で API から作る（`items: [{ price }]`・`billing_cycle_anchor_config: { day_of_month: 31, hour: 15 }`・`metadata`）。
+  支払い方法は `pm_card_visa`（失敗は `pm_card_chargeCustomerFail`、3DS は `pm_card_authenticationRequired`）
+- 最大人数の送信は `sendPeak()` を **`now` = テストクロックの `frozen_time`** で呼ぶ（テストクロックの Customer への送信は、クロックの時刻を基準に受け付けられるはず。未確認なので、違えば挙動を §12 に記録する）。
+  人数の増減は `staff_count_history` に行を INSERT して作り、`reportUsageFor(userId, frozenTime)` で送ってもよい
+- クロックを進めたら `syncCustomer()` を呼んでから DB と請求書を見る
+- 優先順: **1（申し込んだ月の端数期間が初回の請求書に載るか。§11-4 を確定する）**→ 2 → 4 → 5 → 6 → 8 → 15 → 3 → 7 → 9。
+  1 の結果が「載らない」なら、`proration_behavior`・確認画面と規約の「お申し込みの月は…」の文言を見直す案をユーザーに出す
+- 見る: 請求書の金額（`monthlyPriceYen` と一致）、請求書の期間、`billing_subscriptions` の状態、画面（帯・ロック）
+
+#### 5. v1 の引き継ぎ（§8.2。シナリオ 10・13・14・11・12）
+
+- サンドボックスで v1 と同じ形の price（`id: freemium-monthly`、metered・`aggregate_usage: max`・tiered graduated・10 人まで 0 円 / 以降 50 円）を
+  **API `2025-02-24.acacia`** で作れるか試す。作れなければ、その旨と次の案をユーザーに伝える
+  （案: 従来のテストモードで、**ダッシュボードの設定には触らず API でオブジェクトを作る範囲だけ**確かめる。鍵はユーザーに別途用意してもらう）
+- v1 相当の契約をテストクロック付きで 4 種類作る: 上限 15 人・`active` / 上限 15 人・`unpaid`（期限切れカード・下書きが溜まった状態）/ 上限 15 人・`unpaid`・編集なし / 上限 10 人。
+  usage record（acacia）で上限人数を送っておく
+- 入力の CSV を作って `npm run stripe:migrate-v1 -- --input … `（dry-run）→ `--apply --limit 1` → `--apply`
+- 見る: 区分と操作が CSV のとおり、Customer の言語が `ja`、`legacy` / `rescue` に schedule（phase 0 は旧 price・phase 1 は `assift_monthly` + クーポン・1 日で release）、
+  **phase 1 で `discounts` が通るか（通らなければ旧来の `coupon` に直す）**、release のあとも Subscription に price とクーポンが残る、
+  `rescue` が `active` に戻る・下書きが無効・過去分が請求されない、`cancel_*` が解約される、2 回目の `--apply` で何も変わらない（冪等）
+- クロックを期間の終わりまで進める: 旧料金の請求書が v1 の上限人数 × 50 円、次の期間から Meter の人数 × 100 円 × 50%
+- `has_schedule` の間に「プランとお支払い」の「解約する」（`cancelDuringMigration()`）→ 期間の終わりで終わり、新料金に切り替わらない
+
+#### 6. 退会（§5.8）
+
+- 有料の利用者でアカウントを削除 → Meter に最後の人数が送られる・`cancel_at_period_end`（schedule 付きなら `end_behavior: cancel`）→ 退会できる → 期間末の請求書がその人数
+- Stripe を止めた状態（鍵を外す・不正な鍵）で退会 → 「有料プランの解約に失敗しました」で退会しない
+
+#### 7. 片付けと記録
+
+- 作ったテストクロックを消す（Customer と Subscription も一緒に消える）。サンドボックスの Product / Meter / Price / Coupon は残す（本番と同じものを setup で作るので、次の確認でも使う）
+- ローカルの DB は `npx supabase db reset` で seed に戻す
+- 結果を §12 に「2026-10-xx Stripe のサンドボックスでの確認」として追記する（通った項目・見つけた不具合と直したこと・§11-4 の結論・残ったこと）。直したコードがあれば
+  lint / typecheck / test / pgTAP を通してからコミット・プッシュする
 ---
 
 ## 10. やらないこと
@@ -654,7 +740,7 @@ Stripe のサブスクリプションは 有効 795 / 未払い 155 / 期日経�
 - ブラウザ（Playwright・seed のユーザー）: 無料プランの「プランとお支払い」・申し込みの確認画面（Stripe 未設定でボタンが押せない）、
   在籍 10 人で 11 人目を追加 → モーダル →「無料で試す」→ そのまま追加され、トライアルの帯が出る、トライアルを過去にするとシフト表がロックされる
 
-**まだ確かめていないこと**（Stripe のテスト用の鍵が要る。カットオーバーの前に必ず行う）:
+**まだ確かめていないこと**（Stripe のテスト用の鍵が要る。カットオーバーの前に必ず行う。手順は §9.4）:
 
 1. §9.3 のテストクロックの筋書き（anchor・申し込んだ月の端数期間の請求・`last` の集計・期間末の解約・支払い失敗 → 解約）。結果で §11-4 を確定する
 2. Webhook（ローカルで `stripe listen`）と `/api/cron/billing-usage`（`CRON_SECRET` を付けて手で叩く）
