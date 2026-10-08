@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isTrialActive, trialDaysLeft, trialEndFrom, trialLastDay } from './trial'
+import { isTrialActive, trialDaysLeft, trialEndFrom, trialLastDay, trialProgress } from './trial'
 
 describe('trialEndFrom', () => {
   it('10/10 に始めると 12/31 まで（終わりは 1/1 0:00 JST）', () => {
@@ -41,5 +41,23 @@ describe('isTrialActive / trialDaysLeft', () => {
   it('残り日数は今日を含めない', () => {
     expect(trialDaysLeft(end, new Date('2026-12-31T10:00:00+09:00'))).toBe(0)
     expect(trialDaysLeft(end, new Date('2026-12-24T10:00:00+09:00'))).toBe(7)
+  })
+})
+
+describe('trialProgress', () => {
+  const end = new Date('2027-01-01T00:00:00+09:00') // 12/31 まで（10 月に始めた）
+
+  it('始めた月の 1 日が 0、最終日が 1', () => {
+    expect(trialProgress(end, new Date('2026-10-01T09:00:00+09:00'))).toBe(0)
+    expect(trialProgress(end, new Date('2026-12-31T23:00:00+09:00'))).toBe(1)
+  })
+
+  it('途中は日数の割合（JST の日付で数える）', () => {
+    expect(trialProgress(end, new Date('2026-11-15T09:00:00+09:00'))).toBeCloseTo(45 / 91)
+  })
+
+  it('範囲の外は 0〜1 に収める', () => {
+    expect(trialProgress(end, new Date('2026-09-20T09:00:00+09:00'))).toBe(0)
+    expect(trialProgress(end, new Date('2027-02-01T09:00:00+09:00'))).toBe(1)
   })
 })

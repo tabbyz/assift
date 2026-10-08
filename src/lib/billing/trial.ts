@@ -1,4 +1,4 @@
-import { addDays, addMonths, startOfMonth } from '@/lib/calendar/dateString'
+import { addDays, addMonths, diffDays, startOfMonth } from '@/lib/calendar/dateString'
 import { todayJst } from '@/lib/calendar/today'
 
 /** JST のその日の 0:00 */
@@ -49,4 +49,16 @@ export function trialDaysLeft(trialEnd: Date, now: Date): number {
  */
 export function firstDayFrom(start: Date): string {
   return todayJst(new Date(start.getTime() + 1000))
+}
+
+/**
+ * トライアルの進み（0〜1。画面のバー）。始めた日は持っていないので、始めた月の 1 日（最終日の 2 か月前の月初）から数える。
+ * 月の途中で始めた人は少し進んで見えるが、最終日に 1 になることは変わらない
+ */
+export function trialProgress(trialEnd: Date, now: Date): number {
+  const last = trialLastDay(trialEnd)
+  const start = addMonths(startOfMonth(last), -2)
+  const total = diffDays(start, last)
+  if (total <= 0) return 1
+  return Math.min(1, Math.max(0, diffDays(start, todayJst(now)) / total))
 }

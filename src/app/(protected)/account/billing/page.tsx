@@ -5,7 +5,13 @@ import { PRICE_LOOKUP_KEY } from '@/lib/billing/constants'
 import { isEntitledStatus } from '@/lib/billing/entitlement'
 import { isStripeConfigured } from '@/lib/billing/stripe'
 import { syncCustomer } from '@/lib/billing/sync'
-import { firstDayFrom, lastDayBefore, trialLastDay } from '@/lib/billing/trial'
+import {
+  firstDayFrom,
+  lastDayBefore,
+  trialDaysLeft,
+  trialLastDay,
+  trialProgress,
+} from '@/lib/billing/trial'
 import {
   getBillingOverview,
   getPeriodPeak,
@@ -50,6 +56,8 @@ export default async function BillingPage({ searchParams }: PageProps<'/account/
     activeStaffCount: overview.activeStaffCount,
     trialAvailable: overview.trialAvailable,
     trialLastDay: entitlement.kind === 'trial' ? trialLastDay(entitlement.trialEnd) : null,
+    trialDaysLeft: entitlement.kind === 'trial' ? trialDaysLeft(entitlement.trialEnd, now) : null,
+    trialProgress: entitlement.kind === 'trial' ? trialProgress(entitlement.trialEnd, now) : null,
     subscription:
       entitled && subscription
         ? {
