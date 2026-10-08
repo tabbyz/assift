@@ -1,6 +1,7 @@
 import 'server-only'
 import { createPrivilegedClient } from '@/lib/supabase/createPrivilegedClient'
 import { CUSTOMER_USER_ID_KEY } from './constants'
+import { readBillingProfile } from './profile'
 import { getStripe } from './stripe'
 
 /**
@@ -10,15 +11,7 @@ import { getStripe } from './stripe'
  */
 export async function ensureCustomer(user: { id: string; email: string | null }): Promise<string> {
   const db = createPrivilegedClient()
-  const read = async () => {
-    const { data, error } = await db
-      .from('profiles')
-      .select('stripe_customer_id')
-      .eq('id', user.id)
-      .maybeSingle()
-    if (error) throw error
-    return data?.stripe_customer_id ?? null
-  }
+  const read = async () => (await readBillingProfile(db, user.id))?.stripeCustomerId ?? null
 
   const existing = await read()
   if (existing) return existing

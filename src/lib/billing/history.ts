@@ -1,5 +1,6 @@
 import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { pageAll } from '@/lib/queries/pageAll'
 import type { Database } from '@/types/database'
 import type { StaffCountPoint } from './peak'
 
@@ -24,17 +25,21 @@ export async function readStaffCountHistory(
       .order('changed_at', { ascending: false })
       .order('id', { ascending: false })
       .limit(1),
-    db
-      .from('staff_count_history')
-      .select('active_count, changed_at')
-      .eq('user_id', userId)
-      .gt('changed_at', window.start.toISOString())
-      .lt('changed_at', window.end.toISOString())
-      .order('changed_at', { ascending: true }),
+    // 1 期間でも初期設定の一括追加や退職・復帰の繰り返しで行が増えうる。切られると最大人数を少なく請求するので pageAll を通す
+    pageAll((from, to, withCount) =>
+      db
+        .from('staff_count_history')
+        .select('active_count, changed_at', withCount ? { count: 'exact' } : undefined)
+        .eq('user_id', userId)
+        .gt('changed_at', window.start.toISOString())
+        .lt('changed_at', window.end.toISOString())
+        .order('changed_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to)
+    ),
   ])
   if (before.error) throw before.error
-  if (within.error) throw within.error
-  return [...(before.data ?? []), ...(within.data ?? [])].map((row) => ({
+  return [...(before.data ?? []), ...within].map((row) => ({
     at: new Date(row.changed_at),
     count: row.active_count,
   }))

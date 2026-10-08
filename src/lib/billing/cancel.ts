@@ -3,6 +3,7 @@ import type Stripe from 'stripe'
 import { createPrivilegedClient } from '@/lib/supabase/createPrivilegedClient'
 import { LEGACY_API_VERSION } from './constants'
 import { isEntitledStatus } from './entitlement'
+import { readBillingProfile } from './profile'
 import { reportUsageFor } from './report'
 import { getStripe } from './stripe'
 import { syncCustomer } from './sync'
@@ -88,14 +89,8 @@ export async function cancelSubscriptionsForAccountDeletion(
   userId: string,
   now = new Date()
 ): Promise<void> {
-  const db = createPrivilegedClient()
-  const { data: profile, error } = await db
-    .from('profiles')
-    .select('stripe_customer_id')
-    .eq('id', userId)
-    .maybeSingle()
-  if (error) throw error
-  const customerId = profile?.stripe_customer_id
+  const profile = await readBillingProfile(createPrivilegedClient(), userId)
+  const customerId = profile?.stripeCustomerId
   if (!customerId) return
 
   const stripe = getStripe()

@@ -77,7 +77,7 @@ src/
     <domain>/                     ドメインロジック（calendar, patterns, shifts, pdf, csv ...）
     billing/                      課金（019）。pricing（10 人まで無料、11 人目から 1 人 100 円。LP と共有）/ entitlement（上限の規則。SQL の staff_limit と同じ）/
                                   trial / peak（請求期間の最大人数）/ limit（上限の例外 → code: 'staff_limit'）/ checkout / usage（Meter への送信）/
-                                  subscriptionRow（Stripe → 写しの純関数）/ migration（v1 の引き継ぎの区分）。server-only: stripe（SDK）/ sync / report / cancel / history
+                                  subscriptionRow（Stripe → 写しの純関数）/ migration（v1 の引き継ぎの区分）。server-only: stripe（SDK）/ sync / report / cancel / history / profile（service_role の読み取り）
     calendar/                     dateString（YYYY-MM-DD の道具。dayjs はここだけ）/ dateRange / today / weekdays / holidays（server-only）
     shifts/                       key（セルの Map）/ applyAssign（楽観更新。assign_shift と同じ規則）/ satisfaction（必要人数の充足）/ count（集計）/ planDefaultPatterns（デフォルト勤務パターンの行を組む純関数）/ table（エクスポートが共有する表の型）
     shares/                       expiry（公開期限。v1 の DATE_LIMIT = 6）/ code（8 文字のコード）
@@ -213,7 +213,8 @@ service_role を渡すため）。したがって `publicShare.ts` と同じく�
 
 課金（019）の例外は `lib/billing/` に閉じる: Webhook / cron / 申し込み（`startCheckout()`）/ 退会が、`profiles.stripe_customer_id`・
 `profiles.trial_end`（申し込みでトライアルを使ったとみなすとき）・`billing_subscriptions` を service_role で書き、`staff_count_history` を読む。
-中のクエリはすべて `.eq('user_id', …)` / `.eq('id', …)` で 1 人に絞る（`publicShare.ts` と同じ規律）。`profiles.stripe_customer_id` は
+中のクエリはすべて `.eq('user_id', …)` / `.eq('id', …)` で 1 人に絞る（`publicShare.ts` と同じ規律）。`profiles` の読み取りは
+`readBillingProfile()`、有効な契約の一覧は `listEntitledSubscriptions()`（`pageAll()` を通す）に寄せ、書き写さない。`profiles.stripe_customer_id` は
 利用者が書ける口を作らない（書けると他人の Customer を指してポータルを開ける）。Stripe の Customer は入力から受け取らず、常に DB の値を使う。
 
 Stripe の API の版は SDK が固定する最新（`lib/billing/stripe.ts`）。旧 metered の明細を含む v1 の Subscription を触る呼び出し
@@ -226,7 +227,7 @@ Stripe の API の版は SDK が固定する最新（`lib/billing/stripe.ts`）�
 
 - **Webhook（`api/stripe/webhook`、POST）**: 生 body（`request.text()`）と `stripe-signature` で `constructEventAsync`。失敗は 400。
   イベントの中身は使わず、Customer の id で `syncCustomer()` を呼んで Stripe から取り直す（順不同・重複に強い）。同期の失敗は 500（Stripe が再送する）
-- **cron（`api/cron/billing-usage`、GET）**: `Authorization: Bearer ${CRON_SECRET}` が無ければ 401。`vercel.json` の `crons`（毎日 23 時台 JST）
+- **cron（`api/cron/billing-usage`、GET）**: `Authorization: Bearer ${CRON_SECRET}` が無ければ 401。`vercel.json` の `crons`（毎日 22 時台と 23 時台 JST の 2 回。最終日の送信が落ちると取り返せないため）。同期と送信は別々に受け、同期が失敗しても送信は止めない
 - どちらもログイン状態と無関係なので proxy の matcher から外してある（下記）。以下の決まりはエクスポートのもの
 
 - **`ActionResult` を返さない。** ブラウザが直接開く GET なので `notifications.show()` の出番が無い。

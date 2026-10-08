@@ -3,6 +3,7 @@ import Stripe from 'stripe'
 import { createPrivilegedClient } from '@/lib/supabase/createPrivilegedClient'
 import { CUSTOMER_USER_ID_KEY, LEGACY_PRICE_ID } from './constants'
 import { isEntitledStatus } from './entitlement'
+import { listEntitledSubscriptions, readBillingProfile } from './profile'
 import { getStripe, resolvePriceId } from './stripe'
 import { chooseSubscription, subscriptionRow } from './subscriptionRow'
 
@@ -173,21 +174,11 @@ export async function syncAllSubscriptions(
   }
 
   // 有効扱いなのに一覧に出てこなかった（解約済みなど）契約を 1 件ずつ取り直す
-  const { data: stale, error } = await db
-    .from('billing_subscriptions')
-    .select('user_id, stripe_subscription_id')
-    .in('status', ['active', 'trialing', 'past_due'])
-  if (error) throw error
-  for (const row of stale ?? []) {
+  for (const row of await listEntitledSubscriptions(db)) {
     if (seen.has(row.stripe_subscription_id)) continue
     try {
-      const { data: profile, error: profileError } = await db
-        .from('profiles')
-        .select('stripe_customer_id')
-        .eq('id', row.user_id)
-        .maybeSingle()
-      if (profileError) throw profileError
-      if (profile?.stripe_customer_id) await syncCustomer(profile.stripe_customer_id, now)
+      const profile = await readBillingProfile(db, row.user_id)
+      if (profile?.stripeCustomerId) await syncCustomer(profile.stripeCustomerId, now)
       synced += 1
     } catch (syncError) {
       failed += 1

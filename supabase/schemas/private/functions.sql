@@ -158,18 +158,29 @@ begin
 end;
 $$;
 
--- 履歴に 1 行足す。前の行と同じ数なら足さない。利用者が既にいない（退会の cascade の途中）なら何もしない
-create or replace function private.append_staff_count(p_owner uuid, p_count integer)
+-- 在籍数を数えて履歴に 1 行足す。前の行と同じ数なら足さない。利用者が既にいない（退会の cascade の途中）なら何もしない。
+-- p_excluded_tenant は削除中の店舗（その在籍スタッフを数えない。BEFORE DELETE ではまだ行が残っているため）。
+--
+-- 数える前に利用者の行をロックする（門番 guard_staff_limit と同じロック）。ロックせずに数えると、同じ利用者の退職・削除が
+-- 同時に走ったとき互いにコミット前の変更を見ないまま数え、最後の行が実際より多いまま残る（次の期間の「開始時点の人数」が
+-- 多く請求される）。plpgsql は文ごとにスナップショットを取り直すので、ロックを待った後の数には先にコミットした側の変更が入る
+create or replace function private.record_owner_staff_count(p_owner uuid, p_excluded_tenant uuid default null)
 returns void
 language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  v_count integer;
 begin
-  if not exists (select 1 from public.profiles p where p.id = p_owner) then
+  perform 1 from public.profiles p where p.id = p_owner for update;
+  if not found then
     return;
   end if;
-  if p_count is not distinct from (
+  v_count := private.active_staff_count(p_owner)
+    - (select count(*)::integer from public.staffs s
+        where p_excluded_tenant is not null and s.tenant_id = p_excluded_tenant and s.retired_at is null);
+  if v_count is not distinct from (
     select h.active_count from public.staff_count_history h
      where h.user_id = p_owner
      order by h.changed_at desc, h.id desc
@@ -177,7 +188,7 @@ begin
   ) then
     return;
   end if;
-  insert into public.staff_count_history (user_id, active_count) values (p_owner, p_count);
+  insert into public.staff_count_history (user_id, active_count) values (p_owner, v_count);
 end;
 $$;
 
@@ -198,7 +209,7 @@ begin
   if v_owner is null then
     return null;
   end if;
-  perform private.append_staff_count(v_owner, private.active_staff_count(v_owner));
+  perform private.record_owner_staff_count(v_owner);
   return null;
 end;
 $$;
@@ -212,11 +223,7 @@ security definer
 set search_path = ''
 as $$
 begin
-  perform private.append_staff_count(
-    old.owner_id,
-    private.active_staff_count(old.owner_id)
-      - (select count(*)::integer from public.staffs s where s.tenant_id = old.id and s.retired_at is null)
-  );
+  perform private.record_owner_staff_count(old.owner_id, old.id);
   return old;
 end;
 $$;
@@ -234,5 +241,5 @@ $$;
 
 revoke execute on function private.active_staff_count(uuid) from public;
 revoke execute on function private.staff_limit(uuid) from public;
-revoke execute on function private.append_staff_count(uuid, integer) from public;
+revoke execute on function private.record_owner_staff_count(uuid, uuid) from public;
 revoke execute on function private.trial_end_from(timestamptz) from public;

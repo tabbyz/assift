@@ -65,7 +65,9 @@ export async function deleteAccount(): Promise<ActionResult<{ redirectTo: string
   return runAction(async () => {
     const user = await requireUser()
     try {
-      // Stripe の Customer が無ければ何もしない（Stripe が未設定でも退会できる）
+      // Stripe の Customer が無ければ何もしない（その人は Stripe が未設定でも退会できる）。Customer がある人は、
+      // 最後の人数を送って解約できるまで退会させない（Stripe が止まっていれば失敗する。請求できないまま消さない）。
+      // 解約のあとで削除が失敗すると、アカウントは残り有料プランは期間末で終わる。期間末まではポータルで解約を取り消せるので受け入れる
       await cancelSubscriptionsForAccountDeletion(user.id)
     } catch (error) {
       console.error(`[billing] 退会前の解約に失敗しました (user: ${user.id})`, error)
