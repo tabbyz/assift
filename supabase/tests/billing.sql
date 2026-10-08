@@ -5,7 +5,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(38);
+select plan(40);
 
 -- ---------------------------------------------------------------------------
 -- 準備（postgres として実行）
@@ -213,7 +213,19 @@ select is(
   (select count(*) from public.billing_subscriptions),
   0::bigint, 'billing_subscriptions: 他人の行は見えない');
 
+-- 上限に達した他人（user_free は 10 人）の店舗へ足そうとしても、門番ではなく RLS が弾く（店舗の存在とプランを漏らさない）
+select set_config('request.jwt.claims', format('{"sub":"%s","role":"authenticated"}', :user_manual), true);
+select throws_ok(
+  format($$insert into public.staffs (tenant_id, name) values (%L, '他人の店舗')$$, :t_free),
+  '42501', null, '他人の店舗へ足す: staff_limit_exceeded ではなく RLS の拒否');
+
 reset role;
+-- 同じ Stripe の Customer を 2 人に結び付けない
+update public.profiles set stripe_customer_id = 'cus_shared' where id = :user_free;
+select throws_ok(
+  format($$update public.profiles set stripe_customer_id = 'cus_shared' where id = %L$$, :user_paid),
+  '23505', null, 'profiles.stripe_customer_id は一意');
+
 set local role anon;
 select set_config('request.jwt.claims', null, true);
 select throws_ok('select count(*) from public.staff_count_history', '42501', null, 'anon は staff_count_history を読めない');

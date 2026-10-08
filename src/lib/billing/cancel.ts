@@ -6,7 +6,7 @@ import { isEntitledStatus } from './entitlement'
 import { readBillingProfile } from './profile'
 import { reportUsageFor } from './report'
 import { getStripe } from './stripe'
-import { syncCustomer } from './sync'
+import { listCustomerSubscriptions, syncCustomer } from './sync'
 
 /**
  * 解約（019 §5.5・§5.8）。期間の終わりで終える（即時解約は従量分が捨てられる。§3）。
@@ -112,13 +112,8 @@ export async function cancelSubscriptionsForAccountDeletion(
   // 以降は履歴が消えるので、これがその期間の最後の値になる
   await reportUsageFor(userId, now)
 
-  const subscriptions = await stripe.subscriptions.list({
-    customer: customerId,
-    status: 'all',
-    limit: 20,
-    expand: ['data.schedule'],
-  })
-  for (const subscription of subscriptions.data) {
+  const subscriptions = await listCustomerSubscriptions(stripe, customerId, ['data.schedule'])
+  for (const subscription of subscriptions) {
     if (!isEntitledStatus(subscription.status)) continue
     await cancelAtPeriodEnd(stripe, subscription)
   }

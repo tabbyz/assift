@@ -212,7 +212,21 @@ async function deletion(afterPortalCancel: boolean) {
   console.log('  期待: 13 人 = 300 円')
 }
 
+/** Stripe で Customer を消す（Subscription は即時に解約される）→ 同期で写しが消え、有料のまま残らない */
+async function deletedCustomer() {
+  const start = new Date(Math.floor(Date.now() / 60_000) * 60_000 - 120_000)
+  const userId = await createUser('deleted-customer')
+  const clock = await createClockCustomer(userId, 'deleted-customer', start)
+  await subscribe(clock)
+  await syncCustomer(clock.customerId, start)
+  log('申し込み後', await row(userId))
+  await stripe.customers.del(clock.customerId)
+  await syncCustomer(clock.customerId, start)
+  log('Customer を消したあと（期待: null）', await row(userId))
+}
+
 const scenarios: Record<string, () => Promise<void>> = {
+  'deleted-customer': deletedCustomer,
   monthly,
   trial,
   cancel,

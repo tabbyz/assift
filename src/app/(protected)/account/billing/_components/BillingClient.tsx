@@ -178,7 +178,7 @@ export function BillingClient({ view, checkoutSuccess }: Props) {
                 <TableTh>料金</TableTh>
                 <TableTd>
                   {legacy
-                    ? `旧料金: ${FREE_STAFF_LIMIT + 1} 人目から 1 人あたり月 ${Math.floor((PRICE_PER_STAFF_YEN * (100 - (subscription?.discountPercent ?? 0))) / 100)} 円（税込）`
+                    ? `旧料金: ${FREE_STAFF_LIMIT + 1} 人目から 1 人あたり月 ${monthlyPriceYen(FREE_STAFF_LIMIT + 1, subscription?.discountPercent ?? 0)} 円（税込）`
                     : PRICE_RULE}
                 </TableTd>
               </TableTr>

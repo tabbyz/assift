@@ -3,7 +3,12 @@ import Stripe from 'stripe'
 import { createPrivilegedClient } from '@/lib/supabase/createPrivilegedClient'
 import { CUSTOMER_USER_ID_KEY, LEGACY_PRICE_ID } from './constants'
 import { isEntitledStatus } from './entitlement'
-import { listEntitledSubscriptions, readBillingProfile } from './profile'
+import {
+  type BillingOwner,
+  listEntitledSubscriptions,
+  readBillingOwner,
+  readBillingProfile,
+} from './profile'
 import { getStripe, resolvePriceId } from './stripe'
 import { chooseSubscription, subscriptionRow } from './subscriptionRow'
 
@@ -23,33 +28,17 @@ const isMissingPrice = (error: unknown) =>
   error.code === 'resource_missing' &&
   error.param === 'price'
 
-type Owner = { id: string; email: string | null; trialEnd: string | null }
+type Owner = BillingOwner
 
 /** Customer → 利用者。`profiles.stripe_customer_id` で引き、無ければ v2 が付けた metadata（v1 の `user_id` は見ない） */
 async function findOwner(
   db: Db,
   customer: Stripe.Customer | Stripe.DeletedCustomer
 ): Promise<Owner | null> {
-  const { data, error } = await db
-    .from('profiles')
-    .select('id, email, trial_end')
-    .eq('stripe_customer_id', customer.id)
-    .maybeSingle()
-  if (error) throw error
-  if (data) return { id: data.id, email: data.email, trialEnd: data.trial_end }
-  if (customer.deleted) return null
-
+  const byCustomer = await readBillingOwner(db, { customerId: customer.id })
+  if (byCustomer || customer.deleted) return byCustomer
   const userId = customer.metadata?.[CUSTOMER_USER_ID_KEY]
-  if (!userId) return null
-  const byId = await db
-    .from('profiles')
-    .select('id, email, trial_end')
-    .eq('id', userId)
-    .maybeSingle()
-  if (byId.error) throw byId.error
-  return byId.data
-    ? { id: byId.data.id, email: byId.data.email, trialEnd: byId.data.trial_end }
-    : null
+  return userId ? readBillingOwner(db, { userId }) : null
 }
 
 /**
@@ -98,6 +87,26 @@ async function applySubscriptions(
   }
 }
 
+/**
+ * Customer の Subscription を解約済みも含めて全件読む。解約と申し込みを繰り返した人は件数が増えるので、
+ * 1 ページ（以前は 20 件）で切ると有効な契約を見落とす。退会の解約（cancel.ts）と共有する
+ */
+export async function listCustomerSubscriptions(
+  stripe: Stripe,
+  customerId: string,
+  expand: string[]
+): Promise<Stripe.Subscription[]> {
+  const subscriptions: Stripe.Subscription[] = []
+  for await (const subscription of stripe.subscriptions.list({
+    customer: customerId,
+    status: 'all',
+    limit: 100,
+    expand,
+  }))
+    subscriptions.push(subscription)
+  return subscriptions
+}
+
 /** 1 人分を Stripe から取り直して写す。Webhook・画面の描画・Checkout から戻ったときに呼ぶ */
 export async function syncCustomer(
   customerId: string,
@@ -109,15 +118,17 @@ export async function syncCustomer(
   const customer = await stripe.customers.retrieve(customerId)
   const owner = await findOwner(db, customer)
   // 退会済み（利用者がいない）なら何もしない。Subscription は期間の終わりで終わる（§5.8）
-  if (!owner || customer.deleted) return null
+  if (!owner) return null
+  if (customer.deleted) {
+    // Stripe で Customer が消されると、その Subscription はすべて即時に解約される。写しを消さないと
+    // 有効のまま残り、人数の上限なし・請求なしで使えてしまう（Customer の付け替えは次の申し込みで ensureCustomer が行う）
+    const { error } = await db.from('billing_subscriptions').delete().eq('user_id', owner.id)
+    if (error) throw error
+    return { userId: owner.id }
+  }
 
-  const subscriptions = await stripe.subscriptions.list({
-    customer: customerId,
-    status: 'all',
-    limit: 20,
-    expand: EXPAND,
-  })
-  await applySubscriptions(db, stripe, owner, customer, subscriptions.data, now)
+  const subscriptions = await listCustomerSubscriptions(stripe, customerId, EXPAND)
+  await applySubscriptions(db, stripe, owner, customer, subscriptions, now)
   return { userId: owner.id }
 }
 

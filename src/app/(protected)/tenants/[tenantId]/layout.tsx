@@ -33,7 +33,13 @@ export default async function TenantLayout({
     listTenants(),
     userPromise,
     // 課金の状態も並行に読む（直列にすると店舗の画面ごとに往復が 1 回増える。getBillingOverview は cache() 済み）
-    userPromise.then((authUser) => (authUser ? getBillingOverview(authUser.id) : null)),
+    // 帯は無くても使えるので、読めなければ帯を出さずに描く（店舗の画面ごと落とさない）
+    userPromise
+      .then((authUser) => (authUser ? getBillingOverview(authUser.id) : null))
+      .catch((error: unknown) => {
+        console.error('[billing] 店舗の帯の読み取りに失敗しました', error)
+        return null
+      }),
   ])
   // RLS で他人の店舗も存在しない id も null になる（存在を漏らさない）
   if (!tenant) notFound()

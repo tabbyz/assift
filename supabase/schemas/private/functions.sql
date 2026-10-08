@@ -142,7 +142,9 @@ begin
   end if;
 
   select t.owner_id into v_owner from public.tenants t where t.id = new.tenant_id;
-  if v_owner is null then
+  -- 自分の店舗でなければ何もせず、RLS（WITH CHECK）に弾かせる。BEFORE トリガは RLS より先に動くので、
+  -- ここで上限を判定すると他人の店舗の存在とプランの状態が分かり、相手の行もロックしてしまう
+  if v_owner is null or v_owner <> auth.uid() then
     return new;
   end if;
 

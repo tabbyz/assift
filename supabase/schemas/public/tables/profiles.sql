@@ -4,8 +4,9 @@ create table public.profiles (
   email              text,
   is_admin           boolean     not null default false,
   -- Stripe の Customer（019）。利用者が書ける口を作らない（他人の Customer を指すとポータルで他人の請求が見える）。
-  -- 書くのは startCheckout()（service_role）と v1 からの移行だけ
-  stripe_customer_id text,
+  -- 書くのは startCheckout()（service_role）と v1 からの移行だけ。
+  -- 一意: 2 人が同じ Customer を指すと、片方がもう片方の請求をポータルで見られ、同期の持ち主も決まらない
+  stripe_customer_id text unique,
   -- トライアルの終わり（019 §7。この時刻を過ぎたら終わり）。null = 一度も使っていない。
   -- 書くのは public.start_trial() と、申し込みでトライアルを使ったとみなす同期関数（service_role）
   trial_end          timestamptz,

@@ -211,10 +211,11 @@ service_role を渡すため）。したがって `publicShare.ts` と同じく�
 
 唯一の例外は `account/actions.ts` の `deleteAccount()`（`auth.admin.deleteUser` は service_role でしか呼べない）。渡す id は `requireUser()` の戻り値だけにし、入力から受け取らない。例外を足すときはここに追記する。
 
-課金（019）の例外は `lib/billing/` に閉じる: Webhook / cron / 申し込み（`startCheckout()`）/ 退会が、`profiles.stripe_customer_id`・
+課金（019）の例外は `lib/billing/` に閉じる: Webhook / cron / 申し込み（`startCheckout()`）/ 退会 / 「プランとお支払い」の描画時の同期（`syncIfStale`）/
+切り替え待ちの解約（`cancelDuringMigration()`）が、`syncCustomer()` などを通して `profiles.stripe_customer_id`・
 `profiles.trial_end`（申し込みでトライアルを使ったとみなすとき）・`billing_subscriptions` を service_role で書き、`staff_count_history` を読む。
 中のクエリはすべて `.eq('user_id', …)` / `.eq('id', …)` で 1 人に絞る（`publicShare.ts` と同じ規律）。`profiles` の読み取りは
-`readBillingProfile()`、有効な契約の一覧は `listEntitledSubscriptions()`（`pageAll()` を通す）に寄せ、書き写さない。`profiles.stripe_customer_id` は
+`readBillingProfile()` / `readBillingOwner()`、有効な契約の一覧は `listEntitledSubscriptions()`（`pageAll()` を通す）に寄せ、書き写さない。`profiles.stripe_customer_id` は
 利用者が書ける口を作らない（書けると他人の Customer を指してポータルを開ける）。Stripe の Customer は入力から受け取らず、常に DB の値を使う。
 
 Stripe の API の版は SDK が固定する最新（`lib/billing/stripe.ts`）。旧 metered の明細を含む v1 の Subscription を触る呼び出し

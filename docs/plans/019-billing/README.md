@@ -873,3 +873,25 @@ cron は不正な鍵でも同期の失敗のあとに送信を試み、500 を�
 
 **確認:** lint / typecheck / test（765 件）/ pgTAP（213 件）。
 
+### 2026-10-08 実装のレビュー（3 回目）
+
+指摘は 10 件で、1・2 回目とは別の箇所だった（直したものの再発は無い）。重さ順に、直すべきもの 3 件・規約と整理 4 件を直し、性能・重複の 3 件は見送った。
+
+**直したこと:**
+
+1. **Stripe で Customer を消すと、写しが有効のまま残った**（`syncCustomer` は消えた Customer で何も書かずに戻っていた）。Customer を消すと Subscription は即時に解約されるので、
+   人数の上限なし・請求なしで使えてしまう。持ち主が分かれば写しを消す。サンドボックスで、申し込み → Customer を消す → 同期で写しが無くなることを確かめた（`clock.ts deleted-customer`）
+2. **Customer の Subscription を先頭 20 件しか読んでいなかった**（同期と退会）。解約と申し込みを繰り返した人は有効な契約を見落とす → `listCustomerSubscriptions()` で全件を読む
+3. **他人の店舗にスタッフを足そうとすると、RLS より先に門番が上限を判定していた**（BEFORE トリガは WITH CHECK より先に動く）。上限エラーが返ることで店舗の存在と相手のプランが分かり、
+   相手の行もロックしていた → 自分の店舗でなければ門番は何もせず RLS に弾かせる。あわせて **`profiles.stripe_customer_id` を一意にした**（2 人が同じ Customer を指すと、
+   片方がもう片方の請求をポータルで見られ、同期の持ち主も決まらない）。差分 migration `20261008043406_billing_guard_owner_customer_unique.sql`、pgTAP を 2 件足した
+4. AGENTS.md の service_role の例外に、「プランとお支払い」の描画時の同期と `cancelDuringMigration()` を足した
+5. 同期の持ち主の読み取りを `readBillingOwner()`（`lib/billing/profile.ts`）にまとめた
+6. 旧料金の単価の表示を `monthlyPriceYen()` から出す（画面で別に計算していた）
+7. 店舗の layout で、課金の状態が読めなくても帯を出さずに描く（店舗の画面ごと落とさない）
+
+**見送ったこと:** `reportAllUsage` の利用者ごとの `profiles` の読み取り（800 人でも並行 10 本で数秒）/ プランの画面の重複した読み取り（往復 2 回）/
+`peakWindow` と `billableStaffPeak` の区間の計算の重複（今は一致しており、まとめ直すほうが危うい）。
+
+**確認:** lint / typecheck / test（765 件）/ pgTAP（215 件）。サンドボックスで `clock.ts deleted-customer` / `monthly`（200 円 → 500 円）/ `deletion`（300 円）。
+
