@@ -2,8 +2,8 @@ import 'server-only'
 import type Stripe from 'stripe'
 import { createPrivilegedClient } from '@/lib/supabase/createPrivilegedClient'
 import { LEGACY_API_VERSION, LEGACY_PRICE_ID } from './constants'
-import { isEntitledStatus } from './entitlement'
-import { readBillingProfile } from './profile'
+import { blocksAccountDeletion, isEntitledStatus } from './entitlement'
+import { readBillingProfile, readBillingSubscription } from './profile'
 import { reportUsageFor } from './report'
 import { getStripe } from './stripe'
 import { listCustomerSubscriptions, syncCustomer } from './sync'
@@ -94,21 +94,33 @@ export async function cancelAtPeriodEnd(
   await stripe.subscriptions.update(subscription.id, { cancel_at_period_end: true })
 }
 
+/** 有料プランを解約していないので退会させない（先に「プランとお支払い」から解約してもらう） */
+export class PlanStillActiveError extends Error {
+  constructor() {
+    super('有料プランを解約していません')
+  }
+}
+
 /**
  * 退会の前に呼ぶ（§5.8）。今の期間の最大人数を送ってから、有効な契約をすべて期間の終わりで解約する。
+ * 有料プランを解約していなければ `PlanStillActiveError`（Stripe から取り直した状態で判定する。写しが古くても通さない）。
  * 失敗したら例外を投げる（呼び出し側は退会を止める。請求できないまま消さない）
  */
 export async function cancelSubscriptionsForAccountDeletion(
   userId: string,
   now = new Date()
 ): Promise<void> {
-  const profile = await readBillingProfile(createPrivilegedClient(), userId)
+  const db = createPrivilegedClient()
+  const profile = await readBillingProfile(db, userId)
   const customerId = profile?.stripeCustomerId
   if (!customerId) return
 
   const stripe = getStripe()
-  // 期間・状態を最新にしてから送る（Webhook が遅れていても今の期間に送る）
+  // 期間・状態を最新にしてから判定して送る（Webhook が遅れていても今の期間に送る）
   await syncCustomer(customerId, now)
+  if (blocksAccountDeletion(await readBillingSubscription(db, userId))) {
+    throw new PlanStillActiveError()
+  }
   // 以降は履歴が消えるので、これがその期間の最後の値になる
   await reportUsageFor(userId, now)
 

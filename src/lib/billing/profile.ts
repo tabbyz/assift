@@ -56,6 +56,20 @@ export async function readBillingOwner(
     : null
 }
 
+/** 1 人の契約の写し（無ければ null） */
+export async function readBillingSubscription(
+  db: Db,
+  userId: string
+): Promise<Tables<'billing_subscriptions'> | null> {
+  const { data, error } = await db
+    .from('billing_subscriptions')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
 /** 契約の写しを最後に書いた時刻（写しが無ければ null） */
 export async function readSubscriptionSyncedAt(db: Db, userId: string): Promise<Date | null> {
   const { data, error } = await db

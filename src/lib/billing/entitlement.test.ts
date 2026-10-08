@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { entitlement, isOverLimit, staffLimit } from './entitlement'
+import { blocksAccountDeletion, entitlement, isOverLimit, staffLimit } from './entitlement'
 
 const now = new Date('2026-11-10T12:00:00+09:00')
 const future = new Date('2027-01-01T00:00:00+09:00')
@@ -45,5 +45,20 @@ describe('isOverLimit', () => {
     expect(isOverLimit(free, 10)).toBe(false)
     expect(isOverLimit(free, 11)).toBe(true)
     expect(isOverLimit(entitlement({ ...base, subscriptionStatus: 'active' }), 100)).toBe(false)
+  })
+})
+
+describe('blocksAccountDeletion', () => {
+  it('有料プランを解約していなければ削除できない（支払い失敗のリトライ中も）', () => {
+    for (const status of ['active', 'trialing', 'past_due'])
+      expect(blocksAccountDeletion({ status, cancel_at: null })).toBe(true)
+  })
+
+  it('解約済みで期間の終わりを待っている・終わった・契約が無いなら削除できる', () => {
+    expect(blocksAccountDeletion({ status: 'active', cancel_at: '2026-10-31T15:00:00Z' })).toBe(
+      false
+    )
+    expect(blocksAccountDeletion({ status: 'canceled', cancel_at: null })).toBe(false)
+    expect(blocksAccountDeletion(null)).toBe(false)
   })
 })

@@ -3,7 +3,7 @@
  *
  *   npx tsx --env-file=.env.local --conditions=react-server scripts/stripe/verify/clock.ts monthly
  */
-import { cancelSubscriptionsForAccountDeletion } from '@/lib/billing/cancel'
+import { cancelSubscriptionsForAccountDeletion, PlanStillActiveError } from '@/lib/billing/cancel'
 import { entitlement } from '@/lib/billing/entitlement'
 import { reportUsageFor } from '@/lib/billing/report'
 import { syncCustomer } from '@/lib/billing/sync'
@@ -225,7 +225,32 @@ async function deletedCustomer() {
   log('Customer を消したあと（期待: null）', await row(userId))
 }
 
+/** 有料プランを解約していなければ退会を断り、解約したあとなら退会できる */
+async function deletionBlocked() {
+  const start = new Date(Math.floor(Date.now() / 60_000) * 60_000 - 120_000)
+  const userId = await createUser('deletion-blocked')
+  await setHistory(userId, [[new Date(start.getTime() - 86400_000).toISOString(), 12]])
+  const clock = await createClockCustomer(userId, 'deletion-blocked', start)
+  const subscription = await subscribe(clock)
+  await syncCustomer(clock.customerId, start)
+  const first = await cancelSubscriptionsForAccountDeletion(userId).then(
+    () => '通った',
+    (error: unknown) => (error instanceof PlanStillActiveError ? '断られた' : String(error))
+  )
+  log('解約前の退会（期待: 断られた）', first)
+  // ポータルでの解約と同じ形（cancel_at = 期間の終わり）。Webhook が届く前に退会しても、取り直して判定する
+  await stripe.subscriptions.update(subscription.id, {
+    cancel_at: subscription.items.data[0].current_period_end,
+  })
+  const second = await cancelSubscriptionsForAccountDeletion(userId).then(
+    () => '通った',
+    (error: unknown) => (error instanceof PlanStillActiveError ? '断られた' : String(error))
+  )
+  log('解約後の退会（期待: 通った）', second)
+}
+
 const scenarios: Record<string, () => Promise<void>> = {
+  'deletion-blocked': deletionBlocked,
   'deleted-customer': deletedCustomer,
   monthly,
   trial,

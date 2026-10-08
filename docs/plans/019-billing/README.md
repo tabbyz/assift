@@ -354,6 +354,10 @@ URL は**利用者単位**（全店舗の合計で数えるので店舗の外）
 
 即時解約は従量分が捨てられ、猶予中の送信も載らない（§3）。そこで退会では**期間末の解約**にする。
 
+**有料プランを解約していなければ退会できない**（2026-10-08 に変更）。アカウント情報の削除のセクションで「先にプランとお支払いから解約してください」と案内し、
+ボタンを押せなくする。`deleteAccount` も Stripe から取り直した状態で断る（`blocksAccountDeletion`。Webhook が遅れていても通さない）。
+解約済みで期間の終わりを待っている契約は、終わりを待たずに退会できる（以下の 1〜3 で今の期間の分を請求する）。
+
 1. 有料プランなら、今の期間の最大人数を `timestamp = min(今, 期間の終わり − 1 分)` で送る（以降は履歴が消えるので、これがその期間の最後の値になる）
 2. `cancel_at_period_end: true`。schedule が付いていれば release せず、`cancelDuringMigration()` と同じく schedule を `end_behavior: cancel` にする
 3. `auth.admin.deleteUser`
@@ -915,4 +919,11 @@ cron は不正な鍵でも同期の失敗のあとに送信を試み、500 を�
 **再現しないもの:** 消えた Customer で退会できない → Stripe は消えた Customer の契約一覧に空の一覧を返す（サンドボックスで確認）。
 
 **確認:** lint / typecheck / test（765 件）/ pgTAP（215 件）。サンドボックスで `clock.ts deleted-customer` / `monthly` / `deletion`、cron（200）、ブラウザでシフト表とスタッフ設定を開いた。
+
+### 2026-10-08 有料プランを解約していなければ退会できないようにした
+
+- 判定は `blocksAccountDeletion()`（`lib/billing/entitlement.ts`。Vitest）: 有効な状態（`active` / `trialing` / `past_due`）で `cancel_at` が無い。画面と `deleteAccount` が共有する
+- `cancelSubscriptionsForAccountDeletion()` が同期のあとに判定し、`PlanStillActiveError` を投げる。`deleteAccount` はそれを「先に解約してください」の案内に写す
+- アカウント情報: 解約していなければ削除のボタンを押せなくし、「プランとお支払い」へのリンク付きで案内する。解約済みなら確認ダイアログに終了日と「今の請求期間の分はそのあとに請求」を出す
+- 確認: サンドボックスで、解約前の退会が断られ、ポータルと同じ形（`cancel_at`）で解約した直後（Webhook を待たずに）なら通ること（`clock.ts deletion-blocked`）。ブラウザで 2 つの状態の表示
 

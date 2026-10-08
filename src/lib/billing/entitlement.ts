@@ -50,3 +50,17 @@ export function isOverLimit(value: Entitlement, activeStaffCount: number): boole
   const limit = staffLimit(value)
   return limit !== null && activeStaffCount > limit
 }
+
+/**
+ * アカウントを削除できない（有料プランを解約していない）か。解約済みで期間の終わりを待っている契約は削除できる
+ * （退会の処理が今の期間の最大人数を送ってから消す。019 §5.8）。画面と deleteAccount が共有する
+ */
+export function blocksAccountDeletion(
+  subscription: { status: string; cancel_at: string | null } | null
+): boolean {
+  return (
+    subscription !== null &&
+    isEntitledStatus(subscription.status) &&
+    subscription.cancel_at === null
+  )
+}
