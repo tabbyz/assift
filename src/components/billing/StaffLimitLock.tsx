@@ -10,6 +10,8 @@ type Props = {
   tenantId: string
   limit: number
   manual: boolean
+  /** トライアルを一度も使っていない（v1 から移った人など）。申し込みより先に、無料で試せることを案内する */
+  trialAvailable: boolean
   children: ReactNode
 }
 
@@ -17,7 +19,7 @@ type Props = {
  * 在籍が上限を超えているとき（トライアルの終了・解約・支払い失敗の後）、シフト表の上に重ねる（019 §5.4・§11-5）。
  * 画面だけのロックで、書き込みの Action は止めない（増やす操作は DB の門番が止める）。共有ページ・エクスポートも止めない
  */
-export function StaffLimitLock({ tenantId, limit, manual, children }: Props) {
+export function StaffLimitLock({ tenantId, limit, manual, trialAvailable, children }: Props) {
   return (
     <div className={classes.root}>
       <div inert className={classes.content}>
@@ -36,17 +38,22 @@ export function StaffLimitLock({ tenantId, limit, manual, children }: Props) {
               </Text>
             ) : (
               <Text size="sm">
-                有料プランに申し込むか、在籍スタッフが {limit}{' '}
-                人以下になるようスタッフを退職にしてください。
+                {trialAvailable
+                  ? '無料トライアルを始めるか、有料プランに申し込むか'
+                  : '有料プランに申し込むか'}
+                、在籍スタッフが {limit} 人以下になるようスタッフを退職にしてください。
               </Text>
             )}
             <Group justify="flex-end">
               <LinkButton href={`/tenants/${tenantId}/settings/staffs`} variant="default">
                 スタッフを見る
               </LinkButton>
-              {!manual && (
-                <LinkButton href="/account/billing/subscribe">有料プランに申し込む</LinkButton>
-              )}
+              {!manual &&
+                (trialAvailable ? (
+                  <LinkButton href="/account/billing">無料トライアルを始める</LinkButton>
+                ) : (
+                  <LinkButton href="/account/billing/subscribe">有料プランに申し込む</LinkButton>
+                ))}
             </Group>
           </Stack>
         </Paper>

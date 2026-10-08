@@ -8,6 +8,7 @@ import {
   listEntitledSubscriptions,
   readBillingOwner,
   readBillingProfile,
+  readSubscriptionSyncedAt,
 } from './profile'
 import { getStripe, resolvePriceId } from './stripe'
 import { chooseSubscription, subscriptionRow } from './subscriptionRow'
@@ -38,7 +39,11 @@ async function findOwner(
   const byCustomer = await readBillingOwner(db, { customerId: customer.id })
   if (byCustomer || customer.deleted) return byCustomer
   const userId = customer.metadata?.[CUSTOMER_USER_ID_KEY]
-  return userId ? readBillingOwner(db, { userId }) : null
+  if (!userId) return null
+  // metadata で引けるのは、まだ Customer が結び付いていない人だけ。別の Customer を持っている人に結び付けると、
+  // 残骸の Customer（作成の競合で消し損ねたものなど）の状態で本物の契約の写しを上書きしてしまう
+  const byMetadata = await readBillingOwner(db, { userId })
+  return byMetadata && byMetadata.stripeCustomerId === null ? byMetadata : null
 }
 
 /**
@@ -143,6 +148,8 @@ export async function syncAllSubscriptions(
   const stripe = getStripe()
   const db = createPrivilegedClient()
   const priceIds = [await resolvePriceId(stripe), LEGACY_PRICE_ID]
+  // 一覧を取った時刻。全員を写し終えるまで数分かかるので、その間に Webhook が書いた写しは一覧より新しい
+  const listedAt = new Date()
 
   const byCustomer = new Map<
     string,
@@ -179,6 +186,12 @@ export async function syncAllSubscriptions(
     try {
       const owner = await findOwner(db, customer)
       if (!owner) continue
+      // 一覧より後に Webhook が写していれば、古い一覧で上書きしない（解約された契約が有効に戻ってしまう）
+      const syncedAt = await readSubscriptionSyncedAt(db, owner.id)
+      if (syncedAt && syncedAt > listedAt) {
+        synced += 1
+        continue
+      }
       await applySubscriptions(db, stripe, owner, customer, subscriptions, now)
       synced += 1
     } catch (error) {

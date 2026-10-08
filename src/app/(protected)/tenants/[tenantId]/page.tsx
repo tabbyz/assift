@@ -14,10 +14,9 @@ import { listRestrictions } from '@/lib/queries/restrictions'
 import { listShares, type ShareRow } from '@/lib/queries/shares'
 import { listShifts } from '@/lib/queries/shifts'
 import { listActiveStaffsWithPatternIds } from '@/lib/queries/staffs'
-import { getBillingOverview } from '@/lib/queries/billing'
+import { getCurrentBillingOverview } from '@/lib/queries/billing'
 import { getTenant } from '@/lib/queries/tenants'
 import { StaffLimitLock } from '@/components/billing/StaffLimitLock'
-import { getAuthUser } from '@/utils/auth/current'
 import { isUuid } from '@/utils/uuid'
 import type { ShareItem } from './_components/ShareModal'
 import { ShiftsClient } from './_components/ShiftsClient'
@@ -71,7 +70,7 @@ export default async function ShiftsPage({
     listRestrictions(tenantId),
     getLatestAssistRun(tenantId, range.start, range.end),
     // 在籍が上限を超えていたら表をロックする（019 §5.4）。未ログインは layout が弾く
-    getAuthUser().then((user) => (user ? getBillingOverview(user.id) : null)),
+    getCurrentBillingOverview(),
   ])
 
   // 共有 URL はクエリではなくここで組む（クエリは DB の列だけを返す。009 §5.3）
@@ -132,6 +131,7 @@ export default async function ShiftsPage({
         tenantId={tenantId}
         limit={billing.limit}
         manual={billing.entitlement.kind === 'manual'}
+        trialAvailable={billing.trialAvailable}
       >
         {table}
       </StaffLimitLock>

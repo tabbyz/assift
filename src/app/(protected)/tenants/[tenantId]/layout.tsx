@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { TenantShell } from '@/components/TenantShell'
 import { PlanBanner, type PlanBannerProps } from '@/components/billing/PlanBanner'
 import { trialDaysLeft, trialLastDay } from '@/lib/billing/trial'
-import { type BillingOverview, getBillingOverview } from '@/lib/queries/billing'
+import { type BillingOverview, getCurrentBillingOverview } from '@/lib/queries/billing'
 import { getTenant, listTenants } from '@/lib/queries/tenants'
 import { getAuthUser } from '@/utils/auth/current'
 import { isUuid } from '@/utils/uuid'
@@ -27,19 +27,12 @@ export default async function TenantLayout({
   // Postgres の 22P02（invalid input syntax for type uuid）を投げさせない
   if (!isUuid(tenantId)) notFound()
 
-  const userPromise = getAuthUser()
   const [tenant, tenants, user, billing] = await Promise.all([
     getTenant(tenantId),
     listTenants(),
-    userPromise,
-    // 課金の状態も並行に読む（直列にすると店舗の画面ごとに往復が 1 回増える。getBillingOverview は cache() 済み）
-    // 帯は無くても使えるので、読めなければ帯を出さずに描く（店舗の画面ごと落とさない）
-    userPromise
-      .then((authUser) => (authUser ? getBillingOverview(authUser.id) : null))
-      .catch((error: unknown) => {
-        console.error('[billing] 店舗の帯の読み取りに失敗しました', error)
-        return null
-      }),
+    getAuthUser(),
+    // 課金の状態も並行に読む。読めなければ帯を出さずに描く（getCurrentBillingOverview が null を返す）
+    getCurrentBillingOverview(),
   ])
   // RLS で他人の店舗も存在しない id も null になる（存在を漏らさない）
   if (!tenant) notFound()

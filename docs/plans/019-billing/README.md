@@ -156,7 +156,7 @@ v1 の「プラン」のうち、v2 に残すのは料金（11 人目から 1 �
 
 - price の id は環境変数に持たず **`lookup_key` で引く**（test / live で id が違っても同じコード）。クーポンは id を固定で作る
 - これらは `scripts/stripe/setup.ts`（冪等。v1 の `stripe:create_product` / `create_plan` の置き換え）で作る。Webhook・Dashboard の設定は手で行い、手順を README に書く
-- API キーは**制限付きキー**（Customers / Checkout Sessions / Subscriptions / Subscription Schedules / Invoices / Billing Meter Events / Billing Portal の必要な権限だけ）
+- API キーは**制限付きキー**（Customers / Checkout Sessions / Subscriptions / Subscription Schedules / Invoices / Prices（読み取り。`resolvePriceId()` が lookup_key で引く）/ Billing Meter Events / Billing Portal の必要な権限だけ。`stripe:setup` と移行スクリプトは別の鍵で流す）
 - SDK は `stripe`（node）を `apiVersion` 固定（実装時の最新。少なくとも `2026-06-24.dahlia`）
 
 ### 4.2 最大人数の数え方
@@ -894,4 +894,25 @@ cron は不正な鍵でも同期の失敗のあとに送信を試み、500 を�
 `peakWindow` と `billableStaffPeak` の区間の計算の重複（今は一致しており、まとめ直すほうが危うい）。
 
 **確認:** lint / typecheck / test（765 件）/ pgTAP（215 件）。サンドボックスで `clock.ts deleted-customer` / `monthly`（200 円 → 500 円）/ `deletion`（300 円）。
+
+### 2026-10-08 実装のレビュー（4 回目）
+
+指摘は 10 件。直したもの 6 件、再現しないもの 1 件、見送り 3 件（N+1・区間の計算の重複・同じ呼び出しの重複のうち前回と同じもの）。
+
+**直したこと:**
+
+1. **本番の制限付きキーの権限一覧に Prices（読み取り）が無かった**（`.env.example`・§4.1）。`resolvePriceId()` が lookup_key で price を引くので、
+   一覧のとおりに鍵を作ると申し込みも毎晩の同期も失敗する。`stripe:setup` と移行スクリプトは別の鍵で流すことも書いた
+2. **毎晩の同期が、処理中に Webhook が書いた新しい写しを古い一覧で上書きしえた**（解約された契約が有効に戻り、次の同期まで上限なし）→
+   一覧を取った時刻より後に写しが書かれていれば、その人は書き換えない
+3. **シフト表とスタッフ設定のページは、課金の状態が読めないとページごと落ちた**（3 回目で layout だけ直していた）→
+   `getCurrentBillingOverview()`（`lib/queries/billing.ts`。読めなければ null）に寄せ、layout・シフト表・スタッフ設定の 3 か所の書き写しをなくした。
+   読めないときはロックを掛けない側に倒れる（スタッフを増やす操作は DB の門番が止める）
+4. **metadata から持ち主を引くとき、その人が別の Customer を持っていても結び付けていた**（残骸の Customer の状態で本物の写しを上書きしうる）→ Customer がまだ無い人だけ
+5. **未払い・未完了の契約が残っていても申し込めた**（Meter は Customer 単位なので同じ人数が 2 件に請求される）→ `startCheckout` で断り、支払いか問い合わせを案内する
+6. シフト表のロックの画面で、トライアルを使える人には「無料トライアルを始める」を案内する（有料プランだけを出していた）
+
+**再現しないもの:** 消えた Customer で退会できない → Stripe は消えた Customer の契約一覧に空の一覧を返す（サンドボックスで確認）。
+
+**確認:** lint / typecheck / test（765 件）/ pgTAP（215 件）。サンドボックスで `clock.ts deleted-customer` / `monthly` / `deletion`、cron（200）、ブラウザでシフト表とスタッフ設定を開いた。
 

@@ -4,6 +4,7 @@ import { type Entitlement, entitlement, isOverLimit, staffLimit } from '@/lib/bi
 import { peakWindow, readStaffCountHistory } from '@/lib/billing/history'
 import { billableStaffPeak } from '@/lib/billing/peak'
 import type { Tables } from '@/types/database'
+import { getAuthUser } from '@/utils/auth/current'
 import { createClient } from '@/utils/supabase/server'
 
 export type BillingSubscription = Tables<'billing_subscriptions'>
@@ -63,6 +64,22 @@ export const getBillingOverview = cache(async (userId: string): Promise<BillingO
     trialEnd,
     subscription: subscription.data,
     hasCustomer: Boolean(profile.data?.stripe_customer_id),
+  }
+})
+
+/**
+ * ログイン中の利用者の課金の状態（店舗の帯・シフト表のロック・スタッフ設定の案内）。読めなければ null。
+ * どれも無くても画面は使えるので、課金の読み取りの失敗で店舗の画面ごと落とさない（ロックは外れた側に倒れる。
+ * スタッフを増やす操作は DB の門番が止める）
+ */
+export const getCurrentBillingOverview = cache(async (): Promise<BillingOverview | null> => {
+  const user = await getAuthUser()
+  if (!user) return null
+  try {
+    return await getBillingOverview(user.id)
+  } catch (error) {
+    console.error('[billing] 課金の状態を読めませんでした', error)
+    return null
   }
 })
 

@@ -11,7 +11,7 @@ import { LEGACY_API_VERSION } from '@/lib/billing/constants'
 import { ensureCustomer } from '@/lib/billing/customer'
 import { isEntitledStatus } from '@/lib/billing/entitlement'
 import { getStripe, isStripeConfigured, resolvePriceId } from '@/lib/billing/stripe'
-import { syncCustomer } from '@/lib/billing/sync'
+import { listCustomerSubscriptions, syncCustomer } from '@/lib/billing/sync'
 import { requestOrigin } from '@/lib/auth/requestOrigin'
 import { getBillingOverview, getStripeCustomerId } from '@/lib/queries/billing'
 
@@ -20,6 +20,9 @@ import { getBillingOverview, getStripeCustomerId } from '@/lib/queries/billing'
  * クライアントが `window.location.assign` で移る（認証系と同じく ActionResult の契約を保つ）。
  * Stripe の Customer は**入力から受け取らず**、ログイン中の利用者の `profiles.stripe_customer_id` だけを使う
  */
+
+/** 有効ではないが終わってもいない契約（申し込み直すと二重になる） */
+const UNSETTLED_STATUSES = new Set(['unpaid', 'incomplete', 'paused'])
 
 const UNAVAILABLE_MESSAGE = '現在お申し込みを受け付けられません。時間をおいてお試しください'
 
@@ -44,6 +47,15 @@ export async function startCheckout(): Promise<ActionResult<{ redirectTo: string
       if (isEntitledStatus(overview.subscription?.status ?? null)) fail('有料プランをご利用中です')
     }
     const customerId = await ensureCustomer(user)
+    // 未払い・未完了の契約が残っていると、申し込みで 2 件目ができる。Meter は Customer 単位なので同じ人数が両方に請求される
+    const unsettled = (await listCustomerSubscriptions(stripe, customerId, [])).some(
+      (subscription) => UNSETTLED_STATUSES.has(subscription.status)
+    )
+    if (unsettled) {
+      fail(
+        'お支払いが済んでいない契約があります。「お支払い方法・請求書」からお支払いいただくか、お問い合わせください'
+      )
+    }
 
     const origin = await requestOrigin()
     const session = await stripe.checkout.sessions.create(

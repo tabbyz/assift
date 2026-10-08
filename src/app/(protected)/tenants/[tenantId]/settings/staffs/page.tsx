@@ -4,9 +4,8 @@ import { Group, Stack, Title } from '@mantine/core'
 import { IconPlus } from '@tabler/icons-react'
 import { LinkButton } from '@/components/LinkButton'
 import { StaffLimitAlert } from '@/components/billing/StaffLimitAlert'
-import { getBillingOverview } from '@/lib/queries/billing'
+import { getCurrentBillingOverview } from '@/lib/queries/billing'
 import { listActiveStaffs, listRetiredStaffs } from '@/lib/queries/staffs'
-import { getAuthUser } from '@/utils/auth/current'
 import { isUuid } from '@/utils/uuid'
 import { StaffListClient } from './_components/StaffListClient'
 
@@ -23,7 +22,7 @@ export default async function StaffsPage({
   const [activeStaffs, retiredStaffs, billing] = await Promise.all([
     listActiveStaffs(tenantId),
     listRetiredStaffs(tenantId),
-    getAuthUser().then((user) => (user ? getBillingOverview(user.id) : null)),
+    getCurrentBillingOverview(),
   ])
   // 上限（全店舗の合計）に達したら案内する（019 §5.4）。追加ボタンは押せるまま（押したら案内のモーダル）
   const atLimit = billing?.limit != null && billing.activeStaffCount >= billing.limit

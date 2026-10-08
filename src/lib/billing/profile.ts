@@ -29,19 +29,42 @@ export async function readBillingProfile(db: Db, userId: string): Promise<Billin
 }
 
 /** Stripe の Customer の持ち主（同期で使う）。trialEnd は DB の値のまま（null = トライアル未使用） */
-export type BillingOwner = { id: string; email: string | null; trialEnd: string | null }
+export type BillingOwner = {
+  id: string
+  email: string | null
+  trialEnd: string | null
+  stripeCustomerId: string | null
+}
 
 /** 持ち主を `stripe_customer_id`（1 人に決まる。unique）か利用者の id で引く */
 export async function readBillingOwner(
   db: Db,
   by: { customerId: string } | { userId: string }
 ): Promise<BillingOwner | null> {
-  const query = db.from('profiles').select('id, email, trial_end')
+  const query = db.from('profiles').select('id, email, trial_end, stripe_customer_id')
   const { data, error } = await (
     'customerId' in by ? query.eq('stripe_customer_id', by.customerId) : query.eq('id', by.userId)
   ).maybeSingle()
   if (error) throw error
-  return data ? { id: data.id, email: data.email, trialEnd: data.trial_end } : null
+  return data
+    ? {
+        id: data.id,
+        email: data.email,
+        trialEnd: data.trial_end,
+        stripeCustomerId: data.stripe_customer_id,
+      }
+    : null
+}
+
+/** 契約の写しを最後に書いた時刻（写しが無ければ null） */
+export async function readSubscriptionSyncedAt(db: Db, userId: string): Promise<Date | null> {
+  const { data, error } = await db
+    .from('billing_subscriptions')
+    .select('synced_at')
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (error) throw error
+  return data ? new Date(data.synced_at) : null
 }
 
 /**
