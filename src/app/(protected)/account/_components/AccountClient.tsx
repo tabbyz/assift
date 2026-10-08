@@ -229,7 +229,7 @@ export function AccountClient({
                   <Anchor component={Link} href="/account/billing" inherit>
                     プランとお支払い
                   </Anchor>
-                  から有料プランを解約してください（解約後は、請求期間の終わりを待たずに削除できます）。
+                  から有料プランを解約してください。
                 </Text>
               </Alert>
             )}
