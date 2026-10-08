@@ -20,7 +20,7 @@ import { notifications } from '@mantine/notifications'
 import { IconInfoCircle } from '@tabler/icons-react'
 import { FormErrorAlert } from '@/components/FormErrorAlert'
 import { SettingsSection } from '@/components/SettingsSection'
-import { formatJapaneseYearMonthDay as formatDate } from '@/lib/calendar/dateString'
+import { addDays, formatJapaneseMonthDay } from '@/lib/calendar/dateString'
 import { PASSWORD_MIN_LENGTH } from '@/lib/validation/auth'
 import { deleteAccount, updateEmail, updatePassword } from '../actions'
 
@@ -97,9 +97,10 @@ export function AccountClient({
         <Stack gap="xs">
           <Text size="sm">本当にアカウントを削除しますか？この操作は取り消せません。</Text>
           {deletion.planLastDay && (
-            <Text size="sm" c="dimmed">
-              解約済みの有料プランは{formatDate(deletion.planLastDay)}
-              で終わり、今の請求期間の分（期間中に在籍スタッフが最も多かったときの人数）はそのあとに請求します。
+            <Text size="sm">
+              アカウントを削除しても、有料プランの最後のご請求（
+              {Number(deletion.planLastDay.slice(5, 7))}月ご利用分）は
+              {formatJapaneseMonthDay(addDays(deletion.planLastDay, 1))}に行います。
             </Text>
           )}
         </Stack>

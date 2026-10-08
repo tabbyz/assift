@@ -924,6 +924,6 @@ cron は不正な鍵でも同期の失敗のあとに送信を試み、500 を�
 
 - 判定は `blocksAccountDeletion()`（`lib/billing/entitlement.ts`。Vitest）: 有効な状態（`active` / `trialing` / `past_due`）で `cancel_at` が無い。画面と `deleteAccount` が共有する
 - `cancelSubscriptionsForAccountDeletion()` が同期のあとに判定し、`PlanStillActiveError` を投げる。`deleteAccount` はそれを「先に解約してください」の案内に写す
-- アカウント情報: 解約していなければ削除のボタンを押せなくし、「プランとお支払い」へのリンク付きで案内する。解約済みなら確認ダイアログに終了日と「今の請求期間の分はそのあとに請求」を出す
+- アカウント情報: 解約していなければ削除のボタンを押せなくし、「プランとお支払い」へのリンク付きで案内する。解約済みなら確認ダイアログに「アカウントを削除しても、有料プランの最後のご請求（◯月ご利用分）は◯月◯日に行います」を出す
 - 確認: サンドボックスで、解約前の退会が断られ、ポータルと同じ形（`cancel_at`）で解約した直後（Webhook を待たずに）なら通ること（`clock.ts deletion-blocked`）。ブラウザで 2 つの状態の表示
 
