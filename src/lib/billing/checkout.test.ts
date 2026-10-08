@@ -33,6 +33,10 @@ describe('checkoutSessionParams', () => {
     expect(params).not.toHaveProperty('payment_method_types')
   })
 
+  it('円だけで請求する（Adaptive Pricing を切る）', () => {
+    expect(params.adaptive_pricing).toEqual({ enabled: false })
+  })
+
   it('有効期限は 30 分より少し先（Stripe の下限は 30 分）', () => {
     const now = Math.floor(new Date('2026-10-15T03:00:00Z').getTime() / 1000)
     expect(params.expires_at! - now).toBeGreaterThanOrEqual(30 * 60)

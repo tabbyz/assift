@@ -1,5 +1,6 @@
+import Stripe from 'stripe'
 import { describe, expect, it } from 'vitest'
-import { meterIdentifier, meterTimestamp } from './usage'
+import { isDuplicateMeterEvent, meterIdentifier, meterTimestamp } from './usage'
 
 describe('meterIdentifier', () => {
   it('Subscription・期間の開始・人数で決まる（100 文字以内）', () => {
@@ -20,6 +21,24 @@ describe('meterTimestamp', () => {
   it('期間の終わりの 1 分前より後にしない', () => {
     expect(meterTimestamp(new Date('2026-11-30T14:59:30Z'), periodEnd)).toBe(
       Math.floor(periodEnd.getTime() / 1000) - 60
+    )
+  })
+})
+
+describe('isDuplicateMeterEvent', () => {
+  const invalid = (message: string) =>
+    new Stripe.errors.StripeInvalidRequestError({ type: 'invalid_request_error', message })
+
+  it('同じ identifier の 2 回目の断りは送れたものとして扱う', () => {
+    expect(
+      isDuplicateMeterEvent(invalid('An event already exists with identifier sub_1:1791420391:11.'))
+    ).toBe(true)
+  })
+
+  it('ほかの失敗は失敗のまま', () => {
+    expect(isDuplicateMeterEvent(invalid('No such customer: cus_x'))).toBe(false)
+    expect(isDuplicateMeterEvent(new Error('An event already exists with identifier x'))).toBe(
+      false
     )
   })
 })

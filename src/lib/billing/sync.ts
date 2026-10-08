@@ -1,5 +1,5 @@
 import 'server-only'
-import type Stripe from 'stripe'
+import Stripe from 'stripe'
 import { createPrivilegedClient } from '@/lib/supabase/createPrivilegedClient'
 import { CUSTOMER_USER_ID_KEY, LEGACY_PRICE_ID } from './constants'
 import { isEntitledStatus } from './entitlement'
@@ -16,6 +16,11 @@ import { chooseSubscription, subscriptionRow } from './subscriptionRow'
 type Db = ReturnType<typeof createPrivilegedClient>
 
 const EXPAND = ['data.schedule', 'data.discounts']
+
+const isMissingPrice = (error: unknown) =>
+  error instanceof Stripe.errors.StripeInvalidRequestError &&
+  error.code === 'resource_missing' &&
+  error.param === 'price'
 
 type Owner = { id: string; email: string | null; trialEnd: string | null }
 
@@ -137,12 +142,17 @@ export async function syncAllSubscriptions(
       limit: 100,
       expand: [...EXPAND, 'data.customer'],
     })
-    for await (const subscription of pages) {
-      const customer = subscription.customer
-      if (typeof customer === 'string' || customer.deleted) continue
-      const entry = byCustomer.get(customer.id) ?? { customer, subscriptions: [] }
-      entry.subscriptions.push(subscription)
-      byCustomer.set(customer.id, entry)
+    try {
+      for await (const subscription of pages) {
+        const customer = subscription.customer
+        if (typeof customer === 'string' || customer.deleted) continue
+        const entry = byCustomer.get(customer.id) ?? { customer, subscriptions: [] }
+        entry.subscriptions.push(subscription)
+        byCustomer.set(customer.id, entry)
+      }
+    } catch (error) {
+      // v1 の price が無いアカウント（サンドボックス・旧料金をやめたあと）でも、新料金の同期と人数の送信を止めない
+      if (price !== LEGACY_PRICE_ID || !isMissingPrice(error)) throw error
     }
   }
 

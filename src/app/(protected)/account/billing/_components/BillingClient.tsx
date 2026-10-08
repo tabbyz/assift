@@ -63,13 +63,19 @@ export function BillingClient({ view, checkoutSuccess }: Props) {
   const { subscription } = view
   const legacy = (subscription?.discountPercent ?? 0) > 0
 
-  // Checkout から戻った（同期は page が済ませている）。通知を出したらクエリを消す
+  // Checkout から戻った（同期は page が済ませている）。通知を出したらクエリを消す。
+  // id は二重表示よけ（開発時の StrictMode でエフェクトが 2 回走る。同じ id の通知は Mantine が重ねない）
   useEffect(() => {
     if (!checkoutSuccess) return
     notifications.show(
       subscription
-        ? { message: '有料プランのお申し込みが完了しました', color: 'green' }
+        ? {
+            id: 'checkout-success',
+            message: '有料プランのお申し込みが完了しました',
+            color: 'green',
+          }
         : {
+            id: 'checkout-success',
             message: 'お申し込みを確認しています。しばらくしてから再読み込みしてください',
             color: 'yellow',
           }

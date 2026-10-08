@@ -187,7 +187,8 @@ Meter に `max` が無いので、**最大値はアプリが計算し、Meter �
   **毎月末日 15:00 UTC = 翌月 1 日 0:00 JST** に期間が切り替わる（短い月は月末に寄る）。請求書は既定の猶予（1 時間）の後に確定してカードに請求する
 - トライアルは Stripe に持たせないので（§7）、anchor と併用できない制約に当たらない
 - 申し込んだ月の残り（申し込み〜月末）: 規約どおり「その月の最大人数」で請求する方針。`proration_behavior` の既定で初回の端数期間の従量分が
-  1 日の請求書に載ることを**テストクロックで確かめる**（§9.3-1）。載らなければ `proration_behavior` と文言を見直す（§11-4）
+  1 日の請求書に載ることを**テストクロックで確かめた**（§9.3-1。2026-10-08、§12）。申し込みのときの 0 円の請求書は作られず、
+  初回の請求書が「申し込み〜月末」の 1 枚になる（§11-4）
 - v1 から引き継ぐ Subscription は請求日を動かさない（§8.2）
 
 ### 4.4 税とメール
@@ -684,7 +685,7 @@ Checkout で作った Customer にはテストクロックを付けられない�
 | 1 | v1 の利用者の「既存のプラン」をどこまで残すか | **決定**: 料金（1 人 50 円）だけ残し、仕組みは v2（月内の最大在籍数・1 人単位）にそろえる。新料金の price に 50% 引きのクーポン（無期限）で表す（§2.4） |
 | 2 | 旧料金の対象 | **決定**: v2 のリリース時に v1 の有料プランを契約している利用者だけ。v1 の無料プランの人は新料金（§2.4） |
 | 3 | トライアル | **決定**: カード不要・人数無制限・11 人目で始める・全員 v1 と同じ 2 か月後の月末まで（v1 で使った人は対象外）（§7） |
-| 4 | 申し込んだ月の残りの期間 | テストクロックの結果に合わせる（§4.3）。方針は「申し込んだ日からのその月の最大人数で請求」 |
+| 4 | 申し込んだ月の残りの期間 | **決定**: 申し込んだ日からのその月の最大人数で、翌月 1 日に請求する（テストクロックで確認。§4.3・§12）。規約・確認画面の文言はこのまま |
 | 5 | 無料で 10 人を超えたとき | **決定**: シフト表をロック（共有・エクスポートは止めない） |
 | 6 | `plan_change_logs` | **決定**: 移行せず、表ごと消す。元のデータは v1 のダンプに残す（§5.2・§8.1） |
 | 7 | 旧料金の利用者が解約したあと | **決定**: 解約で旧料金は終わり、再び申し込むと新料金（クーポンが Subscription と一緒に終わる）。解約の手前の画面と告知で知らせる（§2.4） |
@@ -748,3 +749,54 @@ Checkout で作った Customer にはテストクロックを付けられない�
 4. `stripe:migrate-v1` をテストモードで v1 相当の Subscription（旧 metered price）に流す: acacia での schedule の作成・更新、
    phase 1 の `discounts`（通らなければ旧来の `coupon`）、release 後に price とクーポンが残ること、下書きの確定で請求やメールが走らないこと、
    回収不能で `unpaid` → `active` に戻ること、`cancelDuringMigration()` で期間末に終わること
+
+### 2026-10-08 Stripe のサンドボックスでの確認
+
+§9.4 の手順で、サンドボックス `assift-v2-dev`（v1 のアカウントの新しいサンドボックス）に対して確かめた。テストクロックの筋書きは
+`scripts/stripe/verify/clock.ts`、v1 の引き継ぎは `scripts/stripe/verify/v1.ts`（どちらも確認用。本番コードは変えない。使い方はファイル冒頭）。
+Checkout・ポータル・退会の画面は Playwright で通した。Webhook はこのセッションに届かないので、Stripe から取ったイベントに
+`generateTestHeaderString` で署名を付けてローカルへ POST した。
+
+**通った項目:**
+
+| 項目 | 結果 |
+| --- | --- |
+| `stripe:setup`（§9.4-1） | 1 回目で作成、2 回目は既存だけ（ポータルは毎回「更新」= 設定の上書きで、想定どおり）。Meter `last`・`by_id`（`stripe_customer_id`）、Price `assift_monthly`（graduated・10 人まで 0 円 / 以降 100 円・`inclusive`）、Coupon 50%・forever、ポータル（請求書・支払い方法・宛名・期間末の解約・プラン変更なし） |
+| Checkout（§9.4-2） | `4242…` で申し込み → `/account/billing?checkout=success` で描画時に同期され「有料プラン」。期間は「申し込み 〜 10/31 15:00 UTC」、`trial_end` に Subscription の開始時刻。申し込み済みで確認画面を開くと `/account/billing` に戻る |
+| ポータル | 日本語で開く。解約は「2026年11月1日 までは引き続きご利用」。endive では解約が `cancel_at`（期間の終わり）に入り、`cancel_at_period_end` は false。`subscriptionRow` は `cancel_at` を先に見るので、同期で「終了予定」が写る |
+| Webhook（§9.4-3） | 署名なし・形の違う署名・別の secret・本文の改ざん → 400、対象外の型・customer なし → 204、`customer.subscription.updated` → 204 で `synced_at` が進む、`customer.subscription.created` → 204 で Meter に 11 が届く |
+| cron | 認証なし・違う Bearer → 401、正しい Bearer → 200（下の 2 件を直したあと `{ sync: { synced: 1, failed: 0 }, usage: { sent: 1, failed: 0 } }`）。2 回続けて呼んでも同じ |
+| 1・2 申し込んだ月と月次 | 10/15 に 12 人で申し込み → **11/1 の請求書が 10/15〜11/1 の 12 人 = 200 円**（§11-4 を決定）。11 月に 12 → 15 → 11 人 → 12/1 に 500 円 |
+| 3 2 月の anchor | 期間が 1/31 15:00 → 2/28 15:00 → 3/31 15:00 UTC（月末に寄る） |
+| 4 トライアル中の申し込み | トライアル（〜12/31）中の 11/10 に申し込み → 12/1・1/1 は 0 円、2/1 に 1 月の最大 14 人 = 400 円 |
+| 5・15 月の途中の解約 | ポータルと同じ `cancel_at` → 12/1 に 11 月の最大 13 人 = 300 円 → `canceled`、以降の請求なし。権利は `free`・10 人（トライアルは申し込みで使用済み） |
+| 6 支払い失敗 | 2 回目の請求からカードが失敗 → 11/1 `past_due` → 11/22 までにリトライが尽きて `canceled`（請求書は `open` のまま残る） |
+| 7 3D セキュア | `pm_card_authenticationRequired` で月次の請求 → `past_due`（請求書は `open`） |
+| 8 退会 | `cancelSubscriptionsForAccountDeletion` → `cancel_at_period_end` → 期間末に 13 人 = 300 円。**ポータルで解約済み（`cancel_at` あり）の契約にも `cancel_at_period_end: true` を付けられる** |
+| 退会（Stripe が止まっている） | 不正な鍵で dev を起動して画面から削除 →「有料プランの解約に失敗しました…」で退会しない |
+| 10・14 v1 の引き継ぎ | acacia で `freemium-monthly`（plan。`id` を指定できるのは plans API だけ）と v1 相当の契約を作れた。dry-run → `--apply --limit 1`（区分ごとに 1 件）→ `--apply` → 2 回目の `--apply` は「schedule 既存」「対象外」だけ（冪等）。Customer の言語が `ja`、schedule は phase 0 が旧 price〜10/31 23:59:59 JST・phase 1 が `assift_monthly` + クーポンを 1 日・`release`。**acacia の phase 1 で `discounts` が通った**。期間の終わりの請求書が v1 の上限 15 人 × 50 円 = 250 円、release のあとも price とクーポンが残り、次の請求書が Meter の 15 人 × 100 円 × 50% = 250 円。切り替え待ちの間に `endScheduleAtCurrentPhase`（`cancelDuringMigration` の中身）→ `cancel_at` が写り、期間の終わりで `canceled`・新料金に切り替わらない。上限 10 人は即時解約 |
+| 11・12 旧料金の終わり | クーポンは Customer に付いていない（申し込み直しに引き継がれない）。Subscription の割引を外すと次の請求書から 500 円 |
+
+**見つけた不具合と直したこと:**
+
+1. **Meter の identifier の重複は「捨てられる」のではなく `invalid_request_error` で断られる**（`An event already exists with identifier …`。code は付かない）。
+   人数が変わらない日の cron が毎回「送信失敗」を数え、本当の失敗と見分けられなかった。`sendPeak` でこの断りだけを成功として扱う（`isDuplicateMeterEvent`。Vitest を足した）
+2. **v1 の price（`freemium-monthly`）が無いアカウントで cron 全体が 500**（`subscriptions.list({ price })` が `resource_missing`）。同期だけでなく人数の送信まで止まり、
+   請求が 0 円のまま進む。本番には今はあるが、旧料金をやめて price を消したとき（§8.5）やサンドボックス・プレビューで起きる。旧 price が無ければ飛ばす（`syncAllSubscriptions`）
+3. **Checkout が Adaptive Pricing で USD を既定にしていた**（海外の IP から開くと USD が選ばれ「USD 通貨で請求する」と出る）。料金・規約は円（税込）なので、
+   Session ごとに `adaptive_pricing: { enabled: false }` を付けた（`checkoutSessionParams`。Vitest を足した）。開き直して円だけになったことを確認
+4. Checkout から戻ったときの「お申し込みが完了しました」が 2 回出た（開発時の StrictMode でエフェクトが 2 回）。通知に `id` を付けて重ねない
+
+**確かめられなかったこと・残ったこと:**
+
+- **13（`unpaid` の救済）**: サンドボックスの「すべての再試行が失敗したら」を**キャンセル**にしてあるため、`unpaid` の契約を作れない。
+  確かめるには、一時的に「未払いにする」へ変えてから、期限切れのカードで v1 相当の契約を作り、下書きが溜まった状態で `stripe:migrate-v1` を流す
+  （下書きの確定でメール・請求が走らないこと、回収不能で `active` に戻ること）。終わったら「キャンセル」に戻す
+- 9（最終日の cron の後の増員・cron が 1 日止まる）は流していない。送信は「その時点までの最大」を `last` で送るだけなので、設計どおりの誤差になる
+- **Webhook の endpoint を登録するときは API の版を `2026-09-30.endive` に指定する。** サンドボックス（= v1 のアカウント）の既定の版は `2019-08-14` で、
+  `stripe.events.list` で取ったイベントもその版だった。ルートはイベントの `type` と `data.object.customer` しか読まないので版が違っても動くが、合わせておく
+- ポータルの解約ダイアログで契約が「assift • ¥0 / 月」と出る（従量の price の最初の段が 0 円のため）。Stripe 側の表示で変えられない。
+  「料金は使用状況により異なります」も併記されるので、告知・FAQ で触れる程度でよい
+- 支払い失敗でリトライが尽きて解約になったあとも、請求書は `open` のまま残る（Stripe の「請求書の扱い」の設定次第）。カットオーバーで設定を見る項目に足す
+- Checkout の国の既定は IP から決まる（海外からだと米国になり、郵便番号が必須になる）。日本からのアクセスでは日本になるので対応しない
+
