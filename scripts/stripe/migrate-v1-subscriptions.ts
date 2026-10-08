@@ -23,7 +23,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { parseArgs } from 'node:util'
 import Stripe from 'stripe'
-import { phaseParams } from '@/lib/billing/cancel'
+import { idOf, phaseParams } from '@/lib/billing/cancel'
 import { LEGACY_API_VERSION, LEGACY_COUPON_ID, PRICE_LOOKUP_KEY } from '@/lib/billing/constants'
 import {
   type MigrationCategory,
@@ -87,7 +87,6 @@ const HEADER: (keyof Result)[] = [
 
 const iso = (seconds: number | undefined | null) =>
   seconds ? new Date(seconds * 1000).toISOString() : ''
-const idOf = (value: string | { id: string }) => (typeof value === 'string' ? value : value.id)
 
 /**
  * 下書きを無効にする。下書きのまま無効にはできないので、自動の確定を止めてから確定し、すぐ無効にする（§8.2.2）。

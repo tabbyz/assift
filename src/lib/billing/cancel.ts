@@ -1,7 +1,7 @@
 import 'server-only'
 import type Stripe from 'stripe'
 import { createPrivilegedClient } from '@/lib/supabase/createPrivilegedClient'
-import { LEGACY_API_VERSION } from './constants'
+import { LEGACY_API_VERSION, LEGACY_PRICE_ID } from './constants'
 import { isEntitledStatus } from './entitlement'
 import { readBillingProfile } from './profile'
 import { reportUsageFor } from './report'
@@ -15,11 +15,15 @@ import { syncCustomer } from './sync'
  * `cancel_at_period_end` にすると、ポータルで解約を取り消せてしまい、旧 metered の price のまま schedule も無い契約が残る
  * （v1 の rake が止まった後は利用量が 0 になり、以後ずっと無料になる）。そこで新料金の phase を消し、今の phase の終わりで
  * `end_behavior: cancel` にする。旧 metered の明細を含むので API `2025-02-24.acacia` で呼ぶ（basil 以降は触れない）
+ *
+ * ただし切り替えの直後（新料金の phase。移行で 1 日だけ付けてある）に解約するときは、その phase で終えると 1 日で解約になる。
+ * もう旧 price ではないので、schedule を release して通常の `cancel_at_period_end` にする（新しい期間の終わりまで使える）
  */
 
 const LEGACY = { apiVersion: LEGACY_API_VERSION }
 
-const idOf = (value: string | { id: string }) => (typeof value === 'string' ? value : value.id)
+export const idOf = (value: string | { id: string }) =>
+  typeof value === 'string' ? value : value.id
 
 /**
  * 既存の phase を update の引数に写す（今の phase を変えずに残すため）。移行スクリプトと共有する。
@@ -43,7 +47,7 @@ export function phaseParams(
   }
 }
 
-/** schedule を今の phase だけにして、その終わりで Subscription を解約する */
+/** 今の期間の終わりで Subscription を解約する。旧 price の phase なら schedule を今の phase だけにして終える */
 export async function endScheduleAtCurrentPhase(stripe: Stripe, scheduleId: string): Promise<void> {
   const schedule = await stripe.subscriptionSchedules.retrieve(scheduleId, {}, LEGACY)
   const current = schedule.current_phase
@@ -54,6 +58,15 @@ export async function endScheduleAtCurrentPhase(stripe: Stripe, scheduleId: stri
   }
   const phase = schedule.phases.find((candidate) => candidate.start_date === current.start_date)
   if (!phase) throw new Error(`今の phase が見つかりません (schedule: ${scheduleId})`)
+
+  const onLegacyPrice = phase.items.some((item) => idOf(item.price) === LEGACY_PRICE_ID)
+  if (!onLegacyPrice) {
+    const subscriptionId = schedule.subscription && idOf(schedule.subscription)
+    if (!subscriptionId) throw new Error(`schedule に Subscription がありません (${scheduleId})`)
+    await stripe.subscriptionSchedules.release(scheduleId, {}, LEGACY)
+    await stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: true })
+    return
+  }
 
   await stripe.subscriptionSchedules.update(
     scheduleId,

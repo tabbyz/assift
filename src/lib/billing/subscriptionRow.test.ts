@@ -138,6 +138,13 @@ describe('chooseSubscription', () => {
     expect(duplicates.map((s) => s.id)).toEqual(['sub_new'])
   })
 
+  it('同じ契約が 2 回渡されても（新旧両方の price の一覧）自分を解約の対象にしない', () => {
+    const only = sub({ id: 'sub_only', created: 100 })
+    const { keep, duplicates } = chooseSubscription([only, { ...only }])
+    expect(keep?.id).toBe('sub_only')
+    expect(duplicates).toEqual([])
+  })
+
   it('有効な契約が無ければ、いちばん新しい契約を写す', () => {
     const { keep, duplicates } = chooseSubscription([
       sub({ id: 'sub_a', status: 'canceled', created: 100 }),

@@ -5,7 +5,7 @@ import { fail } from '@/lib/actions/error'
 import { requireUser } from '@/lib/actions/guards'
 import type { ActionResult } from '@/lib/actions/result'
 import { runAction } from '@/lib/actions/run'
-import { endScheduleAtCurrentPhase } from '@/lib/billing/cancel'
+import { endScheduleAtCurrentPhase, idOf } from '@/lib/billing/cancel'
 import { checkoutSessionParams } from '@/lib/billing/checkout'
 import { LEGACY_API_VERSION } from '@/lib/billing/constants'
 import { ensureCustomer } from '@/lib/billing/customer'
@@ -43,7 +43,7 @@ export async function startCheckout(): Promise<ActionResult<{ redirectTo: string
       const overview = await getBillingOverview(user.id)
       if (isEntitledStatus(overview.subscription?.status ?? null)) fail('有料プランをご利用中です')
     }
-    const customerId = existing ?? (await ensureCustomer(user))
+    const customerId = await ensureCustomer(user)
 
     const origin = await requestOrigin()
     const session = await stripe.checkout.sessions.create(
@@ -86,14 +86,10 @@ export async function cancelDuringMigration(): Promise<ActionResult> {
       }
     )
     // DB の写しが他人の契約を指していても触らない（Customer で突き合わせる）
-    const ownerId =
-      typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id
-    if (ownerId !== customerId) fail('お支払いの情報が一致しません')
+    if (idOf(subscription.customer) !== customerId) fail('お支払いの情報が一致しません')
     if (!subscription.schedule) fail('この操作は現在のプランでは使えません')
 
-    const scheduleId =
-      typeof subscription.schedule === 'string' ? subscription.schedule : subscription.schedule.id
-    await endScheduleAtCurrentPhase(stripe, scheduleId)
+    await endScheduleAtCurrentPhase(stripe, idOf(subscription.schedule))
     await syncCustomer(customerId)
     revalidatePath('/', 'layout')
   })

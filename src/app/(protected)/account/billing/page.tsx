@@ -39,8 +39,7 @@ export default async function BillingPage({ searchParams }: PageProps<'/account/
   const { subscription, entitlement } = overview
   const entitled = subscription !== null && isEntitledStatus(subscription.status)
   // 料金の見込みは新料金の price だけ（切り替え待ちの間は v1 で選んでいた上限人数で請求される）
-  const estimable =
-    entitled && subscription.price_lookup_key === PRICE_LOOKUP_KEY && !subscription.has_schedule
+  const estimable = entitled && subscription.price_lookup_key === PRICE_LOOKUP_KEY
   const periodPeak = estimable
     ? await getPeriodPeak(user.id, subscription, overview.trialEnd, now)
     : null
@@ -57,6 +56,7 @@ export default async function BillingPage({ searchParams }: PageProps<'/account/
             status: subscription.status,
             discountPercent: subscription.discount_percent ?? 0,
             hasSchedule: subscription.has_schedule,
+            legacyPeriod: subscription.price_lookup_key !== PRICE_LOOKUP_KEY,
             periodFirstDay: firstDayFrom(new Date(subscription.current_period_start)),
             periodLastDay: lastDayBefore(new Date(subscription.current_period_end)),
             cancelLastDay: subscription.cancel_at
@@ -77,9 +77,11 @@ export default async function BillingPage({ searchParams }: PageProps<'/account/
 }
 
 async function syncIfStale(userId: string, customerId: string, force: boolean, now: Date) {
-  // 写しが無い（申し込みの途中で戻った・Webhook が届かない）ときも取り直す
+  // 写しが無いのは、申し込んでいない（Checkout を開いて戻った）か、申し込み直後で Webhook がまだのとき。
+  // 後者は Checkout からの戻り（force）で取り直す。それ以外で毎回 Stripe を呼ぶと、申し込まなかった人が開くたびに遅くなる
+  // （Webhook を落としても Stripe の再送と毎日の cron が拾う）
   const syncedAt = await getSyncedAt(userId)
-  if (!force && syncedAt && now.getTime() - syncedAt.getTime() < STALE_MS) return
+  if (!force && (!syncedAt || now.getTime() - syncedAt.getTime() < STALE_MS)) return
   try {
     await syncCustomer(customerId, now)
   } catch (error) {

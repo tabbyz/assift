@@ -7,7 +7,7 @@ export const runtime = 'nodejs'
 export const maxDuration = 300
 
 /**
- * 毎日 22 時台と 23 時台（JST）の定期実行（`vercel.json`）。Vercel Cron は `Authorization: Bearer ${CRON_SECRET}` を付けて呼ぶ。
+ * 毎日 23:20 と 23:50（JST）の定期実行（`vercel.json`。Pro なので指定した分に走る）。Vercel Cron は `Authorization: Bearer ${CRON_SECRET}` を付けて呼ぶ。
  * 1. 全員の状態を同期する（Webhook を落とした日の保険）
  * 2. 有料プランの全員に、今の期間の最大人数を送る（期間の最終日の送信がそのまま請求に効く）
  *

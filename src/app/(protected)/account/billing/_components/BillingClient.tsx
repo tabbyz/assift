@@ -39,8 +39,10 @@ export type BillingView = {
     status: string
     /** 旧料金のクーポン（50）。0 = なし */
     discountPercent: number
-    /** v1 からの切り替え待ち */
+    /** v1 からの切り替えの schedule が付いている（ポータルで解約できないので「解約する」をアプリで受ける） */
     hasSchedule: boolean
+    /** 今の期間を旧 price（v1 で選んでいた上限人数）で請求する。切り替え直後の 1 日は schedule があっても false */
+    legacyPeriod: boolean
     periodFirstDay: string
     periodLastDay: string
     cancelLastDay: string | null
@@ -182,7 +184,7 @@ export function BillingClient({ view, checkoutSuccess }: Props) {
               </TableTr>
             </TableTbody>
           </Table>
-          {subscription?.hasSchedule && (
+          {subscription?.legacyPeriod && (
             <Text size="sm" c="dimmed" mt="sm">
               この期間（{formatDate(subscription.periodLastDay)}まで）は v1
               で選んでいた上限人数で請求されます。次の期間からは、その期間に在籍スタッフが最も多かったときの人数で請求します。

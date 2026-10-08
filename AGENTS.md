@@ -227,7 +227,7 @@ Stripe の API の版は SDK が固定する最新（`lib/billing/stripe.ts`）�
 
 - **Webhook（`api/stripe/webhook`、POST）**: 生 body（`request.text()`）と `stripe-signature` で `constructEventAsync`。失敗は 400。
   イベントの中身は使わず、Customer の id で `syncCustomer()` を呼んで Stripe から取り直す（順不同・重複に強い）。同期の失敗は 500（Stripe が再送する）
-- **cron（`api/cron/billing-usage`、GET）**: `Authorization: Bearer ${CRON_SECRET}` が無ければ 401。`vercel.json` の `crons`（毎日 22 時台と 23 時台 JST の 2 回。最終日の送信が落ちると取り返せないため）。同期と送信は別々に受け、同期が失敗しても送信は止めない
+- **cron（`api/cron/billing-usage`、GET）**: `Authorization: Bearer ${CRON_SECRET}` が無ければ 401。`vercel.json` の `crons`（毎日 23:20 と 23:50 JST の 2 回。最終日の送信が落ちると取り返せないため。Vercel は Pro なので指定した分に走る）。同期と送信は別々に受け、同期が失敗しても送信は止めない
 - どちらもログイン状態と無関係なので proxy の matcher から外してある（下記）。以下の決まりはエクスポートのもの
 
 - **`ActionResult` を返さない。** ブラウザが直接開く GET なので `notifications.show()` の出番が無い。

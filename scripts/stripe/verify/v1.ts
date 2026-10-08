@@ -10,6 +10,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import Stripe from 'stripe'
 import { LEGACY_API_VERSION, LEGACY_PRICE_ID } from '@/lib/billing/constants'
+import { idOf } from '@/lib/billing/cancel'
 import { parseCsv, toCsv } from '@/lib/billing/migration'
 import { reportUsageFor } from '@/lib/billing/report'
 import { syncCustomer } from '@/lib/billing/sync'
@@ -341,6 +342,56 @@ async function unpaidAfter(csv: string) {
   for (const line of await invoices(clock)) console.log(`    ${line}`)
 }
 
+/** 切り替え直後の解約の確認用に、旧料金に移す契約を 1 件だけ作る（このあと stripe:migrate-v1 --apply） */
+async function switchSetup(csv: string) {
+  await ensureLegacyPlan()
+  const now = new Date(Math.floor(Date.now() / 60_000) * 60_000 - 120_000)
+  const row = await createV1Subscription(
+    { label: 'switch', maxStaffs: 15, lastEditedDaysAgo: 3 },
+    now
+  )
+  writeFileSync(csv, toCsv([...HEADER], [row]))
+  log('CSV', csv)
+}
+
+/**
+ * 切り替え直後（新料金の phase。移行で 1 日だけ付けてある）に解約する。
+ * 期待: schedule が release され、新しい期間の終わり（11/30 23:59:59 JST）まで使えて、そこで終わる（1 日で終わらない）
+ */
+async function switchCancel(csv: string) {
+  const r = parseCsv(readFileSync(csv, 'utf8'))[0]
+  const clock: Clock = { id: r.clock, customerId: r.stripe_customer_id, userId: '' }
+  await advance(clock, at('2026-10-31T17:00:00Z'))
+  const before = await stripe.subscriptions.retrieve(r.stripe_subscription_id, {}, LEGACY)
+  log('切り替え直後', {
+    status: before.status,
+    schedule: before.schedule,
+    price: before.items.data.map((i) => i.price.id),
+  })
+
+  const { endScheduleAtCurrentPhase } = await import('@/lib/billing/cancel')
+  await endScheduleAtCurrentPhase(stripe, idOf(before.schedule!))
+  const after = await stripe.subscriptions.retrieve(r.stripe_subscription_id)
+  log('解約の直後', {
+    schedule: after.schedule,
+    cancel_at_period_end: after.cancel_at_period_end,
+    cancel_at: after.cancel_at && new Date(after.cancel_at * 1000).toISOString(),
+    period_end: new Date(after.items.data[0].current_period_end * 1000).toISOString(),
+    discounts: after.discounts,
+  })
+  await advance(clock, at('2026-11-02T03:00:00Z'))
+  log(
+    '11/2（期待: active のまま）',
+    (await stripe.subscriptions.retrieve(r.stripe_subscription_id)).status
+  )
+  await advance(clock, at('2026-12-01T03:00:00Z'))
+  log(
+    '12/1（期待: canceled）',
+    (await stripe.subscriptions.retrieve(r.stripe_subscription_id)).status
+  )
+  for (const line of await invoices(clock)) console.log(`    ${line}`)
+}
+
 const [command, csv] = process.argv.slice(2)
 const commands: Record<string, (csv: string) => Promise<void>> = {
   setup,
@@ -348,6 +399,8 @@ const commands: Record<string, (csv: string) => Promise<void>> = {
   'drop-discount': dropDiscount,
   'unpaid-setup': unpaidSetup,
   'unpaid-after': unpaidAfter,
+  'switch-setup': switchSetup,
+  'switch-cancel': switchCancel,
 }
 const run = command ? commands[command] : undefined
 if (!run || !csv) {

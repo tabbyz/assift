@@ -27,10 +27,13 @@ export default async function TenantLayout({
   // Postgres の 22P02（invalid input syntax for type uuid）を投げさせない
   if (!isUuid(tenantId)) notFound()
 
-  const [tenant, tenants, user] = await Promise.all([
+  const userPromise = getAuthUser()
+  const [tenant, tenants, user, billing] = await Promise.all([
     getTenant(tenantId),
     listTenants(),
-    getAuthUser(),
+    userPromise,
+    // 課金の状態も並行に読む（直列にすると店舗の画面ごとに往復が 1 回増える。getBillingOverview は cache() 済み）
+    userPromise.then((authUser) => (authUser ? getBillingOverview(authUser.id) : null)),
   ])
   // RLS で他人の店舗も存在しない id も null になる（存在を漏らさない）
   if (!tenant) notFound()
@@ -39,7 +42,7 @@ export default async function TenantLayout({
   // layout はパスもウィザードの状態も知れず、「あとで続ける」を出し分けられないため（014 §3.7）
   if (!tenant.setup_completed_at) return children
 
-  const banner = user ? planBanner(await getBillingOverview(user.id)) : null
+  const banner = billing ? planBanner(billing) : null
 
   return (
     <TenantShell

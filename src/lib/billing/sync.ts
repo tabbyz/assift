@@ -148,7 +148,9 @@ export async function syncAllSubscriptions(
         const customer = subscription.customer
         if (typeof customer === 'string' || customer.deleted) continue
         const entry = byCustomer.get(customer.id) ?? { customer, subscriptions: [] }
-        entry.subscriptions.push(subscription)
+        // 新旧両方の price を持つ契約は両方の一覧に出る。2 件と数えると自分を二重契約として解約してしまう
+        if (!entry.subscriptions.some((known) => known.id === subscription.id))
+          entry.subscriptions.push(subscription)
         byCustomer.set(customer.id, entry)
       }
     } catch (error) {
@@ -161,11 +163,12 @@ export async function syncAllSubscriptions(
   let failed = 0
   const seen = new Set<string>()
   for (const { customer, subscriptions } of byCustomer.values()) {
+    // 失敗した人も「見た」に入れる（取り直しのループでもう一度呼ぶと、Stripe への呼び出しと件数が二重になる）
+    subscriptions.forEach((subscription) => seen.add(subscription.id))
     try {
       const owner = await findOwner(db, customer)
       if (!owner) continue
       await applySubscriptions(db, stripe, owner, customer, subscriptions, now)
-      subscriptions.forEach((subscription) => seen.add(subscription.id))
       synced += 1
     } catch (error) {
       failed += 1

@@ -23,7 +23,12 @@ export function chooseSubscription(subscriptions: Stripe.Subscription[]): {
   const entitled = subscriptions
     .filter((subscription) => isEntitledStatus(subscription.status))
     .sort((a, b) => a.created - b.created)
-  if (entitled.length > 0) return { keep: entitled[0], duplicates: entitled.slice(1) }
+  // 同じ契約が 2 回渡されても（新旧両方の price の一覧に出る）自分を解約の対象にしない
+  if (entitled.length > 0)
+    return {
+      keep: entitled[0],
+      duplicates: entitled.slice(1).filter((subscription) => subscription.id !== entitled[0].id),
+    }
   const latest = [...subscriptions].sort((a, b) => b.created - a.created)[0] ?? null
   return { keep: latest, duplicates: [] }
 }
