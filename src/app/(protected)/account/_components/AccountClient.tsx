@@ -17,7 +17,6 @@ import { modals } from '@mantine/modals'
 import { notifications } from '@mantine/notifications'
 import { IconInfoCircle } from '@tabler/icons-react'
 import { FormErrorAlert } from '@/components/FormErrorAlert'
-import { LinkButton } from '@/components/LinkButton'
 import { SettingsSection } from '@/components/SettingsSection'
 import { PASSWORD_MIN_LENGTH } from '@/lib/validation/auth'
 import { deleteAccount, updateEmail, updatePassword } from '../actions'
@@ -194,15 +193,6 @@ export function AccountClient({ email, newEmail, hasPassword, notice, initialErr
               </Text>
             )}
           </Stack>
-        </SettingsSection>
-
-        <SettingsSection title="プランとお支払い">
-          <Group justify="space-between" wrap="wrap" gap="sm">
-            <Text size="sm">現在のプラン・料金・お支払い方法を確認できます。</Text>
-            <LinkButton href="/account/billing" variant="default">
-              プランとお支払い
-            </LinkButton>
-          </Group>
         </SettingsSection>
 
         <SettingsSection title="アカウントを削除">
