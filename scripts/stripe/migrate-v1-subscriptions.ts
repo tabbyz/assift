@@ -89,19 +89,32 @@ const iso = (seconds: number | undefined | null) =>
   seconds ? new Date(seconds * 1000).toISOString() : ''
 const idOf = (value: string | { id: string }) => (typeof value === 'string' ? value : value.id)
 
-/** 下書きを無効にする。下書きのまま無効にはできないので、自動の確定を止めてから確定し、すぐ無効にする（§8.2.2） */
-async function voidDrafts(subscriptionId: string): Promise<number> {
-  let count = 0
+/**
+ * 下書きを無効にする。下書きのまま無効にはできないので、自動の確定を止めてから確定し、すぐ無効にする（§8.2.2）。
+ * `keepLatest` なら最新の 1 件だけは確定して開いたままにする（無効にしない）。救う契約は、続く `markOpenUncollectible` で
+ * それを回収不能にする: Stripe は最新の請求書が支払い済み・回収不能になったときに unpaid を解くので、最新を無効にすると
+ * active に戻らない（2026-10-08 にサンドボックスで確認）
+ */
+async function voidDrafts(subscriptionId: string, keepLatest: boolean): Promise<number> {
+  const drafts: Stripe.Invoice[] = []
   for await (const invoice of stripe.invoices.list(
     { subscription: subscriptionId, status: 'draft', limit: 100 },
     LEGACY
-  )) {
+  ))
+    drafts.push(invoice)
+  drafts.sort((a, b) => a.created - b.created)
+  const latest = keepLatest ? drafts.pop() : undefined
+
+  for (const invoice of drafts) {
     await stripe.invoices.update(invoice.id!, { auto_advance: false }, LEGACY)
     await stripe.invoices.finalizeInvoice(invoice.id!, { auto_advance: false }, LEGACY)
     await stripe.invoices.voidInvoice(invoice.id!, {}, LEGACY)
-    count += 1
   }
-  return count
+  if (latest) {
+    await stripe.invoices.update(latest.id!, { auto_advance: false }, LEGACY)
+    await stripe.invoices.finalizeInvoice(latest.id!, { auto_advance: false }, LEGACY)
+  }
+  return drafts.length
 }
 
 /** 未払いの（確定済みの）請求書を回収不能にする。最新の請求書が支払い済み扱いになり、unpaid から active に戻る（§11-10） */
@@ -212,6 +225,8 @@ async function handle(
   if (category === 'rescue') planned.push('未払いを回収不能にして active に戻す')
   if (category === 'legacy' || category === 'rescue')
     planned.push('言語を日本語', '旧料金の schedule')
+  if (shouldVoidDrafts(category, subscription.status) && category !== 'rescue')
+    planned.push('未払いを回収不能')
   if (category === 'cancel_unpaid' || category === 'cancel_free') planned.push('即時解約')
   result.actions = planned.join(' / ')
 
@@ -229,7 +244,7 @@ async function handle(
   try {
     const log: string[] = []
     if (shouldVoidDrafts(category, subscription.status))
-      log.push(`下書き ${await voidDrafts(subscription.id)} 件を無効`)
+      log.push(`下書き ${await voidDrafts(subscription.id, category === 'rescue')} 件を無効`)
     if (category === 'rescue') {
       log.push(`回収不能 ${await markOpenUncollectible(subscription.id)} 件`)
       const refreshed = await stripe.subscriptions.retrieve(subscription.id, {}, LEGACY)
@@ -242,6 +257,10 @@ async function handle(
       log.push(await scheduleLegacy(subscription, priceId))
     }
     if (category === 'cancel_unpaid' || category === 'cancel_free') {
+      // 失敗した請求書を開いたまま解約すると、ポータルに未払いが残り、同じ Customer で申し込み直したときに払えてしまう。
+      // 過去分は請求しない（§11-12）ので、救わない契約も回収不能にしてから解約する
+      if (shouldVoidDrafts(category, subscription.status))
+        log.push(`回収不能 ${await markOpenUncollectible(subscription.id)} 件`)
       await stripe.subscriptions.cancel(
         subscription.id,
         { invoice_now: false, prorate: false },

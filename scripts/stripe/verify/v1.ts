@@ -60,7 +60,12 @@ async function ensureLegacyPlan() {
   log('plan', `${LEGACY_PRICE_ID}（作成）`)
 }
 
-type Case = { label: string; maxStaffs: number; lastEditedDaysAgo: number | null }
+type Case = {
+  label: string
+  maxStaffs: number
+  lastEditedDaysAgo: number | null
+  card?: string
+}
 
 /** v1 の契約: 期間の終わりは月末 23:59:59 JST、上限人数を usage record（set）で送ってある */
 async function createV1Subscription(item: Case, now: Date) {
@@ -72,7 +77,7 @@ async function createV1Subscription(item: Case, now: Date) {
     { test_clock: clock.id, name: `019 v1 ${item.label}`, email: `v1-${item.label}@example.com` },
     LEGACY
   )
-  await attachCard(customer.id, 'pm_card_visa')
+  await attachCard(customer.id, item.card ?? 'pm_card_visa')
   const subscription = await stripe.subscriptions.create(
     {
       customer: customer.id,
@@ -223,15 +228,130 @@ async function dropDiscount(csv: string) {
   for (const line of await invoices(clock)) console.log(`    ${line}`)
 }
 
+/** 人数（上限）を今の期間に送る（v1 の rake と同じ usage record の set） */
+async function sendUsageRecord(subscriptionId: string, quantity: number, now: Date) {
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId, {}, LEGACY)
+  await stripe.rawRequest(
+    'POST',
+    `/v1/subscription_items/${subscription.items.data[0].id}/usage_records`,
+    { quantity, timestamp: seconds(now), action: 'set' },
+    LEGACY
+  )
+}
+
+async function invoiceStates(customerId: string) {
+  const list = await stripe.invoices.list({ customer: customerId, limit: 20 }, LEGACY)
+  return list.data
+    .sort((a, b) => a.created - b.created)
+    .map((invoice) => `${invoice.status}:${invoice.total}円:試行${invoice.attempt_count}`)
+}
+
+/**
+ * 13（前半）: v1 の `unpaid`（期限切れのカード・下書きが溜まった状態）を作る。サンドボックスの「すべての再試行が失敗したら」を
+ * 「未払いにする」にしてから流す。10/31 の請求が失敗 → リトライが尽きて unpaid → 11/30・12/31 の請求書が下書きのまま溜まる
+ */
+async function unpaidSetup(csv: string) {
+  await ensureLegacyPlan()
+  const now = new Date(Math.floor(Date.now() / 60_000) * 60_000 - 120_000)
+  // 期限切れのカード（pm_card_chargeDeclinedExpiredCard）は attach の時点で断られるので、請求だけが失敗するカードで代える
+  const card = 'pm_card_chargeCustomerFail'
+  const cases: Case[] = [
+    { label: 'rescue', maxStaffs: 15, lastEditedDaysAgo: 3, card },
+    { label: 'unpaid-old', maxStaffs: 15, lastEditedDaysAgo: null, card },
+    { label: 'unpaid-free', maxStaffs: 10, lastEditedDaysAgo: 3, card },
+  ]
+  const rows = []
+  for (const item of cases) rows.push(await createV1Subscription(item, now))
+  writeFileSync(csv, toCsv([...HEADER], rows))
+
+  await Promise.all(
+    rows.map(async (r) => {
+      const clock: Clock = { id: r.clock, customerId: r.stripe_customer_id, userId: '' }
+      for (const day of [
+        '2026-11-01T03:00:00Z',
+        '2026-11-15T03:00:00Z',
+        '2026-11-29T03:00:00Z',
+        '2026-12-01T03:00:00Z',
+        '2026-12-31T03:00:00Z',
+        '2027-01-01T03:00:00Z',
+      ]) {
+        const now = await advance(clock, at(day))
+        const subscription = await stripe.subscriptions.retrieve(
+          r.stripe_subscription_id,
+          {},
+          LEGACY
+        )
+        // v1 の rake は状態を見ずに毎日送っていた
+        if (subscription.status !== 'canceled')
+          await sendUsageRecord(r.stripe_subscription_id, Number(r.max_staffs_count), now)
+        log(
+          `${r.v1_user_id} ${day}`,
+          `${subscription.status} ${(await invoiceStates(r.stripe_customer_id)).join(' ')}`
+        )
+      }
+    })
+  )
+  log('CSV', csv)
+}
+
+/**
+ * 13（後半）: `stripe:migrate-v1 --apply` のあと。rescue は下書きが無効・未払いが回収不能で active に戻り、
+ * 期間の終わりの請求が期限切れのカードで失敗して past_due → カードを更新して払うと旧料金のまま続く
+ */
+async function unpaidAfter(csv: string) {
+  const rows = parseCsv(readFileSync(csv, 'utf8'))
+  for (const r of rows) {
+    const subscription = await stripe.subscriptions.retrieve(r.stripe_subscription_id, {}, LEGACY)
+    log(
+      `${r.v1_user_id} 移行直後`,
+      `${subscription.status} schedule:${subscription.schedule ?? 'なし'}`
+    )
+    log(`${r.v1_user_id} 請求書`, (await invoiceStates(r.stripe_customer_id)).join(' '))
+  }
+
+  const rescue = rows.find((r) => r.v1_user_id === 'rescue')!
+  const userId = await createUser('v1-rescue')
+  const { error } = await db
+    .from('profiles')
+    .update({ stripe_customer_id: rescue.stripe_customer_id, trial_end: '2020-01-31T14:59:59Z' })
+    .eq('id', userId)
+  if (error) throw error
+  await setHistory(userId, [['2026-10-01T00:00:00Z', 15]])
+  const clock: Clock = { id: rescue.clock, customerId: rescue.stripe_customer_id, userId }
+
+  let now = await advance(clock, at('2027-01-01T04:00:00Z'))
+  await syncCustomer(clock.customerId, now)
+  log('rescue 同期', await row(userId))
+
+  now = await advance(clock, at('2027-02-01T03:00:00Z'))
+  await syncCustomer(clock.customerId, now)
+  log('rescue 2/1（期待: 期限切れのカードで失敗・past_due・旧 price の請求）', await row(userId))
+  log('rescue 請求書', (await invoiceStates(clock.customerId)).join(' '))
+
+  await attachCard(clock.customerId, 'pm_card_visa')
+  const open = await stripe.invoices.list({ customer: clock.customerId, status: 'open', limit: 10 })
+  for (const invoice of open.data) await stripe.invoices.pay(invoice.id!)
+  now = await advance(clock, at('2027-02-02T03:00:00Z'))
+  await syncCustomer(clock.customerId, now)
+  log('rescue カードを更新して支払い（期待: active・release 後も旧料金）', await row(userId))
+
+  await reportUsageFor(userId, (now = await advance(clock, at('2027-02-28T14:00:00Z'))))
+  await syncCustomer(clock.customerId, await advance(clock, at('2027-03-01T03:00:00Z')))
+  console.log('  rescue の請求書（期待: 3/1 は 15 人 × 100 円 × 50% = 250 円）:')
+  for (const line of await invoices(clock)) console.log(`    ${line}`)
+}
+
 const [command, csv] = process.argv.slice(2)
 const commands: Record<string, (csv: string) => Promise<void>> = {
   setup,
   advance: advanceAll,
   'drop-discount': dropDiscount,
+  'unpaid-setup': unpaidSetup,
+  'unpaid-after': unpaidAfter,
 }
 const run = command ? commands[command] : undefined
 if (!run || !csv) {
-  console.error('使い方: v1.ts setup|advance|drop-discount <CSV>')
+  console.error(`使い方: v1.ts ${Object.keys(commands).join('|')} <CSV>`)
   process.exit(1)
 }
 run(csv).catch((error) => {
