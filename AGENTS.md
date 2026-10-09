@@ -481,6 +481,8 @@ Prettier: `{ "semi": false, "singleQuote": true, "tabWidth": 2, "trailingComma":
 - PR の前に `npm run lint` / `npm run typecheck` / `npm test` / `npx supabase test db` を通す。
   スキーマを触ったら `npx supabase db reset` と `gen types` も行う
 - push したらすぐ PR を作る。Supabase のブランチ DB の環境変数は、PR を作ったときに Vercel へ同期される
+- **ブランチ DB に seed が流れるのは、ブランチ DB を作ったときだけ。** 以降の push では新しい migration だけが流れ、seed の変更は届かない。
+  PR を作ったあとに `seed.sql` を変えたら、**PR を閉じて開き直す**とブランチ DB が作り直され、今の seed が流れる（ブランチ DB のデータは消える。020 で `admin@example.com` が入らずに気付いた）
 - Vercel のプレビューでは seed のユーザー（`dev@example.com` / `password`）でログインできる。
   管理画面はプレビューの `/-/login` から `admin@example.com` / `password` で入る（プレビューは `ADMIN_HOST` が無いので同じホストで開く）。
   メールのリンクと Google ログインはプレビューでは使えない（メールテンプレートが Site URL = localhost を使うため。本番はカットオーバーで設定する）
