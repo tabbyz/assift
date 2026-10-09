@@ -76,8 +76,8 @@ export function SubscribeClient({ activeStaffCount, trialLastDay, billingAvailab
           </Text>
           {capError === null && typeof staffCap === 'number' && (
             <Text size="sm" fw={600}>
-              在籍スタッフの上限 {staffCap} 人までのため、毎月の料金は最大{' '}
-              {monthlyPriceYen(staffCap).toLocaleString()} 円（税込）です
+              上限 {staffCap} 人なら最大 {monthlyPriceYen(staffCap).toLocaleString()} 円 /
+              月（税込）
             </Text>
           )}
         </Stack>
@@ -85,8 +85,7 @@ export function SubscribeClient({ activeStaffCount, trialLastDay, billingAvailab
     },
     {
       label: '上限',
-      value:
-        '上限の人数を超えてスタッフを登録することはできません。上限は「プランとお支払い」からいつでも変えられます（在籍している人数より少なくはできません）',
+      value: '上限を超えて登録はできません。上限はあとから変えられます',
     },
     { label: '支払い方法', value: 'クレジットカード' },
     {
@@ -112,13 +111,14 @@ export function SubscribeClient({ activeStaffCount, trialLastDay, billingAvailab
 
         <SettingsSection
           title="在籍スタッフの上限"
-          description="思わぬ人数まで増やしてしまわないよう、有料プランでは登録できる在籍スタッフの上限を決めておきます。"
+          description="登録できる在籍スタッフの人数です。あとから変えられます。"
         >
           <StaffCapField
             value={staffCap}
             onChange={setStaffCap}
             min={minCap}
             label="上限の人数"
+            showMaxPrice={false}
             error={staffCap === '' ? null : capError}
           />
         </SettingsSection>

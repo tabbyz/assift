@@ -254,10 +254,22 @@ async function setRetiredAt(
   const { tenantId, staffId } = staffRefSchema.parse(input)
   const acknowledgedPeak = acknowledgedPeakSchema.parse(options.acknowledgedPeak)
   const user = await requireUser()
-  // 復帰は在籍が 1 人増える（019 §13.5）
-  if (value === null) await ensureStaffAddition(user.id, { adding: 1, acknowledgedPeak })
 
   const supabase = await createClient()
+  // 復帰は在籍が 1 人増える（019 §13.5）。在籍中のスタッフへの「復帰」（古いタブ・二度押し）は人数が変わらないので判定しない
+  if (value === null) {
+    const { data: current, error: readError } = await supabase
+      .from('staffs')
+      .select('retired_at')
+      .eq('id', staffId)
+      .eq('tenant_id', tenantId)
+      .maybeSingle()
+    if (readError) throw readError
+    if (!current) fail(STAFF_NOT_FOUND_MESSAGE)
+    if (current.retired_at !== null) {
+      await ensureStaffAddition(user.id, { adding: 1, acknowledgedPeak })
+    }
+  }
   const { data, error } = await supabase
     .from('staffs')
     .update({ retired_at: value })

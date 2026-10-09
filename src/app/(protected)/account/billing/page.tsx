@@ -15,6 +15,8 @@ import {
 import {
   getBillingOverview,
   getPeriodPeak,
+  isBillingStarted,
+  isEstimable,
   getStripeCustomerId,
   getSyncedAt,
 } from '@/lib/queries/billing'
@@ -45,8 +47,7 @@ export default async function BillingPage({ searchParams }: PageProps<'/account/
   const { subscription, entitlement } = overview
   const entitled = subscription !== null && isEntitledStatus(subscription.status)
   // 料金の見込みは新料金の price だけ（切り替え待ちの間は v1 で選んでいた上限人数で請求される）
-  const estimable = entitled && subscription.price_lookup_key === PRICE_LOOKUP_KEY
-  const periodPeak = estimable
+  const periodPeak = isEstimable(subscription)
     ? await getPeriodPeak(user.id, subscription, overview.trialEnd, now)
     : null
 
@@ -71,6 +72,8 @@ export default async function BillingPage({ searchParams }: PageProps<'/account/
               ? lastDayBefore(new Date(subscription.cancel_at))
               : null,
             periodPeak,
+            // 「あと N 人まで料金が変わらない」はスタッフの設定と同じく、請求の区間が始まってから（§13.5）
+            confirmablePeak: isBillingStarted(overview.trialEnd, now) ? periodPeak : null,
           }
         : null,
     billingAvailable: isStripeConfigured(),

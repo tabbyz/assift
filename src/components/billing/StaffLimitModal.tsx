@@ -13,8 +13,9 @@ import {
 } from '@/app/(protected)/actions'
 import { FREE_STAFF_LIMIT, PRICE_PER_STAFF_YEN } from '@/lib/billing/pricing'
 import { minStaffCap, suggestedStaffCap } from '@/lib/billing/staffCap'
-import { formatJapaneseMonthDay, formatJapaneseYearMonthDay } from '@/lib/calendar/dateString'
+import { formatJapaneseYearMonthDay } from '@/lib/calendar/dateString'
 import { STAFF_CAP_MAX } from '@/lib/validation/billing'
+import { PriceQuoteText } from './PriceIncreaseModal'
 import { StaffCapField, staffCapError } from './StaffCapField'
 import { CONTACT_EMAIL } from './contact'
 import type { StaffAdditionRetry } from './staffAddition'
@@ -225,14 +226,7 @@ function RaiseCap({
             label="新しい上限"
             error={cap === '' ? null : capError}
           />
-          {quote && (
-            <Text size="sm" fw={600}>
-              この追加で、今の請求期間（{formatJapaneseMonthDay(quote.periodLastDay)}
-              まで）の料金の見込みは {quote.currentYen.toLocaleString()} 円 →{' '}
-              {quote.nextYen.toLocaleString()}{' '}
-              円になります。期間の途中で人数を減らしても、この期間の料金は下がりません。
-            </Text>
-          )}
+          {quote && <PriceQuoteText quote={quote} />}
         </>
       )}
       <Group justify="flex-end">

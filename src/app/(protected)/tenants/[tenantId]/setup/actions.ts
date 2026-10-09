@@ -116,10 +116,21 @@ export async function completeSetup(
     const { tenantId, names } = completeSetupSchema.parse(input)
     const acknowledgedPeak = acknowledgedPeakSchema.parse(options.acknowledgedPeak)
     const user = await requireUser()
-    // 有料プランの上限人数と、料金が上がる追加の確認（019 §13.5）。まとめて貼ったときに一番効く
-    await ensureStaffAddition(user.id, { adding: names.length, acknowledgedPeak })
 
     const supabase = await createClient()
+    // 二度押しの 2 回目・古いタブは、店舗がもう完了している。名前の数だけ増えるとして判定すると、
+    // 完了済みなのに上限・料金のモーダルが出るので、完了済みなら判定を飛ばしてシフト表へ送る
+    const { data: tenant, error: tenantError } = await supabase
+      .from('tenants')
+      .select('setup_completed_at')
+      .eq('id', tenantId)
+      .maybeSingle()
+    if (tenantError) throw tenantError
+    if (tenant?.setup_completed_at) return { redirectTo: shiftsPath(tenantId) }
+    // 有料プランの上限人数と、料金が上がる追加の確認（019 §13.5）。まとめて貼ったときに一番効く。
+    // 見えない店舗（tenant が null）は RPC が tenant not found で断る
+    if (tenant) await ensureStaffAddition(user.id, { adding: names.length, acknowledgedPeak })
+
     const { error } = await supabase.rpc('complete_setup', {
       p_tenant_id: tenantId,
       p_staff_names: names,

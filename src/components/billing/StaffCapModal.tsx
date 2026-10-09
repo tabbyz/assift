@@ -57,8 +57,7 @@ function StaffCapForm({ current, activeStaffCount, discountPercent }: Options) {
         error={cap === '' ? null : error}
       />
       <Text size="xs" c="dimmed">
-        いまの在籍 {activeStaffCount}{' '}
-        人より少なくはできません。下げたいときは、先にスタッフを退職済みにしてください。
+        在籍 {activeStaffCount} 人より少なくはできません（減らすときは先にスタッフを退職済みに）
       </Text>
       <Group justify="flex-end">
         <Button variant="default" onClick={() => modals.close(MODAL_ID)}>

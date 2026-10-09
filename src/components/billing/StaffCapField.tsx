@@ -13,11 +13,13 @@ type Props = {
   discountPercent?: number
   label?: string
   error?: string | null
+  /** 「最大 ◯円 / 月」を出すか。申し込みの確認画面は表（特商法の最終確認）に出すので出さない */
+  showMaxPrice?: boolean
 }
 
 /**
- * 有料プランの在籍スタッフの上限の入力と「最大 ◯円」（019 §13.4）。申し込みの確認画面・上限の変更・上限で止まったときのモーダルで共有する。
- * 請求は上限ではなく実際の人数なので、その一文を必ず添える
+ * 有料プランの在籍スタッフの上限の入力と「最大 ◯円 / 月」（019 §13.4）。申し込みの確認画面・上限の変更・上限で止まったときのモーダルで共有する。
+ * 請求は上限ではなく実際の人数なので、その一言を添える
  */
 export function StaffCapField({
   value,
@@ -26,7 +28,9 @@ export function StaffCapField({
   discountPercent = 0,
   label = '在籍スタッフの上限',
   error,
+  showMaxPrice = true,
 }: Props) {
+  const valid = typeof value === 'number' && value >= min && value <= STAFF_CAP_MAX
   return (
     <Stack gap={6}>
       <NumberInput
@@ -42,14 +46,13 @@ export function StaffCapField({
         error={error}
         w={160}
       />
-      {typeof value === 'number' && value >= min && value <= STAFF_CAP_MAX && (
+      {showMaxPrice && valid && (
         <Text size="sm">
-          上限 {value} 人の場合、毎月の料金は最大{' '}
-          {monthlyPriceYen(value, discountPercent).toLocaleString()} 円（税込）です。
+          最大 {monthlyPriceYen(value, discountPercent).toLocaleString()} 円 / 月（税込）
         </Text>
       )}
       <Text size="xs" c="dimmed">
-        上限を超えてスタッフを登録することはできません。お支払いは上限の人数分ではなく、その月に在籍スタッフが最も多かったときの人数で決まります。
+        請求は上限ではなく、その月の在籍スタッフの最大人数で決まります
       </Text>
     </Stack>
   )

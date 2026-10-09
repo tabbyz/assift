@@ -63,15 +63,7 @@ function PriceIncreaseOffer({ adding, retry }: Options) {
         {adding} 人を追加します（在籍 {offer.activeStaffCount} 人 → {after} 人）。
       </Text>
       {quote ? (
-        <>
-          <Text size="sm" fw={600}>
-            今の請求期間（{formatJapaneseMonthDay(quote.periodLastDay)}まで）の料金の見込みは{' '}
-            {quote.currentYen.toLocaleString()} 円 → {quote.nextYen.toLocaleString()} 円になります。
-          </Text>
-          <Text size="sm" c="dimmed">
-            期間の途中で人数を減らしても、この期間の料金は下がりません。
-          </Text>
-        </>
+        <PriceQuoteText quote={quote} />
       ) : (
         // 開くまでのあいだにほかの画面で減った・期間が切り替わったなど。料金は上がらない
         <Text size="sm">この追加で今の請求期間の料金は変わりません。</Text>
@@ -82,6 +74,22 @@ function PriceIncreaseOffer({ adding, retry }: Options) {
         </Button>
         <Button onClick={confirm}>追加する</Button>
       </Group>
+    </Stack>
+  )
+}
+
+/** 料金の見込み（今 → 足したあと）。上限で止まったときのモーダルと共有する */
+export function PriceQuoteText({ quote }: { quote: NonNullable<UpgradeOffer['priceQuote']> }) {
+  return (
+    <Stack gap={2}>
+      <Text size="sm" fw={600}>
+        この期間の見込み {quote.currentYen.toLocaleString()} 円 → {quote.nextYen.toLocaleString()}{' '}
+        円
+      </Text>
+      <Text size="xs" c="dimmed">
+        {formatJapaneseMonthDay(quote.periodLastDay)}
+        までの請求期間。途中で人数を減らしても下がりません
+      </Text>
     </Stack>
   )
 }

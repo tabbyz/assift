@@ -3,6 +3,7 @@
 import { Alert, Button, Group, Stack, Text } from '@mantine/core'
 import { IconInfoCircle } from '@tabler/icons-react'
 import { LinkButton } from '@/components/LinkButton'
+import { FREE_STAFF_LIMIT } from '@/lib/billing/pricing'
 import { unchangedHeadroomMessage } from '@/lib/billing/staffAddition'
 import { openStaffCapModal } from './StaffCapModal'
 
@@ -35,7 +36,7 @@ export function StaffLimitAlert(props: Props) {
         <Text size="sm">
           {kind === 'manual'
             ? `ご契約の上限（在籍 ${limit} 人）に達しています。人数を増やすにはお問い合わせください。`
-            : `無料プランは在籍 ${limit} 人までです。${trialAvailable ? '無料トライアルを始めると、人数の制限なく試せます。' : '有料プランに申し込むと、上限の人数を決めて 11 人目から追加できます。'}`}
+            : `無料プランは在籍 ${limit} 人までです。${trialAvailable ? '無料トライアルを始めると、人数の制限なく試せます。' : `有料プランに申し込むと、上限の人数を決めて ${FREE_STAFF_LIMIT + 1} 人目から追加できます。`}`}
         </Text>
         <LinkButton href="/account/billing" size="xs" variant="white" color="yellow">
           プランを見る

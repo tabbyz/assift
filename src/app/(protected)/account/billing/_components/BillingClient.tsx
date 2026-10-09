@@ -56,6 +56,8 @@ export type BillingView = {
     cancelLastDay: string | null
     /** 今の請求期間の最大人数（ここまで）。見込みを出せないとき（切り替え待ち）は null */
     periodPeak: number | null
+    /** 足すと料金が上がるかを見る最大人数。トライアル中（請求の区間の前）も null（§13.5） */
+    confirmablePeak: number | null
   } | null
   billingAvailable: boolean
   hasCustomer: boolean
@@ -394,7 +396,7 @@ function StaffCard({ view }: { view: BillingView }) {
         : view.kind === 'subscription'
           ? `上限 ${limit} 人`
           : `無料の上限 ${limit} 人`
-  const peak = view.subscription?.periodPeak ?? null
+  const peak = view.subscription?.confirmablePeak ?? null
   const headroom =
     view.kind === 'subscription' && peak !== null ? unchangedHeadroomMessage(count, peak) : null
 

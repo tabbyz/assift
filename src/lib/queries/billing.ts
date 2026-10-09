@@ -114,9 +114,13 @@ export async function getConfirmablePeriodPeak(
   now = new Date()
 ): Promise<number | null> {
   const { subscription, trialEnd } = overview
-  if (!isEstimable(subscription)) return null
-  if (trialEnd && trialEnd > now) return null
+  if (!isEstimable(subscription) || !isBillingStarted(trialEnd, now)) return null
   return getPeriodPeak(userId, subscription, trialEnd, now)
+}
+
+/** 請求の区間が始まっているか（トライアル中に申し込んだ人は、トライアルの終わりまで請求しない。§4.2） */
+export function isBillingStarted(trialEnd: Date | null, now = new Date()): boolean {
+  return !(trialEnd && trialEnd > now)
 }
 
 /** 今の請求期間の最大人数（ここまで）。料金の見込みに使う。トライアル中の部分は数えない */
