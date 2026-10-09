@@ -560,3 +560,58 @@ $$;
 
 revoke execute on function public.set_staff_cap(integer) from public;
 grant execute on function public.set_staff_cap(integer) to authenticated;
+
+-- 運営者の管理画面のユーザー一覧（020 §6.1）。行を取ってから数えると max_rows（1000）で黙って切られ、
+-- auth.users / auth.identities は PostgREST から読めないので、1 ページ分と総数をまとめて返す。
+-- security definer は auth スキーマを読むため。呼べるのは service_role だけ（lib/admin/ の createAdminClient()）。
+-- 先にページの範囲に絞ってから集計する（count(*) over () で総数を数えると、全行の副問い合わせが走る）。
+-- 契約の状態（権利の規則）はここでは組み立てない（TS の entitlement() で組む。規則を SQL にもう 1 つ書かない）
+create or replace function public.admin_list_users(
+  p_search text default null,
+  p_limit  integer default 50,
+  p_offset integer default 0
+)
+returns table (
+  id                  uuid,
+  email               text,
+  created_at          timestamptz,
+  last_sign_in_at     timestamptz,
+  providers           text[],
+  trial_end           timestamptz,
+  max_staffs_count    integer,
+  staff_cap           integer,
+  subscription_status text,
+  tenant_count        integer,
+  active_staff_count  integer,
+  total_count         bigint
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  with filtered as (
+    select p.id, p.email, p.created_at, p.trial_end, p.max_staffs_count, p.staff_cap
+      from public.profiles p
+     where p_search is null or strpos(lower(p.email), lower(p_search)) > 0
+  ),
+  page as (
+    select * from filtered f
+     order by f.created_at desc, f.id
+     limit least(greatest(p_limit, 1), 100) offset greatest(p_offset, 0)
+  )
+  select pg.id, pg.email, pg.created_at, u.last_sign_in_at,
+         coalesce((select array_agg(distinct i.provider order by i.provider)
+                     from auth.identities i where i.user_id = pg.id), '{}'),
+         pg.trial_end, pg.max_staffs_count, pg.staff_cap, s.status,
+         (select count(*) from public.tenants t where t.owner_id = pg.id)::integer,
+         private.active_staff_count(pg.id),
+         (select count(*) from filtered)
+    from page pg
+    join auth.users u on u.id = pg.id
+    left join public.billing_subscriptions s on s.user_id = pg.id
+   order by pg.created_at desc, pg.id;
+$$;
+
+revoke execute on function public.admin_list_users(text, integer, integer) from public, anon, authenticated;
+grant execute on function public.admin_list_users(text, integer, integer) to service_role;

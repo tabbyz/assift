@@ -23,6 +23,14 @@ export function trialLastDay(trialEnd: Date): string {
 }
 
 /**
+ * 最終日（JST の `YYYY-MM-DD`）から `trial_end` を組む。`trialLastDay()` の逆（翌日 0:00 JST）。
+ * 管理画面でトライアルの期間を変えるときに使う（020 §7）
+ */
+export function trialEndForLastDay(lastDay: string): Date {
+  return jstMidnight(addDays(lastDay, 1))
+}
+
+/**
  * 終わりの瞬間（含まない）の直前の日付（JST）。請求期間の終わり（翌月 1 日 0:00 JST。v1 の契約は月末 23:59:59）を
  * 「◯月◯日まで」と書くときに使う
  */

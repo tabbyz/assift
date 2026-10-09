@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { isTrialActive, trialDaysLeft, trialEndFrom, trialLastDay, trialProgress } from './trial'
+import {
+  isTrialActive,
+  trialDaysLeft,
+  trialEndForLastDay,
+  trialEndFrom,
+  trialLastDay,
+  trialProgress,
+} from './trial'
 
 describe('trialEndFrom', () => {
   it('10/10 に始めると 12/31 まで（終わりは 1/1 0:00 JST）', () => {
@@ -59,5 +66,20 @@ describe('trialProgress', () => {
   it('範囲の外は 0〜1 に収める', () => {
     expect(trialProgress(end, new Date('2026-09-20T09:00:00+09:00'))).toBe(0)
     expect(trialProgress(end, new Date('2027-02-01T09:00:00+09:00'))).toBe(1)
+  })
+})
+
+describe('trialEndForLastDay', () => {
+  it('最終日の翌日 0:00 JST を返し、trialLastDay と往復する', () => {
+    const end = trialEndForLastDay('2026-12-31')
+    expect(end.toISOString()).toBe(new Date('2027-01-01T00:00:00+09:00').toISOString())
+    expect(trialLastDay(end)).toBe('2026-12-31')
+  })
+
+  it('月末・うるう日もまたげる', () => {
+    expect(trialLastDay(trialEndForLastDay('2028-02-29'))).toBe('2028-02-29')
+    expect(trialEndForLastDay('2028-02-28').toISOString()).toBe(
+      new Date('2028-02-29T00:00:00+09:00').toISOString()
+    )
   })
 })

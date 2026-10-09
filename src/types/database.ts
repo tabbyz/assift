@@ -664,6 +664,23 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_list_users: {
+        Args: { p_limit?: number; p_offset?: number; p_search?: string }
+        Returns: {
+          active_staff_count: number
+          created_at: string
+          email: string
+          id: string
+          last_sign_in_at: string
+          max_staffs_count: number
+          providers: string[]
+          staff_cap: number
+          subscription_status: string
+          tenant_count: number
+          total_count: number
+          trial_end: string
+        }[]
+      }
       assign_shift: {
         Args: {
           p_date: string

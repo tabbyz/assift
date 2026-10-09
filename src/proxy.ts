@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
+import { adminHostDecision, adminHostEnv } from '@/lib/admin/host'
+import { ADMIN_ROOT } from '@/lib/admin/paths'
 import {
   CURRENT_TENANT_COOKIE,
   CURRENT_TENANT_MAX_AGE,
@@ -9,6 +11,11 @@ import { updateSession } from '@/utils/supabase/proxy'
 
 // Next 16 では middleware.ts が proxy.ts に改名された。ロジックは lib / utils の純関数に置く
 export async function proxy(request: NextRequest) {
+  // 0. 運営者の管理画面のホストの振り分け（020 §4.2）。管理画面のホストでは管理画面だけを、
+  //    本体のホストでは管理画面以外だけを開く
+  const admin = adminHostResponse(request)
+  if (admin) return admin
+
   // 1. v1 の店舗 URL（22 文字トークン）なら新 URL へ 308。
   //    未ログインでも先に書き換えるので、/login?next= には新 URL が入る
   const legacy = legacyTenantRedirect(request)
@@ -21,6 +28,29 @@ export async function proxy(request: NextRequest) {
   rememberCurrentTenant(request, response)
 
   return response
+}
+
+/**
+ * 管理画面のホストの振り分け。通すなら null。
+ * 404 は存在しないパスへ rewrite して、アプリの not-found を 404 で出す（素の 404 の Response にしない。
+ * rewrite 先は proxy を通らない）
+ */
+function adminHostResponse(request: NextRequest) {
+  const decision = adminHostDecision(
+    request.headers.get('host'),
+    request.nextUrl.pathname,
+    adminHostEnv()
+  )
+  if (decision === 'pass') return null
+
+  const url = request.nextUrl.clone()
+  url.search = ''
+  if (decision === 'redirectToAdmin') {
+    url.pathname = ADMIN_ROOT
+    return NextResponse.redirect(url)
+  }
+  url.pathname = '/404'
+  return NextResponse.rewrite(url)
 }
 
 /** 旧 URL なら 308 の Response、そうでなければ null */
