@@ -4,7 +4,7 @@
   個別契約 `profiles.max_staffs_count`・権利の規則 `lib/billing/entitlement.ts`）
 - v1: `/<ADMIN_PATH>/...`（`@assift.com` のメールの人だけ）。グラフ・一覧・招待の代理承認・一斉メール・メンテナンスモード（v1 分析 §3.5）
 
-**状態: プラン（未実装）。2026-10-09 に範囲を決め、ホスト振り分けを試作で確かめた（§3）。同日に URL を `admin.assift.com/-/...` に決めた（§4.1）。同日にプランのレビューを 3 回行い、指摘が出なくなるまで見直した（主な変更: 確認でホストも見る §5、ログイン後の管理者の判定、seed の管理者）。**
+**状態: プラン（未実装）。2026-10-09 に範囲を決め、ホスト振り分けを試作で確かめた（§3）。同日に URL を `admin.assift.com/-/...` に決めた（§4.1）。同日にプランのレビューを 3 回行い、指摘が出なくなるまで見直した（主な変更: 確認でホストも見る §5、ログイン後の管理者の判定、seed の管理者）。同日にゼロベースで再レビューし、管理用のアカウントの前提（§5.1）と一覧の集計の順序（§6.1）を直した。**
 
 ---
 
@@ -155,6 +155,25 @@ src/lib/validation/admin.ts  操作の Zod スキーマ
   本体で XSS が起きても管理画面の cookie は読めない（cookie は `httpOnly: false` で JS から読めるので、同じオリジンに置くと盗まれる）
 - **ログアウト**: `signOut({ scope: 'local' })`（本体のセッションは切らない）→ `/-/login`
 
+### 5.1 管理用のアカウントは本体で使わない（ゼロベースのレビューで見つけた前提の穴。§12 で決める）
+
+Supabase のセッション（アクセストークン・リフレッシュトークン）は**ホストに縛られない**。`is_admin` は人に付いていて、セッションには付いていない。
+したがって、管理者が**同じアカウントで本体にもログインしている**と:
+
+1. 本体の XSS が本体のセッションのトークンを読む（cookie は `httpOnly: false`）
+2. 攻撃者が自分のブラウザで、そのトークンを `admin.assift.com` の cookie に入れる
+3. `is_admin` の確認は通るので、管理画面に入れる
+
+ホストを分けた守り（§12 の 1）は、**管理用のアカウントの本体のセッションが存在しない**ときにだけ成り立つ。§5 のホストの確認はこの経路を塞げない。
+
+| 案 | 中身 | 費用 |
+| --- | --- | --- |
+| **A. 管理専用のアカウント（推奨）** | `is_admin` は管理専用のアカウント（店舗を持たない）にだけ立て、そのアカウントでは本体にログインしない。ふだん使いのアカウントには立てない | 0（運用の決まり）。seed も `admin@example.com`（管理専用）と `dev@example.com`（ふだん使い）に分けてある |
+| B. セッションを管理画面に結び付ける | 管理画面でのログイン時に JWT の `session_id` を表に記録し、確認でその表にあるセッションだけを通す。本体で作られたセッションは盗まれても通らない | 表 1 つ・migration・pgTAP・ログイン / ログアウト / 確認の書き込みと読み取り |
+
+A は決まりを破れば（管理専用のアカウントで本体にログインすれば）穴が開くが、管理者 1 名なら守れる。B はコードで強制できる。
+A で始め、B は MFA と一緒に運用開始までに再検討する（どちらも「管理用のアカウントの資格情報が漏れたとき」の守り）。
+
 ## 6. 読み取り
 
 ### 6.1 一覧: RPC `public.admin_list_users`
@@ -177,19 +196,27 @@ stable
 security definer
 set search_path = ''
 as $$
-  select p.id, p.email, p.created_at, u.last_sign_in_at,
+  with filtered as (
+    select p.id, p.email, p.created_at, p.trial_end, p.max_staffs_count, p.staff_cap
+      from public.profiles p
+     where p_search is null or strpos(lower(p.email), lower(p_search)) > 0
+  ),
+  page as (
+    select * from filtered
+     order by created_at desc, id
+     limit least(greatest(p_limit, 1), 100) offset greatest(p_offset, 0)
+  )
+  select pg.id, pg.email, pg.created_at, u.last_sign_in_at,
          coalesce((select array_agg(distinct i.provider order by i.provider)
-                   from auth.identities i where i.user_id = p.id), '{}'),
-         p.trial_end, p.max_staffs_count, p.staff_cap, s.status,
-         (select count(*) from public.tenants t where t.owner_id = p.id)::integer,
-         private.active_staff_count(p.id),
-         count(*) over ()
-  from public.profiles p
-  join auth.users u on u.id = p.id
-  left join public.billing_subscriptions s on s.user_id = p.id
-  where p_search is null or strpos(lower(p.email), lower(p_search)) > 0
-  order by p.created_at desc, p.id
-  limit least(greatest(p_limit, 1), 100) offset greatest(p_offset, 0);
+                     from auth.identities i where i.user_id = pg.id), '{}'),
+         pg.trial_end, pg.max_staffs_count, pg.staff_cap, s.status,
+         (select count(*) from public.tenants t where t.owner_id = pg.id)::integer,
+         private.active_staff_count(pg.id),
+         (select count(*) from filtered)
+    from page pg
+    join auth.users u on u.id = pg.id
+    left join public.billing_subscriptions s on s.user_id = pg.id
+   order by pg.created_at desc, pg.id;
 $$;
 
 revoke execute on function public.admin_list_users(text, integer, integer) from public, anon, authenticated;
@@ -199,6 +226,8 @@ grant execute on function public.admin_list_users(text, integer, integer) to ser
 - `security definer` にするのは `auth.users` / `auth.identities` を読むため。呼べるのは **service_role だけ**（`authenticated` から EXECUTE を外す）。
   生成 migration に `GRANT ... TO authenticated` / `anon` が残る場合は、生成ファイルに REVOKE を追記し、`unmanaged/restrict_anon_grants.sql` も末尾に足す（関数を足すため）
 - 検索は `ilike` ではなく `strpos`（`%` `_` のエスケープが要らない）。空の検索語は TS で `null` にして渡す
+- **先にページの範囲に絞ってから集計する**（`page` の CTE）。`count(*) over ()` で総数を数えると、窓関数の下で全行の副問い合わせ（店舗数・在籍数・登録方法）が走る。
+  総数は絞り込みだけの `filtered` を数える
 - `total_count` は行に付くので、範囲外のページ（0 行）では総数が分からない。`page` が範囲外なら「該当なし」と 1 ページ目へのリンクを出す
 - 「契約の状態」の列は `entitlement()`（TS の純関数）で組み立て、`isOverLimit(entitlement, active_staff_count)` ならロック中の印を付ける。SQL に規則をもう 1 つ書かない（今でも TS と `private.staff_limit` の 2 か所）
 - 契約状態での絞り込みは入れない（入れると規則を SQL にもう 1 つ書くことになる。要るようになってから）
@@ -318,12 +347,15 @@ grant execute on function public.admin_list_users(text, integer, integer) to ser
 | 5 | 監査ログ | 入れない（管理者 1 名） |
 | 6 | ログインの方法 | メール + パスワードだけ |
 | 7 | ユーザーの画面を見る機能 | 入れない（2026-10-09。費用が高いため。要るようになったら別のプランで検討する） |
+| 8 | 管理用のアカウント | **未決**。推奨は管理専用のアカウント（§5.1 の A）。セッションの結び付け（B）は運用開始までに再検討 |
 
 管理者にするアカウントはメール + パスワードで登録したもの（2026-10-09 に確認。Google だけのアカウントは管理画面にログインできない）。
+ただし §5.1 の理由で、ふだん使いのアカウントとは別の管理専用のアカウントにすることを勧める（#8）。
 
 未確定:
 
 - cookie tossing（本体のホストの XSS から `Domain=assift.com` の cookie を書かれる）への対策（管理画面のホストの cookie 名を `__Host-` 始まりにする）。権限は上がらない（攻撃者のセッションでは 404）ので、MFA と一緒に再検討する
+- セッションを管理画面に結び付ける（§5.1 の B）。MFA と一緒に再検討する
 - `admin.localhost` での cookie（§10 の 1）
 
 ## 13. 実装ログ
