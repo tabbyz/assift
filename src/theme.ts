@@ -5,6 +5,8 @@ import { PATTERN_COLORS } from '@/lib/patterns/colors'
  * 色・半径・フォントはここに集約する。コンポーネント側で直接 hex を書かない。
  * primary は gray。ブランド色で chrome を塗らず、パターン色と不足の赤に役割を残す。
  * 状態がよい色は green（公開中、充足、成功通知）。chrome には使わない。
+ * プランの案内（上限・アップグレード）は blue。警告ではなくお知らせなので yellow にしない。
+ * 色は安易に増やさないが、役割（意味）があって gray では伝わらないときは検討して足し、ここに書き足す。
  * Button・Checkbox・Switch・Chip の既定色は dark。色を省略した filled が gray の 6 番に落ちないようにする。
  * `variant="default"` は色を見ないので、操作・集計などの副操作はそのまま残る。
  */
