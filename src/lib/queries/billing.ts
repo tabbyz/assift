@@ -1,6 +1,13 @@
 import 'server-only'
 import { cache } from 'react'
-import { type Entitlement, entitlement, isOverLimit, staffLimit } from '@/lib/billing/entitlement'
+import { PRICE_LOOKUP_KEY } from '@/lib/billing/constants'
+import {
+  type Entitlement,
+  entitlement,
+  isEntitledStatus,
+  isOverLimit,
+  staffLimit,
+} from '@/lib/billing/entitlement'
 import { peakWindow, readStaffCountHistory } from '@/lib/billing/history'
 import { billableStaffPeak } from '@/lib/billing/peak'
 import type { Tables } from '@/types/database'
@@ -33,7 +40,7 @@ export const getBillingOverview = cache(async (userId: string): Promise<BillingO
   const [profile, subscription, staffs] = await Promise.all([
     supabase
       .from('profiles')
-      .select('trial_end, max_staffs_count, stripe_customer_id')
+      .select('trial_end, max_staffs_count, staff_cap, stripe_customer_id')
       .eq('id', userId)
       .maybeSingle(),
     supabase.from('billing_subscriptions').select('*').eq('user_id', userId).maybeSingle(),
@@ -52,6 +59,7 @@ export const getBillingOverview = cache(async (userId: string): Promise<BillingO
     subscriptionStatus: subscription.data?.status ?? null,
     trialEnd,
     manualLimit: profile.data?.max_staffs_count ?? null,
+    staffCap: profile.data?.staff_cap ?? null,
     now: new Date(),
   })
   const activeStaffCount = staffs.count ?? 0
@@ -82,6 +90,34 @@ export const getCurrentBillingOverview = cache(async (): Promise<BillingOverview
     return null
   }
 })
+
+/**
+ * 料金の見込みを出せる有効な契約か。新料金の price だけ（切り替え待ちの間は v1 で選んでいた上限人数で請求される。§5.4）
+ */
+export function isEstimable(
+  subscription: BillingSubscription | null
+): subscription is BillingSubscription {
+  return (
+    subscription !== null &&
+    isEntitledStatus(subscription.status) &&
+    subscription.price_lookup_key === PRICE_LOOKUP_KEY
+  )
+}
+
+/**
+ * 足すと今の期間の料金が上がるかを見るための最大人数（019 §13.5）。null = 足しても今の期間の請求は変わらない
+ * （有料でない・切り替え待ち・トライアル中で請求の区間が始まっていない）
+ */
+export async function getConfirmablePeriodPeak(
+  userId: string,
+  overview: BillingOverview,
+  now = new Date()
+): Promise<number | null> {
+  const { subscription, trialEnd } = overview
+  if (!isEstimable(subscription)) return null
+  if (trialEnd && trialEnd > now) return null
+  return getPeriodPeak(userId, subscription, trialEnd, now)
+}
 
 /** 今の請求期間の最大人数（ここまで）。料金の見込みに使う。トライアル中の部分は数えない */
 export async function getPeriodPeak(

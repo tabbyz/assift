@@ -40,7 +40,7 @@ export const LAW_ITEMS: LawItem[] = [
     note: (
       <>
         例：{EXAMPLE_STAFF_COUNT}人なら月額{monthlyPriceYen(EXAMPLE_STAFF_COUNT).toLocaleString()}
-        円。人数は、その月に全店舗の在籍スタッフが最も多かったときで数えます（
+        円。人数は、その月に全店舗の在籍スタッフが最も多かったときで数えます。お申し込み時に設定する上限の人数を超えて登録することはできません（
         <Anchor href="/terms#price" inherit>
           利用規約「料金」
         </Anchor>

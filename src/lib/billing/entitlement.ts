@@ -6,11 +6,12 @@ import { isTrialActive } from './trial'
  * 画面（プランの表示・上限の案内・ロック）が使う。書き込みを止めるのは DB の門番（§5.3）
  */
 
-/** 上限なしで使えるサブスクリプションの状態。past_due（支払いのリトライ中）も使えるまま */
+/** 有料プランとして使えるサブスクリプションの状態。past_due（支払いのリトライ中）も使えるまま */
 export const ENTITLED_STATUSES = ['active', 'trialing', 'past_due'] as const
 
 export type Entitlement =
-  | { kind: 'subscription' }
+  /** cap: 利用者が選んだ上限人数（§13）。null は同期が埋めるまでの間で、上限なしとして扱う */
+  | { kind: 'subscription'; cap: number | null }
   | { kind: 'trial'; trialEnd: Date }
   | { kind: 'manual'; limit: number }
   | { kind: 'free'; limit: number }
@@ -22,6 +23,8 @@ export type EntitlementInput = {
   trialEnd: Date | null
   /** profiles.max_staffs_count（個別契約） */
   manualLimit: number | null
+  /** profiles.staff_cap（有料プランの上限人数。§13） */
+  staffCap: number | null
   now: Date
 }
 
@@ -30,7 +33,8 @@ export function isEntitledStatus(status: string | null): boolean {
 }
 
 export function entitlement(input: EntitlementInput): Entitlement {
-  if (isEntitledStatus(input.subscriptionStatus)) return { kind: 'subscription' }
+  if (isEntitledStatus(input.subscriptionStatus))
+    return { kind: 'subscription', cap: input.staffCap }
   if (input.trialEnd && isTrialActive(input.trialEnd, input.now)) {
     return { kind: 'trial', trialEnd: input.trialEnd }
   }
@@ -42,11 +46,23 @@ export function entitlement(input: EntitlementInput): Entitlement {
 
 /** 在籍スタッフの上限。null = 上限なし */
 export function staffLimit(value: Entitlement): number | null {
-  return value.kind === 'manual' || value.kind === 'free' ? value.limit : null
+  switch (value.kind) {
+    case 'subscription':
+      return value.cap
+    case 'trial':
+      return null
+    case 'manual':
+    case 'free':
+      return value.limit
+  }
 }
 
-/** 在籍が上限を超えているか（ロックの条件。019 §5.4） */
+/**
+ * 在籍が上限を超えているか（ロックの条件。019 §5.4）。**有料プランの上限人数ではロックしない**（§13.3）:
+ * 上限人数を在籍数が上回ることはあるが（トライアル中に足した・古い値が残った）、足す操作を門番が止めるだけにする
+ */
 export function isOverLimit(value: Entitlement, activeStaffCount: number): boolean {
+  if (value.kind === 'subscription') return false
   const limit = staffLimit(value)
   return limit !== null && activeStaffCount > limit
 }

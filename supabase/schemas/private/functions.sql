@@ -93,8 +93,8 @@ as $$
      and s.retired_at is null;
 $$;
 
--- 在籍スタッフの上限（019 §5.1）。null = 上限なし。lib/billing/entitlement.ts と同じ規則（上から順に）:
---   1. サブスクリプションが active / trialing / past_due → なし
+-- 在籍スタッフの上限（019 §5.1・§13.3）。null = 上限なし。lib/billing/entitlement.ts と同じ規則（上から順に）:
+--   1. サブスクリプションが active / trialing / past_due → profiles.staff_cap（null は同期が埋めるまでの間。上限なし）
 --   2. トライアル中（trial_end > now()）→ なし
 --   3. 個別契約（max_staffs_count > 10）→ その値
 --   4. それ以外 → 10（FREE_STAFF_LIMIT）
@@ -109,7 +109,7 @@ as $$
     when exists (
       select 1 from public.billing_subscriptions b
        where b.user_id = p_owner and b.status in ('active', 'trialing', 'past_due')
-    ) then null
+    ) then (select p.staff_cap from public.profiles p where p.id = p_owner)
     when exists (
       select 1 from public.profiles p where p.id = p_owner and p.trial_end > now()
     ) then null

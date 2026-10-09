@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Alert, Box, Button, Group, Stack, Text } from '@mantine/core'
 import { modals } from '@mantine/modals'
 import { notifications } from '@mantine/notifications'
-import { openStaffLimitModal } from '@/components/billing/StaffLimitModal'
+import { type StaffAdditionRetry, openStaffAdditionModal } from '@/components/billing/staffAddition'
 import { IconCheck } from '@tabler/icons-react'
 import type { ActionResult } from '@/lib/actions/result'
 import type { ShiftCycle } from '@/lib/calendar/shiftCycle'
@@ -53,10 +53,10 @@ type Props = Common &
         saveSetupPatterns: (
           input: SetupPatternsInput & { tenantId: string }
         ) => Promise<SetupResult>
-        completeSetup: (input: {
-          tenantId: string
-          names: string[]
-        }) => Promise<ActionResult<{ redirectTo: string }>>
+        completeSetup: (
+          input: { tenantId: string; names: string[] },
+          options?: { acknowledgedPeak?: number }
+        ) => Promise<ActionResult<{ redirectTo: string }>>
         deleteTenant: (input: { tenantId: string }) => Promise<ActionResult<{ redirectTo: string }>>
       }
   )
@@ -272,20 +272,28 @@ export function SetupWizard(props: Props) {
         go('staff')
         return
       }
-      if (view === 'staff' && props.mode === 'resume') {
-        const result = await props.completeSetup({
-          tenantId: props.tenant.id,
-          names: parsedNames.names,
-        })
-        if (!result.ok) {
-          // 在籍の上限（全店舗の合計。019 §5.3）。トライアルを始めたらそのまま完了をやり直す
-          if (result.code === 'staff_limit') return openStaffLimitModal({ onTrialStarted: next })
-          return fail(result.error)
-        }
-        go('done')
-      }
+      if (view === 'staff') await complete({})
     })
   }
+
+  // ステップ 3 の完了。上限・料金のモーダルで決めたあとのやり直しもここ（確認した人数を渡す）
+  const complete = async (options: { acknowledgedPeak?: number }) => {
+    if (props.mode !== 'resume') return
+    const result = await props.completeSetup(
+      { tenantId: props.tenant.id, names: parsedNames.names },
+      options
+    )
+    if (!result.ok) {
+      // 在籍の上限（全店舗の合計）・料金が上がる追加（019 §5.3・§13）。まとめて貼った人数をモーダルに見せる
+      if (
+        openStaffAdditionModal(result, { adding: parsedNames.names.length, retry: retryComplete })
+      )
+        return
+      return fail(result.error)
+    }
+    go('done')
+  }
+  const retryComplete: StaffAdditionRetry = (options) => startTransition(() => complete(options))
 
   const back = () => {
     if (view === 'patterns') go('store')

@@ -10,10 +10,13 @@ import { checkoutSessionParams } from '@/lib/billing/checkout'
 import { LEGACY_API_VERSION } from '@/lib/billing/constants'
 import { ensureCustomer } from '@/lib/billing/customer'
 import { isEntitledStatus } from '@/lib/billing/entitlement'
+import { throwIfStaffCapError } from '@/lib/billing/limit'
 import { getStripe, isStripeConfigured, resolvePriceId } from '@/lib/billing/stripe'
 import { listCustomerSubscriptions, syncCustomer } from '@/lib/billing/sync'
 import { requestOrigin } from '@/lib/auth/requestOrigin'
 import { getBillingOverview, getStripeCustomerId } from '@/lib/queries/billing'
+import { staffCapSchema } from '@/lib/validation/billing'
+import { createClient } from '@/utils/supabase/server'
 
 /**
  * プランとお支払いの書き込み（019 §5.5）。外部 URL（Checkout・ポータル）へは redirect() せず `{ redirectTo }` を返し、
@@ -33,10 +36,14 @@ function requireStripe() {
 
 /**
  * 有料プランに申し込む（Checkout へ）。同期してから既に有料なら断る（二重契約を防ぐ）。
- * それでも 2 件できたら同期が新しいほうを即時解約する（§5.5）
+ * それでも 2 件できたら同期が新しいほうを即時解約する（§5.5）。
+ * 確認画面で選んだ在籍スタッフの上限（§13.4）を Checkout の前に保存する。途中でやめても値が残るだけで、効くのは有料プランになってから
  */
-export async function startCheckout(): Promise<ActionResult<{ redirectTo: string }>> {
+export async function startCheckout(input: {
+  staffCap: number | ''
+}): Promise<ActionResult<{ redirectTo: string }>> {
   return runAction(async () => {
+    const staffCap = staffCapSchema.parse(input.staffCap)
     const user = await requireUser()
     const stripe = requireStripe()
 
@@ -46,6 +53,14 @@ export async function startCheckout(): Promise<ActionResult<{ redirectTo: string
       const overview = await getBillingOverview(user.id)
       if (isEntitledStatus(overview.subscription?.status ?? null)) fail('有料プランをご利用中です')
     }
+    // 画面を開いたあとに在籍が増えていたら RPC が断る（上限は在籍数以上）
+    const supabase = await createClient()
+    const { error: capError } = await supabase.rpc('set_staff_cap', { p_cap: staffCap })
+    if (capError) {
+      throwIfStaffCapError(capError)
+      throw capError
+    }
+
     const customerId = await ensureCustomer(user)
     // 未払い・未完了の契約が残っていると、申し込みで 2 件目ができる。Meter は Customer 単位なので同じ人数が両方に請求される
     const unsettled = (await listCustomerSubscriptions(stripe, customerId, [])).some(

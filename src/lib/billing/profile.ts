@@ -34,6 +34,8 @@ export type BillingOwner = {
   email: string | null
   trialEnd: string | null
   stripeCustomerId: string | null
+  /** 有料プランの上限人数（null = まだ決めていない。§13.4） */
+  staffCap: number | null
 }
 
 /** 持ち主を `stripe_customer_id`（1 人に決まる。unique）か利用者の id で引く */
@@ -41,7 +43,7 @@ export async function readBillingOwner(
   db: Db,
   by: { customerId: string } | { userId: string }
 ): Promise<BillingOwner | null> {
-  const query = db.from('profiles').select('id, email, trial_end, stripe_customer_id')
+  const query = db.from('profiles').select('id, email, trial_end, stripe_customer_id, staff_cap')
   const { data, error } = await (
     'customerId' in by ? query.eq('stripe_customer_id', by.customerId) : query.eq('id', by.userId)
   ).maybeSingle()
@@ -52,8 +54,20 @@ export async function readBillingOwner(
         email: data.email,
         trialEnd: data.trial_end,
         stripeCustomerId: data.stripe_customer_id,
+        staffCap: data.staff_cap,
       }
     : null
+}
+
+/** 1 人の全店舗の在籍スタッフ数（上限人数を既定値で埋めるとき。§13.4）。店舗のオーナーで 1 人に絞る */
+export async function readActiveStaffCount(db: Db, userId: string): Promise<number> {
+  const { count, error } = await db
+    .from('staffs')
+    .select('id, tenants!inner(owner_id)', { count: 'exact', head: true })
+    .eq('tenants.owner_id', userId)
+    .is('retired_at', null)
+  if (error) throw error
+  return count ?? 0
 }
 
 /** 1 人の契約の写し（無ければ null） */

@@ -8,7 +8,7 @@
 > 番号: データ移行・カットオーバーより先に入れる。v1 には課金中の利用者がいるので、**カットオーバーの時点で課金が動いていないと請求が止まる**。
 > 移行（001 §5）には本プランの §8 を足す。
 
-**状態: プラン（未実装）。2026-10-07 に §11 の 1〜3・5〜14 を決定（同日に 2 を「リリース時に有料プランの人だけ」、1・3 を簡素化のため見直し、v1 の Stripe の実数で §8 を具体化）。4 はテストクロックの結果待ち。同日にプランのレビューを反映し、指摘が出なくなるまで見直した。2026-10-09 に有料プランの上限人数と、料金が上がる前の確認を足した（§13。未実装）。**
+**状態: プラン（未実装）。2026-10-07 に §11 の 1〜3・5〜14 を決定（同日に 2 を「リリース時に有料プランの人だけ」、1・3 を簡素化のため見直し、v1 の Stripe の実数で §8 を具体化）。4 はテストクロックの結果待ち。同日にプランのレビューを反映し、指摘が出なくなるまで見直した。2026-10-09 に有料プランの上限人数と、料金が上がる前の確認を足した（§13。同日に実装）。**
 
 ---
 
@@ -963,7 +963,7 @@ cron は不正な鍵でも同期の失敗のあとに送信を試み、500 を�
 
 ---
 
-## 13. 上限人数と、料金が上がる前の確認（2026-10-09 追加。プラン・未実装）
+## 13. 上限人数と、料金が上がる前の確認（2026-10-09 追加。実装済み。ログは §13.10）
 
 ### 13.1 背景
 
@@ -1153,3 +1153,37 @@ settings/staffs/page.tsx・StaffLimitAlert.tsx    有料プランの上限の 1 
 AGENTS.md                                        RPC の一覧と例外に set_staff_cap（start_trial と同じく 1 行の更新の例外）/ ActionFailure.code に 'price_increase' /
                                                  「スタッフを増やす経路を足したら」に料金の確認
 ```
+
+### 13.10 実装ログ（2026-10-09）
+
+§13 のとおりに実装した。データ移行（§13.7）は移行のインポートがまだ無いので、そのときの仕様として残す。
+
+- **DB**: `profiles.staff_cap`（check 11〜1000）、`private.staff_limit()` の有料プランを `staff_cap` に、RPC `public.set_staff_cap(p_cap)`（`security definer`・行ロック・在籍数より下は `below active count`）。
+  差分 migration `20261009044350_staff_cap.sql`（`restrict_anon_grants.sql` を追記）。pgTAP（`billing.sql`）に 12 本: 範囲外・上限まで足せて次は P0001・在籍数より下は断る・
+  引き上げ・まとめて 4 人で止まる・`staff_limit()` が `staff_cap` を返す・他人の行・check・anon は 42501
+- **lib**: `validation/billing`（上限の Zod と定数）、`staffCap`（`suggestedStaffCap` / `minStaffCap`）、`staffAddition`（`checkStaffAddition`: 上限 → 料金の順。
+  `priceIncreaseQuote` / `raisesPrice` / `unchangedHeadroom(Message)`）、`addition`（server-only。`ensureStaffAddition`）、`entitlement`（`subscription` に `cap`。
+  `isOverLimit` は有料プランで常に false）、`sync`（有効な契約を写すとき `staff_cap` が null なら `suggestedStaffCap(在籍数)` で埋める）、`limit`（`price_increase` と `set_staff_cap` の例外の日本語）
+- **Action**: `createStaff` / `restoreStaff` / `completeSetup` が書き込む前に `ensureStaffAddition`。2 つ目の引数 `{ acknowledgedPeak }` でやり直す。
+  `setStaffCap`、`startCheckout({ staffCap })`（Checkout の前に `set_staff_cap`）、`getUpgradeOffer({ adding })` に在籍数・割引・料金の見込みを足した
+- **画面**: 申し込みの確認画面の上限の入力（`StaffCapField`）と「最大 ◯円」、「プランとお支払い」の在籍スタッフのカード（上限・メーター・「上限を変える」= `StaffCapModal`）、
+  上限で止まったときのモーダル（有料は `RaiseCap`: 足そうとした人数・新しい上限・最大の月額・今の期間の見込み・人数入りのボタン）、料金が上がる追加の確認（`PriceIncreaseModal`）、
+  スタッフの設定の有料プランの 1 行（`StaffLimitAlert` の `subscription`）。呼び出しは `openStaffAdditionModal(result, { adding, retry })` に寄せた
+- **文言**: 規約「料金」に上限の段落、特商法の販売価格の注記、LP の料金に 1 行。「有料プランは人数の制限なし」の文言を直した。AGENTS.md（ディレクトリ・Action・RPC の一覧）
+
+プランから変えたこと:
+
+- **料金の確認は「人数が最大人数を超えるか」ではなく「料金のかかる人数が増えるか」で判定する**（`raisesPrice`）。人数で比べると、在籍 8 人 → 9 人のように
+  無料の 10 人の範囲でも「0 円 → 0 円になります」の確認が出る（画面で確かめていて気付いた）。「あと N 人まで料金が変わらない」も最大人数と 10 人の大きいほうで数える
+- `getPriceIncreaseQuote` は作らず、`getUpgradeOffer({ adding })` に料金の見込み（`priceQuote`）を足した。上限のモーダルと料金の確認のモーダルが同じ中身を読む
+- 申し込みの確認画面は、上限の入力を表（特商法の最終確認）の前に置いた。決めた上限が表の「料金」の欄の「最大 ◯円」に出る
+
+確認（ローカル。Stripe は使わず、`billing_subscriptions` に有効な行を入れて有料プランにした。スマホ幅）:
+
+- 申し込みの確認画面: 在籍 8 人で最初の値が 15 人・「最大 500 円」
+- 在籍 10 人・上限 12 人で 1 人足す → 料金の確認「0 円 → 100 円」→ 追加する → 登録。12 人目も同じく「100 円 → 200 円」
+- 13 人目 → 上限のモーダル（12 人 → 13 人・新しい上限 15・最大 500 円・見込み 200 円 → 300 円）→「上限を 15 人にして 1 人を追加する」→ 確認を重ねずに登録
+- 初期設定で 5 人を貼る（在籍 13 人・上限 15 人）→ 上限のモーダル 1 回（13 人 → 18 人・新しい上限 20）→ 引き上げてそのまま完成の画面
+- 「プランとお支払い」: 見込み 300 円・在籍 13 人・上限 15 人・あと 2 人
+- `npm run lint`（既存の警告 1 件のみ）/ `typecheck` / `test`（789）/ `npx supabase db reset` / `npx supabase test db`（227）/ `npm run build` が通る
+

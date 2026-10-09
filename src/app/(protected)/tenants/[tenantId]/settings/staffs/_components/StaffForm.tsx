@@ -6,7 +6,7 @@ import { Button, Group, Stack } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { FormErrorAlert } from '@/components/FormErrorAlert'
 import { LinkButton } from '@/components/LinkButton'
-import { openStaffLimitModal } from '@/components/billing/StaffLimitModal'
+import { type StaffAdditionRetry, openStaffAdditionModal } from '@/components/billing/staffAddition'
 import { SettingsSection } from '@/components/SettingsSection'
 import { WEEKDAY_VALUES } from '@/lib/calendar/weekdays'
 import { createStaff } from '../actions'
@@ -43,17 +43,16 @@ export function StaffForm({ tenantId, patterns }: Props) {
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    submitStaff()
+    submitStaff({})
   }
 
-  const submitStaff = () =>
+  const submitStaff: StaffAdditionRetry = (options = {}) =>
     startTransition(async () => {
-      const result = await createStaff({ tenantId, name, ...conditions })
+      const result = await createStaff({ tenantId, name, ...conditions }, options)
       if (!result.ok) {
-        // 在籍の上限（019 §5.3）。トライアルを始めたらそのまま追加をやり直す
-        if (result.code === 'staff_limit') {
+        // 在籍の上限・料金が上がる追加（019 §5.3・§13）。モーダルで決めたらそのまま追加をやり直す
+        if (openStaffAdditionModal(result, { adding: 1, retry: submitStaff })) {
           setError(undefined)
-          openStaffLimitModal({ onTrialStarted: () => submitStaff() })
           return
         }
         setError(result.error)

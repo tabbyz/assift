@@ -1,6 +1,6 @@
 'use client'
 
-import { type ReactNode, useTransition } from 'react'
+import { type ReactNode, useState, useTransition } from 'react'
 import Link from 'next/link'
 import {
   Anchor,
@@ -20,7 +20,9 @@ import {
 import { notifications } from '@mantine/notifications'
 import { LinkButton } from '@/components/LinkButton'
 import { SettingsSection } from '@/components/SettingsSection'
+import { StaffCapField, staffCapError } from '@/components/billing/StaffCapField'
 import { FREE_STAFF_LIMIT, PRICE_PER_STAFF_YEN, monthlyPriceYen } from '@/lib/billing/pricing'
+import { minStaffCap, suggestedStaffCap } from '@/lib/billing/staffCap'
 import { formatJapaneseYearMonthDay } from '@/lib/calendar/dateString'
 import { startCheckout } from '../../actions'
 
@@ -40,10 +42,14 @@ const EXAMPLE_COUNTS = [FREE_STAFF_LIMIT, 15, 20, 30, 50]
  */
 export function SubscribeClient({ activeStaffCount, trialLastDay, billingAvailable }: Props) {
   const [isPending, startTransition] = useTransition()
+  // 在籍スタッフの上限（019 §13.4）。最初は在籍数より大きい次の 5 の倍数（最小 15）、下限は在籍数
+  const [staffCap, setStaffCap] = useState<number | ''>(() => suggestedStaffCap(activeStaffCount))
+  const minCap = minStaffCap(activeStaffCount)
+  const capError = staffCapError(staffCap, minCap)
 
   const submit = () =>
     startTransition(async () => {
-      const r = await startCheckout()
+      const r = await startCheckout({ staffCap })
       if (!r.ok) {
         notifications.show({ message: r.error, color: 'red' })
         return
@@ -68,8 +74,19 @@ export function SubscribeClient({ activeStaffCount, trialLastDay, billingAvailab
             いまの人数（{activeStaffCount} 人）なら月額{' '}
             {monthlyPriceYen(activeStaffCount).toLocaleString()} 円（税込）
           </Text>
+          {capError === null && typeof staffCap === 'number' && (
+            <Text size="sm" fw={600}>
+              在籍スタッフの上限 {staffCap} 人までのため、毎月の料金は最大{' '}
+              {monthlyPriceYen(staffCap).toLocaleString()} 円（税込）です
+            </Text>
+          )}
         </Stack>
       ),
+    },
+    {
+      label: '上限',
+      value:
+        '上限の人数を超えてスタッフを登録することはできません。上限は「プランとお支払い」からいつでも変えられます（在籍している人数より少なくはできません）',
     },
     { label: '支払い方法', value: 'クレジットカード' },
     {
@@ -92,6 +109,19 @@ export function SubscribeClient({ activeStaffCount, trialLastDay, billingAvailab
     <Container size="sm" py="xl">
       <Stack gap="lg">
         <Title order={2}>お申し込み内容の確認</Title>
+
+        <SettingsSection
+          title="在籍スタッフの上限"
+          description="思わぬ人数まで増やしてしまわないよう、有料プランでは登録できる在籍スタッフの上限を決めておきます。"
+        >
+          <StaffCapField
+            value={staffCap}
+            onChange={setStaffCap}
+            min={minCap}
+            label="上限の人数"
+            error={staffCap === '' ? null : capError}
+          />
+        </SettingsSection>
 
         <SettingsSection title="有料プラン">
           <Table variant="vertical" layout="fixed" withTableBorder={false}>
@@ -148,7 +178,11 @@ export function SubscribeClient({ activeStaffCount, trialLastDay, billingAvailab
           <LinkButton href="/account/billing" variant="default">
             もどる
           </LinkButton>
-          <Button onClick={submit} loading={isPending} disabled={!billingAvailable}>
+          <Button
+            onClick={submit}
+            loading={isPending}
+            disabled={!billingAvailable || capError !== null}
+          >
             カード情報の入力へ
           </Button>
         </Group>

@@ -12,6 +12,10 @@ create table public.profiles (
   trial_end          timestamptz,
   -- 個別契約（振込）の在籍スタッフの上限。null = 通常（019 §5.1）。管理者が SQL で設定する
   max_staffs_count   integer,
+  -- 有料プランの在籍スタッフの上限（019 §13）。請求には使わない（請求は実人数の最大）。null = まだ決めていない。
+  -- 書くのは public.set_staff_cap()（利用者）と、null のとき既定値で埋める同期関数・データ移行（v1 の上限。§13.7）だけ。
+  -- 下限 11・上限 1000 は lib/validation/billing.ts と同じ
+  staff_cap          integer check (staff_cap between 11 and 1000),
   created_at         timestamptz not null default now(),
   updated_at         timestamptz not null default now()
 );
@@ -19,7 +23,7 @@ create table public.profiles (
 alter table public.profiles enable row level security;
 
 -- ユーザーが更新する列はない（email はトリガ同期、is_admin・max_staffs_count は SQL で立てる、
--- trial_end は start_trial()、stripe_customer_id はサーバーだけ）。UPDATE を付けると trial_end などを書き換えられる
+-- trial_end は start_trial()、staff_cap は set_staff_cap()、stripe_customer_id はサーバーだけ）。UPDATE を付けると trial_end などを書き換えられる
 revoke all on public.profiles from anon, authenticated;
 grant select on public.profiles to authenticated;
 
