@@ -383,14 +383,19 @@ function StaffCard({ view }: { view: BillingView }) {
         : `無料の上限 ${limit} 人`
 
   return (
-    <Card title="在籍スタッフ（全店舗の合計）">
-      {/* 上限は見出しの行に並べると、スマホで両方とも折り返すので数字の行の右に置く */}
-      <Group justify="space-between" align="baseline" wrap="nowrap" gap="sm">
-        <BigNumber value={String(count)} after="人" />
-        <Text size="sm" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
-          {limitLabel}
+    <Card title="在籍スタッフ">
+      {/* 上限は数字の行の右に置く（見出しの行に並べるとスマホで折り返す）。上の小さな字は「この期間の料金の見込み」と同じ並べ方 */}
+      <Stack gap={6}>
+        <Text size="xs" c="dimmed">
+          全店舗の合計
         </Text>
-      </Group>
+        <Group justify="space-between" align="baseline" wrap="nowrap" gap="sm">
+          <BigNumber value={String(count)} after="人" />
+          <Text size="sm" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+            {limitLabel}
+          </Text>
+        </Group>
+      </Stack>
       {limit !== null && <Meter count={count} limit={limit} />}
       {limit !== null && (
         <Text size="sm" c={count > limit ? 'red' : 'dimmed'}>
