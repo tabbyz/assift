@@ -9,7 +9,6 @@ import {
   Button,
   Container,
   Group,
-  Paper,
   Progress,
   Stack,
   Text,
@@ -19,6 +18,7 @@ import { modals } from '@mantine/modals'
 import { notifications } from '@mantine/notifications'
 import { startTrial } from '@/app/(protected)/actions'
 import { LinkButton } from '@/components/LinkButton'
+import { SettingsSection } from '@/components/SettingsSection'
 import { PortalButton } from '@/components/billing/PortalButton'
 import { CONTACT_EMAIL } from '@/components/billing/contact'
 import { FREE_STAFF_LIMIT, PRICE_PER_STAFF_YEN, monthlyPriceYen } from '@/lib/billing/pricing'
@@ -137,7 +137,10 @@ export function BillingClient({ view, checkoutSuccess }: Props) {
       <Stack gap="lg">
         <Title order={2}>プランとお支払い</Title>
 
-        <Card label="現在のプラン" aside={<PlanBadge view={view} />}>
+        <Card title="現在のプラン">
+          <Group>
+            <PlanBadge view={view} />
+          </Group>
           <PlanBody view={view} />
           {actions}
         </Card>
@@ -213,28 +216,12 @@ export function BillingClient({ view, checkoutSuccess }: Props) {
   }
 }
 
-/** 見出し（小さいラベル）と右端の補足を持つカード */
-function Card({
-  label,
-  aside,
-  children,
-}: {
-  label: string
-  aside?: ReactNode
-  children: ReactNode
-}) {
+/** 設定画面のセクション（見出しは枠の外。アカウント情報などと同じ）。中身は縦に並べる */
+function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <Paper withBorder radius="md" p="lg">
-      <Stack gap="md">
-        <Group justify="space-between" wrap="nowrap" gap="sm">
-          <Text size="sm" c="dimmed">
-            {label}
-          </Text>
-          {aside}
-        </Group>
-        {children}
-      </Stack>
-    </Paper>
+    <SettingsSection title={title}>
+      <Stack gap="md">{children}</Stack>
+    </SettingsSection>
   )
 }
 
@@ -396,7 +383,7 @@ function StaffCard({ view }: { view: BillingView }) {
         : `無料の上限 ${limit} 人`
 
   return (
-    <Card label="在籍スタッフ（全店舗の合計）">
+    <Card title="在籍スタッフ（全店舗の合計）">
       {/* 上限は見出しの行に並べると、スマホで両方とも折り返すので数字の行の右に置く */}
       <Group justify="space-between" align="baseline" wrap="nowrap" gap="sm">
         <BigNumber value={String(count)} after="人" />
@@ -469,7 +456,7 @@ function PriceCard({ view }: { view: BillingView }) {
   const discount = subscription?.discountPercent ?? 0
   const unit = discount > 0 ? monthlyPriceYen(FREE_STAFF_LIMIT + 1, discount) : PRICE_PER_STAFF_YEN
   return (
-    <Card label="料金">
+    <Card title="料金">
       <Stack gap={0}>
         <PriceRow label={`${FREE_STAFF_LIMIT} 人まで`} value="無料" />
         <PriceRow
