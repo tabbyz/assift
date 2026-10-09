@@ -39,3 +39,12 @@ create policy staffs_member_all on public.staffs
 create trigger staffs_set_updated_at
   before update on public.staffs
   for each row execute function private.set_updated_at();
+
+-- 課金（019 §5.3）: 上限の門番と在籍数の履歴
+create trigger staffs_guard_staff_limit
+  before insert or update of retired_at on public.staffs
+  for each row execute function private.guard_staff_limit();
+
+create trigger staffs_record_staff_count
+  after insert or delete or update of retired_at on public.staffs
+  for each row execute function private.record_staff_count();

@@ -24,7 +24,7 @@ import {
   UnstyledButton,
 } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
-import { IconUserCircle } from '@tabler/icons-react'
+import { IconCreditCard, IconUserCircle } from '@tabler/icons-react'
 import { LogoutMenuItem, LogoutNavLink } from '@/components/LogoutMenuItem'
 import { TenantSwitcher } from '@/components/TenantSwitcher'
 import type { TenantListItem, TenantSummary } from '@/lib/queries/tenants'
@@ -42,6 +42,8 @@ type Props = {
   tenant: TenantSummary
   tenants: TenantListItem[]
   email: string
+  /** 画面の上の帯（トライアル中・支払い失敗。019 §5.4） */
+  banner?: ReactNode
   children: ReactNode
 }
 
@@ -54,7 +56,7 @@ const navLinkClassNames = { root: classes.drawerItem, section: classes.drawerIco
  * padding は 0。シフト表がキャンバスの端まで行き、設定は Container が inset を持つ。
  * ヘッダー右の「設定」からマスタへ入る。表へ戻るのは設定ナビの「シフト表画面へ」。
  */
-export function TenantShell({ tenant, tenants, email, children }: Props) {
+export function TenantShell({ tenant, tenants, email, banner, children }: Props) {
   const [opened, { toggle, close }] = useDisclosure(false)
   const pathname = usePathname()
 
@@ -111,6 +113,9 @@ export function TenantShell({ tenant, tenants, email, children }: Props) {
                 <MenuItem component={Link} href="/account">
                   アカウント情報
                 </MenuItem>
+                <MenuItem component={Link} href="/account/billing">
+                  プランとお支払い
+                </MenuItem>
                 <MenuDivider />
                 <LogoutMenuItem />
               </MenuDropdown>
@@ -163,12 +168,22 @@ export function TenantShell({ tenant, tenants, email, children }: Props) {
               leftSection={<IconUserCircle size={18} stroke={1.75} />}
               classNames={navLinkClassNames}
             />
+            <NavLink
+              component={Link}
+              href="/account/billing"
+              label="プランとお支払い"
+              leftSection={<IconCreditCard size={18} stroke={1.75} />}
+              classNames={navLinkClassNames}
+            />
             <LogoutNavLink classNames={navLinkClassNames} />
           </Stack>
         </ScrollArea>
       </AppShellNavbar>
 
-      <AppShellMain>{children}</AppShellMain>
+      <AppShellMain>
+        {banner}
+        {children}
+      </AppShellMain>
     </AppShell>
   )
 }

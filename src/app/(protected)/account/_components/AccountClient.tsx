@@ -1,9 +1,11 @@
 'use client'
 
 import { type FormEvent, useState, useTransition } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   Alert,
+  Anchor,
   Button,
   Container,
   Group,
@@ -18,6 +20,7 @@ import { notifications } from '@mantine/notifications'
 import { IconInfoCircle } from '@tabler/icons-react'
 import { FormErrorAlert } from '@/components/FormErrorAlert'
 import { SettingsSection } from '@/components/SettingsSection'
+import { addDays, formatJapaneseMonthDay } from '@/lib/calendar/dateString'
 import { PASSWORD_MIN_LENGTH } from '@/lib/validation/auth'
 import { deleteAccount, updateEmail, updatePassword } from '../actions'
 
@@ -30,9 +33,22 @@ type Props = {
   /** /auth/callback から `?notice=` / `?error=` で渡された文言（page が検証済み） */
   notice?: string
   initialError?: string
+  deletion: {
+    /** 有料プランを解約していない（先に解約してもらう） */
+    blocked: boolean
+    /** 解約済みで終了を待っている有料プランの最終日（YYYY-MM-DD）。無ければ null */
+    planLastDay: string | null
+  }
 }
 
-export function AccountClient({ email, newEmail, hasPassword, notice, initialError }: Props) {
+export function AccountClient({
+  email,
+  newEmail,
+  hasPassword,
+  notice,
+  initialError,
+  deletion,
+}: Props) {
   const router = useRouter()
   const [nextEmail, setNextEmail] = useState('')
   const [currentPassword, setCurrentPassword] = useState('')
@@ -77,7 +93,18 @@ export function AccountClient({ email, newEmail, hasPassword, notice, initialErr
   const confirmDelete = () =>
     modals.openConfirmModal({
       title: 'アカウントを削除',
-      children: <Text size="sm">本当にアカウントを削除しますか？この操作は取り消せません。</Text>,
+      children: (
+        <Stack gap="xs">
+          <Text size="sm">本当にアカウントを削除しますか？この操作は取り消せません。</Text>
+          {deletion.planLastDay && (
+            <Text size="sm">
+              アカウントを削除しても、有料プランの最後のご請求（
+              {Number(deletion.planLastDay.slice(5, 7))}月ご利用分）は
+              {formatJapaneseMonthDay(addDays(deletion.planLastDay, 1))}に行います。
+            </Text>
+          )}
+        </Stack>
+      ),
       labels: { confirm: '削除する', cancel: 'キャンセル' },
       confirmProps: { color: 'red' },
       onConfirm: () =>
@@ -196,12 +223,24 @@ export function AccountClient({ email, newEmail, hasPassword, notice, initialErr
             <Text size="sm" c="red">
               この操作は元には戻せません。
             </Text>
+            {deletion.blocked && (
+              <Alert color="yellow" variant="light" icon={<IconInfoCircle size={16} />}>
+                <Text size="sm">
+                  有料プランをご利用中のため、アカウントを削除できません。先に
+                  <Anchor component={Link} href="/account/billing" inherit>
+                    プランとお支払い
+                  </Anchor>
+                  から有料プランを解約してください。
+                </Text>
+              </Alert>
+            )}
             <Group>
               <Button
                 color="red"
                 variant="outline"
                 onClick={confirmDelete}
                 loading={isDeletePending}
+                disabled={deletion.blocked}
               >
                 アカウントを削除する
               </Button>

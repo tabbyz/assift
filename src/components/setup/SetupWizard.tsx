@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Alert, Box, Button, Group, Stack, Text } from '@mantine/core'
 import { modals } from '@mantine/modals'
 import { notifications } from '@mantine/notifications'
+import { openStaffLimitModal } from '@/components/billing/StaffLimitModal'
 import { IconCheck } from '@tabler/icons-react'
 import type { ActionResult } from '@/lib/actions/result'
 import type { ShiftCycle } from '@/lib/calendar/shiftCycle'
@@ -276,7 +277,11 @@ export function SetupWizard(props: Props) {
           tenantId: props.tenant.id,
           names: parsedNames.names,
         })
-        if (!result.ok) return fail(result.error)
+        if (!result.ok) {
+          // 在籍の上限（全店舗の合計。019 §5.3）。トライアルを始めたらそのまま完了をやり直す
+          if (result.code === 'staff_limit') return openStaffLimitModal({ onTrialStarted: next })
+          return fail(result.error)
+        }
         go('done')
       }
     })

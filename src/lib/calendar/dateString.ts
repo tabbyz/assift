@@ -108,3 +108,9 @@ export function formatJapaneseMonthDay(date: string): string {
   const d = dayjs(date)
   return `${d.month() + 1}月${d.date()}日`
 }
+
+/** `2026年9月18日`（料金・トライアルの日付のように年をまたぎうるもの） */
+export function formatJapaneseYearMonthDay(date: string): string {
+  const d = dayjs(date)
+  return `${d.year()}年${d.month() + 1}月${d.date()}日`
+}

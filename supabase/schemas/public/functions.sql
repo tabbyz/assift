@@ -486,3 +486,39 @@ $$;
 
 revoke execute on function public.complete_setup(uuid, text[]) from public;
 grant execute on function public.complete_setup(uuid, text[]) to authenticated;
+
+-- トライアルを始める（019 §7）。1 アカウント 1 回、始めた日から 2 か月後の月末まで、在籍スタッフの上限なし。
+-- profiles に UPDATE を付けない（trial_end や stripe_customer_id を書き換えさせない）ための RPC。
+-- 1 行の更新だが、AGENTS.md の「RPC は複数行を 1 文で書き換えるときだけ」の例外（019 §5.2）。
+-- 引数を取らない（他人の行を指せない）。返すのはトライアルの終わり（その次の瞬間）
+create or replace function public.start_trial()
+returns timestamptz
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_end timestamptz;
+begin
+  if v_uid is null then
+    raise exception 'start_trial: not authenticated';
+  end if;
+  if exists (
+    select 1 from public.billing_subscriptions b
+     where b.user_id = v_uid and b.status in ('active', 'trialing', 'past_due')
+  ) then
+    raise exception 'start_trial: subscribed';
+  end if;
+
+  v_end := private.trial_end_from(now());
+  update public.profiles set trial_end = v_end where id = v_uid and trial_end is null;
+  if not found then
+    raise exception 'start_trial: already used';
+  end if;
+  return v_end;
+end;
+$$;
+
+revoke execute on function public.start_trial() from public;
+grant execute on function public.start_trial() to authenticated;

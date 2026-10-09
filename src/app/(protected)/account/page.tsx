@@ -2,6 +2,9 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { SimpleShell } from '@/components/SimpleShell'
 import { ACCOUNT_ERRORS, ACCOUNT_NOTICES } from '@/lib/auth/notices'
+import { blocksAccountDeletion, isEntitledStatus } from '@/lib/billing/entitlement'
+import { lastDayBefore } from '@/lib/billing/trial'
+import { getBillingOverview } from '@/lib/queries/billing'
 import { getAuthUser } from '@/utils/auth/current'
 import { lookup } from '@/utils/record'
 import { firstString } from '@/utils/searchParams'
@@ -28,6 +31,19 @@ export default async function AccountPage({ searchParams }: PageProps<'/account'
 
   const { user } = data
   const providers = (user.app_metadata.providers as string[] | undefined) ?? []
+
+  // 有料プランを解約していなければ削除のボタンを止める（deleteAccount も Stripe から取り直して断る。ここは案内のため）
+  const subscription = await getBillingOverview(authUser.id)
+    .then((overview) => overview.subscription)
+    .catch(() => null)
+  const deletion = {
+    blocked: blocksAccountDeletion(subscription),
+    planLastDay:
+      subscription && isEntitledStatus(subscription.status) && subscription.cancel_at
+        ? lastDayBefore(new Date(subscription.cancel_at))
+        : null,
+  }
+
   return (
     <SimpleShell>
       <AccountClient
@@ -36,6 +52,7 @@ export default async function AccountPage({ searchParams }: PageProps<'/account'
         hasPassword={providers.includes('email')}
         notice={lookup(ACCOUNT_NOTICES, firstString(params.notice))}
         initialError={lookup(ACCOUNT_ERRORS, firstString(params.error))}
+        deletion={deletion}
       />
     </SimpleShell>
   )

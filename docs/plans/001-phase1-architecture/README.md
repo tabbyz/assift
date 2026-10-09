@@ -67,7 +67,7 @@ v1（Rails）の分析（`docs/v1-analysis.md`）と Phase 1 の決定事項を�
 | restrictions | `restrictions` | `kind` を enum 化、pattern FK 追加 |
 | events | `date_notes` | 名前を用途に合わせて変更。`UNIQUE(tenant_id, date)` |
 | shares | `shares` | `code` はそのまま |
-| usage_records | `plan_change_logs` | プラン変更履歴。Phase 1 では UI なし。Stripe には月次の請求人数しか残らないため保持する |
+| usage_records | ~~`plan_change_logs`~~ | **019 で取りやめ**（移行せず表ごと削除。元のデータは v1 のダンプに残す。019 §5.2）。当初: プラン変更履歴。Phase 1 では UI なし |
 | invoices | （移行しない） | 本番にレコードなし（書き込みコードも存在しない）。請求書は Stripe に全履歴がある |
 
 移行する行の PK は v1 の ID から **uuid v5 で決定的に導出**する。`uuidv5('<table>:<v1 id>', NS)` とし、tenants だけは整数 ID ではなく 22 文字トークンを名前にする。対応表や `legacy_id` 列は持たず、FK も同じ式で書き換える。再実行は `ON CONFLICT (id)` で冪等。名前空間 `NS` は固定の UUID で、移行スクリプトと（旧 URL 解決のため）アプリの両方が環境変数 `V1_UUID_NAMESPACE` として参照する。
@@ -415,7 +415,7 @@ staffs（在籍・position 順）、patterns（position 順）、staff_patterns�
 | events | `date_notes` へ。`(tenant_id, date)` 重複は最新のみ |
 | shares | そのまま。`end_date - start_date > 31` は end_date を丸める |
 | 文字数超過（全テーブルの text 列） | v1 の上限（店舗名 20 / スタッフ名 10 / パターン名 6 / 説明 10 / メモ 12）は 2019-05-05 に導入されたため、それ以前の行は超過しうる。DB の CHECK と同じ長さに切り詰める（v1 の画面・PDF・共有ページの表示と同じ長さ）。テーブル・列ごとの件数と前後の値をログに出す（003 §3.10 の決定） |
-| usage_records | `plan_change_logs` へ。`id = uuidv5('usage_records:' + id, NS)`、`user_id` は users と同じ式で導出 |
+| usage_records | **019 で取りやめ（移行しない）**。当初: `plan_change_logs` へ。`id = uuidv5('usage_records:' + id, NS)`、`user_id` は users と同じ式で導出 |
 | staff_groups, invoices | 移行しない。invoices は本番 0 件を確認済み。pg_dump は保管 |
 
 ### 5.3 検証
@@ -461,7 +461,7 @@ staffs（在籍・position 順）、patterns（position 順）、staff_patterns�
 ## 7. 確認済みの決定（2026-09-17）
 
 - ID: 全テーブル uuid PK。移行分は uuid v5 で導出し、対応表・legacy 列は持たない。新規行は `gen_random_uuid()`
-- `usage_records` は `plan_change_logs` として移行する。`invoices` は本番 0 件（書き込みコードも存在しない）のため移行しない
+- ~~`usage_records` は `plan_change_logs` として移行する。~~ 019 で取りやめ（移行しない。019 §8.1）。`invoices` は本番 0 件（書き込みコードも存在しない）のため移行しない
 - サインアップは「メール + パスワード → 確認メール」方式に変更する
 - `events` → `date_notes`、`disabled` → `retired_at`、`kana` 廃止の列名整理を採用する
 - 旧 URL のリダイレクトは 301

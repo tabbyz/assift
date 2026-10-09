@@ -6,6 +6,7 @@ import { requireUser } from '@/lib/actions/guards'
 import { reorderRows } from '@/lib/actions/reorder'
 import type { ActionResult } from '@/lib/actions/result'
 import { runAction } from '@/lib/actions/run'
+import { throwIfStaffLimit } from '@/lib/billing/limit'
 import type { DayKey } from '@/lib/calendar/weekdays'
 import { nextPosition } from '@/lib/queries/positions'
 import {
@@ -142,7 +143,11 @@ export async function createStaff(input: StaffInput): Promise<ActionResult<{ nam
       .insert({ tenant_id: tenantId, position, name: parsed.name, ...toConditionColumns(parsed) })
       .select('id')
       .single()
-    if (error) throw error
+    if (error) {
+      // 在籍の上限は DB の門番が止める（019 §5.3）。画面は code を見て案内のモーダルを開く
+      throwIfStaffLimit(error)
+      throw error
+    }
 
     await syncStaffRelations(supabase, {
       tenantId,
@@ -239,7 +244,11 @@ async function setRetiredAt(input: { tenantId: string; staffId: string }, value:
     .eq('tenant_id', tenantId)
     .select('id')
     .maybeSingle()
-  if (error) throw error
+  if (error) {
+    // 復帰で在籍の上限を超えるときは DB の門番が止める（019 §5.3）
+    throwIfStaffLimit(error)
+    throw error
+  }
   if (!data) fail(STAFF_NOT_FOUND_MESSAGE)
 
   revalidatePath(`/tenants/${tenantId}`, 'layout')

@@ -71,6 +71,53 @@ export type Database = {
           },
         ]
       }
+      billing_subscriptions: {
+        Row: {
+          cancel_at: string | null
+          current_period_end: string
+          current_period_start: string
+          discount_percent: number | null
+          has_schedule: boolean
+          price_lookup_key: string | null
+          status: string
+          stripe_subscription_id: string
+          synced_at: string
+          user_id: string
+        }
+        Insert: {
+          cancel_at?: string | null
+          current_period_end: string
+          current_period_start: string
+          discount_percent?: number | null
+          has_schedule?: boolean
+          price_lookup_key?: string | null
+          status: string
+          stripe_subscription_id: string
+          synced_at?: string
+          user_id: string
+        }
+        Update: {
+          cancel_at?: string | null
+          current_period_end?: string
+          current_period_start?: string
+          discount_percent?: number | null
+          has_schedule?: boolean
+          price_lookup_key?: string | null
+          status?: string
+          stripe_subscription_id?: string
+          synced_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       date_notes: {
         Row: {
           created_at: string
@@ -163,35 +210,6 @@ export type Database = {
           },
         ]
       }
-      plan_change_logs: {
-        Row: {
-          created_at: string
-          id: string
-          staffs_count: number
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          staffs_count: number
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          staffs_count?: number
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "plan_change_logs_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       profiles: {
         Row: {
           created_at: string
@@ -200,7 +218,6 @@ export type Database = {
           is_admin: boolean
           max_staffs_count: number | null
           stripe_customer_id: string | null
-          stripe_subscription_id: string | null
           trial_end: string | null
           updated_at: string
         }
@@ -211,7 +228,6 @@ export type Database = {
           is_admin?: boolean
           max_staffs_count?: number | null
           stripe_customer_id?: string | null
-          stripe_subscription_id?: string | null
           trial_end?: string | null
           updated_at?: string
         }
@@ -222,7 +238,6 @@ export type Database = {
           is_admin?: boolean
           max_staffs_count?: number | null
           stripe_customer_id?: string | null
-          stripe_subscription_id?: string | null
           trial_end?: string | null
           updated_at?: string
         }
@@ -437,6 +452,35 @@ export type Database = {
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      staff_count_history: {
+        Row: {
+          active_count: number
+          changed_at: string
+          id: number
+          user_id: string
+        }
+        Insert: {
+          active_count: number
+          changed_at?: string
+          id?: never
+          user_id: string
+        }
+        Update: {
+          active_count?: number
+          changed_at?: string
+          id?: never
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staff_count_history_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -672,6 +716,7 @@ export type Database = {
         }
         Returns: number
       }
+      start_trial: { Args: never; Returns: string }
     }
     Enums: {
       assist_run_status: "running" | "succeeded" | "failed"

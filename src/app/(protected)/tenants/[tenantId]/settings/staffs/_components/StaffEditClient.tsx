@@ -8,6 +8,7 @@ import { modals } from '@mantine/modals'
 import { notifications } from '@mantine/notifications'
 import { IconChevronDown } from '@tabler/icons-react'
 import { SettingsSection } from '@/components/SettingsSection'
+import { openStaffLimitModal } from '@/components/billing/StaffLimitModal'
 import { deleteStaff, restoreStaff, retireStaff } from '../actions'
 
 type Props = {
@@ -31,6 +32,9 @@ export function StaffEditClient({ tenantId, staffId, retired }: Props) {
         ? await restoreStaff({ tenantId, staffId })
         : await retireStaff({ tenantId, staffId })
       if (!result.ok) {
+        // 在籍の上限（019 §5.3）。トライアルを始めたらそのまま復帰をやり直す
+        if (result.code === 'staff_limit')
+          return openStaffLimitModal({ onTrialStarted: toggleRetired })
         notifications.show({ message: result.error, color: 'red' })
         return
       }

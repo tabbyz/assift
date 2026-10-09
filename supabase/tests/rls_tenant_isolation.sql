@@ -5,7 +5,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(133);
+select plan(137);
 
 -- ---------------------------------------------------------------------------
 -- 準備（postgres として実行。RLS はテーブル所有者には適用されない）
@@ -665,10 +665,19 @@ select throws_ok('truncate public.staffs', '42501', null, 'authenticated に TRU
 select is((select count(*) from public.profiles), 1::bigint, 'profiles は自分の 1 行だけ');
 select is((select id from public.profiles), :user_a::uuid, '見えているのは自分の profile');
 select throws_ok('update public.profiles set is_admin = true', '42501', null, 'profiles に UPDATE 権限はない');
-select is((select count(*) from public.plan_change_logs), 0::bigint, 'plan_change_logs は自分の行だけ（0 件）');
+-- 課金（019）。どちらも利用者単位の表で、自分の行だけ・SELECT のみ
+select is(
+  (select count(*) from public.staff_count_history where user_id <> :user_a),
+  0::bigint, 'staff_count_history は自分の行だけ');
 select throws_ok(
-  $$insert into public.plan_change_logs (user_id, staffs_count) values ('aaaaaaaa-0000-0000-0000-00000000000a', 1)$$,
-  '42501', null, 'plan_change_logs に INSERT 権限はない'
+  $$insert into public.staff_count_history (user_id, active_count) values ('aaaaaaaa-0000-0000-0000-00000000000a', 1)$$,
+  '42501', null, 'staff_count_history に INSERT 権限はない'
+);
+select is((select count(*) from public.billing_subscriptions), 0::bigint, 'billing_subscriptions は自分の行だけ（0 件）');
+select throws_ok(
+  $$insert into public.billing_subscriptions (user_id, stripe_subscription_id, status, current_period_start, current_period_end)
+    values ('aaaaaaaa-0000-0000-0000-00000000000a', 'sub_x', 'active', now(), now())$$,
+  '42501', null, 'billing_subscriptions に INSERT 権限はない'
 );
 
 -- ---------------------------------------------------------------------------
@@ -682,6 +691,8 @@ select throws_ok('select count(*) from public.tenants', '42501', null, 'anon は
 select throws_ok('select count(*) from public.staffs', '42501', null, 'anon は staffs を読めない');
 select throws_ok('select count(*) from public.profiles', '42501', null, 'anon は profiles を読めない');
 select throws_ok('select private.owned_tenant_ids()', '42501', null, 'anon は private スキーマを使えない');
+select throws_ok('select public.start_trial()', '42501', null, 'anon は start_trial を実行できない');
+select throws_ok('select count(*) from public.billing_subscriptions', '42501', null, 'anon は billing_subscriptions を読めない');
 select throws_ok(
   $$select public.reorder_positions('staffs', 'aaaaaaaa-1111-0000-0000-00000000000a', array['aaaaaaaa-2222-0000-0000-00000000000a']::uuid[])$$,
   '42501', null, 'anon は reorder_positions を実行できない'

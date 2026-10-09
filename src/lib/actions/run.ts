@@ -1,5 +1,5 @@
 import { unstable_rethrow } from 'next/navigation'
-import { toActionError } from './error'
+import { ActionError, toActionError } from './error'
 import type { ActionResult } from './result'
 
 /**
@@ -12,6 +12,9 @@ export async function runAction<T>(fn: () => Promise<T>): Promise<ActionResult<T
     return { ok: true, data }
   } catch (error) {
     unstable_rethrow(error)
-    return { ok: false, error: toActionError(error) }
+    const code = error instanceof ActionError ? error.code : undefined
+    return code
+      ? { ok: false, error: toActionError(error), code }
+      : { ok: false, error: toActionError(error) }
   }
 }

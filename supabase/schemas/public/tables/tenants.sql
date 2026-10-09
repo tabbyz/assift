@@ -32,3 +32,8 @@ create trigger tenants_set_updated_at
 create trigger tenants_guard_setup_completed_at
   before update on public.tenants
   for each row execute function private.guard_setup_completed_at();
+
+-- 課金（019 §5.3）: 店舗の削除で在籍数の減少を記録する（スタッフの cascade 側では店舗を引けない）
+create trigger tenants_record_tenant_delete
+  before delete on public.tenants
+  for each row execute function private.record_tenant_delete();

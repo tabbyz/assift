@@ -12,7 +12,9 @@
     "test:watch": "vitest",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "assist:eval": "tsx --conditions=react-server scripts/assist-eval/run.ts"
+    "assist:eval": "tsx --conditions=react-server scripts/assist-eval/run.ts",
+    "stripe:setup": "tsx --conditions=react-server scripts/stripe/setup.ts",
+    "stripe:migrate-v1": "tsx --conditions=react-server scripts/stripe/migrate-v1-subscriptions.ts"
   },
   "dependencies": {
     "@holiday-jp/holiday_jp": "^2.5.1",
@@ -35,6 +37,7 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "server-only": "^0.0.1",
+    "stripe": "^23.0.0",
     "uuid": "^14.0.2",
     "zod": "^4.6.5"
   },

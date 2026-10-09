@@ -45,3 +45,12 @@ body {
 .mantine-Button-section[data-position='right'] {
   margin-inline-start: 8px;
 }
+
+/*
+ * 段落の最後の行に数文字だけが落ちる「泣き別れ」を防ぐ（pretty）。日本語は文節の切れ目で折り返す（auto-phrase）。
+ * auto-phrase は Chrome だけが対応し、Safari では無視される（pretty だけが効く）
+ */
+p {
+  text-wrap: pretty;
+  word-break: auto-phrase;
+}
