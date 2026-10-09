@@ -7,9 +7,16 @@ import type { ActionResult } from '@/lib/actions/result'
 import { runAction } from '@/lib/actions/run'
 import { authErrorMessage } from '@/lib/auth/authErrorMessage'
 import { requestOrigin } from '@/lib/auth/requestOrigin'
+import { throwIfStaffCapError } from '@/lib/billing/limit'
+import { priceIncreaseQuote, raisesPrice } from '@/lib/billing/staffAddition'
 import { getStripe, isStripeConfigured } from '@/lib/billing/stripe'
-import { trialEndFrom, trialLastDay } from '@/lib/billing/trial'
-import { getBillingOverview, getStripeCustomerId } from '@/lib/queries/billing'
+import { lastDayBefore, trialEndFrom, trialLastDay } from '@/lib/billing/trial'
+import {
+  getBillingOverview,
+  getConfirmablePeriodPeak,
+  getStripeCustomerId,
+} from '@/lib/queries/billing'
+import { addingSchema, staffCapSchema } from '@/lib/validation/billing'
 import { createClient } from '@/utils/supabase/server'
 
 /**
@@ -39,7 +46,7 @@ const TRIAL_MESSAGES: { match: string; message: string }[] = [
 ]
 
 export type UpgradeOffer = {
-  /** 上限で止まったときの上限（null = 上限なし。別タブでトライアルを始めた後など） */
+  /** 上限で止まったときの上限（null = 上限なし。別タブでトライアルを始めた後など）。有料プランは上限人数（019 §13） */
   limit: number | null
   kind: 'subscription' | 'trial' | 'manual' | 'free'
   trialAvailable: boolean
@@ -47,20 +54,68 @@ export type UpgradeOffer = {
   trialLastDay: string
   /** 申し込みを受け付けられるか（Stripe が未設定なら false） */
   billingAvailable: boolean
+  /** 全店舗の在籍スタッフの合計（足す前） */
+  activeStaffCount: number
+  /** 旧料金のクーポン（50）。0 = なし。「最大 ◯円」に効かせる */
+  discountPercent: number
+  /**
+   * 足すと今の請求期間の料金が上がるときの見込み（019 §13.5）。上がらない・見込みを出せない（トライアル中・切り替え待ち）なら null
+   */
+  priceQuote: { currentYen: number; nextYen: number; periodLastDay: string } | null
 }
 
-/** 上限で止まったときのモーダルの中身（どの画面からでも開けるよう Action で読む） */
-export async function getUpgradeOffer(): Promise<ActionResult<UpgradeOffer>> {
+/**
+ * 上限で止まったとき・料金が上がる追加の確認のモーダルの中身（どの画面からでも開けるよう Action で読む）。
+ * `adding` は何人足そうとしたか（初期設定は名前の数、1 人ずつの追加・復帰は 1）
+ */
+export async function getUpgradeOffer(
+  input: { adding?: number } = {}
+): Promise<ActionResult<UpgradeOffer>> {
   return runAction(async () => {
+    const adding = addingSchema.parse(input.adding ?? 1)
     const user = await requireUser()
     const overview = await getBillingOverview(user.id)
+    const discountPercent = overview.subscription?.discount_percent ?? 0
+    const periodPeak = await getConfirmablePeriodPeak(user.id, overview)
+    const after = overview.activeStaffCount + adding
+    const priceQuote =
+      periodPeak !== null && overview.subscription && raisesPrice(periodPeak, after)
+        ? {
+            ...priceIncreaseQuote({ periodPeak, after, discountPercent }),
+            periodLastDay: lastDayBefore(new Date(overview.subscription.current_period_end)),
+          }
+        : null
     return {
       limit: overview.limit,
       kind: overview.entitlement.kind,
       trialAvailable: overview.trialAvailable,
       trialLastDay: trialLastDay(trialEndFrom(new Date())),
       billingAvailable: isStripeConfigured(),
+      activeStaffCount: overview.activeStaffCount,
+      discountPercent,
+      priceQuote,
     }
+  })
+}
+
+/**
+ * 有料プランの在籍スタッフの上限を変える（019 §13.4）。在籍数より下にはできない（RPC が断る）。
+ * 請求には使わない（請求は実人数の最大）。上限で止まったときの引き上げと「プランとお支払い」の変更が呼ぶ
+ */
+export async function setStaffCap(input: {
+  staffCap: number | ''
+}): Promise<ActionResult<{ staffCap: number }>> {
+  return runAction(async () => {
+    const staffCap = staffCapSchema.parse(input.staffCap)
+    await requireUser()
+    const supabase = await createClient()
+    const { error } = await supabase.rpc('set_staff_cap', { p_cap: staffCap })
+    if (error) {
+      throwIfStaffCapError(error)
+      throw error
+    }
+    revalidatePath('/', 'layout')
+    return { staffCap }
   })
 }
 

@@ -20,8 +20,10 @@ import { startTrial } from '@/app/(protected)/actions'
 import { LinkButton } from '@/components/LinkButton'
 import { SettingsSection } from '@/components/SettingsSection'
 import { PortalButton } from '@/components/billing/PortalButton'
+import { openStaffCapModal } from '@/components/billing/StaffCapModal'
 import { CONTACT_EMAIL } from '@/components/billing/contact'
 import { FREE_STAFF_LIMIT, PRICE_PER_STAFF_YEN, monthlyPriceYen } from '@/lib/billing/pricing'
+import { unchangedHeadroomMessage } from '@/lib/billing/staffAddition'
 import {
   addDays,
   formatJapaneseMonthDay,
@@ -31,6 +33,7 @@ import { cancelDuringMigration } from '../actions'
 
 export type BillingView = {
   kind: 'subscription' | 'trial' | 'manual' | 'free'
+  /** 在籍スタッフの上限。有料プランは利用者が選んだ上限人数（019 §13。null = まだ決まっていない） */
   limit: number | null
   activeStaffCount: number
   trialAvailable: boolean
@@ -53,6 +56,8 @@ export type BillingView = {
     cancelLastDay: string | null
     /** 今の請求期間の最大人数（ここまで）。見込みを出せないとき（切り替え待ち）は null */
     periodPeak: number | null
+    /** 足すと料金が上がるかを見る最大人数。トライアル中（請求の区間の前）も null（§13.5） */
+    confirmablePeak: number | null
   } | null
   billingAvailable: boolean
   hasCustomer: boolean
@@ -343,7 +348,11 @@ function PlanBody({ view }: { view: BillingView }) {
           </Text>
         </Stack>
       ) : (
-        <Text size="sm">在籍スタッフの人数の制限なく使えます。</Text>
+        view.limit !== null && (
+          <Text size="sm">
+            在籍スタッフ {view.limit} 人まで登録できます（上限は下で変えられます）。
+          </Text>
+        )
       )}
       {subscription.status === 'past_due' && (
         <Text size="sm" c="red">
@@ -370,17 +379,26 @@ function PlanBody({ view }: { view: BillingView }) {
   )
 }
 
-/** 在籍スタッフ。上限があるとき（トライアル中は終わったあとの無料の上限）はメーターで見せる */
+/**
+ * 在籍スタッフ。上限があるとき（トライアル中は終わったあとの無料の上限）はメーターで見せる。
+ * 有料プランは利用者が選んだ上限人数と「変更」（§13.4）。上限で請求するのではないので、料金の見込みとは分けて書く
+ */
 function StaffCard({ view }: { view: BillingView }) {
   const count = view.activeStaffCount
-  const limit =
-    view.kind === 'trial' ? FREE_STAFF_LIMIT : view.kind === 'subscription' ? null : view.limit
+  const limit = view.kind === 'trial' ? FREE_STAFF_LIMIT : view.limit
   const limitLabel =
     limit === null
-      ? '人数の制限なし'
+      ? view.kind === 'subscription'
+        ? '上限は未設定'
+        : '人数の制限なし'
       : view.kind === 'manual'
         ? `ご契約の上限 ${limit} 人`
-        : `無料の上限 ${limit} 人`
+        : view.kind === 'subscription'
+          ? `上限 ${limit} 人`
+          : `無料の上限 ${limit} 人`
+  const peak = view.subscription?.confirmablePeak ?? null
+  const headroom =
+    view.kind === 'subscription' && peak !== null ? unchangedHeadroomMessage(count, peak) : null
 
   return (
     <Card title="在籍スタッフ">
@@ -402,6 +420,27 @@ function StaffCard({ view }: { view: BillingView }) {
           {staffMessage(view.kind, count, limit)}
         </Text>
       )}
+      {/* 最大人数で請求するので、今の期間の最大人数までは足しても料金が変わらない（§13.5） */}
+      {headroom && (
+        <Text size="sm" c="dimmed">
+          {headroom}
+        </Text>
+      )}
+      {view.kind === 'subscription' && (
+        <Button
+          variant="default"
+          onClick={() =>
+            openStaffCapModal({
+              current: view.limit,
+              activeStaffCount: count,
+              discountPercent: view.subscription?.discountPercent ?? 0,
+            })
+          }
+          fullWidth
+        >
+          上限を変える
+        </Button>
+      )}
     </Card>
   )
 }
@@ -417,6 +456,11 @@ function staffMessage(kind: BillingView['kind'], count: number, limit: number): 
     if (rest > 0) return `あと ${rest} 人まで追加できます。`
     if (rest === 0) return 'ご契約の上限に達しています。'
     return `ご契約の上限を ${-rest} 人超えています。お問い合わせください。`
+  }
+  if (kind === 'subscription') {
+    if (rest > 0) return `あと ${rest} 人まで追加できます。`
+    if (rest === 0) return '上限に達しています。追加するには上限を引き上げてください。'
+    return `上限を ${-rest} 人超えています。スタッフを追加するには上限を引き上げてください。`
   }
   if (rest > 0) return `あと ${rest} 人まで無料で使えます。`
   if (rest === 0) return '無料で使える上限に達しています。'

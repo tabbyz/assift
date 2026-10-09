@@ -1,11 +1,11 @@
 -- 課金（019）の DB 側を固定するテスト（npx supabase test db）。
 -- 在籍スタッフの上限の門番（無料・トライアル・有料・個別契約・service_role）、人数の履歴（追加・退職・削除・店舗の削除・退会）、
--- start_trial（1 回だけ・申し込み済みは不可・anon 不可）、トライアルの終わりの計算。
+-- start_trial（1 回だけ・申し込み済みは不可・anon 不可）、トライアルの終わりの計算、有料プランの上限人数（set_staff_cap。§13）。
 -- 同時実行（profiles の for update）は 1 接続では試せないので、手動で確かめる。
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(40);
+select plan(52);
 
 -- ---------------------------------------------------------------------------
 -- 準備（postgres として実行）
@@ -15,12 +15,14 @@ select plan(40);
 \set user_manual '''aaaaaaaa-0000-0000-0000-0000000019a3'''
 \set user_bulk '''aaaaaaaa-0000-0000-0000-0000000019a4'''
 \set user_gone '''aaaaaaaa-0000-0000-0000-0000000019a5'''
+\set user_cap '''aaaaaaaa-0000-0000-0000-0000000019a6'''
 \set t_free '''aaaaaaaa-1919-0000-0000-000000000001'''
 \set t_free2 '''aaaaaaaa-1919-0000-0000-000000000002'''
 \set t_paid '''aaaaaaaa-1919-0000-0000-000000000003'''
 \set t_manual '''aaaaaaaa-1919-0000-0000-000000000004'''
 \set t_bulk '''aaaaaaaa-1919-0000-0000-000000000005'''
 \set t_gone '''aaaaaaaa-1919-0000-0000-000000000006'''
+\set t_cap '''aaaaaaaa-1919-0000-0000-000000000007'''
 \set staff_retired '''aaaaaaaa-1919-2222-0000-000000000001'''
 \set staff_one '''aaaaaaaa-1919-2222-0000-000000000002'''
 
@@ -33,16 +35,18 @@ select '00000000-0000-0000-0000-000000000000', u.id, 'authenticated', 'authentic
                (:user_paid::uuid, 'billing-paid@example.test'),
                (:user_manual::uuid, 'billing-manual@example.test'),
                (:user_bulk::uuid, 'billing-bulk@example.test'),
-               (:user_gone::uuid, 'billing-gone@example.test')) as u(id, email);
+               (:user_gone::uuid, 'billing-gone@example.test'),
+               (:user_cap::uuid, 'billing-cap@example.test')) as u(id, email);
 
 insert into public.tenants (id, owner_id, name) values
   (:t_free, :user_free, '無料A'), (:t_free2, :user_free, '無料B'),
   (:t_paid, :user_paid, '有料'), (:t_manual, :user_manual, '個別'),
-  (:t_bulk, :user_bulk, 'まとめ'), (:t_gone, :user_gone, '退会');
+  (:t_bulk, :user_bulk, 'まとめ'), (:t_gone, :user_gone, '退会'), (:t_cap, :user_cap, '上限');
 
 -- 有料（active）と個別契約（12 人まで）
 insert into public.billing_subscriptions (user_id, stripe_subscription_id, status, current_period_start, current_period_end)
-values (:user_paid, 'sub_paid', 'active', now(), now() + interval '1 month');
+values (:user_paid, 'sub_paid', 'active', now(), now() + interval '1 month'),
+       (:user_cap, 'sub_cap', 'active', now(), now() + interval '1 month');
 update public.profiles set max_staffs_count = 12 where id = :user_manual;
 -- complete_setup が勤務 0 で先に止まらないように
 insert into public.patterns (tenant_id, name) values (:t_bulk, '早番');
@@ -181,6 +185,35 @@ select throws_ok(
   format($$select public.complete_setup(%L, array['a','b','c','d','e','f','g','h','i','j','k'])$$, :t_bulk),
   'P0001', 'staff_limit_exceeded', 'complete_setup: 11 人の初期設定も門番が止める（postgres でも request の auth.uid() で判定）');
 
+-- ---------------------------------------------------------------------------
+-- 有料プランの上限人数（§13.4）
+-- ---------------------------------------------------------------------------
+set local role authenticated;
+select set_config('request.jwt.claims', format('{"sub":"%s","role":"authenticated"}', :user_cap), true);
+select throws_ok('select public.set_staff_cap(10)', 'P0001', 'set_staff_cap: out of range', 'set_staff_cap: 11 未満は断る');
+select throws_ok('select public.set_staff_cap(1001)', 'P0001', 'set_staff_cap: out of range', 'set_staff_cap: 1000 を超えると断る');
+select is(public.set_staff_cap(12), 12, 'set_staff_cap: 12 人にする');
+select lives_ok(
+  format($$insert into public.staffs (tenant_id, name) select %L, 'C' || g from generate_series(1, 12) g$$, :t_cap),
+  '上限 12 人: 12 人まで足せる');
+select throws_ok(
+  format($$insert into public.staffs (tenant_id, name) values (%L, 'C13')$$, :t_cap),
+  'P0001', 'staff_limit_exceeded', '上限 12 人: 13 人目は止まる');
+select throws_ok('select public.set_staff_cap(11)', 'P0001', 'set_staff_cap: below active count', 'set_staff_cap: 在籍数（12）より下にはできない');
+select is(public.set_staff_cap(15), 15, 'set_staff_cap: 15 人に引き上げる');
+select throws_ok(
+  format($$insert into public.staffs (tenant_id, name) select %L, 'D' || g from generate_series(1, 4) g$$, :t_cap),
+  'P0001', 'staff_limit_exceeded', '上限 15 人: まとめて 4 人（16 人目）で止まる');
+
+reset role;
+select is(private.staff_limit(:user_cap), 15, 'staff_limit: 有料は staff_cap');
+select is(
+  (select staff_cap from public.profiles where id = :user_free),
+  null::integer, 'set_staff_cap: 他人の行は変えない');
+select throws_ok(
+  format($$update public.profiles set staff_cap = 5 where id = %L$$, :user_cap),
+  '23514', null, 'profiles.staff_cap: 11 未満は check で入らない');
+
 -- service_role（auth.uid() が null）は止めない（移行スクリプト）
 set local role service_role;
 select set_config('request.jwt.claims', null, true);
@@ -229,6 +262,7 @@ select throws_ok(
 set local role anon;
 select set_config('request.jwt.claims', null, true);
 select throws_ok('select count(*) from public.staff_count_history', '42501', null, 'anon は staff_count_history を読めない');
+select throws_ok('select public.set_staff_cap(20)', '42501', null, 'anon は set_staff_cap を呼べない');
 
 select * from finish();
 rollback;

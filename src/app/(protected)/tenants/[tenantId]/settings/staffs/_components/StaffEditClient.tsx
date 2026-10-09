@@ -8,7 +8,7 @@ import { modals } from '@mantine/modals'
 import { notifications } from '@mantine/notifications'
 import { IconChevronDown } from '@tabler/icons-react'
 import { SettingsSection } from '@/components/SettingsSection'
-import { openStaffLimitModal } from '@/components/billing/StaffLimitModal'
+import { type StaffAdditionRetry, openStaffAdditionModal } from '@/components/billing/staffAddition'
 import { deleteStaff, restoreStaff, retireStaff } from '../actions'
 
 type Props = {
@@ -26,15 +26,14 @@ export function StaffEditClient({ tenantId, staffId, retired }: Props) {
   const [isDeleting, startDelete] = useTransition()
 
   // 退職・復帰は取り消せるので確認モーダルなし（v1 も無し。006 §3.6）
-  const toggleRetired = () =>
+  const toggleRetired: StaffAdditionRetry = (options = {}) =>
     startRetire(async () => {
       const result = retired
-        ? await restoreStaff({ tenantId, staffId })
+        ? await restoreStaff({ tenantId, staffId }, options)
         : await retireStaff({ tenantId, staffId })
       if (!result.ok) {
-        // 在籍の上限（019 §5.3）。トライアルを始めたらそのまま復帰をやり直す
-        if (result.code === 'staff_limit')
-          return openStaffLimitModal({ onTrialStarted: toggleRetired })
+        // 在籍の上限・料金が上がる復帰（019 §5.3・§13）。モーダルで決めたらそのまま復帰をやり直す
+        if (openStaffAdditionModal(result, { adding: 1, retry: toggleRetired })) return
         notifications.show({ message: result.error, color: 'red' })
         return
       }
@@ -117,7 +116,7 @@ export function StaffEditClient({ tenantId, staffId, retired }: Props) {
                   <Button
                     color="dark"
                     variant="outline"
-                    onClick={toggleRetired}
+                    onClick={() => toggleRetired({})}
                     loading={isRetiring}
                   >
                     退職済みにする

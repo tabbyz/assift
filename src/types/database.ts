@@ -217,6 +217,7 @@ export type Database = {
           id: string
           is_admin: boolean
           max_staffs_count: number | null
+          staff_cap: number | null
           stripe_customer_id: string | null
           trial_end: string | null
           updated_at: string
@@ -227,6 +228,7 @@ export type Database = {
           id: string
           is_admin?: boolean
           max_staffs_count?: number | null
+          staff_cap?: number | null
           stripe_customer_id?: string | null
           trial_end?: string | null
           updated_at?: string
@@ -237,6 +239,7 @@ export type Database = {
           id?: string
           is_admin?: boolean
           max_staffs_count?: number | null
+          staff_cap?: number | null
           stripe_customer_id?: string | null
           trial_end?: string | null
           updated_at?: string
@@ -716,6 +719,7 @@ export type Database = {
         }
         Returns: number
       }
+      set_staff_cap: { Args: { p_cap: number }; Returns: number }
       start_trial: { Args: never; Returns: string }
     }
     Enums: {

@@ -1,29 +1,83 @@
 'use client'
 
-import { Alert, Group, Text } from '@mantine/core'
+import { Alert, Button, Group, Stack, Text } from '@mantine/core'
 import { IconInfoCircle } from '@tabler/icons-react'
 import { LinkButton } from '@/components/LinkButton'
+import { FREE_STAFF_LIMIT } from '@/lib/billing/pricing'
+import { unchangedHeadroomMessage } from '@/lib/billing/staffAddition'
+import { openStaffCapModal } from './StaffCapModal'
 
-type Props = {
-  limit: number
-  /** 個別契約なら申し込みではなく問い合わせを案内する */
-  manual: boolean
-  trialAvailable: boolean
-}
+type Props =
+  | {
+      kind: 'free' | 'manual'
+      limit: number
+      trialAvailable: boolean
+    }
+  | {
+      /** 有料プラン（019 §13.4）。上限に達していなくても出す */
+      kind: 'subscription'
+      limit: number
+      activeStaffCount: number
+      /** 今の請求期間の最大人数。null = 見込みを出せない（トライアル中・切り替え待ち） */
+      periodPeak: number | null
+      discountPercent: number
+    }
 
-/** スタッフの設定で、在籍が上限に達したときの案内（v1 の `_upper_limit`。019 §5.4）。追加ボタンは押せるまま */
-export function StaffLimitAlert({ limit, manual, trialAvailable }: Props) {
+/**
+ * スタッフの設定の上限の案内（v1 の `_upper_limit`。019 §5.4・§13.4）。追加ボタンは押せるまま。
+ * 無料・個別契約は上限に達したときだけ、有料プランは常に「上限 N 人・在籍 M 人」を出す
+ */
+export function StaffLimitAlert(props: Props) {
+  if (props.kind === 'subscription') return <SubscriptionCap {...props} />
+  const { kind, limit, trialAvailable } = props
   return (
     <Alert color="yellow" variant="light" icon={<IconInfoCircle size={16} />}>
       <Group justify="space-between" wrap="wrap" gap="sm">
         <Text size="sm">
-          {manual
+          {kind === 'manual'
             ? `ご契約の上限（在籍 ${limit} 人）に達しています。人数を増やすにはお問い合わせください。`
-            : `無料プランは在籍 ${limit} 人までです。${trialAvailable ? '無料トライアルを始めると、人数の制限なく試せます。' : '有料プランに申し込むと、人数の制限なく使えます。'}`}
+            : `無料プランは在籍 ${limit} 人までです。${trialAvailable ? '無料トライアルを始めると、人数の制限なく試せます。' : `有料プランに申し込むと、上限の人数を決めて ${FREE_STAFF_LIMIT + 1} 人目から追加できます。`}`}
         </Text>
         <LinkButton href="/account/billing" size="xs" variant="white" color="yellow">
           プランを見る
         </LinkButton>
+      </Group>
+    </Alert>
+  )
+}
+
+function SubscriptionCap({
+  limit,
+  activeStaffCount,
+  periodPeak,
+  discountPercent,
+}: Extract<Props, { kind: 'subscription' }>) {
+  const atLimit = activeStaffCount >= limit
+  const headroom =
+    periodPeak === null ? null : unchangedHeadroomMessage(activeStaffCount, periodPeak)
+  return (
+    <Alert color={atLimit ? 'yellow' : 'gray'} variant="light" icon={<IconInfoCircle size={16} />}>
+      <Group justify="space-between" wrap="wrap" gap="sm">
+        <Stack gap={2}>
+          <Text size="sm">
+            {atLimit
+              ? `有料プランの上限（在籍 ${limit} 人）に達しています。追加するには上限を引き上げてください。`
+              : `有料プランの上限 ${limit} 人・在籍 ${activeStaffCount} 人（全店舗の合計）`}
+          </Text>
+          {headroom && (
+            <Text size="xs" c="dimmed">
+              {headroom}
+            </Text>
+          )}
+        </Stack>
+        <Button
+          size="xs"
+          variant={atLimit ? 'white' : 'default'}
+          color={atLimit ? 'yellow' : undefined}
+          onClick={() => openStaffCapModal({ current: limit, activeStaffCount, discountPercent })}
+        >
+          上限を変える
+        </Button>
       </Group>
     </Alert>
   )

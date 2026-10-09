@@ -6,6 +6,7 @@ import { fail } from '@/lib/actions/error'
 import { requireTenant, requireUser } from '@/lib/actions/guards'
 import type { ActionResult } from '@/lib/actions/result'
 import { runAction } from '@/lib/actions/run'
+import { ensureStaffAddition } from '@/lib/billing/addition'
 import { throwIfStaffLimit } from '@/lib/billing/limit'
 import type { ShiftCycle } from '@/lib/calendar/shiftCycle'
 import { type SetupPatternsInput, toRpcPatterns } from '@/lib/setup/patternsState'
@@ -15,6 +16,7 @@ import {
   saveSetupPatternsSchema,
   updateSetupTenantSchema,
 } from '@/lib/validation/setup'
+import { acknowledgedPeakSchema } from '@/lib/validation/billing'
 import { TENANT_NOT_FOUND_MESSAGE } from '@/lib/validation/tenants'
 import { createClient } from '@/utils/supabase/server'
 
@@ -103,15 +105,32 @@ export async function saveSetupPatterns(
 }
 
 /** ステップ 3: スタッフを作って完了を記録する。次はシフト表 */
-export async function completeSetup(input: {
-  tenantId: string
-  names: string[]
-}): Promise<ActionResult<{ redirectTo: string }>> {
+export async function completeSetup(
+  input: {
+    tenantId: string
+    names: string[]
+  },
+  options: { acknowledgedPeak?: number } = {}
+): Promise<ActionResult<{ redirectTo: string }>> {
   return runAction(async () => {
     const { tenantId, names } = completeSetupSchema.parse(input)
-    await requireUser()
+    const acknowledgedPeak = acknowledgedPeakSchema.parse(options.acknowledgedPeak)
+    const user = await requireUser()
 
     const supabase = await createClient()
+    // 二度押しの 2 回目・古いタブは、店舗がもう完了している。名前の数だけ増えるとして判定すると、
+    // 完了済みなのに上限・料金のモーダルが出るので、完了済みなら判定を飛ばしてシフト表へ送る
+    const { data: tenant, error: tenantError } = await supabase
+      .from('tenants')
+      .select('setup_completed_at')
+      .eq('id', tenantId)
+      .maybeSingle()
+    if (tenantError) throw tenantError
+    if (tenant?.setup_completed_at) return { redirectTo: shiftsPath(tenantId) }
+    // 有料プランの上限人数と、料金が上がる追加の確認（019 §13.5）。まとめて貼ったときに一番効く。
+    // 見えない店舗（tenant が null）は RPC が tenant not found で断る
+    if (tenant) await ensureStaffAddition(user.id, { adding: names.length, acknowledgedPeak })
+
     const { error } = await supabase.rpc('complete_setup', {
       p_tenant_id: tenantId,
       p_staff_names: names,

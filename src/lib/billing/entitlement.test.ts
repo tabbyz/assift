@@ -4,15 +4,26 @@ import { blocksAccountDeletion, entitlement, isOverLimit, staffLimit } from './e
 const now = new Date('2026-11-10T12:00:00+09:00')
 const future = new Date('2027-01-01T00:00:00+09:00')
 const past = new Date('2026-10-01T00:00:00+09:00')
-const base = { subscriptionStatus: null, trialEnd: null, manualLimit: null, now }
+const base = { subscriptionStatus: null, trialEnd: null, manualLimit: null, staffCap: null, now }
 
 describe('entitlement', () => {
-  it('active / trialing / past_due のサブスクリプションは上限なし', () => {
+  it('active / trialing / past_due のサブスクリプションは上限人数（staff_cap）', () => {
     for (const status of ['active', 'trialing', 'past_due']) {
-      const value = entitlement({ ...base, subscriptionStatus: status })
-      expect(value.kind).toBe('subscription')
-      expect(staffLimit(value)).toBeNull()
+      const value = entitlement({ ...base, subscriptionStatus: status, staffCap: 20 })
+      expect(value).toEqual({ kind: 'subscription', cap: 20 })
+      expect(staffLimit(value)).toBe(20)
     }
+  })
+
+  it('上限人数が未定（同期が埋める前）なら上限なし', () => {
+    expect(staffLimit(entitlement({ ...base, subscriptionStatus: 'active' }))).toBeNull()
+  })
+
+  it('上限人数は有料プランのときだけ効く', () => {
+    expect(staffLimit(entitlement({ ...base, subscriptionStatus: 'canceled', staffCap: 20 }))).toBe(
+      10
+    )
+    expect(staffLimit(entitlement({ ...base, trialEnd: future, staffCap: 20 }))).toBeNull()
   })
 
   it('unpaid / canceled / incomplete は無料に戻る', () => {
@@ -45,6 +56,12 @@ describe('isOverLimit', () => {
     expect(isOverLimit(free, 10)).toBe(false)
     expect(isOverLimit(free, 11)).toBe(true)
     expect(isOverLimit(entitlement({ ...base, subscriptionStatus: 'active' }), 100)).toBe(false)
+  })
+
+  it('有料プランは上限人数を超えていてもロックしない', () => {
+    expect(
+      isOverLimit(entitlement({ ...base, subscriptionStatus: 'active', staffCap: 20 }), 30)
+    ).toBe(false)
   })
 })
 

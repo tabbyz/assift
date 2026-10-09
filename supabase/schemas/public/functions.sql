@@ -522,3 +522,41 @@ $$;
 
 revoke execute on function public.start_trial() from public;
 grant execute on function public.start_trial() to authenticated;
+
+-- 有料プランの在籍スタッフの上限を決める（019 §13.4）。請求には使わない（請求は実人数の最大）。
+-- profiles に UPDATE を付けない（trial_end や stripe_customer_id を書き換えさせない）ための RPC。start_trial と同じく
+-- 1 行の更新だが、AGENTS.md の「RPC は複数行を 1 文で書き換えるときだけ」の例外。引数で利用者を受けない（他人の行を指せない）。
+-- 有料プランでなくても書ける（申し込みの確認画面が Checkout の前に保存する）。効くのは有料プランのときだけ（private.staff_limit）。
+-- 門番（private.guard_staff_limit）と同じ行をロックしてから数える。ロックしないと、上限を下げるのと同時にスタッフを足されて
+-- 上限を超えた状態ができる
+create or replace function public.set_staff_cap(p_cap integer)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := auth.uid();
+begin
+  if v_uid is null then
+    raise exception 'set_staff_cap: not authenticated';
+  end if;
+  if p_cap is null or p_cap < 11 or p_cap > 1000 then
+    raise exception 'set_staff_cap: out of range';
+  end if;
+
+  perform 1 from public.profiles p where p.id = v_uid for update;
+  if not found then
+    raise exception 'set_staff_cap: not authenticated';
+  end if;
+  if p_cap < private.active_staff_count(v_uid) then
+    raise exception 'set_staff_cap: below active count';
+  end if;
+
+  update public.profiles set staff_cap = p_cap where id = v_uid;
+  return p_cap;
+end;
+$$;
+
+revoke execute on function public.set_staff_cap(integer) from public;
+grant execute on function public.set_staff_cap(integer) to authenticated;

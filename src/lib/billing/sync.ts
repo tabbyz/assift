@@ -6,10 +6,12 @@ import { isEntitledStatus } from './entitlement'
 import {
   type BillingOwner,
   listEntitledSubscriptions,
+  readActiveStaffCount,
   readBillingOwner,
   readBillingProfile,
   readSubscriptionSyncedAt,
 } from './profile'
+import { suggestedStaffCap } from './staffCap'
 import { getStripe, resolvePriceId } from './stripe'
 import { chooseSubscription, subscriptionRow } from './subscriptionRow'
 
@@ -84,6 +86,18 @@ async function applySubscriptions(
         .eq('id', owner.id)
         .is('trial_end', null)
       if (trialError) throw trialError
+    }
+
+    // 上限人数が無いまま有料になった（確認画面を通らない申し込み。Dashboard で作った契約など）なら既定値で埋める（§13.4）。
+    // 確認画面とデータ移行が入れた値は上書きしない
+    if (isEntitledStatus(keep.status) && owner.staffCap === null) {
+      const count = await readActiveStaffCount(db, owner.id)
+      const { error: capError } = await db
+        .from('profiles')
+        .update({ staff_cap: suggestedStaffCap(count) })
+        .eq('id', owner.id)
+        .is('staff_cap', null)
+      if (capError) throw capError
     }
   }
 

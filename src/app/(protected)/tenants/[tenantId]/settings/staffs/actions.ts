@@ -6,6 +6,7 @@ import { requireUser } from '@/lib/actions/guards'
 import { reorderRows } from '@/lib/actions/reorder'
 import type { ActionResult } from '@/lib/actions/result'
 import { runAction } from '@/lib/actions/run'
+import { ensureStaffAddition } from '@/lib/billing/addition'
 import { throwIfStaffLimit } from '@/lib/billing/limit'
 import type { DayKey } from '@/lib/calendar/weekdays'
 import { nextPosition } from '@/lib/queries/positions'
@@ -16,6 +17,7 @@ import {
   updateStaffNameSchema,
   STAFF_NOT_FOUND_MESSAGE,
 } from '@/lib/validation/staffs'
+import { acknowledgedPeakSchema } from '@/lib/validation/billing'
 import type { Database } from '@/types/database'
 import { createClient } from '@/utils/supabase/server'
 
@@ -35,6 +37,12 @@ export type StaffInput = {
   availablePatternIds: string[]
   defaultPatterns: Partial<Record<DayKey, string>>
 }
+
+/**
+ * スタッフを増やす操作の 2 つ目の引数（019 §13.5）。料金が上がる追加は `code: 'price_increase'` で一度止め、
+ * 画面が確認したら「足したあとの人数」を載せてやり直す
+ */
+export type StaffAdditionOptions = { acknowledgedPeak?: number }
 
 function toConditionColumns(parsed: { availableWdays: number[]; maxWorkWeek: number }) {
   return {
@@ -129,11 +137,17 @@ async function syncStaffRelations(
  * スタッフを作成する。v1 の新規フォームは全パターンにチェックが入った状態なので、
  * 画面から渡ってくる `availablePatternIds` をそのまま結び付ける。
  */
-export async function createStaff(input: StaffInput): Promise<ActionResult<{ name: string }>> {
+export async function createStaff(
+  input: StaffInput,
+  options: StaffAdditionOptions = {}
+): Promise<ActionResult<{ name: string }>> {
   return runAction(async () => {
     const parsed = createStaffSchema.parse(input)
+    const acknowledgedPeak = acknowledgedPeakSchema.parse(options.acknowledgedPeak)
     const { tenantId } = parsed
-    await requireUser()
+    const user = await requireUser()
+    // 有料プランの上限人数と、料金が上がる追加の確認（019 §13.5）。無料の上限は下の INSERT で門番が止める
+    await ensureStaffAddition(user.id, { adding: 1, acknowledgedPeak })
 
     const supabase = await createClient()
     const position = await nextPosition(supabase, 'staffs', tenantId)
@@ -232,11 +246,30 @@ export async function updateStaffConditions(
 }
 
 /** 退職 / 復帰は `retired_at` の切り替えだけ（v1 の disabled）。データは消さない */
-async function setRetiredAt(input: { tenantId: string; staffId: string }, value: string | null) {
+async function setRetiredAt(
+  input: { tenantId: string; staffId: string },
+  value: string | null,
+  options: StaffAdditionOptions = {}
+) {
   const { tenantId, staffId } = staffRefSchema.parse(input)
-  await requireUser()
+  const acknowledgedPeak = acknowledgedPeakSchema.parse(options.acknowledgedPeak)
+  const user = await requireUser()
 
   const supabase = await createClient()
+  // 復帰は在籍が 1 人増える（019 §13.5）。在籍中のスタッフへの「復帰」（古いタブ・二度押し）は人数が変わらないので判定しない
+  if (value === null) {
+    const { data: current, error: readError } = await supabase
+      .from('staffs')
+      .select('retired_at')
+      .eq('id', staffId)
+      .eq('tenant_id', tenantId)
+      .maybeSingle()
+    if (readError) throw readError
+    if (!current) fail(STAFF_NOT_FOUND_MESSAGE)
+    if (current.retired_at !== null) {
+      await ensureStaffAddition(user.id, { adding: 1, acknowledgedPeak })
+    }
+  }
   const { data, error } = await supabase
     .from('staffs')
     .update({ retired_at: value })
@@ -261,11 +294,14 @@ export async function retireStaff(input: {
   return runAction(() => setRetiredAt(input, new Date().toISOString()))
 }
 
-export async function restoreStaff(input: {
-  tenantId: string
-  staffId: string
-}): Promise<ActionResult> {
-  return runAction(() => setRetiredAt(input, null))
+export async function restoreStaff(
+  input: {
+    tenantId: string
+    staffId: string
+  },
+  options: StaffAdditionOptions = {}
+): Promise<ActionResult> {
+  return runAction(() => setRetiredAt(input, null, options))
 }
 
 /** 削除。このスタッフのシフトと関連は FK の cascade で消える */

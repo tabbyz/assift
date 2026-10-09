@@ -76,8 +76,10 @@ src/
     queries/                      読み取り（Server から呼ぶ）。publicShare.ts だけが service_role（下記）
     <domain>/                     ドメインロジック（calendar, patterns, shifts, pdf, csv ...）
     billing/                      課金（019）。pricing（10 人まで無料、11 人目から 1 人 100 円。LP と共有）/ entitlement（上限の規則。SQL の staff_limit と同じ）/
-                                  trial / peak（請求期間の最大人数）/ limit（上限の例外 → code: 'staff_limit'）/ checkout / usage（Meter への送信）/
-                                  subscriptionRow（Stripe → 写しの純関数）/ migration（v1 の引き継ぎの区分）。server-only: stripe（SDK）/ sync / report / cancel / history / profile（service_role の読み取り）
+                                  trial / peak（請求期間の最大人数）/ limit（上限の例外 → code: 'staff_limit'。set_staff_cap の例外 → 日本語）/ checkout / usage（Meter への送信）/
+                                  staffCap（有料プランの上限人数の既定値・下限）/ staffAddition（増やす前の判定。上限 → 料金の順）/
+                                  subscriptionRow（Stripe → 写しの純関数）/ migration（v1 の引き継ぎの区分）。server-only: stripe（SDK）/ sync / report / cancel / history / profile（service_role の読み取り）/
+                                  addition（ensureStaffAddition。スタッフを増やす Action が書き込む前に呼ぶ）
     calendar/                     dateString（YYYY-MM-DD の道具。dayjs はここだけ）/ dateRange / today / weekdays / holidays（server-only）
     shifts/                       key（セルの Map）/ applyAssign（楽観更新。assign_shift と同じ規則）/ satisfaction（必要人数の充足）/ count（集計）/ planDefaultPatterns（デフォルト勤務パターンの行を組む純関数）/ table（エクスポートが共有する表の型）
     shares/                       expiry（公開期限。v1 の DATE_LIMIT = 6）/ code（8 文字のコード）
@@ -108,7 +110,7 @@ supabase/
 ページ専用は `_components/` / `_lib/`、横断 UI は `src/components/`、読み取りは `lib/queries/`、書き込みは各ルートの `actions.ts`。
 
 ルートをまたいで使う Action は、そのグループ直下に置く（`(protected)/actions.ts` の `logout` はヘッダーとアカウント画面の両方から呼ぶ。
-同じファイルの `getUpgradeOffer` / `startTrial` / `openPortal` は上限のモーダル・店舗の帯・プランの画面から呼ぶ。
+同じファイルの `getUpgradeOffer` / `startTrial` / `openPortal` / `setStaffCap` は上限・料金の確認のモーダル・店舗の帯・プランの画面・スタッフの設定から呼ぶ。
 `tenants/actions.ts` の `deleteTenant` は店舗情報と初期設定の両方から、`saveDefaultRequiredNums` は必要人数の設定と
 AI シフト作成の両方から呼ぶ。`[tenantId]/actions.ts` はシフト表のもの）。
 
@@ -185,9 +187,12 @@ startTransition(async () => {
 流れ: `runAction` → guard → Zod → `createClient()`（anon + RLS）→ `revalidatePath` / `refresh`。
 
 画面が文言以外で分岐するときだけ `new ActionError(message, code)` を投げ、`ActionFailure.code` に載せる。
-いまは在籍スタッフの上限（019）だけ: DB の門番（`staffs` のトリガ）が `staff_limit_exceeded` を投げ、Action は
-`throwIfStaffLimit(error)`（`lib/billing/limit.ts`）で日本語 + `code: 'staff_limit'` に写す。クライアントは `openStaffLimitModal({ onTrialStarted })` を開く。
-スタッフを増やす経路（追加・復帰・初期設定）を足したら、Action とクライアントの両方にこれを足す。
+いまは在籍スタッフの上限と、料金が上がる追加の確認（019 §5.3・§13）だけ: DB の門番（`staffs` のトリガ）が `staff_limit_exceeded` を投げ、Action は
+`throwIfStaffLimit(error)`（`lib/billing/limit.ts`）で日本語 + `code: 'staff_limit'` に写す。有料プランは書き込む前に
+`ensureStaffAddition(user.id, { adding, acknowledgedPeak })`（`lib/billing/addition.ts`）が上限人数（`staff_limit`）→ 料金（`price_increase`）の順に見る。
+クライアントは `openStaffAdditionModal(result, { adding, retry })`（`components/billing/staffAddition.ts`）でモーダルを開き、決めたら
+`retry({ acknowledgedPeak })` で同じ Action をやり直す（Action の 2 つ目の引数）。
+スタッフを増やす経路（追加・復帰・初期設定）を足したら、Action（`ensureStaffAddition` と `throwIfStaffLimit`）とクライアントの両方にこれを足す。
 
 書き込み後の再描画は 2 通りに分ける（007 §3.5）。
 
@@ -367,9 +372,9 @@ PK は uuid（`gen_random_uuid()`）。v1 から移行する行は `uuidv5('<tab
 
 複数行を 1 文で書き換える必要があるときだけ足す（現在は並べ替えの `reorder_positions`、シフトのアサインの `assign_shift`、
 一括操作の `set_shifts_fixed` / `clear_draft_shifts`、コピーの `copy_shifts`、自動アサインを元に戻す `rollback_assist_run`、
-初期設定の `save_setup_patterns` / `complete_setup`、トライアルを始める `start_trial`）。単純な CRUD は PostgREST のまま。
-`start_trial` は 1 行の更新だが例外: `profiles` に `authenticated` の UPDATE を付けない（`trial_end` や `stripe_customer_id` を書き換えさせない）ため、
-引数を取らない `security definer` の RPC にしている（019 §5.2）。
+初期設定の `save_setup_patterns` / `complete_setup`、トライアルを始める `start_trial`、有料プランの上限人数の `set_staff_cap`）。単純な CRUD は PostgREST のまま。
+`start_trial` / `set_staff_cap` は 1 行の更新だが例外: `profiles` に `authenticated` の UPDATE を付けない（`trial_end` や `stripe_customer_id` を書き換えさせない）ため、
+利用者を引数で受けない `security definer` の RPC にしている（019 §5.2・§13.4）。
 
 一括の書き込みでも、1 文で書けるなら RPC にしない。ただし **PostgREST の UPDATE / DELETE は別テーブルの条件で絞れない**
 （「在籍スタッフの行だけ」は `staffs` との join）。そこで id を URL に並べて分割するのは回避策の積み重ねになるので、RPC にする（008 §10.13）。

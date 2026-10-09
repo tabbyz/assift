@@ -20,3 +20,23 @@ export function staffLimitError(): ActionError {
 export function throwIfStaffLimit(error: { message?: string } | null | undefined): void {
   if (isStaffLimitError(error)) throw staffLimitError()
 }
+
+export const PRICE_INCREASE_MESSAGE = 'この追加で今の請求期間の料金が上がります'
+
+/** スタッフを増やすと今の請求期間の料金が上がる（019 §13.5）。画面は確認のモーダルを開き、確認したらやり直す */
+export function priceIncreaseError(): ActionError {
+  return new ActionError(PRICE_INCREASE_MESSAGE, 'price_increase')
+}
+
+export const STAFF_CAP_BELOW_ACTIVE_MESSAGE = '上限は在籍している人数以上にしてください'
+
+/** `public.set_staff_cap()` の例外 → 日本語（申し込み・上限の変更・上限の引き上げで共有。§13.4） */
+const STAFF_CAP_MESSAGES: { match: string; message: string }[] = [
+  { match: 'set_staff_cap: below active count', message: STAFF_CAP_BELOW_ACTIVE_MESSAGE },
+  { match: 'set_staff_cap: out of range', message: '上限の人数が正しくありません' },
+]
+
+export function throwIfStaffCapError(error: { message?: string } | null | undefined): void {
+  const known = STAFF_CAP_MESSAGES.find((entry) => error?.message?.includes(entry.match))
+  if (known) throw new ActionError(known.message)
+}

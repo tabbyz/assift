@@ -134,6 +134,7 @@ async function cancel() {
     subscriptionStatus: (await row(userId))?.status ?? null,
     trialEnd: new Date((await profile(userId)).trial_end!),
     manualLimit: null,
+    staffCap: null,
     now,
   })
   log('権利（期待: free・10 人。トライアルは使用済み）', value)
