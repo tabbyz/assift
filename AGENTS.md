@@ -42,7 +42,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ```
 src/
-  proxy.ts                        cookie 更新 + 保護ルートの未ログイン redirect
+  proxy.ts                        管理画面のホストの振り分け + cookie 更新 + 保護ルートの未ログイン redirect
   theme.ts                        createTheme（色・半径・フォントはここに集約）
   app/
     layout.tsx                    MantineProvider > ModalsProvider > NuqsAdapter > children + Notifications
@@ -54,6 +54,7 @@ src/
       tenants/
         actions.ts                店舗配下でルートをまたぐ Action（deleteTenant / saveDefaultRequiredNums）
         [tenantId]/               **シフト表が店舗のトップ**（005 §11。page / actions / searchParams / _components / _lib）
+    -/                            運営者の管理画面（020）。本番は admin.assift.com/-/...（下記「管理画面」）。login / (console)/users
           shifts/page.tsx         旧 URL の受け皿。307 で店舗のトップへ（クエリごと）
           <feature>/
             page.tsx              Server。searchParams → queries → Client へ props
@@ -71,6 +72,7 @@ src/
     shiftTable/                   シフト表の見た目（CSS Modules / DateHeaderCell / PatternDescriptionList / cellStyle）とセル・ポップオーバー（ShiftCell / PatternPopover / holdToToggle）。保護ルート・公開ページ・LP のデモで共有
   lib/
     actions/                      result / run / error / guards
+    admin/                        管理画面（020）。host（ホストの振り分け）/ paths / guard / client（service_role）/ queries / trial / planView
     migration/v1Ids.ts            v1 の ID → uuid v5（旧 URL 解決と 012 が共有）
     tenants/                      旧 URL の書き換え・直近店舗 cookie の純関数
     queries/                      読み取り（Server から呼ぶ）。publicShare.ts だけが service_role（下記）
@@ -104,7 +106,7 @@ supabase/
   migrations/                     sync の出力（init_schema は凍結。以降は差分を積む）
   unmanaged/                      pg-delta が生成できない SQL。テーブル・関数を足した差分 migration へ追記する
   tests/                          RLS の pgTAP（npx supabase test db）
-  seed.sql                        ローカル専用。dev@example.com / password
+  seed.sql                        ローカル専用。dev@example.com / password（店舗あり）と admin@example.com / password（管理専用）
 ```
 
 ページ専用は `_components/` / `_lib/`、横断 UI は `src/components/`、読み取りは `lib/queries/`、書き込みは各ルートの `actions.ts`。
@@ -223,9 +225,21 @@ service_role を渡すため）。したがって `publicShare.ts` と同じく�
 `readBillingProfile()` / `readBillingOwner()`、有効な契約の一覧は `listEntitledSubscriptions()`（`pageAll()` を通す）に寄せ、書き写さない。`profiles.stripe_customer_id` は
 利用者が書ける口を作らない（書けると他人の Customer を指してポータルを開ける）。Stripe の Customer は入力から受け取らず、常に DB の値を使う。
 
+管理画面（020）の例外は `lib/admin/` に閉じる: `createAdminClient()` が `requireAdminAction()`（ホスト + `is_admin`）を通してから
+`createPrivilegedClient()` を返す。中のクエリは対象の 1 人に絞る（`.eq('id' / 'user_id' / 'owner_id', …)`）。一覧は RPC `admin_list_users`（service_role だけが呼べる）。
+
 Stripe の API の版は SDK が固定する最新（`lib/billing/stripe.ts`）。旧 metered の明細を含む v1 の Subscription を触る呼び出し
 （移行スクリプト・`cancelDuringMigration()`・退会時の schedule の更新。`lib/billing/cancel.ts`）だけ、リクエストごとに
 `{ apiVersion: LEGACY_API_VERSION }`（`2025-02-24.acacia`）を渡す（basil 以降は meter の無い metered price を扱えない）。
+
+## 管理画面（`src/app/-/`。020）
+
+- 本番は `admin.assift.com/-/...`。**rewrite しない**ので、パスは `/-/...` の 1 系統（`lib/admin/paths.ts` の定数を使う。`revalidatePath` も同じ）
+- proxy の 0 段目（`adminHostDecision()`）が振り分ける: 管理画面のホストでは `/-` だけ、本体のホストでは `/-` を 404。
+  `ADMIN_HOST` は Vercel の Production にだけ入れる。無ければ本番以外（プレビュー・開発）は同じホストで開き、本番は閉じる。開発で本番と同じ形を試すときは `.env.local` に `ADMIN_HOST=admin.localhost:3000`
+- page / layout は `requireAdminPage()`、Action は `requireAdminAction()`。どちらも**ホストも見る**（Server Action はどのページからでも呼べるので、`requireAdmin()` だけでは本体のホストから呼べてしまう）。layout はクライアント遷移で描き直されないので page でも呼ぶ
+- **`is_admin` は管理専用のアカウントにだけ立て、そのアカウントでは本体にログインしない**（020 §5.1。セッションはホストに縛られないので、本体で盗まれたトークンで管理画面に入れる）
+- ログインは管理画面専用（`/-/login`。メール + パスワードだけ）。cookie はホスト限定なので、本体のログインとは別のセッション
 
 ## Route Handler（`src/app/api/`）
 
@@ -275,8 +289,9 @@ Stripe の API の版は SDK が固定する最新（`lib/billing/stripe.ts`）�
 
 ## proxy（`src/proxy.ts`）
 
-3 段の合成にとどめ、ロジックは `lib/tenants/` の純関数に置く。
+4 段の合成にとどめ、ロジックは `lib/tenants/`・`lib/admin/host.ts` の純関数に置く。
 
+0. 管理画面のホストの振り分け（020。管理画面のホストでは `/-` だけ、本体のホストでは `/-` を 404）
 1. v1 の店舗 URL（22 文字トークン）を新 URL へ 308
 2. `updateSession()`: Supabase の cookie 更新 + 保護ルートの未ログイン redirect
 3. 開いている `/tenants/<uuid>` を直近店舗の cookie に記録
@@ -467,6 +482,7 @@ Prettier: `{ "semi": false, "singleQuote": true, "tabWidth": 2, "trailingComma":
   スキーマを触ったら `npx supabase db reset` と `gen types` も行う
 - push したらすぐ PR を作る。Supabase のブランチ DB の環境変数は、PR を作ったときに Vercel へ同期される
 - Vercel のプレビューでは seed のユーザー（`dev@example.com` / `password`）でログインできる。
+  管理画面はプレビューの `/-/login` から `admin@example.com` / `password` で入る（プレビューは `ADMIN_HOST` が無いので同じホストで開く）。
   メールのリンクと Google ログインはプレビューでは使えない（メールテンプレートが Site URL = localhost を使うため。本番はカットオーバーで設定する）
 
 ## コミット

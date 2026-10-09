@@ -8,9 +8,10 @@ create table public.profiles (
   -- 一意: 2 人が同じ Customer を指すと、片方がもう片方の請求をポータルで見られ、同期の持ち主も決まらない
   stripe_customer_id text unique,
   -- トライアルの終わり（019 §7。この時刻を過ぎたら終わり）。null = 一度も使っていない。
-  -- 書くのは public.start_trial() と、申し込みでトライアルを使ったとみなす同期関数（service_role）
+  -- 書くのは public.start_trial() と、申し込みでトライアルを使ったとみなす同期関数（service_role）と、
+  -- 運営者の管理画面（020 §7。期間の変更・今すぐ終える・未使用に戻す。請求に戻りうる契約がある人には書かない）
   trial_end          timestamptz,
-  -- 個別契約（振込）の在籍スタッフの上限。null = 通常（019 §5.1）。管理者が SQL で設定する
+  -- 個別契約（振込）の在籍スタッフの上限。null = 通常（019 §5.1）。運営者の管理画面（020 §7）が設定する
   max_staffs_count   integer,
   -- 有料プランの在籍スタッフの上限（019 §13）。請求には使わない（請求は実人数の最大）。null = まだ決めていない。
   -- 書くのは public.set_staff_cap()（利用者）と、null のとき既定値で埋める同期関数・データ移行（v1 の上限。§13.7）だけ。
@@ -22,7 +23,7 @@ create table public.profiles (
 
 alter table public.profiles enable row level security;
 
--- ユーザーが更新する列はない（email はトリガ同期、is_admin・max_staffs_count は SQL で立てる、
+-- ユーザーが更新する列はない（email はトリガ同期、is_admin は SQL で立てる、max_staffs_count は管理画面（service_role）、
 -- trial_end は start_trial()、staff_cap は set_staff_cap()、stripe_customer_id はサーバーだけ）。UPDATE を付けると trial_end などを書き換えられる
 revoke all on public.profiles from anon, authenticated;
 grant select on public.profiles to authenticated;

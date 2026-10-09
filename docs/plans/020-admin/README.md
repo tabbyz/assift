@@ -4,7 +4,7 @@
   個別契約 `profiles.max_staffs_count`・権利の規則 `lib/billing/entitlement.ts`）
 - v1: `/<ADMIN_PATH>/...`（`@assift.com` のメールの人だけ）。グラフ・一覧・招待の代理承認・一斉メール・メンテナンスモード（v1 分析 §3.5）
 
-**状態: プラン（未実装）。2026-10-09 に範囲を決め、ホスト振り分けを試作で確かめた（§3）。同日に URL を `admin.assift.com/-/...` に決めた（§4.1）。同日にプランのレビューを 3 回行い、指摘が出なくなるまで見直した（主な変更: 確認でホストも見る §5、ログイン後の管理者の判定、seed の管理者）。同日にゼロベースで再レビューし、管理用のアカウントの前提（§5.1）と一覧の集計の順序（§6.1）を直した。管理専用のアカウントに決めた（#8）。同日に最後のレビューで #8 との食い違いを直し、指摘が出なくなった。**
+**状態: 実装済み（2026-10-09。ログは §13）。2026-10-09 に範囲を決め、ホスト振り分けを試作で確かめた（§3）。同日に URL を `admin.assift.com/-/...` に決めた（§4.1）。同日にプランのレビューを 3 回行い、指摘が出なくなるまで見直した（主な変更: 確認でホストも見る §5、ログイン後の管理者の判定、seed の管理者）。同日にゼロベースで再レビューし、管理用のアカウントの前提（§5.1）と一覧の集計の順序（§6.1）を直した。管理専用のアカウントに決めた（#8）。同日に最後のレビューで #8 との食い違いを直し、指摘が出なくなった。**
 
 ---
 
@@ -262,12 +262,12 @@ grant execute on function public.admin_list_users(text, integer, integer) to ser
 
 | Action | 書く値 | 条件 |
 | --- | --- | --- |
-| `setTrialLastDay({ userId, lastDay })` | `trial_end = lastDay の翌日 0:00 JST`（`trialEndForLastDay()` を `lib/billing/trial.ts` に足す。`trialLastDay()` の逆） | 契約中でない |
-| `endTrialNow({ userId })` | `trial_end = now()` | 契約中でない・トライアル中 |
-| `resetTrial({ userId })` | `trial_end = null`（もう一度始められる） | 契約中でない |
+| `setTrialLastDay({ userId, lastDay })` | `trial_end = lastDay の翌日 0:00 JST`（`trialEndForLastDay()` を `lib/billing/trial.ts` に足す。`trialLastDay()` の逆） | 請求に戻りうる契約が無い |
+| `endTrialNow({ userId })` | `trial_end = now()` | 請求に戻りうる契約が無い・トライアル中 |
+| `resetTrial({ userId })` | `trial_end = null`（もう一度始められる） | 請求に戻りうる契約が無い |
 | `setManualLimit({ userId, limit })` | `max_staffs_count = limit`（`null` = 通常） | なし |
 
-- **トライアルの操作は、有料プランを契約中（`isEntitledStatus(status)`）の人には出さず、Action でも断る**。`trial_end` は請求の区間の始まりに使われ
+- **トライアルの操作は、請求に戻りうる契約がある人（サブスクリプションの行があり、`canceled` / `incomplete_expired` でない。`unpaid` / `incomplete` / `paused` も支払われれば `active` に戻る）には出さず、Action でも断る**。`trial_end` は請求の区間の始まりに使われ
   （`lib/billing/peak.ts`・`history.ts` の `peakWindow`）、`null` にすると次の同期が値を入れ直す（`sync.ts`）。触ると請求額が変わる。
   画面の判定と Action の判定は同じ純関数（`lib/admin/trial.ts` の `canEditTrial()` / `canEndTrialNow()`）を使う。判定と更新の間に申し込まれる競合は、管理者 1 名なので受け入れる
 - `lastDay` は `isDateString()` で検証する。過去の日も受ける（その時点で終わる）
@@ -320,7 +320,7 @@ grant execute on function public.admin_list_users(text, integer, integer) to ser
 - 手で確かめる（`ADMIN_HOST=admin.localhost:3000`）
   - 管理者でない人（`dev@example.com`）がログイン → 断られ、セッションが残らない / 管理者でない人の cookie で `/-/users` → 404 / `localhost:3000/-` → 404（ステータスも 404・アプリの not-found が出る）
   - トライアルの最終日を変える → 本体の帯の日付が変わる / 今すぐ終える → 10 人を超える店舗がロックされる / 未使用に戻す → 11 人目で「無料で試す」が出る
-  - 契約中の人にはトライアルの操作が出ない
+  - 請求に戻りうる契約がある人にはトライアルの操作が出ない
   - `ADMIN_HOST` を外す → `localhost:3000/-` で開ける（プレビューと同じ）
   - 管理画面の Action を本体のホスト（`localhost:3000`）のページから呼ぶ（devtools で `Next-Action` ヘッダを付けて POST）→ 断られる
 - `npm run build` で `/-` のルートができること
@@ -368,4 +368,61 @@ grant execute on function public.admin_list_users(text, integer, integer) to ser
 
 ## 13. 実装ログ
 
-（未実装）
+### 2026-10-09 実装
+
+プランのとおりに実装した。変えた点・プランに無かった点:
+
+- **migration に `authenticated` からの REVOKE を手で足した**（§6.1 で「残る場合は」と書いたとおりになった）。生成された migration は
+  `REVOKE ALL ... FROM PUBLIC` と `GRANT ... TO postgres, service_role` だけで、Supabase の既定の権限が付ける `authenticated` の EXECUTE が残った
+  （pgTAP の「authenticated は EXECUTE を持たない / 呼べない」が落ちて気付いた）。`anon` は `restrict_anon_grants.sql` で外れる
+- 生成された migration には `restrictions_wdays_check` の作り直しも入るが、これまでの migration すべてにある pg-delta の雑音で、害は無い
+- 表示の文（契約の状態・上限とその理由・ロック中）は `lib/admin/planView.ts`（純関数。Vitest）、日時の書式は `lib/admin/format.ts` に置いた
+- 一覧の検索は `limitUrlUpdates: debounce(300)`（nuqs 2.10）。検索語を変えたら `page` を消して 1 ページ目に戻す
+- 詳細の操作（`PlanControls`）は、変更が無いとき・空欄のときは保存ボタンを押せない。「未使用に戻す」は `trial_end` があるときだけ、「通常に戻す」は個別契約があるときだけ出す
+
+### 確認
+
+- `npm run lint`（今回触っていない `reasons.test.ts` の警告 1 件だけ）/ `npm run typecheck` / `npm test`（88 ファイル・814 件）/
+  `npx supabase db reset` / `npx supabase test db`（5 ファイル・241 件。`admin_list_users.sql` 14 件を足した）/ `npm run build`（`/-`・`/-/login`・`/-/users`・`/-/users/[userId]` ができる）
+- `npm run format:check` の警告 4 件は、今回触っていないファイルにもとからあるもの
+- `next start` + `ADMIN_HOST=admin.localhost:3000` + Playwright で、§10 の手で確かめる項目を通した:
+  - 未ログインで `admin.localhost:3000/` → `/-` → `/-/login`
+  - `dev@example.com` でログイン → 「メールアドレスまたはパスワードが正しくありません」・管理画面のホストに Supabase の cookie が残らない
+  - `admin@example.com` でログイン → `/-/users`。cookie は `admin.localhost` だけに付き、`localhost:3000/tenants` は `/login` へ送られる（**§3 で未確認だった cookie の分離を確かめた**）
+  - 検索（`dev@`）で 1 行。詳細で、トライアルの最終日を 10/28 にする（`trial_end` = 10/29 0:00 JST）→ 今すぐ終える → 未使用に戻す（null）、個別契約を 20 → 通常に戻す（null）
+  - 有料プラン（active）の行を足すと「有料プランを契約中のため変更できません」になり、トライアルの保存ボタンが出ない
+  - `localhost:3000/-` は 404（ステータスも 404・アプリの not-found）。Location は相対（`/-`・`/-/login`）
+  - 本体でログインした `dev@example.com` のトークンを `admin.localhost` の cookie に移して `/-/users` → 404
+  - 管理者のトークンを本体のホストに置き（決まりが破られた想定）、本体のページから `setManualLimit` の Action の ID を POST →
+    **Next 自身が「Server action not found」（404）で止め**、DB は変わらなかった。`requireAdminAction()` のホストの確認までは届いていないので、
+    ホストの確認そのものは Vitest（`isAdminHost()`）でだけ確かめている
+  - ログアウト → `/-/login`
+  - `ADMIN_HOST` を外すと `localhost:3000/-/login` が開く（プレビューと同じ）
+
+### 2026-10-09 コードレビュー（指摘が出なくなるまで 3 回）
+
+1 回目（10 件。すべて直した）:
+
+- **トライアルを変えてよい条件を広げた**: `isEntitledStatus()`（active / trialing / past_due）だけを止めていたが、`unpaid` / `incomplete` / `paused` も
+  支払われれば `active` に戻る（019 §8.2 の救済）。戻ったあとは書き換えた `trial_end` が請求の区間の始まりになる。サブスクリプションの行があり、
+  `canceled` / `incomplete_expired` でないときは止める（`lib/admin/trial.ts`）
+- 操作のあと、入力欄（最終日・上限の人数）が古い値のまま残り、保存を押すと終えたトライアルを戻せた。`PlanControls` に `key` を付け、値が変わったら作り直す
+- `?page=` に上限が無く、大きな値でオフセットが int4 を超えて RPC が落ちた（500）。10,000 ページで丸める
+- 最終日の上限が無く、9999-12-31 だと翌日が 5 桁の年になり `Date` が壊れた。2099-12-31 までにした（Zod と `maxDate`）
+- `trial_end` の読み取りを `readBillingProfile()` に寄せた（AGENTS.md の「書き写さない」）
+- Action が `requireAdminAction()` と `createAdminClient()`（中で同じ確認）を二重に呼んでいた。`createAdminClient()` を最初に呼ぶ（入力の検証より先に断る）
+- 詳細の `getUserById` を最初の `Promise.all` に入れ、往復を 1 回減らした
+- `(console)/layout.tsx` の props を `LayoutProps<'/-'>` にした
+- `profiles.sql` の列のコメントに、管理画面が `trial_end` / `max_staffs_count` を書くことを足した
+- 確認のモーダルの「10 人」を `FREE_STAFF_LIMIT` にし、「今すぐ終える」の文を個別契約の人にも正しい言い方（上限を超えていればロック）にした
+
+2 回目: import の順番 1 件。3 回目: 指摘なし。
+
+直した挙動は Playwright で確かめた: 今すぐ終えると最終日の入力が今日に、通常に戻すと上限の入力が空になり、どちらも保存を押せない /
+`unpaid` は操作が出ず `canceled` は出る / `?page=50000000` は 200 で「該当するユーザーはいません」。
+`npm run typecheck` / `npm run lint` / `npm test`（88 ファイル・816 件）/ `npx supabase test db`（241 件）も通した。
+
+### 残り
+
+- 本番（カットオーバーのとき）の §10 の手順。Host ヘッダが独自ドメインで届くことは本番のデプロイ後に確かめる
+- §12 の未確定（MFA・セッションの結び付け・cookie tossing・CSP）は運用開始までに再検討する

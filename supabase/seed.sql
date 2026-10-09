@@ -44,6 +44,42 @@ values (
 );
 
 -- ---------------------------------------------------------------------------
+-- 運営者の管理用アカウント: admin@example.com / password（020 §5.1）
+--
+-- 管理専用（店舗を持たない。本体ではログインしない）。dev@example.com は管理者にしない
+-- （管理画面で「管理者でない人」を確かめるのに使う）。is_admin はトリガが作った profiles に立てる。
+-- ---------------------------------------------------------------------------
+insert into auth.users (
+  instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+  raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+  confirmation_token, recovery_token, email_change, email_change_token_new
+)
+values (
+  '00000000-0000-0000-0000-000000000000',
+  'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+  'authenticated', 'authenticated',
+  'admin@example.com',
+  extensions.crypt('password', extensions.gen_salt('bf')),
+  now(),
+  '{"provider":"email","providers":["email"]}', '{}', now(), now(),
+  '', '', '', ''
+);
+
+insert into auth.identities (
+  id, user_id, provider_id, provider, identity_data, last_sign_in_at, created_at, updated_at
+)
+values (
+  gen_random_uuid(),
+  'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+  'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+  'email',
+  '{"sub":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","email":"admin@example.com","email_verified":true}',
+  now(), now(), now()
+);
+
+update public.profiles set is_admin = true where id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+
+-- ---------------------------------------------------------------------------
 -- 店舗「小石川ストア」
 --
 -- id は固定（2222… / 3333… / 4444… / 5555…）。変えるとローカルの URL が毎回変わる。
