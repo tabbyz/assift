@@ -45,7 +45,7 @@ v1（Rails / Heroku Postgres）の全データを v2（Supabase）に移し、**
 
 | 項目 | 理由 / 代わり |
 | --- | --- |
-| `staff_groups` / `invoices` / `usage_records` の移行 | 001 §3.1・019 §5.2 の決定どおり移行しない。ダンプに残す |
+| `staff_groups` / `invoices` / `usage_records` の移行 | 001 §3.1・019 §5.2 の決定どおり移行しない。`usage_records` だけは名前を含まない CSV に抜いて 1 年残す（§10-8） |
 | 対応表・`legacy_id` 列 | uuid v5 で導出する（001 §3.1）。`v1Uuid()` 以外で id を組まない |
 | 差分・追いつき移行（v1 を動かしたまま 2 回目を流す） | カットオーバーは v1 を止めてから 1 回（001 §5.4）。差分は要らない。失敗したらトランザクションごと戻して流し直す |
 | Stripe の Subscription の引き継ぎ | 019 §8.2 の `scripts/stripe/migrate-v1-subscriptions.ts`（実装済み）。本プランは入力の CSV を出すだけ |
@@ -142,7 +142,7 @@ MIGRATION_DATABASE_URL=postgresql://... \
 | 書き込み | 1000 行ずつの複数行 `INSERT`（`pg` のパラメータ上限 65535 に収まる列数にする）。リハーサルで遅ければ `COPY FROM STDIN`（`pg-copy-streams`）に替える。**最後に `ANALYZE`** |
 | トリガ | 冒頭で `alter table public.staffs disable trigger staffs_record_staff_count`、末尾で `enable`（§3-2）。`on_auth_user_created` は**止めない**（`profiles` を作らせる。`handle_new_user` は `on conflict do nothing`） |
 | 既存データ | 起動時に `auth.users` と `public.tenants` の件数を表示し、`tenants` が 0 件でなければ `--allow-existing` が無い限り止まる（本番は管理用アカウント 1 件だけの状態で流す。ローカルは seed が入っているので `--allow-existing`） |
-| レポート | `report.json`: テーブルごとの `読んだ / 入れた / 捨てた（理由別）/ 直した（理由別）`、捨てた行の id と理由、切り詰めた値の前後。**個人情報（名前・メモ）を含む**のでエクスポートと同じ場所に置き、同じ扱いで保管する |
+| レポート | `report.json`: テーブルごとの `読んだ / 入れた / 捨てた（理由別）/ 直した（理由別）`、捨てた行の id と理由、切り詰めた値の前後。**個人情報（名前・メモ）を含む**のでエクスポートと同じ場所に置き、暗号化して 1 年で消す（§10-8） |
 | 実行環境 | `tsx --conditions=react-server`（`stripe:*` と同じ。`server-only` の `lib/calendar/holidays.ts` を読むため） |
 
 ### 6.2 変換は純関数（`src/lib/migration/`）
@@ -349,7 +349,7 @@ select p.id, count(s.id) filter (where s.retired_at is null), now()
 | 5 | `npm run stripe:migrate-v1 -- --input …/v1-subscriptions.csv`（dry-run → `--limit 5` → 全部。019 §8.2.3） | |
 | 6 | 全員の同期（019 §8.3-4）→ Stripe の Dashboard の設定を切り替える | |
 | 7 | DNS を Vercel へ | |
-| 8 | ダンプ・エクスポート・`report.json`・Stripe の結果 CSV を暗号化して保管（保管期間は §13-6） | |
+| 8 | 保管（**決定。2026-10-10**。§13-6）。暗号化して 1 か所に置き、ファイル名に消す日を入れ、022 のチェックリストに削除の日付を 2 つ書く: (a) **pg_dump と JSONL はカットオーバーから 3 か月**で消す（復旧の窓はシフトの 3 周期で足り、以降は v2 のほうが新しくて戻せない。パスワードのハッシュと第三者であるスタッフの名前を本番の外に置き続けない。プライバシーポリシーの「バックアップに一定期間残り、復旧にのみ使う」と揃う）。(b) **`manifest.json` / `report.json` / Stripe の引き継ぎの結果 CSV と旧料金の対象者の一覧（019 §8.1）/ ダンプから抜いた `usage_records` の CSV（user id・人数・日時だけ）は 1 年**（「スタッフが消えた」「旧料金のはず」の問い合わせと、半年後に旧料金をやめる作業 019 §8.5 に使う）。Heroku の自動バックアップはアプリの停止（001 §5.4）で消える | |
 
 3 で失敗したら: トランザクションごと戻っているので、原因を直して 3 からやり直す。v1 は止まったままなのでデータはずれない。
 直すのに時間がかかるなら Heroku のメンテナンスモードを解いて日を改める（v2 には何も入っていない）。
@@ -396,7 +396,7 @@ docs/plans/001-…/README.md       §5 の冒頭に「021 で上書き」の注�
 | 3 | `staffs.available_wdays` が nil のときの読み替え | **決定（2026-10-10）**: `[]`（全日「担当不可」）。v1 の `Staff` は `serialize ..., Array` で NULL を `[]` と読み、判定はすべてモデル経由なので、v1 の見え方と同じ。`available_patterns` → `[]`、`default_patterns` → `{}` も同じ理由（§5.1） |
 | 4 | 本番の `postgres` ロールで `auth.users` への INSERT と `disable trigger` ができるか | **9.3 で確かめる**。できなければ: INSERT は `supabase_auth_admin` 相当の権限を一時的に付ける / トリガは止めずに `staff_count_history` を最後に `delete` して入れ直す |
 | 5 | 1 トランザクション（§3-1）・トリガの止め方（§3-2）・`is_admin` を立てない（§3-3）・必要人数の間引き（§3-4） | **本プランで決定**（理由は §3）。異論があればここで |
-| 6 | ダンプ・エクスポート・レポートの保管期間 | **未確定**。暗号化して保管し、期限を決めて消す（019 §8.1）。案: 移行から 1 年 |
+| 6 | ダンプ・エクスポート・レポートの保管期間 | **決定（2026-10-10）**: pg_dump と JSONL は 3 か月、manifest / report / Stripe の結果 CSV / `usage_records` の CSV は 1 年（§10-8）。当初の案（全部 1 年）は、フルのダンプの価値が数週間で尽きる一方で負債が 1 年残るのでやめた |
 | 7 | リハーサルのダンプをいつ取るか | **未確定**。実装の 5（§12）の前。古いダンプでよい |
 | 8 | 書き込みが遅いときの `COPY` への切り替え | 9.1 の所要時間で判断。目安: インポート全体が 10 分を超えるなら切り替える |
 
