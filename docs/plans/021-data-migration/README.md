@@ -62,6 +62,7 @@ v1（Rails / Heroku Postgres）の全データを v2（Supabase）に移し、**
 | 3 | `@assift.com` のユーザーに `is_admin = true`（001 §4.3） | **立てない** | 020 §5.1 で「`is_admin` は管理専用のアカウントにだけ立て、本体にはログインしない」と決めた。運営者の v1 アカウント（店舗を持ち本体で使う）に立てると、本体で盗まれたセッションで管理画面に入れる。管理用のアカウントはカットオーバーで別に作る（022） |
 | 4 | `required_nums` は `tenant_id` を補完してそのまま（001 §5.2） | **焼き付けられた行を捨て、上書きだけ残す**（015 と同じ規則。祝日はアプリで判定） | 015 で `required_nums` の意味が「この日だけの上書き」に変わった。v1 の「デフォルト人数をセット」で期間ぶん焼き付いた行をそのまま入れると、基本の人数を直しても既存の期間に届かない（015 が直したこと）が v1 の店舗だけに残る。詳細は §7.7 |
 | 5 | `shifts.assist_token` は廃止（001 §3.1） | 同じ。加えて v2 の `shifts.assist_run_id` は null | v1 の自動アサインの履歴は再現しない（012） |
+| 6 | 名前空間は環境変数 `V1_UUID_NAMESPACE`（001 §3.1・005 §3.1） | **リポジトリの定数にする**（`lib/migration/v1Ids.ts` の `V1_UUID_NAMESPACE`。値は `uuidgen` で作った v4）。環境変数の読み取り・未設定時の警告・`.env.example` の項目は消す（**決定。2026-10-10**） | 秘密ではない（名前空間が分かっても RLS は破れず、店舗の uuid は旧 URL の 308 で見える）。一方で Vercel の Production・インポート・リハーサル・プレビューの 4 か所で同じ値でなければならず、一度決めたら変えられない。「複数の場所で同一で、永久に変えない値」は設定ではなく定数。定数にすればアプリとインポートが同じ import を読むので構造的にずれず、設定漏れも無くなる。値を意味のある形（ゾロ目など）にはしない: 推測できる名前空間と v1 の連番 id を合わせると全行の id を外から計算できる。いまは id の秘匿に頼っていないが、ランダムにしておけば将来もその前提を保てる。読み手に「定数である」ことを伝えるのは値の見た目ではなく、名前・コメント（秘密ではないが絶対に変えない）・値を固定するテストで行う |
 
 ## 4. 全体の流れ
 
@@ -127,14 +128,14 @@ Heroku 本番 ──pg_dump──▶ 手元の v1（ローカル DB に restore�
 ### 6.1 `scripts/migrate-v1/import.ts`
 
 ```
-V1_UUID_NAMESPACE=... MIGRATION_DATABASE_URL=postgresql://... \
+MIGRATION_DATABASE_URL=postgresql://... \
   npm run migrate:v1 -- --input ~/v1-export/20261025-0100 [--rollback] [--report ~/v1-export/20261025-0100/report.json]
 ```
 
 | 項目 | 内容 |
 | --- | --- |
 | 接続 | `pg`（新しい devDependency）。`MIGRATION_DATABASE_URL`（ローカルは `postgresql://postgres:postgres@127.0.0.1:54322/postgres`、本番は Session pooler の URL + `sslmode=require`）。`.env.local` には書かず、実行する shell で渡す |
-| 名前空間 | `getV1UuidNamespace()`（`lib/migration/v1Ids.ts`）。無ければ起動時に止まる。**本番の Vercel に入れる `V1_UUID_NAMESPACE` と同じ値**でなければ旧 URL が別の id に解決される。起動時に既知の店舗トークン 1 件の導出結果を表示し、手順書の値と目で突き合わせる |
+| 名前空間 | `V1_UUID_NAMESPACE`（`lib/migration/v1Ids.ts` の定数。§3-6）。アプリの旧 URL 解決と同じ import を読むので、環境ごとの設定も突き合わせも要らない |
 | 実行の単位 | `BEGIN` → 全テーブル → 件数の突合（§8.1）→ `COMMIT`（`--rollback` なら `ROLLBACK`）。途中の例外は `ROLLBACK` して非 0 で終わる |
 | 順序 | `auth.users` → `auth.identities` → `profiles`（UPDATE）→ `tenants` → `patterns`（`pair_pattern_id` は後から UPDATE）→ `staffs` → `staff_patterns` → `staff_default_patterns` → `shifts` → `required_nums` → `restrictions` → `date_notes` → `shares` → `staff_count_history` |
 | 書き込み | 1000 行ずつの複数行 `INSERT`（`pg` のパラメータ上限 65535 に収まる列数にする）。リハーサルで遅ければ `COPY FROM STDIN`（`pg-copy-streams`）に替える。**最後に `ANALYZE`** |
@@ -346,7 +347,7 @@ select p.id, count(s.id) filter (where s.retired_at is null), now()
 | 4 | `verify.ts` + §8.2 の 2〜4・7・9 を本番で | |
 | 5 | `npm run stripe:migrate-v1 -- --input …/v1-subscriptions.csv`（dry-run → `--limit 5` → 全部。019 §8.2.3） | |
 | 6 | 全員の同期（019 §8.3-4）→ Stripe の Dashboard の設定を切り替える | |
-| 7 | DNS を Vercel へ。`V1_UUID_NAMESPACE` が本番の env に入っていることを 3 の前に確かめておく（005 §3.1） | |
+| 7 | DNS を Vercel へ | |
 | 8 | ダンプ・エクスポート・`report.json`・Stripe の結果 CSV を暗号化して保管（保管期間は §13-6） | |
 
 3 で失敗したら: トランザクションごと戻っているので、原因を直して 3 からやり直す。v1 は止まったままなのでデータはずれない。
@@ -360,34 +361,37 @@ scripts/migrate-v1/
   verify.ts                      移行後の DB と manifest / report の突合
   v1/v2_export.rake              v1 に写して流す rake（§5）
 src/lib/migration/
-  v1Ids.ts (+ test)              既存
+  v1Ids.ts (+ test)              既存。V1_UUID_NAMESPACE を定数にし、getV1UuidNamespace() を消す。テストで値を固定する
   v1Types.ts                     JSONL の行の Zod
   transform.ts (+ test)          テーブルごとの変換（§7）
   truncate.ts (+ test)           文字数の切り詰め
   requiredNums.ts (+ test)       焼き付けられた行の判定（§7.7）
 package.json                     "migrate:v1" / "migrate:v1:verify"（tsx --conditions=react-server）、pg / @types/pg
-.env.example                     MIGRATION_DATABASE_URL（コメントだけ。.env.local には書かない）
+src/lib/tenants/legacyUrl.ts     resolveLegacyTenantUrl() から名前空間の取得と未設定の警告を消す（常に解決する）
+.env.example / README.md         V1_UUID_NAMESPACE の項目を消し、MIGRATION_DATABASE_URL をコメントで書く（.env.local には書かない）
 .gitignore                       v1-export/
-AGENTS.md                        scripts/migrate-v1 と lib/migration の説明、環境変数
+AGENTS.md                        scripts/migrate-v1 と lib/migration の説明。「uuid の扱い」の V1_UUID_NAMESPACE を定数に読み替える
 docs/plans/001-…/README.md       §5 の冒頭に「021 で上書き」の注記
 ```
 
 ## 12. 実装の順序と確認
 
-1. `v1Types.ts` と `v2_export.rake` を先に書き、**形を 1 つに決める**（JSONL の 1 行 = Zod の 1 型）
-2. `truncate.ts` / `requiredNums.ts` / `transform.ts` と Vitest（§7 の各行に 1 ケース以上。重複・他店舗・自己参照・空文字・範囲外）
-3. `import.ts`。手元の seed だけの DB に、手で作った小さな JSONL（2 ユーザー・2 店舗・Google の人・捨てる行を含む）を入れて通す
-4. `verify.ts`
-5. 9.1 のリハーサル（本物のダンプ）。件数と所要時間を §14 に記録
-6. AGENTS.md・001 の注記・`.env.example`
-7. PR の前に `npm run lint` / `typecheck` / `test`。`npx supabase test db` はスキーマを触らないので変化なし
+1. `uuidgen` で v4 を 1 つ作り、`v1Ids.ts` の定数 `V1_UUID_NAMESPACE` にする（コメント: 秘密ではないが絶対に変えない。変えると移行した全行の id と旧 URL がずれる）。
+   テストで値を固定し、`getV1UuidNamespace()` と `legacyUrl.ts` の警告、`.env.example` / README の項目を消す。**この時点で 1 回コミットし、以降は値に触らない**
+2. `v1Types.ts` と `v2_export.rake` を先に書き、**形を 1 つに決める**（JSONL の 1 行 = Zod の 1 型）
+3. `truncate.ts` / `requiredNums.ts` / `transform.ts` と Vitest（§7 の各行に 1 ケース以上。重複・他店舗・自己参照・空文字・範囲外）
+4. `import.ts`。手元の seed だけの DB に、手で作った小さな JSONL（2 ユーザー・2 店舗・Google の人・捨てる行を含む）を入れて通す
+5. `verify.ts`
+6. 9.1 のリハーサル（本物のダンプ）。件数と所要時間を §14 に記録
+7. AGENTS.md・001 の注記・`.env.example`
+8. PR の前に `npm run lint` / `typecheck` / `test`。`npx supabase test db` はスキーマを触らないので変化なし
 
 ## 13. 決定と未確定
 
 | # | 論点 | 状態 |
 | --- | --- | --- |
 | 1 | 未確認ユーザー（`confirmed_at IS NULL`、招待は承認済み）の扱い | **決定（2026-10-10）**: v1 でログインできた人（`confirmed_at IS NOT NULL OR sign_in_count > 0`）だけを確認済みで入れ、それ以外は入れない。未確認の行は作らない（§7.1）。devise_invitable は招待の承認で `confirmed_at` を埋め、Devise の confirmable は未確認のログインを拒むので、該当は僅少のはず。§5.2-5 の内訳と「移行しないのに店舗を持つ人」が 0 件であることをリハーサルで確かめる |
-| 2 | `V1_UUID_NAMESPACE` の値 | **未確定**。RFC 準拠の v4 を 1 つ作り、Vercel の Production と手順書（パスワード管理ツール）の両方に置く。一度決めたら変えない（`.env.example` の注記） |
+| 2 | `V1_UUID_NAMESPACE` の管理場所と値 | **決定（2026-10-10）**: 環境変数をやめ、`lib/migration/v1Ids.ts` の定数にする。値は `uuidgen` のランダムな v4（意味のある値にしない。理由は §3-6）。実装の最初に作ってコミットし、テストで固定する |
 | 3 | `staffs.available_wdays` が nil のときの読み替え | **未確定**。v1 の `Staff` の判定を見て §5.1 に書く |
 | 4 | 本番の `postgres` ロールで `auth.users` への INSERT と `disable trigger` ができるか | **9.3 で確かめる**。できなければ: INSERT は `supabase_auth_admin` 相当の権限を一時的に付ける / トリガは止めずに `staff_count_history` を最後に `delete` して入れ直す |
 | 5 | 1 トランザクション（§3-1）・トリガの止め方（§3-2）・`is_admin` を立てない（§3-3）・必要人数の間引き（§3-4） | **本プランで決定**（理由は §3）。異論があればここで |
