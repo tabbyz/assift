@@ -123,8 +123,8 @@ function StaffLimitOffer({ adding, retry }: Options) {
     return (
       <Stack gap="md">
         <Text size="sm">
-          無料プランは在籍 {FREE_STAFF_LIMIT} 人までです。{FREE_STAFF_LIMIT}{' '}
-          人を超えるスタッフは有料プランで使えます。
+          無料プランの在籍スタッフは、全店舗の合計で {FREE_STAFF_LIMIT} 人までです。
+          {FREE_STAFF_LIMIT} 人を超えるスタッフは有料プランで使えます。
         </Text>
         <Text size="sm" fw={600}>
           {formatJapaneseYearMonthDay(offer.trialLastDay)}
@@ -144,7 +144,9 @@ function StaffLimitOffer({ adding, retry }: Options) {
 
   return (
     <Stack gap="md">
-      <Text size="sm">無料プランは在籍 {FREE_STAFF_LIMIT} 人までです。</Text>
+      <Text size="sm">
+        無料プランの在籍スタッフは、全店舗の合計で {FREE_STAFF_LIMIT} 人までです。
+      </Text>
       {!offer.billingAvailable && (
         <Text size="sm" c="dimmed">
           現在お申し込みを受け付けていません。時間をおいてお試しください。

@@ -35,7 +35,7 @@ export function StaffLimitAlert(props: Props) {
         <Text size="sm">
           {kind === 'manual'
             ? `ご契約の上限（在籍 ${limit} 人）に達しています。人数を増やすにはお問い合わせください。`
-            : `無料プランは在籍 ${limit} 人までです。${trialAvailable ? '無料トライアルを始めると、人数の制限なく試せます。' : ''}`}
+            : `無料プランの在籍スタッフは、全店舗の合計で ${limit} 人までです。${trialAvailable ? '無料トライアルを始めると、人数の制限なく試せます。' : ''}`}
         </Text>
         {kind === 'manual' ? (
           <LinkButton href="/account/billing" size="xs" variant="white" color="blue">
