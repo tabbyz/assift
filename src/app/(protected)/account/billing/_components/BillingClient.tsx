@@ -1,8 +1,9 @@
 'use client'
 
-import { type ReactNode, useEffect, useTransition } from 'react'
+import { type ReactNode, useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import {
+  Alert,
   Anchor,
   Badge,
   Box,
@@ -14,6 +15,7 @@ import {
   Text,
   Title,
 } from '@mantine/core'
+import { IconCircleCheck } from '@tabler/icons-react'
 import { modals } from '@mantine/modals'
 import { notifications } from '@mantine/notifications'
 import { startTrial } from '@/app/(protected)/actions'
@@ -74,24 +76,23 @@ export function BillingClient({ view, checkoutSuccess }: Props) {
   const [isTrialPending, startTrialTransition] = useTransition()
   const [isCancelPending, startCancel] = useTransition()
   const { subscription } = view
+  // Checkout から戻って有料プランになっていたら、画面の上に完了の帯を残す（消える通知だと上限人数の案内を読み逃す）。
+  // クエリは下で消すので、最初の描画の値を持ち続ける
+  const [justSubscribed, setJustSubscribed] = useState(
+    () => checkoutSuccess && subscription !== null
+  )
 
-  // Checkout から戻った（同期は page が済ませている）。通知を出したらクエリを消す。
+  // Checkout から戻った（同期は page が済ませている）。クエリを消す。まだ写っていなければ通知で知らせる。
   // id は二重表示よけ（開発時の StrictMode でエフェクトが 2 回走る。同じ id の通知は Mantine が重ねない）
   useEffect(() => {
     if (!checkoutSuccess) return
-    notifications.show(
-      subscription
-        ? {
-            id: 'checkout-success',
-            message: '有料プランのお申し込みが完了しました',
-            color: 'green',
-          }
-        : {
-            id: 'checkout-success',
-            message: 'お申し込みを確認しています。しばらくしてから再読み込みしてください',
-            color: 'yellow',
-          }
-    )
+    if (!subscription) {
+      notifications.show({
+        id: 'checkout-success',
+        message: 'お申し込みを確認しています。しばらくしてから再読み込みしてください',
+        color: 'yellow',
+      })
+    }
     router.replace('/account/billing')
   }, [checkoutSuccess, subscription, router])
 
@@ -141,6 +142,21 @@ export function BillingClient({ view, checkoutSuccess }: Props) {
     <Container size="sm" py="xl">
       <Stack gap="lg">
         <Title order={2}>プランとお支払い</Title>
+
+        {justSubscribed && (
+          <Alert
+            color="green"
+            variant="light"
+            icon={<IconCircleCheck size={18} />}
+            title="有料プランのお申し込みが完了しました"
+            withCloseButton
+            closeButtonLabel="閉じる"
+            onClose={() => setJustSubscribed(false)}
+          >
+            {view.limit !== null &&
+              `在籍スタッフ人数の上限は ${view.limit} 人です。いつでも変更できます。`}
+          </Alert>
+        )}
 
         <Card title="現在のプラン">
           <Group>

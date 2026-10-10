@@ -13,8 +13,10 @@ type Props = {
   discountPercent?: number
   label?: string
   error?: string | null
-  /** 「最大 ◯円 / 月」を出すか。申し込みの確認画面は表（特商法の最終確認）に出すので出さない */
+  /** 「最大 ◯円 / 月」を出すか。申し込みの確認画面は入力の外に文で出すので出さない */
   showMaxPrice?: boolean
+  /** 「請求は上限ではなく…」の一言を出すか。申し込みの確認画面は入力の外に書くので出さない */
+  showBillingNote?: boolean
 }
 
 /**
@@ -29,6 +31,7 @@ export function StaffCapField({
   label = '在籍スタッフの上限',
   error,
   showMaxPrice = true,
+  showBillingNote = true,
 }: Props) {
   const valid = typeof value === 'number' && value >= min && value <= STAFF_CAP_MAX
   return (
@@ -51,9 +54,11 @@ export function StaffCapField({
           最大 {monthlyPriceYen(value, discountPercent).toLocaleString()} 円 / 月（税込）
         </Text>
       )}
-      <Text size="xs" c="dimmed">
-        請求は上限ではなく、その月の在籍スタッフの最大人数で決まります
-      </Text>
+      {showBillingNote && (
+        <Text size="xs" c="dimmed">
+          請求は上限ではなく、その月の在籍スタッフの最大人数で決まります
+        </Text>
+      )}
     </Stack>
   )
 }
