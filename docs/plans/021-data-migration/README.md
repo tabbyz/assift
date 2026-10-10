@@ -8,7 +8,7 @@
 > 番号: 013 / 014 の冒頭注記では移行を 015 / 016 に繰り下げていたが、015〜020 が別の用途に使われたので本プランを **021** とし、
 > カットオーバー（本番の構築・DNS・告知・当日の手順）は **022** にする。本プランはカットオーバーのうち「データを v2 に入れて確かめる」部分だけを扱う。
 
-**状態: プラン（未実装）。2026-10-10 に作成。同日に §13 の 1〜3・5・6 を決めた（未確認ユーザー・名前空間の定数化・YAML 列の NULL・保管期間）。残りはリハーサルのダンプの時期（#7）と、リハーサルで確かめること（#4・#8）だけ。**
+**状態: プラン（レビュー済み・未実装）。2026-10-10 に作成。同日に §13 の 1〜3・5・6 を決めた（未確認ユーザー・名前空間の定数化・YAML 列の NULL・保管期間）。同日にレビューを 6 回行い、指摘が出なくなった（§14）。残りはリハーサルのダンプの時期（#7）と、リハーサルで確かめること（#4・#8）だけ。**
 
 ---
 
@@ -105,7 +105,7 @@ Heroku 本番 ──pg_dump──▶ 手元の v1（ローカル DB に restore�
 | `usage_records.csv` | `usage_records` | `user_id, staffs_count, created_at`（名前を含まない。1 年残す記録。§10-8） |
 
 019 §8.2 の引き継ぎスクリプトの入力 `v1-subscriptions.csv`（`v1_user_id, email, stripe_customer_id, stripe_subscription_id, max_staffs_count, last_edited_at`）は **rake ではなく `import.ts` が書く**（§6.1）。
-「移行する人」の判定（§7.1）を Ruby と TS の 2 か所に持たないため。`last_edited_at` は `shifts.jsonl` の `updated_at` の最大を staff → tenant → user でたどって TS が出す。
+「移行する人」の判定（§7.1）を Ruby と TS の 2 か所に持たないため。`last_edited_at` は `shifts.jsonl` の `updated_at` の最大を **pattern → tenant → user** でたどり、**§7.6 で捨てる前の全行**（`staff_id IS NULL` の自動アサインの一時行や、消えたスタッフの行を含む）から TS が出す。019 §8.2.1 の集計（`Shift.joins(pattern: :tenant)`）と同じ母集合にしないと、rescue / cancel_unpaid の 90 日の境目が動く。
 移行しない人の Subscription は `v1-subscriptions-not-migrated.csv` に分け、引き継ぎスクリプトには渡さず Dashboard で解約する（想定 0 件。022 の手順に入れる）。
 
 - `shift_cycle` / `kind` は **enum の名前**（`month` / `workday`）で書く（整数を v2 で読み替えない）
@@ -121,7 +121,7 @@ Heroku 本番 ──pg_dump──▶ 手元の v1（ローカル DB に restore�
 | # | 集計 | 使い道 |
 | --- | --- | --- |
 | 1 | `patterns.default_required_nums` の型の内訳（Hash / String / nil）と、値に文字列を含む件数 | §5.1 のほどき方の確認 |
-| 2 | `staffs` の YAML 列が NULL の件数 | §5.1（0 件のはず。あれば v1 でも「担当不可」だった人として `[]` で入る） |
+| 2 | `staffs` の YAML 列が NULL の件数（列ごと） | §5.1。`available_wdays` / `available_patterns` は 0 件のはず（2018-01 に追加）。`default_patterns` は **2019-11-16 に追加**（`20191116120346_add_default_patterns_to_staffs.rb`）で、それ以前に作られて以降保存されていないスタッフは NULL のまま。どちらも v1 の見え方と同じ（`[]` / `{}`）で入る |
 | 3 | `shifts` の `(staff_id, date)` 重複の組数・`staff_id IS NULL` の件数 | §7.6 で捨てる件数の見込み |
 | 4 | `patterns.pair_pattern_id` が自分自身・他店舗・存在しない id を指す件数 | §7.4 |
 | 5 | `users` の未確認（`confirmed_at IS NULL`）の内訳: 招待未承認 / 承認済みだが未確認 / ログイン実績あり | §7.1 の規則の確認（移行しないのに店舗を持つ人の一覧は `report.json` に出る。0 件のはず） |
@@ -197,7 +197,7 @@ MIGRATION_DATABASE_URL=postgresql://... \
 | `auth.identities` の共通の列 | `id = gen_random_uuid()`、`identity_data` の `email` は小文字、`last_sign_in_at` / `created_at` / `updated_at` は v1 の `created_at`（seed と同じく明示する。本番の `auth` スキーマは GoTrue が管理していて既定値が版で変わりうる） |
 | その他の列 | `instance_id = '00000000-…'`、`aud = role = 'authenticated'`、`raw_user_meta_data = '{}'`、`last_sign_in_at = current_sign_in_at`、token 系 4 列は `''`（seed の注記。null だと GoTrue が落ちる） |
 | `locked_at` | 無視する（ロックは解除）。件数だけ記録。`unconfirmed_email` は v1 に無い（`reconfirmable = false`） |
-| `profiles`（トリガが作った後、staffs の後に UPDATE） | `stripe_customer_id`（そのまま。v1 に一意制約が無く v2 は `unique` なので、同じ Customer を持つユーザーが 2 人以上いれば、`stripe_subscription_id` を持つ人を優先し、それでも決まらなければ `created_at` が古い 1 人に残して他は null にして記録。Customer を失った側の Subscription は v2 に結び付かないので、§5.2-8 が 0 件でなければ Stripe の Dashboard でその Customer の Subscription の持ち主を確かめてから決める）/ `trial_end`（そのまま）/ `created_at` / `updated_at`（v1 の値。トリガは止めてある）/ `max_staffs_count`（**`stripe_subscription_id IS NULL AND max_staffs_count >= 11` のときだけ**その値。個別契約）/ `staff_cap`（**`stripe_subscription_id IS NOT NULL AND max_staffs_count >= 11` のとき** `least(greatest(max_staffs_count, 移行時点の在籍数), 1000)`。019 §13.7）/ `is_admin` は **立てない**（§3-3）。v1 は `stripe_subscription_id` を退会以外で消さない（解約は上限を 10 人に下げるだけ。`user.rb`・`charges_controller.rb`）ので、「Subscription なし」= 一度も申し込んでいない人で、`max_staffs_count >= 11` なら管理者が SQL で入れた個別契約 |
+| `profiles`（トリガが作った後、staffs の後に UPDATE） | `stripe_customer_id`（そのまま。v1 に一意制約が無く v2 は `unique` なので、同じ Customer を持つユーザーが 2 人以上いれば、`stripe_subscription_id` を持つ人を優先し、それでも決まらなければ `created_at` が古い 1 人に残して他は null にして記録。Customer を失った側に `stripe_subscription_id` があれば、その人は `v1-subscriptions-not-migrated.csv` に出して Dashboard で扱う（引き継ぎスクリプトに渡すと Customer 一致で schedule が付き、同期の `chooseSubscription()` が後から解約する形になる）。Customer を失った側の Subscription は v2 に結び付かないので、§5.2-8 が 0 件でなければ Stripe の Dashboard でその Customer の Subscription の持ち主を確かめてから決める）/ `trial_end`（そのまま）/ `created_at` / `updated_at`（v1 の値。トリガは止めてある）/ `max_staffs_count`（**`stripe_subscription_id IS NULL AND max_staffs_count >= 11` のときだけ**その値。個別契約）/ `staff_cap`（**`stripe_subscription_id IS NOT NULL AND max_staffs_count >= 11` のとき** `least(greatest(max_staffs_count, 移行時点の在籍数), 1000)`。019 §13.7）/ `is_admin` は **立てない**（§3-3）。v1 は `stripe_subscription_id` を退会以外で消さない（解約は上限を 10 人に下げるだけ。`user.rb`・`charges_controller.rb`）ので、「Subscription なし」= 一度も申し込んでいない人で、`max_staffs_count >= 11` なら管理者が SQL で入れた個別契約 |
 
 - `email` は Devise が小文字で保存している。念のため `.toLowerCase().trim()` し、重複があれば止まる（`auth.users` の一意制約に任せず、変換で先に検出して理由を出す）
 - 店舗を 1 つも持たないユーザーも移行する（ログインできて `/tenants/new` に着く）
@@ -310,7 +310,7 @@ SQL で数え直さない（2 つの数え方を持たない）。§8.1 で DB �
 | `auth.users` と `profiles` | 件数が同じ。`profiles.email = auth.users.email` |
 | 在籍数 | 全員について `staff_count_history.active_count = private.active_staff_count(user_id)`（TS の数え方と DB の数え方が一致する） |
 | `encrypted_password is null` の件数 | = `password_is_email` の人と `encrypted_password = ''` だった人の和集合（Google の人はパスワードを残すので含まない。§7.1） |
-| `staff_cap` を 1000 で切った人数 / 個別契約の `max_staffs_count > 1000` | 0（019 §13.7。管理画面の上限の入力は 11〜1000） |
+| `staff_cap` を 1000 で切った人数 / 個別契約の `max_staffs_count > 1000` | **報告するだけ（ROLLBACK しない）**。§7.1 の式は 1000 超を丸めて入れる設計で、v2 側に他の手が無い（CHECK も管理画面も 11〜1000。019 §13.7）。該当者には個別に連絡する |
 | スタッフ 0 人（準備中）の店舗のうち勤務パターン・制約・必要人数を持つ店舗 | 報告する（初期設定でパターンを置き換えると消える。多ければ 022 の告知に入れる） |
 | 上限超過の人数と一覧 | v1 の `over_limit?`（在籍 > `max_staffs_count`）の人と、個別契約でなく在籍 > 10 の人を、Subscription の有無・上限（10 以下 / 11 以上）の内訳付きで報告する。上限 10 の Subscription（約 502 件）と使っていない `unpaid`（87 件）は Stripe の引き継ぎで解約されて v2 では無料になり、v1 は解約で上限を下げるだけで在籍を減らさないので、この層にロックされる人がいる（019 §8.1・§8.2.2）。多ければカットオーバーの前に連絡 |
 | `tenants` で `setup_completed_at is null` の件数 | = スタッフ 0 人の店舗の数 |
@@ -363,7 +363,7 @@ SQL で数え直さない（2 つの数え方を持たない）。§8.1 で DB �
 | --- | --- | --- |
 | 1 | Heroku `MAINTENANCE_MODE=on`。Heroku Scheduler の `stripe:create_usage_record` を止める（019 §8.2） | |
 | 2 | `heroku pg:backups:capture` → download → 手元に restore → `rails v2:export` | |
-| 3 | `npm run migrate:v1 -- --input … --rollback`（最終確認）→ `--rollback` 無しで本番へ。**23 時台（Vercel の cron が `staffs` を読む）を避ける** | |
+| 3 | `npm run migrate:v1 -- --input … --rollback`（最終確認）→ `--rollback` 無しで本番へ。**23 時台（Vercel の cron の同期が `profiles` に書く）を避ける** | |
 | 4 | `verify.ts` + §8.2 の 2〜4・7・9 を本番で | |
 | 5 | `npm run stripe:migrate-v1 -- --input <report と同じ場所>/v1-subscriptions.csv`（dry-run → `--limit 5` → 全部。019 §8.2.3）。dry-run の結果 CSV で、`skip`（Stripe で解約済み）・`review`・取得できません・Customer が一致しません のいずれかで `max_staffs_count >= 11` の人がいれば（どれも `billing_subscriptions` に写しが作られない）、Dashboard から解約した個別契約かを確かめる（§7.1 の規則では `staff_cap` が入り `max_staffs_count` は null になるので、同期の後に無料扱いでロックされうる。該当なら `profiles.max_staffs_count` を管理画面で入れる） | |
 | 6 | 全員の同期（019 §8.3-4）→ Stripe の Dashboard の設定を切り替える | |
@@ -512,6 +512,18 @@ docs/plans/019-…/README.md       §8.1 の「session_replication_role = replic
 | 9 | `migrate-v1-subscriptions.ts` と `lib/billing/migration.ts` の冒頭コメントが「`rails runner` で出す」のまま | §11 に直す対象として足した |
 | A | `required_nums.num` が `smallint` の上限を超える行 | 捨てて記録。manifest に件数（§7.7・§5.2-10） |
 | B | `import.ts` のメモリ（全行をヒープに載せる） | §9.1-5 で RSS を記録し、§13-8 に `--max-old-space-size` を足した |
+
+### 6 回目（2026-10-10。収束判定。別のレビュー担当が「実装やカットオーバーの結果を変える指摘だけ」を出し、2 件 + 軽微 3 件で収束と判定）
+
+| # | 指摘 | 対応 |
+| --- | --- | --- |
+| 1 | §8.1 の「`staff_cap` を 1000 で切った人数 = 0」が ROLLBACK の条件になっていて、§7.1 の「1000 で丸めて入れる」式と食い違う | 報告するだけにした（v2 に他の手が無い。該当者には連絡） |
+| 2 | `last_edited_at` を staff 経由で求めると、019 §8.2.1 の集計（pattern 経由・自動アサインの一時行を含む）と母集合が違い、rescue / cancel_unpaid の境目が動く | pattern → tenant → user、§7.6 で捨てる前の全行から求める（§5.1） |
+| 3 | §10-3 の括弧の理由が 5 回目 #5 の修正に追いついていなかった | 揃えた |
+| 4 | `default_patterns` は 2019-11 に足された列で、NULL は 0 件とは限らない | §5.2-2 の期待値を列ごとに分けた |
+| 5 | `stripe_customer_id` の重複で Customer を失った側の Subscription をどちらの CSV に書くかが未定 | not-migrated に出して Dashboard で扱う（§7.1） |
+
+以降の指摘は出ていない。実装に入る。
 
 ## 15. 実装ログ
 
