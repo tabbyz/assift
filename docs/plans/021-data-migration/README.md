@@ -107,7 +107,8 @@ Heroku 本番 ──pg_dump──▶ 手元の v1（ローカル DB に restore�
 - `shift_cycle` / `kind` は **enum の名前**（`month` / `workday`）で書く（整数を v2 で読み替えない）
 - YAML 列は `staff.available_wdays`（配列）・`staff.available_patterns`（配列）・`staff.default_patterns`（Hash）・`pattern.default_required_nums`（Hash）を**モデルの属性として読んだ値**をそのまま書く。
   `default_required_nums` は json 列に YAML 文字列が入っている疑いがある（v1 分析 §2.2）。読んだ値が `String` なら `YAML.safe_load(..., permitted_classes: [ActiveSupport::HashWithIndifferentAccess, Symbol])` でもう一段ほどき、`manifest.json` に「文字列だった件数」を出す
-- `available_wdays` が nil のスタッフは、v1 の画面が「担当可」をどう判定しているか（`Staff#available?` 相当）を見て、**その判定の結果と同じ配列**にする（nil = 全日不可なら `[]`、全日可なら `[0..6]`）。rake の中で判定し、理由を manifest に書く（§13-3）
+- YAML 列が NULL のスタッフは、**モデルを通して読んだ値をそのまま書く** = `available_wdays` / `available_patterns` は `[]`、`default_patterns` は `{}`（**決定。2026-10-10**。§13-3）。
+  v1 は `serialize :available_wdays, Array` で、Rails は NULL を `[]` として読む。画面の「担当可 / 不可」（`Staff#available_wday?`）・ポップオーバーの絞り込み・自動アサインはすべてモデル経由なので、v1 でも NULL と `[]` は区別されていない（= 全日「担当不可」）。rake に特別な読み替えは書かない。NULL の件数だけ manifest に出す（列は 2018-01-04 に足され、クローズドベータは 2019-02 からなので 0 件のはず）
 - `find_each`（1000 件ずつ）で書く。`shifts` は数十万〜数百万行を見込む（件数は §9.1 で埋める）
 - 個人情報を含むので、出力先はリポジトリの外（`~/v1-export/`）。`.gitignore` に `v1-export/` を足しておく
 
@@ -116,7 +117,7 @@ Heroku 本番 ──pg_dump──▶ 手元の v1（ローカル DB に restore�
 | # | 集計 | 使い道 |
 | --- | --- | --- |
 | 1 | `patterns.default_required_nums` の型の内訳（Hash / String / nil） | §5.1 のほどき方の確認 |
-| 2 | `staffs` の YAML 列が nil の件数 | nil の読み替え（§5.1） |
+| 2 | `staffs` の YAML 列が NULL の件数 | §5.1（0 件のはず。あれば v1 でも「担当不可」だった人として `[]` で入る） |
 | 3 | `shifts` の `(staff_id, date)` 重複の組数・`staff_id IS NULL` の件数 | §7.6 で捨てる件数の見込み |
 | 4 | `patterns.pair_pattern_id` が自分自身・他店舗・存在しない id を指す件数 | §7.4 |
 | 5 | `users` の未確認（`confirmed_at IS NULL`）の内訳: 招待未承認 / 承認済みだが未確認 / ログイン実績あり。移行しないユーザーのうち店舗（スタッフかシフトのあるもの）を持つ人の一覧 | §7.1 の規則の確認（店舗を持つ人は 0 件のはず） |
@@ -392,7 +393,7 @@ docs/plans/001-…/README.md       §5 の冒頭に「021 で上書き」の注�
 | --- | --- | --- |
 | 1 | 未確認ユーザー（`confirmed_at IS NULL`、招待は承認済み）の扱い | **決定（2026-10-10）**: v1 でログインできた人（`confirmed_at IS NOT NULL OR sign_in_count > 0`）だけを確認済みで入れ、それ以外は入れない。未確認の行は作らない（§7.1）。devise_invitable は招待の承認で `confirmed_at` を埋め、Devise の confirmable は未確認のログインを拒むので、該当は僅少のはず。§5.2-5 の内訳と「移行しないのに店舗を持つ人」が 0 件であることをリハーサルで確かめる |
 | 2 | `V1_UUID_NAMESPACE` の管理場所と値 | **決定（2026-10-10）**: 環境変数をやめ、`lib/migration/v1Ids.ts` の定数にする。値は `uuidgen` のランダムな v4（意味のある値にしない。理由は §3-6）。実装の最初に作ってコミットし、テストで固定する |
-| 3 | `staffs.available_wdays` が nil のときの読み替え | **未確定**。v1 の `Staff` の判定を見て §5.1 に書く |
+| 3 | `staffs.available_wdays` が nil のときの読み替え | **決定（2026-10-10）**: `[]`（全日「担当不可」）。v1 の `Staff` は `serialize ..., Array` で NULL を `[]` と読み、判定はすべてモデル経由なので、v1 の見え方と同じ。`available_patterns` → `[]`、`default_patterns` → `{}` も同じ理由（§5.1） |
 | 4 | 本番の `postgres` ロールで `auth.users` への INSERT と `disable trigger` ができるか | **9.3 で確かめる**。できなければ: INSERT は `supabase_auth_admin` 相当の権限を一時的に付ける / トリガは止めずに `staff_count_history` を最後に `delete` して入れ直す |
 | 5 | 1 トランザクション（§3-1）・トリガの止め方（§3-2）・`is_admin` を立てない（§3-3）・必要人数の間引き（§3-4） | **本プランで決定**（理由は §3）。異論があればここで |
 | 6 | ダンプ・エクスポート・レポートの保管期間 | **未確定**。暗号化して保管し、期限を決めて消す（019 §8.1）。案: 移行から 1 年 |
