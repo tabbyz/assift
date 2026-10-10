@@ -118,7 +118,7 @@ Heroku 本番 ──pg_dump──▶ 手元の v1（ローカル DB に restore�
 | 2 | `staffs` の YAML 列が nil の件数 | nil の読み替え（§5.1） |
 | 3 | `shifts` の `(staff_id, date)` 重複の組数・`staff_id IS NULL` の件数 | §7.6 で捨てる件数の見込み |
 | 4 | `patterns.pair_pattern_id` が自分自身・他店舗・存在しない id を指す件数 | §7.4 |
-| 5 | `users` の未確認（`confirmed_at IS NULL`）の内訳: 招待未承認 / 承認済みだが未確認 / ログイン実績あり | §7.1 の規則を決める |
+| 5 | `users` の未確認（`confirmed_at IS NULL`）の内訳: 招待未承認 / 承認済みだが未確認 / ログイン実績あり。移行しないユーザーのうち店舗（スタッフかシフトのあるもの）を持つ人の一覧 | §7.1 の規則の確認（店舗を持つ人は 0 件のはず） |
 | 6 | `provider = 'google_oauth2'` の件数 | §7.1 |
 | 7 | 文字数超過の件数（店舗名 20 / スタッフ名 10 / パターン名 6 / 説明 10 / メモ 12） | 003 §3.10。想定外に多ければ CHECK の緩和を再検討 |
 
@@ -169,8 +169,9 @@ V1_UUID_NAMESPACE=... MIGRATION_DATABASE_URL=postgresql://... \
 
 | v1 | v2 |
 | --- | --- |
-| 招待未承認（`invitation_accepted_at IS NULL AND invitation_token IS NOT NULL`） | **移行しない**（パスワードが無い。001 §5.2） |
-| `confirmed_at IS NULL` で上以外 | **§13-1 で決める。** 案: `sign_in_count > 0` なら確認済みとして入れる（`email_confirmed_at = coalesce(confirmed_at, invitation_accepted_at, created_at)`）。ログイン実績が無ければ未確認のまま入れる（`email_confirmed_at = null`。v2 は `enable_confirmations = true` なので、ログインには確認メールの再送が要る） |
+| 入れる人（**決定。2026-10-10**） | **v1 でログインできた人だけ**: `confirmed_at IS NOT NULL OR sign_in_count > 0`。全員を**確認済み**で入れる（`email_confirmed_at = coalesce(confirmed_at, invitation_accepted_at, created_at)`）。未確認（`email_confirmed_at = null`）の行は作らない |
+| それ以外（招待未承認・未確認でログイン実績なし） | **移行しない**。招待未承認はパスワードが無い（001 §5.2）。未確認の人は Devise の confirmable が v1 でもログインを拒んでいる（`active_for_authentication?` が false）ので、店舗も作れていない。v2 で登録し直せば同じメールで新しく始められる。未確認の行を v2 に残すと、同じメールでの登録（GoTrue は既存の未確認ユーザーに確認メールを再送する）がパスワードを引き継ぐのか置き換えるのかが読みにくくなる |
+| 保険 | エクスポートが、移行しないユーザーのうち**店舗（スタッフかシフトのあるもの）を持つ人**を manifest に出す。想定は 0 件。1 件でもあれば止めて個別に見る（その人は v1 で使えていたはずなので、確認済みで入れる方向） |
 | `encrypted_password`（Devise の bcrypt `$2a$`） | そのまま `encrypted_password` へ。GoTrue は `$2a$` を受ける。**リハーサルで実際にログインして確かめる**（§9.2） |
 | `provider = 'google_oauth2'`・`uid` | `raw_app_meta_data = {"provider":"google","providers":["google"]}`、`auth.identities` に `provider = 'google'`・`provider_id = uid`・`identity_data = {"sub": uid, "email", "email_verified": true}`。`encrypted_password` は **null**（v1 の omniauth が入れた乱数のパスワードは誰も知らない。004 §3.5 の「Google だけの人」として扱わせる） |
 | それ以外 | `raw_app_meta_data = {"provider":"email","providers":["email"]}`、`auth.identities` に `provider = 'email'`・`provider_id = <v2 の id>`（seed と同じ形） |
@@ -385,7 +386,7 @@ docs/plans/001-…/README.md       §5 の冒頭に「021 で上書き」の注�
 
 | # | 論点 | 状態 |
 | --- | --- | --- |
-| 1 | 未確認ユーザー（`confirmed_at IS NULL`、招待は承認済み）の扱い | **未確定**。案は §7.1（ログイン実績があれば確認済み扱い）。§5.2-5 の内訳を見てから決める |
+| 1 | 未確認ユーザー（`confirmed_at IS NULL`、招待は承認済み）の扱い | **決定（2026-10-10）**: v1 でログインできた人（`confirmed_at IS NOT NULL OR sign_in_count > 0`）だけを確認済みで入れ、それ以外は入れない。未確認の行は作らない（§7.1）。devise_invitable は招待の承認で `confirmed_at` を埋め、Devise の confirmable は未確認のログインを拒むので、該当は僅少のはず。§5.2-5 の内訳と「移行しないのに店舗を持つ人」が 0 件であることをリハーサルで確かめる |
 | 2 | `V1_UUID_NAMESPACE` の値 | **未確定**。RFC 準拠の v4 を 1 つ作り、Vercel の Production と手順書（パスワード管理ツール）の両方に置く。一度決めたら変えない（`.env.example` の注記） |
 | 3 | `staffs.available_wdays` が nil のときの読み替え | **未確定**。v1 の `Staff` の判定を見て §5.1 に書く |
 | 4 | 本番の `postgres` ロールで `auth.users` への INSERT と `disable trigger` ができるか | **9.3 で確かめる**。できなければ: INSERT は `supabase_auth_admin` 相当の権限を一時的に付ける / トリガは止めずに `staff_count_history` を最後に `delete` して入れ直す |
