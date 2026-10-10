@@ -15,6 +15,8 @@ type Props = {
   error?: string | null
   /** 「最大 ◯円 / 月」を出すか。申し込みの確認画面は表（特商法の最終確認）に出すので出さない */
   showMaxPrice?: boolean
+  /** 請求の一言に続けて同じ段落に書く補足（上限を変えるモーダルの「在籍 N 人より少なくはできません。…」） */
+  note?: string
 }
 
 /**
@@ -29,6 +31,7 @@ export function StaffCapField({
   label = '在籍スタッフの上限',
   error,
   showMaxPrice = true,
+  note,
 }: Props) {
   const valid = typeof value === 'number' && value >= min && value <= STAFF_CAP_MAX
   return (
@@ -51,8 +54,11 @@ export function StaffCapField({
           最大 {monthlyPriceYen(value, discountPercent).toLocaleString()} 円 / 月（税込）
         </Text>
       )}
+      {/* 補足が 1 文なら句点を付けない（ほかの画面の補足と同じ）。2 文以上になるときだけ付けて 1 段落にする */}
       <Text size="xs" c="dimmed">
-        請求は上限ではなく、その月の在籍スタッフの最大人数で決まります
+        {note
+          ? `請求は上限ではなく、その月の在籍スタッフの最大人数で決まります。${note}`
+          : '請求は上限ではなく、その月の在籍スタッフの最大人数で決まります'}
       </Text>
     </Stack>
   )
