@@ -186,6 +186,25 @@ export function SetupWizard(props: Props) {
     window.scrollTo({ top: 0 })
   }, [view])
 
+  // iOS Safari は、キーボードを閉じたあと画面の下に固定した要素（主ボタン）の押せる位置が、
+  // 一度スクロールするまで見た目とずれたままになる（押しても反応しない）。
+  // キーボードが閉じて表示領域が広がったら 1px 動かして戻し、位置を合わせ直させる
+  useEffect(() => {
+    const viewport = window.visualViewport
+    if (!viewport) return
+    let lastHeight = viewport.height
+    const onResize = () => {
+      if (viewport.height > lastHeight + 100) {
+        const y = window.scrollY
+        window.scrollTo(window.scrollX, y > 0 ? y - 1 : y + 1)
+        window.scrollTo(window.scrollX, y)
+      }
+      lastHeight = viewport.height
+    }
+    viewport.addEventListener('resize', onResize)
+    return () => viewport.removeEventListener('resize', onResize)
+  }, [])
+
   const go = (next: View) => {
     setResumeDismissed(true)
     setShowIssue(false)
