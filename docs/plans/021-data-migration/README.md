@@ -523,7 +523,7 @@ docs/plans/019-…/README.md       §8.1 の「session_replication_role = replic
 | 4 | `default_patterns` は 2019-11 に足された列で、NULL は 0 件とは限らない | §5.2-2 の期待値を列ごとに分けた |
 | 5 | `stripe_customer_id` の重複で Customer を失った側の Subscription をどちらの CSV に書くかが未定 | not-migrated に出して Dashboard で扱う（§7.1） |
 
-以降の指摘は出ていない。実装に入る。
+以降の指摘は出ていない。ここで収束とする。
 
 ## 15. 実装ログ
 
