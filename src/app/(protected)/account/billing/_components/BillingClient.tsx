@@ -65,13 +65,13 @@ export type BillingView = {
   hasCustomer: boolean
 }
 
-type Props = { view: BillingView; checkoutSuccess: boolean }
+type Props = { view: BillingView; checkoutSuccess: boolean; portalReturned: boolean }
 
 /** メーターをマスで描く上限（個別契約で大きな上限のときはバーにする） */
 const MAX_SEATS = 20
 
 /** 「プランとお支払い」（019 §5.4）。プラン・在籍スタッフ・料金の 3 枚のカード */
-export function BillingClient({ view, checkoutSuccess }: Props) {
+export function BillingClient({ view, checkoutSuccess, portalReturned }: Props) {
   const router = useRouter()
   const [isTrialPending, startTrialTransition] = useTransition()
   const [isCancelPending, startCancel] = useTransition()
@@ -95,6 +95,11 @@ export function BillingClient({ view, checkoutSuccess }: Props) {
     }
     router.replace('/account/billing')
   }, [checkoutSuccess, subscription, router])
+
+  // ポータルから戻った（同期は page が済ませている）。再読み込みのたびに取り直さないよう、クエリを消す
+  useEffect(() => {
+    if (portalReturned) router.replace('/account/billing')
+  }, [portalReturned, router])
 
   const submitTrial = () =>
     startTrialTransition(async () => {
@@ -267,9 +272,18 @@ function BigNumber({ before, value, after }: { before?: string; value: string; a
   )
 }
 
-/** プランのバッジは 1 つ（並べるとスマホで切れる）。支払いの失敗を優先し、旧料金は料金のカードで示す */
+/**
+ * プランのバッジは 1 つ（並べるとスマホで切れる）。支払いの失敗、解約の予約の順に優先し、旧料金は料金のカードで示す。
+ * 解約を予約しても期間の終わりまでは有料プランだが、止めたことが一目で分かるようにする（終了日は下の文）
+ */
 function PlanBadge({ view }: { view: BillingView }) {
   if (view.subscription?.status === 'past_due') return <Badge color="red">お支払いの失敗</Badge>
+  if (view.subscription?.cancelLastDay)
+    return (
+      <Badge color="orange" variant="light">
+        解約予定
+      </Badge>
+    )
   switch (view.kind) {
     case 'subscription':
       return <Badge color="dark">有料プラン</Badge>
