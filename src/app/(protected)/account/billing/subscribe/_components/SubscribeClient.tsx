@@ -10,6 +10,7 @@ import {
   Divider,
   Flex,
   Group,
+  NumberInput,
   Paper,
   Stack,
   Table,
@@ -24,10 +25,11 @@ import {
 import { notifications } from '@mantine/notifications'
 import { LinkButton } from '@/components/LinkButton'
 import { SettingsSection } from '@/components/SettingsSection'
-import { StaffCapField, staffCapError } from '@/components/billing/StaffCapField'
+import { staffCapError } from '@/components/billing/StaffCapField'
 import { FREE_STAFF_LIMIT, PRICE_PER_STAFF_YEN, monthlyPriceYen } from '@/lib/billing/pricing'
 import { minStaffCap, suggestedStaffCap } from '@/lib/billing/staffCap'
 import { formatJapaneseYearMonthDay } from '@/lib/calendar/dateString'
+import { STAFF_CAP_MAX } from '@/lib/validation/billing'
 import { startCheckout } from '../../actions'
 
 type Props = {
@@ -147,32 +149,43 @@ export function SubscribeClient({ activeStaffCount, trialLastDay, billingAvailab
           </Stack>
           <Paper bg="blue.0" bd="1px solid var(--mantine-color-blue-2)" p="lg">
             <Stack gap="md">
-              {editingCap ? (
-                <Stack gap="sm" align="flex-start">
-                  <StaffCapField
-                    value={staffCap}
-                    onChange={setStaffCap}
-                    min={minCap}
-                    label="上限の人数"
-                    showMaxPrice={false}
-                    showBillingNote={false}
-                    error={staffCap === '' ? null : capError}
-                  />
-                  <Button onClick={() => setEditingCap(false)} disabled={capError !== null}>
-                    この人数にする
-                  </Button>
-                </Stack>
-              ) : (
-                <Group justify="space-between" align="center">
-                  <Text fz="xl" fw={700}>
-                    {staffCap} 人
-                  </Text>
-                  <Button variant="default" onClick={() => setEditingCap(true)}>
-                    変更
-                  </Button>
-                </Group>
-              )}
-              {capError === null && typeof staffCap === 'number' && (
+              {/* 見る・変えるで高さが変わらないよう、どちらも「人数」と「ボタン」の 1 行にする */}
+              <Group justify="space-between" align="center" wrap="nowrap" gap="sm" mih={36}>
+                {editingCap ? (
+                  <>
+                    <NumberInput
+                      aria-label="上限の人数"
+                      value={staffCap}
+                      onChange={(next) => setStaffCap(typeof next === 'number' ? next : '')}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' && capError === null) setEditingCap(false)
+                      }}
+                      min={minCap}
+                      max={STAFF_CAP_MAX}
+                      allowDecimal={false}
+                      allowNegative={false}
+                      clampBehavior="none"
+                      suffix=" 人"
+                      error={capError !== null}
+                      w={120}
+                      autoFocus
+                    />
+                    <Button onClick={() => setEditingCap(false)} disabled={capError !== null}>
+                      この人数にする
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Text fz="xl" fw={700}>
+                      {staffCap} 人
+                    </Text>
+                    <Button variant="default" onClick={() => setEditingCap(true)}>
+                      変更
+                    </Button>
+                  </>
+                )}
+              </Group>
+              {capError === null && typeof staffCap === 'number' ? (
                 <Text size="sm">
                   実際の請求金額はその月の在籍スタッフの最大人数で決まります。上限 {staffCap}{' '}
                   人なら、
@@ -180,6 +193,10 @@ export function SubscribeClient({ activeStaffCount, trialLastDay, billingAvailab
                     毎月の料金は最大 {monthlyPriceYen(staffCap).toLocaleString()} 円
                   </Text>
                   です。
+                </Text>
+              ) : (
+                <Text size="sm" c="red">
+                  {capError}
                 </Text>
               )}
             </Stack>
