@@ -61,12 +61,18 @@ function SubscriptionCap({
   const headroom =
     periodPeak === null ? null : unchangedHeadroomMessage(activeStaffCount, periodPeak)
   return (
-    <Alert color={atLimit ? 'yellow' : 'gray'} variant="light" icon={<IconInfoCircle size={16} />}>
+    // 上限に達したら無料プランの帯と同じ淡い青（プランの案内。theme.ts）、達していなければ控えめな灰色
+    <Alert
+      color={atLimit ? 'blue' : 'gray'}
+      variant="light"
+      bg={atLimit ? 'blue.0' : undefined}
+      icon={<IconInfoCircle size={16} />}
+    >
       <Group justify="space-between" wrap="wrap" gap="sm">
         <Stack gap={2}>
           <Text size="sm">
             {atLimit
-              ? `有料プランの上限（在籍 ${limit} 人）に達しています。追加するには上限を引き上げてください。`
+              ? `有料プランの在籍スタッフの上限（全店舗の合計で ${limit} 人）に達しています。追加するには上限を引き上げてください。`
               : `有料プランの上限 ${limit} 人・在籍 ${activeStaffCount} 人（全店舗の合計）`}
           </Text>
           {headroom && (
@@ -77,8 +83,8 @@ function SubscriptionCap({
         </Stack>
         <Button
           size="xs"
-          variant={atLimit ? 'white' : 'default'}
-          color={atLimit ? 'yellow' : undefined}
+          variant={atLimit ? 'filled' : 'default'}
+          color={atLimit ? 'blue.7' : undefined}
           onClick={() => openStaffCapModal({ current: limit, activeStaffCount, discountPercent })}
         >
           上限を変える
