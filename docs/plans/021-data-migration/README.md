@@ -304,7 +304,7 @@ SQL で数え直さない（2 つの数え方を持たない）。§8.1 で DB �
 | テーブルごとの件数 | `読んだ − 捨てた = 入れた = (終わりの count(*)) − (BEGIN 直後の count(*))`。差分で見れば seed や管理用アカウントの行を除け、数十万件の id を `IN` に並べずに済む。以下の行も同じく差分か、移行した行に限る条件で数える |
 | `auth.users` と `profiles` | 件数が同じ。`profiles.email = auth.users.email` |
 | 在籍数 | 全員について `staff_count_history.active_count = private.active_staff_count(user_id)`（TS の数え方と DB の数え方が一致する） |
-| `encrypted_password is null` の件数 | = Google の人 と `password_is_email` の人の和集合（両方に当たる人は 1 人と数える） |
+| `encrypted_password is null` の件数 | = `password_is_email` の人と `encrypted_password = ''` だった人の和集合（Google の人はパスワードを残すので含まない。§7.1） |
 | `staff_cap` を 1000 で切った人数 / 個別契約の `max_staffs_count > 1000` | 0（019 §13.7。管理画面の上限の入力は 11〜1000） |
 | `v1-subscriptions.csv` の行数 | = 移行した users のうち `stripe_subscription_id` のある人の数 |
 | スタッフ 0 人（準備中）の店舗のうち勤務パターン・制約・必要人数を持つ店舗 | 報告する（初期設定でパターンを置き換えると消える。多ければ 022 の告知に入れる） |
@@ -441,7 +441,7 @@ docs/plans/001-…/README.md       §5 の冒頭に「021 で上書き」の注�
 | 1 | §8.2-5 の CSV の `diff` は、v1 の CSV が名前を切り詰めない（`index.csv.ruby` は `staff.name` をそのまま出す）ので、切り詰めた行で必ず違う | 違って正しいと書き、`report.json` の切り詰めの一覧と突き合わせる（§8.2-5・§1） |
 | 2 | `shifts.pattern_id` が null・存在しない行の扱いが無かった | 捨てて記録（§7.6。v1 に FK があるので 0 件のはず） |
 | 3 | §7.7 の判定に使う `default_required_nums` が、v1 の文字列のままか数値化後かが曖昧 | §7.4 で数値化した後の値と明記 |
-| 4 | §8.1 の `encrypted_password is null` の件数が、Google と代理承認の両方に当たる人を二重に数える | 和集合と明記 |
+| 4 | §8.1 の `encrypted_password is null` の件数が、Google と代理承認の両方に当たる人を二重に数える | 和集合と明記（3 回目の #1 で Google の人はパスワードを残すことになり、内訳を `password_is_email` と `''` に直した） |
 | 5 | `provider = 'google_oauth2'` で `uid` が空の行の扱いが無かった | identity を作らず記録。GoTrue の自動リンクに任せる（§7.1） |
 | 6 | 「Subscription なし = 個別契約の候補」の根拠（v1 が `stripe_subscription_id` を消さないこと）を確かめていなかった | `user.rb` / `charges_controller.rb` で、解約は上限を 10 に下げるだけで id は消さないことを確認。§7.1 に書いた |
 | 7 | `password_is_email` の bcrypt の検証の所要時間に触れていなかった | 1 回 ≈ 0.2 秒、全員で数分と書いた（§5.1） |
