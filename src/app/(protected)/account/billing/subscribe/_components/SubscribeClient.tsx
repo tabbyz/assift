@@ -69,14 +69,12 @@ export function SubscribeClient({ activeStaffCount, trialLastDay, billingAvailab
     {
       label: '料金',
       value: (
-        <Stack gap={4}>
+        // 無料の範囲と 1 人あたりの料金は別の決まりなので、行を分ける
+        <Stack gap={2}>
+          {/* スマホ幅（390px）でもそれぞれ 1 行に収まる長さにしている */}
+          <Text size="sm">全店舗の在籍スタッフ {FREE_STAFF_LIMIT} 人まで無料。</Text>
           <Text size="sm">
-            在籍スタッフ（全店舗の合計）{FREE_STAFF_LIMIT} 人まで無料、{FREE_STAFF_LIMIT + 1}{' '}
-            人目から 1 人あたり月額 {PRICE_PER_STAFF_YEN} 円（税込）
-          </Text>
-          <Text size="sm">
-            いまの人数（{activeStaffCount} 人）なら月額{' '}
-            {monthlyPriceYen(activeStaffCount).toLocaleString()} 円
+            {FREE_STAFF_LIMIT + 1} 人目から 1 人月額 {PRICE_PER_STAFF_YEN} 円（税込）。
           </Text>
         </Stack>
       ),
