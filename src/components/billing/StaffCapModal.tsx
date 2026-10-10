@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Button, Group, Stack, Text } from '@mantine/core'
+import { Button, Group, Stack } from '@mantine/core'
 import { modals } from '@mantine/modals'
 import { notifications } from '@mantine/notifications'
 import { setStaffCap } from '@/app/(protected)/actions'
@@ -55,10 +55,8 @@ function StaffCapForm({ current, activeStaffCount, discountPercent }: Options) {
         discountPercent={discountPercent}
         label="新しい上限"
         error={cap === '' ? null : error}
+        note={`在籍している ${activeStaffCount} 人より少なくはできません。減らすときは、先にスタッフを退職済みにしてください。`}
       />
-      <Text size="xs" c="dimmed">
-        在籍 {activeStaffCount} 人より少なくはできません（減らすときは先にスタッフを退職済みに）
-      </Text>
       <Group justify="flex-end">
         <Button variant="default" onClick={() => modals.close(MODAL_ID)}>
           やめる

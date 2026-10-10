@@ -35,12 +35,14 @@ export default async function BillingPage({ searchParams }: PageProps<'/account/
   if (!user) redirect('/login')
 
   const checkoutSuccess = firstString(params.checkout) === 'success'
+  // お支払いの管理画面（ポータル）から戻った。解約の予約などを Webhook を待たずに出す
+  const portalReturned = firstString(params.portal) === 'return'
   const now = new Date()
 
   // 読む前に同期する（getBillingOverview は cache() 済みなので、同期のあとに 1 回だけ読む）
   const customerId = await getStripeCustomerId(user.id)
   if (customerId && isStripeConfigured()) {
-    await syncIfStale(user.id, customerId, checkoutSuccess, now)
+    await syncIfStale(user.id, customerId, checkoutSuccess || portalReturned, now)
   }
 
   const overview = await getBillingOverview(user.id)
@@ -82,14 +84,18 @@ export default async function BillingPage({ searchParams }: PageProps<'/account/
 
   return (
     <SimpleShell>
-      <BillingClient view={view} checkoutSuccess={checkoutSuccess} />
+      <BillingClient
+        view={view}
+        checkoutSuccess={checkoutSuccess}
+        portalReturned={portalReturned}
+      />
     </SimpleShell>
   )
 }
 
 async function syncIfStale(userId: string, customerId: string, force: boolean, now: Date) {
   // 写しが無いのは、申し込んでいない（Checkout を開いて戻った）か、申し込み直後で Webhook がまだのとき。
-  // 後者は Checkout からの戻り（force）で取り直す。それ以外で毎回 Stripe を呼ぶと、申し込まなかった人が開くたびに遅くなる
+  // 後者は Checkout からの戻り（force）で取り直す。ポータルからの戻りも force（解約の予約が古い写しのまま出ないように）。それ以外で毎回 Stripe を呼ぶと、申し込まなかった人が開くたびに遅くなる
   // （Webhook を落としても Stripe の再送と毎日の cron が拾う）
   const syncedAt = await getSyncedAt(userId)
   if (!force && (!syncedAt || now.getTime() - syncedAt.getTime() < STALE_MS)) return

@@ -11,7 +11,7 @@ import {
   setStaffCap,
   startTrial,
 } from '@/app/(protected)/actions'
-import { FREE_STAFF_LIMIT, PRICE_PER_STAFF_YEN } from '@/lib/billing/pricing'
+import { FREE_STAFF_LIMIT } from '@/lib/billing/pricing'
 import { minStaffCap, suggestedStaffCap } from '@/lib/billing/staffCap'
 import { formatJapaneseYearMonthDay } from '@/lib/calendar/dateString'
 import { STAFF_CAP_MAX } from '@/lib/validation/billing'
@@ -123,8 +123,8 @@ function StaffLimitOffer({ adding, retry }: Options) {
     return (
       <Stack gap="md">
         <Text size="sm">
-          無料プランは在籍 {FREE_STAFF_LIMIT} 人までです。{FREE_STAFF_LIMIT}{' '}
-          人を超えるスタッフは有料プランで使えます。
+          無料プランの在籍スタッフは、全店舗の合計で {FREE_STAFF_LIMIT} 人までです。
+          {FREE_STAFF_LIMIT} 人を超えるスタッフは有料プランで使えます。
         </Text>
         <Text size="sm" fw={600}>
           {formatJapaneseYearMonthDay(offer.trialLastDay)}
@@ -145,9 +145,7 @@ function StaffLimitOffer({ adding, retry }: Options) {
   return (
     <Stack gap="md">
       <Text size="sm">
-        無料プランは在籍 {FREE_STAFF_LIMIT} 人までです。有料プランに申し込むと{' '}
-        {FREE_STAFF_LIMIT + 1} 人目から追加できます（{FREE_STAFF_LIMIT} 人を超えた 1 人あたり月{' '}
-        {PRICE_PER_STAFF_YEN} 円）。
+        無料プランの在籍スタッフは、全店舗の合計で {FREE_STAFF_LIMIT} 人までです。
       </Text>
       {!offer.billingAvailable && (
         <Text size="sm" c="dimmed">

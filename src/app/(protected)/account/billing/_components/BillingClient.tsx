@@ -1,8 +1,9 @@
 'use client'
 
-import { type ReactNode, useEffect, useTransition } from 'react'
+import { type ReactNode, useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import {
+  Alert,
   Anchor,
   Badge,
   Box,
@@ -14,6 +15,7 @@ import {
   Text,
   Title,
 } from '@mantine/core'
+import { IconCircleCheck } from '@tabler/icons-react'
 import { modals } from '@mantine/modals'
 import { notifications } from '@mantine/notifications'
 import { startTrial } from '@/app/(protected)/actions'
@@ -63,37 +65,41 @@ export type BillingView = {
   hasCustomer: boolean
 }
 
-type Props = { view: BillingView; checkoutSuccess: boolean }
+type Props = { view: BillingView; checkoutSuccess: boolean; portalReturned: boolean }
 
 /** メーターをマスで描く上限（個別契約で大きな上限のときはバーにする） */
 const MAX_SEATS = 20
 
 /** 「プランとお支払い」（019 §5.4）。プラン・在籍スタッフ・料金の 3 枚のカード */
-export function BillingClient({ view, checkoutSuccess }: Props) {
+export function BillingClient({ view, checkoutSuccess, portalReturned }: Props) {
   const router = useRouter()
   const [isTrialPending, startTrialTransition] = useTransition()
   const [isCancelPending, startCancel] = useTransition()
   const { subscription } = view
+  // Checkout から戻って有料プランになっていたら、画面の上に完了の帯を残す（消える通知だと上限人数の案内を読み逃す）。
+  // クエリは下で消すので、最初の描画の値を持ち続ける
+  const [justSubscribed, setJustSubscribed] = useState(
+    () => checkoutSuccess && subscription !== null
+  )
 
-  // Checkout から戻った（同期は page が済ませている）。通知を出したらクエリを消す。
+  // Checkout から戻った（同期は page が済ませている）。クエリを消す。まだ写っていなければ通知で知らせる。
   // id は二重表示よけ（開発時の StrictMode でエフェクトが 2 回走る。同じ id の通知は Mantine が重ねない）
   useEffect(() => {
     if (!checkoutSuccess) return
-    notifications.show(
-      subscription
-        ? {
-            id: 'checkout-success',
-            message: '有料プランのお申し込みが完了しました',
-            color: 'green',
-          }
-        : {
-            id: 'checkout-success',
-            message: 'お申し込みを確認しています。しばらくしてから再読み込みしてください',
-            color: 'yellow',
-          }
-    )
+    if (!subscription) {
+      notifications.show({
+        id: 'checkout-success',
+        message: 'お申し込みを確認しています。しばらくしてから再読み込みしてください',
+        color: 'yellow',
+      })
+    }
     router.replace('/account/billing')
   }, [checkoutSuccess, subscription, router])
+
+  // ポータルから戻った（同期は page が済ませている）。再読み込みのたびに取り直さないよう、クエリを消す
+  useEffect(() => {
+    if (portalReturned) router.replace('/account/billing')
+  }, [portalReturned, router])
 
   const submitTrial = () =>
     startTrialTransition(async () => {
@@ -141,6 +147,21 @@ export function BillingClient({ view, checkoutSuccess }: Props) {
     <Container size="sm" py="xl">
       <Stack gap="lg">
         <Title order={2}>プランとお支払い</Title>
+
+        {justSubscribed && (
+          <Alert
+            color="green"
+            variant="light"
+            icon={<IconCircleCheck size={18} />}
+            title="有料プランのお申し込みが完了しました"
+            withCloseButton
+            closeButtonLabel="閉じる"
+            onClose={() => setJustSubscribed(false)}
+          >
+            {view.limit !== null &&
+              `在籍スタッフ人数の上限は ${view.limit} 人です。いつでも変更できます。`}
+          </Alert>
+        )}
 
         <Card title="現在のプラン">
           <Group>
@@ -251,9 +272,18 @@ function BigNumber({ before, value, after }: { before?: string; value: string; a
   )
 }
 
-/** プランのバッジは 1 つ（並べるとスマホで切れる）。支払いの失敗を優先し、旧料金は料金のカードで示す */
+/**
+ * プランのバッジは 1 つ（並べるとスマホで切れる）。支払いの失敗、解約の予約の順に優先し、旧料金は料金のカードで示す。
+ * 解約を予約しても期間の終わりまでは有料プランだが、止めたことが一目で分かるようにする（終了日は下の文）
+ */
 function PlanBadge({ view }: { view: BillingView }) {
   if (view.subscription?.status === 'past_due') return <Badge color="red">お支払いの失敗</Badge>
+  if (view.subscription?.cancelLastDay)
+    return (
+      <Badge color="orange" variant="light">
+        解約予定
+      </Badge>
+    )
   switch (view.kind) {
     case 'subscription':
       return <Badge color="dark">有料プラン</Badge>

@@ -148,7 +148,8 @@ export async function openPortal(): Promise<ActionResult<{ redirectTo: string }>
     const session = await getStripe().billingPortal.sessions.create({
       customer: customerId,
       locale: 'ja',
-      return_url: `${origin}/account/billing`,
+      // 戻ったら描画の前に Stripe から取り直させる（解約・カードの変更をすぐ画面に出す。Webhook より先に戻ることがある）
+      return_url: `${origin}/account/billing?portal=return`,
     })
     return { redirectTo: session.url }
   })
