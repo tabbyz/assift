@@ -25,7 +25,7 @@ v1（Rails / Heroku Postgres）の全データを v2（Supabase）に移し、**
 - [ ] `npm run migrate:v1 -- --input <dir>` が、空の v2 DB に対して **1 トランザクション**で全テーブルを入れ、件数の突合（v1 の件数 − 捨てた件数 = v2 の件数）を自分で確かめて通る
 - [ ] 捨てた行・切り詰めた値・直した値が、理由つきでレポート（JSON）に残る
 - [ ] ローカルのリハーサルで: v1 と同じパスワードでログインできる / v1 の店舗 URL（22 文字トークン）が 308 で移行後の店舗に着く / `/share/<code>` が開く /
-      サンプル店舗の CSV が v1 と一致する / 移行後の店舗が「準備中」にならない / 必要人数の表示が v1 と同じ
+      サンプル店舗の CSV が v1 と一致する（切り詰めた名前を除く）/ 移行後の店舗が「準備中」にならない / 必要人数の表示が焼き付け済みの期間で v1 と同じ
 - [ ] 本番の Supabase に対して `--rollback`（全部入れて最後に ROLLBACK）で通り、所要時間が分かっている
 - [ ] 019 §8.2 の Stripe の引き継ぎスクリプトの入力（`v1-subscriptions.csv`）が、同じダンプから出る
 
@@ -92,7 +92,7 @@ Heroku 本番 ──pg_dump──▶ 手元の v1（ローカル DB に restore�
 
 | ファイル | 元 | 列 |
 | --- | --- | --- |
-| `users.jsonl` | `users` | `id email encrypted_password password_is_email confirmed_at invitation_accepted_at invitation_token provider uid sign_in_count current_sign_in_at locked_at stripe_customer_id stripe_subscription_id trial_end max_staffs_count created_at updated_at`。`password_is_email` は `user.valid_password?(user.email)`（v1 の管理画面の「代理承認」が初期パスワードをメールにした人。§7.1） |
+| `users.jsonl` | `users` | `id email encrypted_password password_is_email confirmed_at invitation_accepted_at invitation_token provider uid sign_in_count current_sign_in_at locked_at stripe_customer_id stripe_subscription_id trial_end max_staffs_count created_at updated_at`。`password_is_email` は `user.valid_password?(user.email)`（v1 の管理画面の「代理承認」が初期パスワードをメールにした人。§7.1。bcrypt の検証 1 回 ≈ 0.2 秒なので全員分で数分） |
 | `tenants.jsonl` | `tenants` | `id uuid user_id name shift_cycle start_of_week created_at updated_at` |
 | `staffs.jsonl` | `staffs` | `id tenant_id name position disabled max_work_week available_wdays(配列) available_patterns(配列) default_patterns(Hash) created_at updated_at` |
 | `patterns.jsonl` | `patterns` | `id tenant_id name description color_hex kind pair_pattern_id position default_required_nums(Hash) created_at updated_at` |
@@ -179,10 +179,11 @@ MIGRATION_DATABASE_URL=postgresql://... \
 | `encrypted_password`（Devise の bcrypt） | そのまま `encrypted_password` へ。v1 は **pepper なし・stretches 11・bcrypt 3.1.20**（`config/initializers/devise.rb`・`Gemfile.lock`）なので `$2a$11$…` の素の bcrypt で、GoTrue（Go の bcrypt）がそのまま検証できる。pepper があれば全員ログインできなくなるところだった。**リハーサルで実際にログインして確かめる**（§9.2） |
 | `password_is_email = true`（代理承認の初期パスワード） | `encrypted_password = null`（パスワードではログインできない。「パスワードを忘れた方」で再設定してもらう）。v1 は `/tenants` で `valid_password?(email)` を見て強制的に変更させていた（`tenants_controller.rb` の `check_init_password!`）が、v2 にその仕組みは無く、残すとメールを知る人が誰でも入れる。件数を記録する |
 | `provider = 'google_oauth2'`・`uid` | `raw_app_meta_data = {"provider":"google","providers":["google"]}`、`auth.identities` に `provider = 'google'`・`provider_id = uid`・`identity_data = {"sub": uid, "email", "email_verified": true}`。`encrypted_password` は **null**（v1 の omniauth が入れた乱数のパスワードは誰も知らない。004 §3.5 の「Google だけの人」として扱わせる）。v1 で後から再設定してパスワードでも入っていた人は v2 では Google か再設定になるが、v1 の画面も provider のある人には「Google アカウント経由で登録されたためパスワードは変更できません」と出していたので受け入れる |
+| `provider = 'google_oauth2'` だが `uid` が空 | `google` の identity は作らず記録だけする（`encrypted_password` は null のまま）。最初の Google ログインで GoTrue が確認済みの同じメールに自動で結び付ける（001 §5.2 のとおり identity は保険） |
 | それ以外 | `raw_app_meta_data = {"provider":"email","providers":["email"]}`、`auth.identities` に `provider = 'email'`・`provider_id = <v2 の id>`（seed と同じ形） |
 | その他の列 | `instance_id = '00000000-…'`、`aud = role = 'authenticated'`、`raw_user_meta_data = '{}'`、`last_sign_in_at = current_sign_in_at`、token 系 4 列は `''`（seed の注記。null だと GoTrue が落ちる） |
 | `locked_at` | 無視する（ロックは解除）。件数だけ記録。`unconfirmed_email` は v1 に無い（`reconfirmable = false`） |
-| `profiles`（トリガが作った後、staffs の後に UPDATE） | `stripe_customer_id`（そのまま。v1 に一意制約が無く v2 は `unique` なので、同じ Customer を持つユーザーが 2 人以上いれば `created_at` が古い 1 人に残して他は null にして記録）/ `trial_end`（そのまま）/ `max_staffs_count`（**`stripe_subscription_id IS NULL AND max_staffs_count >= 11` のときだけ**その値。個別契約）/ `staff_cap`（**`stripe_subscription_id IS NOT NULL AND max_staffs_count >= 11` のとき** `least(greatest(max_staffs_count, 移行時点の在籍数), 1000)`。019 §13.7）/ `is_admin` は **立てない**（§3-3） |
+| `profiles`（トリガが作った後、staffs の後に UPDATE） | `stripe_customer_id`（そのまま。v1 に一意制約が無く v2 は `unique` なので、同じ Customer を持つユーザーが 2 人以上いれば `created_at` が古い 1 人に残して他は null にして記録）/ `trial_end`（そのまま）/ `max_staffs_count`（**`stripe_subscription_id IS NULL AND max_staffs_count >= 11` のときだけ**その値。個別契約）/ `staff_cap`（**`stripe_subscription_id IS NOT NULL AND max_staffs_count >= 11` のとき** `least(greatest(max_staffs_count, 移行時点の在籍数), 1000)`。019 §13.7）/ `is_admin` は **立てない**（§3-3）。v1 は `stripe_subscription_id` を退会以外で消さない（解約は上限を 10 人に下げるだけ。`user.rb`・`charges_controller.rb`）ので、「Subscription なし」= 一度も申し込んでいない人で、`max_staffs_count >= 11` なら管理者が SQL で入れた個別契約 |
 
 - `email` は Devise が小文字で保存している。念のため `.toLowerCase().trim()` し、重複があれば止まる（`auth.users` の一意制約に任せず、変換で先に検出して理由を出す）
 - 店舗を 1 つも持たないユーザーも移行する（ログインできて `/tenants/new` に着く）
@@ -229,6 +230,7 @@ MIGRATION_DATABASE_URL=postgresql://... \
 | --- | --- |
 | `staff_id IS NULL` | 捨てる（自動アサインの一時 Task。v1 分析 §2.2） |
 | `staff_id` が存在しない（FK 無し） | 捨てて記録 |
+| `pattern_id` が null・存在しない | 捨てて記録（v1 は FK と `dependent: :destroy` があるので 0 件のはず） |
 | スタッフの店舗 ≠ パターンの店舗 | 捨てて記録 |
 | `(staff_id, date)` の重複 | `updated_at` が最新の 1 件（同時刻なら id が大きいほう）を残し、残りを捨てて記録 |
 | `tenant_id` | スタッフの店舗 |
@@ -242,7 +244,7 @@ MIGRATION_DATABASE_URL=postgresql://... \
 | --- | --- |
 | `tenant_id` | パターンの店舗 |
 | パターンが `dayoff` | 捨てて記録（v1 も workday しか作らない。v2 の画面にも出ない） |
-| **焼き付けられた行** | **捨てる**。判定は 015 の migration（`20261005150000_resolve_required_nums.sql`）と同じで、祝日だけアプリで解決する: `num = (default_required_nums[dayKeyFor(date, isHolidayDate(date))] ?? 0)` なら捨てる |
+| **焼き付けられた行** | **捨てる**。判定は 015 の migration（`20261005150000_resolve_required_nums.sql`）と同じで、祝日だけアプリで解決する: `num = (default_required_nums[dayKeyFor(date, isHolidayDate(date))] ?? 0)` なら捨てる。`default_required_nums` は §7.4 で数値化した後の値（v1 の文字列のまま比べない） |
 | 残った行 | 「この日だけの上書き」として入れる（v1 にも `unique (date, pattern_id)` があるので重複は無い） |
 
 - 015 の SQL は祝日を見られず「曜日の値と `holiday` が同じときだけ」消えたが、TS は `lib/calendar/holidays.ts` を使えるので**祝日は `holiday` キーで判定**する。v1 の焼き付けは祝日に `holiday` の値を入れていた（v1 分析 §3.4）ので、こちらのほうが v1 の意図どおりに消える
@@ -292,7 +294,7 @@ SQL で数え直さない（2 つの数え方を持たない）。§8.1 で DB �
 | テーブルごとの件数 | `読んだ − 捨てた = 入れた = select count(*)`（移行対象の id に絞る） |
 | `auth.users` と `profiles` | 件数が同じ。`profiles.email = auth.users.email` |
 | 在籍数 | 全員について `staff_count_history.active_count = private.active_staff_count(user_id)`（TS の数え方と DB の数え方が一致する） |
-| `encrypted_password is null` の件数 | = Google の人 + `password_is_email` の人 |
+| `encrypted_password is null` の件数 | = Google の人 と `password_is_email` の人の和集合（両方に当たる人は 1 人と数える） |
 | `staff_cap` を 1000 で切った人数 | 0（019 §13.7） |
 | 無料扱い（Subscription 無し・個別契約でない）で在籍 11 人以上の人数と一覧 | 報告する（v2 では lock panel が出る。多ければカットオーバーの前に連絡。019 §8.1） |
 | `tenants` で `setup_completed_at is null` の件数 | = スタッフ 0 人の店舗の数 |
@@ -308,7 +310,7 @@ SQL で数え直さない（2 つの数え方を持たない）。§8.1 で DB �
 | 2 | パスワード | リハーサルでは restore した v1 の 1 ユーザーに既知のパスワードを `rails runner` で入れてからエクスポートし、v2 でログインする。本番では自分のアカウント |
 | 3 | 旧 URL | `curl -I https://<v2>/tenants/<v1 トークン>/shifts?start_date=2026-10-01` が 308 で `/tenants/<uuid>?start=…`、その uuid の店舗が開く |
 | 4 | 共有 URL | 有効な `shares` を 3 件選び `/share/<code>` が v1 と同じ表を出す。期限切れは 404 |
-| 5 | **CSV の一致** | サンプル店舗 5 件（スタッフ数の多い店・ペアのある店・退職者のいる店・半月表示の店・必要人数の上書きが多い店）で、v1 の `shifts.csv?encoding=utf8` と v2 の `/api/tenants/<id>/shifts/csv?encoding=utf8` を同じ `start` で取り `diff`。違いは 1 つずつ理由を書く（CSV は 010 で v1 と同じ形に作った） |
+| 5 | **CSV の一致** | サンプル店舗 5 件（スタッフ数の多い店・ペアのある店・退職者のいる店・半月表示の店・必要人数の上書きが多い店）で、v1 の `shifts.csv?encoding=utf8` と v2 の `/api/tenants/<id>/shifts/csv?encoding=utf8` を同じ `start` で取り `diff`。違いは 1 つずつ理由を書く（CSV は 010 で v1 と同じ形に作った）。v1 の CSV は名前を切り詰めないので、切り詰めたスタッフ名・パターン名の行は違って正しい（`report.json` の切り詰めの一覧と突き合わせる） |
 | 6 | 必要人数 | 5 のサンプルで、**「デフォルト人数をセット」を押してある期間**について v1 の表の `required / assigned` と v2 の表の数字が同じ（§7.7 で消した行が表示を変えていない）。押していない期間は v1 が 0、v2 が基本の人数で、違って正しい（§7.7） |
 | 7 | 準備中 | 移行した店舗を開いて `/setup` に送られない（§7.2） |
 | 8 | Google の人 | `auth.identities` に `google` の行があり、アカウント画面でパスワード欄が出ない（004 §3.5）。`encrypted_password = null` のままメール + パスワードのログインが「メールアドレスまたはパスワードが違います」で止まり、GoTrue が落ちないこと。実際の Google ログインは本番の Google の資格情報が要るので 022 で |
@@ -319,8 +321,8 @@ SQL で数え直さない（2 つの数え方を持たない）。§8.1 で DB �
 
 ### 9.1 手元（ローカル Supabase）
 
-1. Heroku からダンプを取る（`heroku pg:backups:capture` → `download`）。**取った日時と件数を本プランの §14 に書く**（`shifts` の行数で所要時間を見込む）
-2. 手元の v1 に restore → `rails v2:export`
+1. Heroku からダンプを取る（`heroku pg:backups:capture` → `download`）。**取った日時と件数を本プランの §15 に書く**（`shifts` の行数で所要時間を見込む）
+2. 手元の v1 に restore（`pg_restore`。Heroku の Postgres と同じメジャー版を使う）→ `rails v2:export`
 3. `npx supabase db reset`（seed あり）→ `npm run migrate:v1 -- --input … --allow-existing`
 4. §8.2 の 1〜10（Google は 8 の範囲まで）
 5. 所要時間を記録する。エクスポート・インポート・検証のそれぞれ
@@ -361,6 +363,7 @@ scripts/migrate-v1/
   import.ts                      読む → 変換 → 1 トランザクションで書く → 突合 → COMMIT / ROLLBACK
   verify.ts                      移行後の DB と manifest / report の突合
   v1/v2_export.rake              v1 に写して流す rake（§5）
+  fixtures/                      手で作った小さな JSONL（§12-4。個人情報を含まない架空の値。Vitest の通しのテストも読む）
 src/lib/migration/
   v1Ids.ts (+ test)              既存。V1_UUID_NAMESPACE を定数にし、getV1UuidNamespace() を消す。テストで値を固定する
   v1Types.ts                     JSONL の行の Zod
@@ -381,9 +384,9 @@ docs/plans/001-…/README.md       §5 の冒頭に「021 で上書き」の注�
    テストで値を固定し、`getV1UuidNamespace()` と `legacyUrl.ts` の警告、`.env.example` / README の項目を消す。**この時点で 1 回コミットし、以降は値に触らない**
 2. `v1Types.ts` と `v2_export.rake` を先に書き、**形を 1 つに決める**（JSONL の 1 行 = Zod の 1 型）
 3. `truncate.ts` / `requiredNums.ts` / `transform.ts` と Vitest（§7 の各行に 1 ケース以上。重複・他店舗・自己参照・空文字・範囲外）
-4. `import.ts`。手元の seed だけの DB に、手で作った小さな JSONL（2 ユーザー・2 店舗・Google の人・捨てる行を含む）を入れて通す
+4. `import.ts`。`scripts/migrate-v1/fixtures/` に手で作った小さな JSONL（2 ユーザー・2 店舗・Google の人・代理承認の人・捨てる行・切り詰める値・焼き付けと上書きの必要人数を含む）を置き、変換の通し（JSONL → v2 の行 + report）を Vitest で固定してから、手元の seed だけの DB に入れて通す
 5. `verify.ts`
-6. 9.1 のリハーサル（本物のダンプ）。件数と所要時間を §14 に記録
+6. 9.1 のリハーサル（本物のダンプ）。件数と所要時間を §15 に記録
 7. AGENTS.md・001 の注記・`.env.example`
 8. PR の前に `npm run lint` / `typecheck` / `test`。`npx supabase test db` はスキーマを触らないので変化なし
 
@@ -397,7 +400,7 @@ docs/plans/001-…/README.md       §5 の冒頭に「021 で上書き」の注�
 | 4 | 本番の `postgres` ロールで `auth.users` への INSERT と `disable trigger` ができるか | **9.3 で確かめる**。できなければ: INSERT は `supabase_auth_admin` 相当の権限を一時的に付ける / トリガは止めずに `staff_count_history` を最後に `delete` して入れ直す |
 | 5 | 1 トランザクション（§3-1）・トリガの止め方（§3-2）・`is_admin` を立てない（§3-3）・必要人数の間引き（§3-4） | **本プランで決定**（理由は §3）。異論があればここで |
 | 6 | ダンプ・エクスポート・レポートの保管期間 | **決定（2026-10-10）**: pg_dump と JSONL は 3 か月、manifest / report / Stripe の結果 CSV / `usage_records` の CSV は 1 年（§10-8）。当初の案（全部 1 年）は、フルのダンプの価値が数週間で尽きる一方で負債が 1 年残るのでやめた |
-| 7 | リハーサルのダンプをいつ取るか | **未確定**。実装の 5（§12）の前。古いダンプでよい |
+| 7 | リハーサルのダンプをいつ取るか | **未確定**。実装の 6（§12）の前。古いダンプでよい |
 | 8 | 書き込みが遅いときの `COPY` への切り替え | 9.1 の所要時間で判断。目安: インポート全体が 10 分を超えるなら切り替える |
 
 ## 14. プランのレビュー（指摘が出なくなるまで）
@@ -418,6 +421,21 @@ docs/plans/001-…/README.md       §5 の冒頭に「021 で上書き」の注�
 | 10 | `dayoff` のパターンの `default_required_nums` をそのまま入れていた。v2 は休みに変えたら空にする（015 §3.4） | `{}` にする（§7.4） |
 | 11 | Google の人の `encrypted_password` を null にすると、v1 で後からパスワードを再設定した人が困る可能性 | v1 の画面も provider のある人にはパスワード変更不可と出していたので受け入れる、と明記（§7.1） |
 | 12 | manifest の集計に 2・9 の件数が無かった | §5.2 に足した |
+
+### 2 回目（2026-10-10。1 回目の反映後に頭から読み直し、v2 側の前提をコードと突き合わせた）
+
+| # | 指摘 | 対応 |
+| --- | --- | --- |
+| 1 | §8.2-5 の CSV の `diff` は、v1 の CSV が名前を切り詰めない（`index.csv.ruby` は `staff.name` をそのまま出す）ので、切り詰めた行で必ず違う | 違って正しいと書き、`report.json` の切り詰めの一覧と突き合わせる（§8.2-5・§1） |
+| 2 | `shifts.pattern_id` が null・存在しない行の扱いが無かった | 捨てて記録（§7.6。v1 に FK があるので 0 件のはず） |
+| 3 | §7.7 の判定に使う `default_required_nums` が、v1 の文字列のままか数値化後かが曖昧 | §7.4 で数値化した後の値と明記 |
+| 4 | §8.1 の `encrypted_password is null` の件数が、Google と代理承認の両方に当たる人を二重に数える | 和集合と明記 |
+| 5 | `provider = 'google_oauth2'` で `uid` が空の行の扱いが無かった | identity を作らず記録。GoTrue の自動リンクに任せる（§7.1） |
+| 6 | 「Subscription なし = 個別契約の候補」の根拠（v1 が `stripe_subscription_id` を消さないこと）を確かめていなかった | `user.rb` / `charges_controller.rb` で、解約は上限を 10 に下げるだけで id は消さないことを確認。§7.1 に書いた |
+| 7 | `password_is_email` の bcrypt の検証の所要時間に触れていなかった | 1 回 ≈ 0.2 秒、全員で数分と書いた（§5.1） |
+| 8 | 手で作る JSONL の置き場と、変換の通しのテストが無かった | `scripts/migrate-v1/fixtures/` と Vitest の通し（§11・§12-4） |
+| 9 | §9.1・§12・§13-7 の節番号の参照が、§14 を足したときにずれていた（§14 → §15、実装の 5 → 6） | 直した |
+| 10 | `pg_restore` の版を書いていなかった | Heroku と同じメジャー版（§9.1） |
 
 ## 15. 実装ログ
 
