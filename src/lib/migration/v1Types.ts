@@ -15,8 +15,12 @@ import { isDateString } from '@/lib/calendar/dateString'
  */
 
 const id = z.int().positive()
-/** 親を指す列。v1 では nullable（§7 共通の `parent_missing`） */
-const parentId = z.int().positive().nullable()
+/**
+ * 親を指す列。v1 では nullable（§7 共通の `parent_missing`）。
+ * 0 や負も受ける: `shifts_controller#assign` は `params[:staff_id].to_i` をそのまま保存し（FK も無い）、
+ * 無い id は変換が `parent_missing` で捨てる。ここで弾くと 1 行でインポートが止まる
+ */
+const parentId = z.int().nullable()
 
 const dateString = z
   .string()

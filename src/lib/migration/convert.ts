@@ -273,7 +273,7 @@ export function convertExport(input: V1Export, options: ConvertOptions): Convert
       stripeNotMigrated.push({
         ...csvRow({
           v1Id: u.id,
-          email: u.email,
+          email: u.email.toLowerCase().trim(),
           stripeCustomerId: u.stripe_customer_id?.trim() || null,
           stripeSubscriptionId: sub,
           maxStaffsCount: u.max_staffs_count,

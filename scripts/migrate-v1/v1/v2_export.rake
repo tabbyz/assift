@@ -320,6 +320,9 @@ class V2Exporter
     @stats[:shifts][:duplicate_staff_date_groups] =
       count.call('select count(*) from (select staff_id, date from shifts where staff_id is not null group by staff_id, date having count(*) > 1) d')
     @stats[:shifts][:staff_id_null] = Shift.unscoped.where(staff_id: nil).count
+    # FK が無いので、消えたスタッフや assign の to_i が入れた 0 を指す行がありうる（§7.6 の parent_missing）
+    @stats[:shifts][:staff_missing] =
+      count.call('select count(*) from shifts s where s.staff_id is not null and not exists (select 1 from staffs t where t.id = s.staff_id)')
 
     # 4. patterns.pair_pattern_id が自分自身・他店舗・存在しない id を指す件数
     @stats[:patterns][:pair_self] = count.call('select count(*) from patterns where pair_pattern_id = id')

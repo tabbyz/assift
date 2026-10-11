@@ -738,6 +738,7 @@ describe('transformShifts（§7.6）', () => {
       [
         shift({ id: 1, staff_id: null }),
         shift({ id: 2, staff_id: 99 }),
+        shift({ id: 8, staff_id: 0 }), // v1 の assign は params[:staff_id].to_i をそのまま保存する
         shift({ id: 3, staff_id: 3 }),
         shift({ id: 4, pattern_id: null }),
         shift({ id: 5, pattern_id: 99 }),
@@ -750,6 +751,7 @@ describe('transformShifts（§7.6）', () => {
     expect(r.dropped.map((d) => [d.id, d.reason, d.detail])).toEqual([
       [1, 'unassigned', undefined],
       [2, 'parent_missing', 'staff'],
+      [8, 'parent_missing', 'staff'],
       [3, 'parent_dropped', 'staff'],
       [4, 'parent_missing', 'pattern'],
       [5, 'parent_missing', 'pattern'],
