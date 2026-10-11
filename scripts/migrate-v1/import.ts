@@ -524,8 +524,6 @@ async function main() {
     const failed = checks.filter((ck) => !ck.ok)
     if (failed.length > 0) throw new MigrationError(`突合が ${failed.length} 件合いません`)
 
-    await client.query('analyze')
-
     if (values.rollback) {
       await client.query('rollback')
       console.log('ROLLBACK（--rollback）')
@@ -533,6 +531,10 @@ async function main() {
       await client.query('commit')
       committed = true
       console.log('COMMIT')
+      // 書いた表だけ。裸の ANALYZE は postgres が所有しない表（auth.* など）で WARNING を出し、全表のロックを持つ
+      for (const table of TARGET_TABLES) {
+        if (table.startsWith('public.')) await client.query(`analyze ${table}`)
+      }
     }
   } catch (error) {
     await client.query('rollback').catch(() => {})
@@ -551,6 +553,15 @@ async function main() {
     overrides,
     sample,
   })
+}
+
+function countByColumn(items: { table: string; column: string }[]): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const item of items) {
+    const key = `${item.table}.${item.column}`
+    counts[key] = (counts[key] ?? 0) + 1
+  }
+  return counts
 }
 
 /** `report.json` と Stripe の引き継ぎ用 CSV（§6.1） */
@@ -588,6 +599,8 @@ function writeOutputs(
     not_migrated_users_with_tenants: c.notMigratedUsersWithTenants,
     over_limit: c.overLimit,
     tenants_pending_with_data: c.tenantsPendingWithData,
+    /** 切り詰めた値の件数（列ごと。§8.1） */
+    truncated: countByColumn(c.fixed.filter((f) => f.reason === 'truncated')),
     staff_cap_clipped: c.fixed.filter((f) => f.reason === 'staff_cap_clipped').map((f) => f.id),
     manual_limit_over_1000: c.migratedUsers
       .filter((u) => u.stripeSubscriptionId === null && u.maxStaffsCount > 1000)

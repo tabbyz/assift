@@ -151,7 +151,7 @@ MIGRATION_DATABASE_URL=postgresql://... \
 
 | 項目 | 内容 |
 | --- | --- |
-| 接続 | `pg`（新しい devDependency）。`MIGRATION_DATABASE_URL`（ローカルは `postgresql://postgres:postgres@127.0.0.1:54322/postgres`、本番は Session pooler の URL + `sslmode=require`）。`.env.local` には書かず、実行する shell で渡す |
+| 接続 | `pg`（新しい devDependency）。`MIGRATION_DATABASE_URL`（ローカルは `postgresql://postgres:postgres@127.0.0.1:54322/postgres`、本番は Session pooler の URL + **`sslmode=verify-full`**。`pg` 8.x は `require` を `verify-full` の別名として扱い毎回 SECURITY WARNING を出し、9 で libpq の意味（検証なし）に変わるので、明示する。pooler の証明書が Node の信頼ストアに無ければ `sslrootcert=<Supabase の CA>` を足す）。`.env.local` には書かず、実行する shell で渡す |
 | 名前空間 | `V1_UUID_NAMESPACE`（`lib/migration/v1Ids.ts` の定数。§3-6）。アプリの旧 URL 解決と同じ import を読むので、環境ごとの設定も突き合わせも要らない |
 | 実行の単位 | `BEGIN` → 全テーブル → 件数の突合（§8.1）→ `COMMIT`（`--rollback` なら `ROLLBACK`）。途中の例外は `ROLLBACK` して非 0 で終わる |
 | 順序 | `auth.users` → `auth.identities` → `tenants` → `patterns`（`pair_pattern_id` は後から UPDATE）→ `staffs` → `profiles`（UPDATE）→ `staff_patterns` → `staff_default_patterns` → `shifts` → `required_nums` → `restrictions` → `date_notes` → `shares` → `staff_count_history`。在籍数（`staff_cap` と `staff_count_history`）は TS が変換済みの `staffs` から数えるので、順序に制約は無い。両方に同じ値を使い、§8.1 で DB の `private.active_staff_count()` と突き合わせる |
@@ -370,7 +370,7 @@ SQL で数え直さない（2 つの数え方を持たない）。§8.1 で DB �
 
 本番のプロジェクト（022 で作る）が出来たら、管理用アカウントだけの状態で `--rollback` を流す。
 
-- 確かめること: Session pooler につながる / `postgres` ロールで `auth.users` に INSERT できる・トリガを止められる（クラウドの `postgres` は superuser ではない。できなければ §13-4）/ `statement_timeout` と `idle_in_transaction_session_timeout` を 0 にできる / `pg` の SSL（`sslmode=require` の解釈は版で変わる。つながらなければ Supabase の CA を渡して `verify-full`） / 所要時間（手元との差）/ §8.1 がすべて通る
+- 確かめること: Session pooler につながる / **管理用アカウントのメールが v1 のどのユーザーとも重ならない**（重なると `auth.users` の一意制約で全体が ROLLBACK する。変換はv1 の中の重複しか見ない）/ `postgres` ロールで `auth.users` に INSERT できる・トリガを止められる（クラウドの `postgres` は superuser ではない。できなければ §13-4）/ `statement_timeout` と `idle_in_transaction_session_timeout` を 0 にできる / `pg` の SSL（`sslmode=require` の解釈は版で変わる。つながらなければ Supabase の CA を渡して `verify-full`） / 所要時間（手元との差）/ §8.1 がすべて通る
 - 何も残らないので、何度でも流せる。**当日の前に最低 1 回**、できれば当日の朝にもう 1 回（ネットワークと権限の最終確認）
 
 ## 10. カットオーバーでの位置（022 に渡す）
@@ -618,6 +618,20 @@ docs/plans/019-…/README.md       §8.1 の「session_replication_role = replic
 #### Google の人の identity をやめた（2026-10-11。§13-10）
 
 利用者の指摘で、v1 の `uid` から `google` の identity を先に作るのをやめ、全員を email のアカウントとして入れる形にした（`transformUsers()` から `google` の identity と `providers` の `google` を外した。`google_without_uid` の記録も不要になった）。GoTrue の自動リンクの規則は supabase/auth の `internal/models/linking.go` で確かめた。fixtures で、Google の人（`hanako`）が `email` の identity 1 行でパスワードログインできることを確かめ直した。
+
+#### レビュー 2 周目（2026-10-11。利用者の依頼で収束まで繰り返す。1 回目: 変換の規則 / スクリプトと rake の 2 人）
+
+| # | 指摘 | 対応 |
+| --- | --- | --- |
+| 1 | **高**: rake の `valid_password?` は devise_invitable が上書きしていて、招待未承認の人には nil を返す。`password_is_email: null` になり Zod が止まる（fixtures は手書きの false だったので通っていた） | `Devise::Encryptor.compare(User, encrypted_password, email) == true` を直接呼ぶ |
+| 2 | **中**: v1 の `shifts_controller#assign` は `params[:staff_id].to_i` をそのまま保存し FK も無いので `staff_id = 0` がありうる。Zod の `.positive()` が弾いて止まる | 親を指す列は整数なら受け、変換が `parent_missing` で捨てる。rake に「存在しないスタッフを指す shifts」の集計 |
+| 3 | 低: `pg` 8.x の `sslmode=require` は `verify-full` の別名（警告つき）で、9 で意味が変わる | `verify-full` を明示（§6.1・`.env.example`） |
+| 4 | 低: 裸の `ANALYZE` は postgres が所有しない表で WARNING を出し、全表のロックをコミットまで持つ | COMMIT の後に書いた public の表だけ `analyze` |
+| 5 | 低: `profiles` とペアの UPDATE が 1 行 1 往復（Session pooler 越しで利用者数 × RTT） | リハーサルの所要時間で判断（§13-8 と同じ扱い）。遅ければ `unnest` でまとめる |
+| 6 | 低: §8.1 の「切り詰めた値の件数（列ごと）」が理由別にしか無かった | `report.truncated`（`table.column` → 件数）を足した |
+| 7 | 低: 管理用アカウントのメールが v1 のユーザーと重なると一意制約で全体が戻る | §9.3 の確かめることに足した |
+| 8 | 低: 移行しない人の Stripe 用 CSV のメールが小文字化されていない | 揃えた |
+| 9 | 低（受け入れ）: `shifts` / `events` / `shares` の日付が西暦 3 桁以下・5 桁だと Zod が止める（`required_nums` だけ捨てる規則） | v1 の画面から入ることは実質無いので止まる挙動のまま |
 
 #### 未実施（次にやること）
 

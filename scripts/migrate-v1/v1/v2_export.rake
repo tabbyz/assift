@@ -119,10 +119,12 @@ class V2Exporter
     @stats[:users][:password_is_email] = password_is_email
   end
 
+  # `user.valid_password?` は使わない: devise_invitable が上書きしていて、招待未承認（`invitation_token` あり）の人には
+  # nil を返す（JSON の null になり v2 の Zod が止まる）。Devise の本体と同じ比較を直接呼ぶ
   def password_is_email?(user)
     return false if user.encrypted_password.blank?
 
-    user.valid_password?(user.email)
+    Devise::Encryptor.compare(User, user.encrypted_password, user.email) == true
   rescue BCrypt::Errors::InvalidHash
     bump(:users, :invalid_password_hash)
     false
