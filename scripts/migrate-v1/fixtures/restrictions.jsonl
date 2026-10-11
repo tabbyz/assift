@@ -1,0 +1,8 @@
+{"days":null,"pattern1_id":12,"pattern2_id":10,"position":2,"created_at":"2026-09-01T10:00:00.000000Z","updated_at":"2026-09-01T10:00:00.000000Z","id":3000,"tenant_id":1,"kind":"deny_pattern_pair"}
+{"days":3,"pattern1_id":10,"pattern2_id":null,"position":1,"created_at":"2026-09-01T10:00:00.000000Z","updated_at":"2026-09-01T10:00:00.000000Z","id":3001,"tenant_id":1,"kind":"max_work_week"}
+{"days":5,"pattern1_id":null,"pattern2_id":null,"position":3,"created_at":"2026-09-01T10:00:00.000000Z","updated_at":"2026-09-01T10:00:00.000000Z","id":3002,"tenant_id":1,"kind":"max_work_consecutive"}
+{"days":null,"pattern1_id":null,"pattern2_id":null,"position":null,"created_at":"2026-09-01T10:00:00.000000Z","updated_at":"2026-09-01T10:00:00.000000Z","id":3003,"tenant_id":1,"kind":"sat_or_sun_dayoff"}
+{"days":null,"pattern1_id":10,"pattern2_id":null,"position":4,"created_at":"2026-09-01T10:00:00.000000Z","updated_at":"2026-09-01T10:00:00.000000Z","id":3004,"tenant_id":1,"kind":"max_work_week"}
+{"days":10,"pattern1_id":null,"pattern2_id":null,"position":5,"created_at":"2026-09-01T10:00:00.000000Z","updated_at":"2026-09-01T10:00:00.000000Z","id":3005,"tenant_id":1,"kind":"max_work_month"}
+{"days":null,"pattern1_id":null,"pattern2_id":null,"position":1,"created_at":"2026-09-01T10:00:00.000000Z","updated_at":"2026-09-01T10:00:00.000000Z","id":3006,"tenant_id":3,"kind":"sat_or_sun_dayoff"}
+{"days":null,"pattern1_id":10,"pattern2_id":20,"position":6,"created_at":"2026-09-01T10:00:00.000000Z","updated_at":"2026-09-01T10:00:00.000000Z","id":3007,"tenant_id":1,"kind":"deny_pattern_pair"}

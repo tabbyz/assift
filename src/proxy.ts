@@ -6,7 +6,7 @@ import {
   CURRENT_TENANT_MAX_AGE,
   tenantIdFromPathname,
 } from '@/lib/tenants/currentTenant'
-import { resolveLegacyTenantUrl } from '@/lib/tenants/legacyUrl'
+import { rewriteLegacyTenantUrl } from '@/lib/tenants/legacyUrl'
 import { updateSession } from '@/utils/supabase/proxy'
 
 // Next 16 では middleware.ts が proxy.ts に改名された。ロジックは lib / utils の純関数に置く
@@ -56,7 +56,7 @@ function adminHostResponse(request: NextRequest) {
 /** 旧 URL なら 308 の Response、そうでなければ null */
 function legacyTenantRedirect(request: NextRequest) {
   const { pathname, search } = request.nextUrl
-  const rewritten = resolveLegacyTenantUrl(pathname, search)
+  const rewritten = rewriteLegacyTenantUrl(pathname, search)
   if (!rewritten) return null
 
   // 文字列連結で Location を組まない（同一オリジンから外れないように clone を使う）

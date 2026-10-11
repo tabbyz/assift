@@ -463,7 +463,7 @@ v1 は「カード登録から 2 か月後の月末まで、カード必須」�
 | `usage_records` | **移行しない**。カットオーバーで取る v1 のダンプ（暗号化し、保管期間を決めて残す。001 §5.4）に残る |
 | `max_staffs_count` | **Subscription が無く、11 以上**のユーザー（個別契約）だけその値。ほかは null |
 | `stripe_subscription_id` | 入れない。移行の後に全員を同期して `billing_subscriptions` を作る（一覧でまとめて取る。§5.7・§8.3） |
-| 在籍スタッフ数 | 全員に `staff_count_history` を 1 行（移行時点の数）。インポートの間は `staffs` / `tenants` のトリガを止める（`session_replication_role = replica`。止めないとスタッフ 1 行ごとに履歴ができる）。門番は `auth.uid()` が null なら止めないので影響しない |
+| 在籍スタッフ数 | 全員に `staff_count_history` を 1 行（移行時点の数）。インポートの間は `staffs` / `tenants` のトリガを止める（`session_replication_role = replica`。止めないとスタッフ 1 行ごとに履歴ができる）。門番は `auth.uid()` が null なら止めないので影響しない。**021 §3-2 で上書き**: `replica` は FK の整合性トリガも止めるのでやめ、`disable trigger` で履歴のトリガと 2 つの `set_updated_at` だけ止める |
 
 移行の検証に足す: 無料扱いなのに在籍が 10 人を超える利用者の数（v1 の `over_limit?`。v2 では lock panel が出る）。多ければカットオーバーの前に連絡する。
 

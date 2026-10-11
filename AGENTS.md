@@ -73,7 +73,8 @@ src/
   lib/
     actions/                      result / run / error / guards
     admin/                        管理画面（020）。host（ホストの振り分け）/ paths / guard / client（service_role）/ queries / trial / planView
-    migration/v1Ids.ts            v1 の ID → uuid v5（旧 URL 解決と 012 が共有）
+    migration/                    v1 データ移行（021）。v1Ids（ID → uuid v5。名前空間は定数。旧 URL 解決と共有）/ v1Types（JSONL の 1 行の Zod。rake と 1:1）/
+                                  readExport / truncate（コードポイントで切る）/ requiredNums（焼き付けの判定）/ transform（表ごとの変換。§7）/ convert（全体の配線 + レポートの材料）
     tenants/                      旧 URL の書き換え・直近店舗 cookie の純関数
     queries/                      読み取り（Server から呼ぶ）。publicShare.ts だけが service_role（下記）
     <domain>/                     ドメインロジック（calendar, patterns, shifts, pdf, csv ...）
@@ -100,6 +101,9 @@ src/
     supabase/{server,client,proxy,env}.ts
 assets/fonts/                     PDF に埋め込む Noto Sans JP（public/ に置かない。下記）
 scripts/stripe/                   setup（Product / Meter / Price / Coupon / Portal。冪等）/ migrate-v1-subscriptions（カットオーバーで 1 回）
+scripts/migrate-v1/               v1 データ移行（021）。import（読む → 変換 → 1 トランザクション → 突合 → COMMIT / ROLLBACK）/ verify（移行後の突合）/
+                                  pg（型パーサ。date を文字列のまま）/ overrides.example.json / v1/v2_export.rake（v1 に写して流す）/
+                                  fixtures（架空の JSONL。Vitest の通しとローカルの通しに使う）
 supabase/
   config.toml
   schemas/                        宣言的スキーマ（正）。RPC は schemas/public/functions.sql
@@ -284,8 +288,8 @@ Stripe の API の版は SDK が固定する最新（`lib/billing/stripe.ts`）�
 
 - **`z.uuid()` と `uuid` パッケージの `validate()` は使わない。** RFC 9562 の version / variant ビットまで検査するため、seed（`22222222-…`）や pgTAP の id を弾く。Postgres の uuid 型はこれらを受けるので、アプリ側の判定も合わせる
 - 形式の判定は `isUuid()`（`src/utils/uuid.ts`）、Zod は `z.guid()`
-- 例外は uuid v5 の**名前空間**だけ。`v5()` は RFC 非準拠の値に例外を投げるので、`getV1UuidNamespace()`（`lib/migration/v1Ids.ts`）が `validate()` で先に弾く
-- v1 の ID からの導出は `v1Uuid(table, id, namespace)` に集約する。旧 URL の解決（005）と移行スクリプト（012）が同じ関数を使う
+- 例外は uuid v5 の**名前空間**だけ。`v5()` は RFC 非準拠の値に例外を投げるので、`V1_UUID_NAMESPACE`（`lib/migration/v1Ids.ts` の定数。環境変数ではない。021 §3-6）は `uuidgen` で作った v4 で、テストが `validate()` で確かめている
+- v1 の ID からの導出は `v1Uuid(table, id)` に集約する（名前空間は内部の定数。引数で受けない）。旧 URL の解決（005）と移行スクリプト（021）が同じ関数を使う
 
 ## proxy（`src/proxy.ts`）
 
@@ -361,7 +365,7 @@ npx supabase gen types typescript --local --schema public > src/types/database.t
   差分 migration では、**新しいテーブル・シーケンス・関数を足したときに**生成 migration の末尾へ追記する
   （`REVOKE ALL ... FROM anon` は何度流しても同じ結果になる）。追記漏れは `npx supabase test db` で落ちる
 
-PK は uuid（`gen_random_uuid()`）。v1 から移行する行は `uuidv5('<table>:<v1 id>', V1_UUID_NAMESPACE)` で決定的に導出する。
+PK は uuid（`gen_random_uuid()`）。v1 から移行する行は `uuidv5('<table>:<v1 id>', V1_UUID_NAMESPACE)`（`v1Uuid()`。名前空間はリポジトリの定数）で決定的に導出する。
 
 ### RLS
 
@@ -462,6 +466,8 @@ npm test               # vitest run
 npm run format         # prettier --write .
 npm run format:check
 npm run assist:eval    # 自動アサインの評価（012 §6.3。手動。LLM を使う評価は AI_GATEWAY_API_KEY が要る）
+npm run migrate:v1 -- --input <dir> [--rollback] [--allow-existing]   # v1 データのインポート（021。MIGRATION_DATABASE_URL で直接つなぐ）
+npm run migrate:v1:verify -- --input <dir>                             # 移行後の突合
 ```
 
 Prettier: `{ "semi": false, "singleQuote": true, "tabWidth": 2, "trailingComma": "es5", "printWidth": 100 }`

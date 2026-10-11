@@ -2,11 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { v1Uuid } from '@/lib/migration/v1Ids'
 import { rewriteLegacyTenantUrl } from './legacyUrl'
 
-const NS = '7f4a1e62-0c1a-4f1e-9a3e-2b7c6d5e4f30'
 const TOKEN = 'JuFZPcSXmXOaVvCmbb1JVw'
-const ID = v1Uuid('tenants', TOKEN, NS)
+const ID = v1Uuid('tenants', TOKEN)
 
-const rewrite = (pathname: string, search = '') => rewriteLegacyTenantUrl(pathname, search, NS)
+const rewrite = (pathname: string, search = '') => rewriteLegacyTenantUrl(pathname, search)
 
 describe('rewriteLegacyTenantUrl', () => {
   it('店舗トップを uuid の URL にする', () => {
