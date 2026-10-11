@@ -49,3 +49,6 @@ supabase/.temp/
 
 # v1 データ移行のエクスポート（個人情報を含む。021 §5.1）
 v1-export/
+# fixtures をそのまま --input にしたときの出力（report と CSV）
+scripts/migrate-v1/fixtures/report.json
+scripts/migrate-v1/fixtures/v1-subscriptions*.csv

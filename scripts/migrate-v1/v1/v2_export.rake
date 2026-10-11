@@ -90,9 +90,10 @@ class V2Exporter
 
   def export_users
     password_is_email = 0
-    jsonl('users', User.unscoped.order(:id)) do |u|
-      # 代理承認の初期パスワード（メール）のままの人（§7.1）。bcrypt の検証 1 回 ≈ 0.2 秒
-      is_email = u.encrypted_password.present? && u.valid_password?(u.email)
+    jsonl('users', User.unscoped) do |u|
+      # 代理承認の初期パスワード（メール）のままの人（§7.1）。bcrypt の検証 1 回 ≈ 0.2 秒。
+      # bcrypt の形でないハッシュ（Devise 以外が書いた値）は false にして件数だけ出す（1 行で全体を止めない）
+      is_email = password_is_email?(u)
       password_is_email += 1 if is_email
       {
         id: u.id,
@@ -118,8 +119,17 @@ class V2Exporter
     @stats[:users][:password_is_email] = password_is_email
   end
 
+  def password_is_email?(user)
+    return false if user.encrypted_password.blank?
+
+    user.valid_password?(user.email)
+  rescue BCrypt::Errors::InvalidHash
+    bump(:users, :invalid_password_hash)
+    false
+  end
+
   def export_tenants
-    jsonl('tenants', Tenant.unscoped.order(:id)) do |t|
+    jsonl('tenants', Tenant.unscoped) do |t|
       {
         id: t.id,
         uuid: t.uuid,
@@ -134,7 +144,7 @@ class V2Exporter
   end
 
   def export_staffs
-    jsonl('staffs', Staff.unscoped.order(:id)) do |s|
+    jsonl('staffs', Staff.unscoped) do |s|
       # YAML 列はモデルの属性として読む（NULL は [] / {} になる。§5.1・§13-3）
       {
         id: s.id,
@@ -155,7 +165,7 @@ class V2Exporter
   def export_patterns
     types = Hash.new(0)
     string_values = 0
-    jsonl('patterns', Pattern.unscoped.order(:id)) do |p|
+    jsonl('patterns', Pattern.unscoped) do |p|
       # json 列 + serialize Hash の二重エンコード（§5.1）。生の値の型を集計し、モデルの値を Hash に寄せる
       types[raw_json_type(p)] += 1
       nums = hash_or_empty(p.default_required_nums, :patterns, :default_required_nums)
@@ -179,7 +189,7 @@ class V2Exporter
   end
 
   def export_shifts
-    jsonl('shifts', Shift.unscoped.order(:id)) do |s|
+    jsonl('shifts', Shift.unscoped) do |s|
       {
         id: s.id,
         date: date(s.date),
@@ -193,13 +203,13 @@ class V2Exporter
   end
 
   def export_required_nums
-    jsonl('required_nums', RequiredNum.unscoped.order(:id)) do |r|
+    jsonl('required_nums', RequiredNum.unscoped) do |r|
       { id: r.id, date: date(r.date), pattern_id: r.pattern_id, num: r.num }
     end
   end
 
   def export_restrictions
-    jsonl('restrictions', Restriction.unscoped.order(:id)) do |r|
+    jsonl('restrictions', Restriction.unscoped) do |r|
       {
         id: r.id,
         tenant_id: r.tenant_id,
@@ -215,7 +225,7 @@ class V2Exporter
   end
 
   def export_events
-    jsonl('events', Event.unscoped.order(:id)) do |e|
+    jsonl('events', Event.unscoped) do |e|
       {
         id: e.id,
         tenant_id: e.tenant_id,
@@ -228,7 +238,7 @@ class V2Exporter
   end
 
   def export_shares
-    jsonl('shares', Share.unscoped.order(:id)) do |s|
+    jsonl('shares', Share.unscoped) do |s|
       {
         id: s.id,
         tenant_id: s.tenant_id,
@@ -246,7 +256,7 @@ class V2Exporter
     count = 0
     CSV.open(path, 'w') do |csv|
       csv << %w[user_id staffs_count created_at]
-      UsageRecord.unscoped.order(:id).find_each(batch_size: BATCH) do |u|
+      UsageRecord.unscoped.find_each(batch_size: BATCH) do |u|
         csv << [u.user_id, u.staffs_count, ts(u.created_at)]
         count += 1
       end

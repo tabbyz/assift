@@ -33,8 +33,8 @@ const reportPath = values.report ?? join(inputDir, 'report.json')
 const reportSchema = z
   .object({
     committed: z.boolean(),
-    before: z.record(z.string(), z.int()),
-    after: z.record(z.string(), z.int()),
+    before: z.record(z.string(), z.int()).nullable(),
+    after: z.record(z.string(), z.int()).nullable(),
     sample: z.object({ shiftId: z.string(), date: z.string() }).nullable(),
     source: z.record(
       z.string(),
@@ -64,7 +64,7 @@ async function main() {
     JSON.parse(readFileSync(join(inputDir, 'manifest.json'), 'utf8'))
   )
   const report = reportSchema.parse(JSON.parse(readFileSync(reportPath, 'utf8')))
-  if (!report.committed) {
+  if (!report.committed || !report.before || !report.after) {
     console.error(
       'report.json は COMMIT していない実行のもの（--rollback か失敗）。検証する DB と合いません'
     )

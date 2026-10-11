@@ -196,7 +196,7 @@ MIGRATION_DATABASE_URL=postgresql://... \
 | それ以外（招待未承認・未確認でログイン実績なし） | **移行しない**。招待未承認はパスワードが無い（001 §5.2）。未確認の人は Devise の confirmable が v1 でもログインを拒んでいる（`active_for_authentication?` が false）ので、店舗も作れていない。v2 で登録し直せば同じメールで新しく始められる。未確認の行を v2 に残すと、同じメールでの登録（GoTrue は既存の未確認ユーザーに確認メールを再送する）がパスワードを引き継ぐのか置き換えるのかが読みにくくなる |
 | 保険 | `import.ts` が、移行しないユーザーのうち**店舗（スタッフかシフトのあるもの）を持つ人**を `report.json` に出す。想定は 0 件。1 件でもあれば個別に見て、入れるなら `--overrides` の `forceMigrateUsers`（§6.1）で確認済みとして入れる（その人は v1 で使えていたはず） |
 | `encrypted_password`（Devise の bcrypt） | そのまま `encrypted_password` へ。v1 は **pepper なし・stretches 11・bcrypt 3.1.20**（`config/initializers/devise.rb`・`Gemfile.lock`）なので `$2a$11$…` の素の bcrypt で、GoTrue（Go の bcrypt）がそのまま検証できる。pepper があれば全員ログインできなくなるところだった。**リハーサルで実際にログインして確かめる**（§8.2-2・§9.1-4） |
-| `password_is_email = true`（代理承認の初期パスワード） | **Google の人でも最優先で** `encrypted_password = null`（パスワードではログインできない。「パスワードを忘れた方」で再設定してもらう）。v1 は**店舗を新しく作るときだけ**（`tenants_controller.rb` の `check_init_password!` は `only: [:new]`）`valid_password?(email)` を見て変更させていたので、既に店舗を持つ人は初期パスワードのまま使えていた。v2 にその仕組みは無く、残すとメールを知る人が誰でも入れる。件数を記録し（想定より多いかもしれない）、022 の案内の分量を決める |
+| `password_is_email = true`（代理承認の初期パスワード） | **Google の人でも最優先で** `encrypted_password = null`（パスワードではログインできない。「パスワードを忘れた方」で再設定してもらう）。v1 は**店舗を新しく作るときだけ**（`tenants_controller.rb` の `check_init_password!` は `only: [:new]`）`valid_password?(email)` を見て変更させていたので、既に店舗を持つ人は初期パスワードのまま使えていた。v2 にその仕組みは無く、残すとメールを知る人が誰でも入れる。件数を記録し（想定より多いかもしれない）、022 の案内の分量を決める。**判定は今のメールとしか比べられない**: 代理承認の後にメールを変えた人（`reconfirmable = false` なので即時）は、旧メールのままのパスワードで入る。ダンプには比べる相手が無いので件数は下限として読む |
 | `encrypted_password = ''`（v1 の既定値）で移行対象の人 | 理屈上いない（§7.1 の条件はログインできた人）が、いれば `null` にして記録 |
 | `provider = 'google_oauth2'`・`uid` | `raw_app_meta_data = {"provider":"google","providers":["google","email"]}`、`auth.identities` に `google`（`provider_id = uid`・`identity_data = {"sub": uid, "email", "email_verified": true}`）と `email` の**両方**。`encrypted_password` は**そのまま残す**（`password_is_email` なら null）。`providers` に `email` があるので、アカウント画面のパスワード欄（`account/page.tsx` の `hasPassword`）と「パスワードを忘れた方」の guard（`requireEmailProviderAccount()`）が通る。`providers` は GoTrue が identity の link / unlink のときにしか計算し直さないので、書いた値がそのまま JWT に出る。**v1 は Google ログインが壊れていた**（`users/sessions/new.html.slim` がボタンに取り消し線を引き「現在、Google ログインできない問題が発生しています」と出している。v1 分析 §2.2）ので、この人たちは「パスワードを忘れた方」で自分のパスワードを作って入っている（Devise の recoverable は provider を見ない）。null にすると初日から締め出す。`from_omniauth` が入れた乱数の bcrypt が残っている人は誰もそれで入れないので、残しても害が無い。§5.2-11 で最近ログインしている人数を見る |
 | `provider = 'google_oauth2'` だが `uid` が空 | 「それ以外」と同じ（`providers = ["email"]`・`email` の identity だけ・パスワードは残す）にして記録。最初の Google ログインで GoTrue が確認済みの同じメールに自動で結び付ける（001 §5.2 のとおり identity は保険） |
@@ -603,6 +603,16 @@ docs/plans/019-…/README.md       §8.1 の「session_replication_role = replic
 - `transformShares` の重複判定は店舗をまたぐ（v2 の `code` は全体で一意）
 - インポートの突合に「`shifts.date` が文字列のまま一致する」を足し、`report.json` の `sample` に id と日付を残して `verify.ts` も同じ 1 件を見る（§8.2-1）
 - `verify.ts` は `report.committed` が false（`--rollback` や失敗）なら止まる
+
+#### レビュー（2026-10-11。別の担当に実物と突き合わせて読ませ、低い重大度 5 件。すべて反映）
+
+| # | 指摘 | 対応 |
+| --- | --- | --- |
+| 1 | rake の `valid_password?` は bcrypt の形でないハッシュで `BCrypt::Errors::InvalidHash` を投げ、1 行で全体が止まる | `rescue` して false にし、`users.invalid_password_hash` を manifest に出す。TS はそのハッシュをそのまま入れる（GoTrue は照合に失敗して 400 を返すだけで落ちない。再設定で直せる） |
+| 2 | `import.ts` の読み込み・変換の失敗（メールの重複など）が `try` の外で、スタックトレースのまま終わる | `main().catch()` でメッセージを出して非 0 |
+| 3 | fixtures の README の手順どおりに流すと、追跡中の `fixtures/` に report と CSV が落ちる | `.gitignore` に足した |
+| 4 | `verify.ts` の `before` / `after` が non-null で、BEGIN 前に失敗した report は Zod のエラーで止まる | `nullable()` にし、`committed` と同じ文言で止める |
+| 5 | `password_is_email` は今のメールとしか比べられない（メールを変えた代理承認の人は検出できない） | §7.1 に注記。件数は下限として読む |
 
 #### 未実施（次にやること）
 

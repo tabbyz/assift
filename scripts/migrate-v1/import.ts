@@ -613,4 +613,8 @@ function writeOutputs(
   }
 }
 
-main()
+main().catch((error) => {
+  // 読み込み・変換の失敗（JSONL の形・メールの重複・overrides の矛盾）。DB にはまだ触っていない
+  console.error(error instanceof Error ? error.message : error)
+  process.exit(1)
+})
