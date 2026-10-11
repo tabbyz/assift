@@ -8,7 +8,7 @@
 > 番号: 013 / 014 の冒頭注記では移行を 015 / 016 に繰り下げていたが、015〜020 が別の用途に使われたので本プランを **021** とし、
 > カットオーバー（本番の構築・DNS・告知・当日の手順）は **022** にする。本プランはカットオーバーのうち「データを v2 に入れて確かめる」部分だけを扱う。
 
-**状態: プラン（レビュー済み・未実装）。2026-10-10 に作成。同日に §13 の 1〜3・5・6 を決めた（未確認ユーザー・名前空間の定数化・YAML 列の NULL・保管期間）。同日にレビューを 6 回行い、指摘が出なくなった（§14）。残りはリハーサルのダンプの時期（#7）と、リハーサルで確かめること（#4・#8）だけ。**
+**状態: プラン（レビュー済み・未実装）。2026-10-10 に作成し、§13 の #1・2・3・6（未確認ユーザー・名前空間の定数化・YAML 列の NULL・保管期間）を決め、レビューを 6 回行った。2026-10-11 に §3 の 6 点（#5）と変換を TS で書くこと（#9）を決め、全体をもう一度レビューした（7 回目。§14）。残りはリハーサルのダンプの時期（#7）と、リハーサルで確かめること（#4・#8）だけ。**
 
 ---
 
@@ -58,11 +58,18 @@ v1（Rails / Heroku Postgres）の全データを v2（Supabase）に移し、**
 | # | 001 / 019 | 本プラン | 理由 |
 | --- | --- | --- | --- |
 | 1 | `INSERT ... ON CONFLICT (id) DO UPDATE` で再実行を冪等にする（001 §5.1） | **1 トランザクションで入れ、失敗したら全部戻す。`ON CONFLICT` は書かない**（**決定。2026-10-11**） | 空の DB に 1 回入れるだけなので「途中から再開」は要らない。upsert にすると、親を更新して子が残る・捨てるべき行が前回の残骸として残る、といった半端な状態を自分で考えることになる。重複は PK で**うるさく失敗**させたほうが安全。副産物として `--rollback` で本番の予行ができる（§9.3） |
-| 2 | インポートの間は `session_replication_role = replica` でトリガを止める（019 §8.1） | **止めるのは 3 つだけ**（**決定。2026-10-11**）: `staffs_record_staff_count`（履歴）と、`patterns_set_updated_at` / `profiles_set_updated_at`（ペアの後追い UPDATE と `profiles` の UPDATE で v1 の `updated_at` が `now()` に上書きされないように）。`alter table … disable trigger …` をトランザクションの中で流し、終わりに enable | `replica` は FK の整合性トリガ（RI）も止める。壊れた参照（v1 には FK が無い列が多い）を DB が見逃すのは移行でいちばん避けたいこと。止めたいのは在籍数の履歴がスタッフ 1 行ごとに増えることだけなので、そのトリガだけ止める。上限の門番は `auth.uid()` が null なら通す（019 §5.3）ので止めない |
+| 2 | インポートの間は `session_replication_role = replica` でトリガを止める（019 §8.1） | **止めるのは 3 つだけ**（**決定。2026-10-11**）: `staffs_record_staff_count`（履歴）と、`patterns_set_updated_at` / `profiles_set_updated_at`（ペアの後追い UPDATE と `profiles` の UPDATE で v1 の `updated_at` が `now()` に上書きされないように）。`alter table … disable trigger …` をトランザクションの中で流し、終わりに enable | `replica` は FK の整合性トリガ（RI）も止める。壊れた参照（v1 には FK が無い列が多い）を DB が見逃すのは移行でいちばん避けたいこと。止めたいのは、在籍数の履歴がスタッフ 1 行ごとに増えること（履歴のトリガ）と、ペアの後追い UPDATE と `profiles` の UPDATE で `updated_at` / `created_at` が `now()` になること（2 つの `set_updated_at`）だけ。上限の門番は `auth.uid()` が null なら通す（019 §5.3）ので止めない |
 | 3 | `@assift.com` のユーザーに `is_admin = true`（001 §4.3） | **立てない**（**決定。2026-10-11**） | 020 §5.1 で「`is_admin` は管理専用のアカウントにだけ立て、本体にはログインしない」と決めた。運営者の v1 アカウント（店舗を持ち本体で使う）に立てると、本体で盗まれたセッションで管理画面に入れる。管理用のアカウントはカットオーバーで別に作る（022） |
 | 4 | `required_nums` は `tenant_id` を補完してそのまま（001 §5.2） | **焼き付けられた行を捨て、上書きだけ残す**（015 と同じ規則。祝日はアプリで判定。**決定。2026-10-11**） | 015 で `required_nums` の意味が「この日だけの上書き」に変わった。v1 の「デフォルト人数をセット」で期間ぶん焼き付いた行をそのまま入れると、基本の人数を直しても既存の期間に届かない（015 が直したこと）が v1 の店舗だけに残る。詳細は §7.7 |
 | 5 | `shifts.assist_token` は廃止（001 §3.1） | 同じ。加えて v2 の `shifts.assist_run_id` は null（**決定。2026-10-11**） | v1 の自動アサインの履歴は再現しない（012） |
-| 6 | 名前空間は環境変数 `V1_UUID_NAMESPACE`（001 §3.1・005 §3.1） | **リポジトリの定数にする**（`lib/migration/v1Ids.ts` の `V1_UUID_NAMESPACE`。値は `uuidgen` で作った v4）。環境変数の読み取り・未設定時の警告・`.env.example` の項目は消す（**決定。2026-10-10**） | 秘密ではない（名前空間が分かっても RLS は破れず、店舗の uuid は旧 URL の 308 で見える）。一方で Vercel の Production・インポート・リハーサル・プレビューの 4 か所で同じ値でなければならず、一度決めたら変えられない。「複数の場所で同一で、永久に変えない値」は設定ではなく定数。定数にすればアプリとインポートが同じ import を読むので構造的にずれず、設定漏れも無くなる。値を意味のある形（ゾロ目など）にはしない: 推測できる名前空間と v1 の連番 id を合わせると全行の id を外から計算できる。いまは id の秘匿に頼っていないが、ランダムにしておけば将来もその前提を保てる。読み手に「定数である」ことを伝えるのは値の見た目ではなく、名前・コメント（秘密ではないが絶対に変えない）・値を固定するテストで行う |
+| 6 | 名前空間は環境変数 `V1_UUID_NAMESPACE`（001 §3.1・005 §3.1） | **リポジトリの定数にする**（`lib/migration/v1Ids.ts` の `V1_UUID_NAMESPACE`。値は `uuidgen` で作った v4）。`v1Uuid(table, id)` は内部でこの定数を使い、名前空間を引数で受けない。環境変数の読み取り・未設定時の警告・`.env.example` の項目は消す（**決定。2026-10-10**） | 下の箇条書き |
+
+§3-6 の理由:
+
+- 秘密ではない。名前空間が分かっても RLS は破れず、店舗の uuid は旧 URL の 308 で誰にでも見える
+- 一方で Vercel の Production・インポート・リハーサル・プレビューの 4 か所で同じ値でなければならず、一度決めたら変えられない。「複数の場所で同一で、永久に変えない値」は設定ではなく定数。定数にすればアプリとインポートが同じ import を読むので構造的にずれず、設定漏れも無くなる
+- `v1Uuid()` が名前空間を引数で受けると、別の値を渡せる口が残る。定数を内部で使う形にして口を閉じる（テスト用に名前空間を渡す関数は別名で残す）
+- 値を意味のある形（ゾロ目など）にはしない。推測できる名前空間と v1 の連番 id を合わせると全行の id を外から計算できる。いまは id の秘匿に頼っていないが、ランダムにしておけば将来もその前提を保てる。「定数である」ことは値の見た目ではなく、名前・コメント（秘密ではないが絶対に変えない）・値を固定するテストで示す
 
 ## 4. 全体の流れ
 
@@ -104,16 +111,14 @@ Heroku 本番 ──pg_dump──▶ 手元の v1（ローカル DB に restore�
 | `manifest.json` | — | 各テーブルの行数・ダンプの取得時刻・v1 の最終コミット・`Rails.env`・YAML 列の形の集計（§5.2） |
 | `usage_records.csv` | `usage_records` | `user_id, staffs_count, created_at`（名前を含まない。1 年残す記録。§10-8） |
 
-019 §8.2 の引き継ぎスクリプトの入力 `v1-subscriptions.csv`（`v1_user_id, email, stripe_customer_id, stripe_subscription_id, max_staffs_count, last_edited_at`）は **rake ではなく `import.ts` が書く**（§6.1）。
-「移行する人」の判定（§7.1）を Ruby と TS の 2 か所に持たないため。`last_edited_at` は `shifts.jsonl` の `updated_at` の最大を **pattern → tenant → user** でたどり、**§7.6 で捨てる前の全行**（`staff_id IS NULL` の自動アサインの一時行や、消えたスタッフの行を含む）から TS が出す。019 §8.2.1 の集計（`Shift.joins(pattern: :tenant)`）と同じ母集合にしないと、rescue / cancel_unpaid の 90 日の境目が動く。
-移行しない人の Subscription は `v1-subscriptions-not-migrated.csv` に分け、引き継ぎスクリプトには渡さず Dashboard で解約する（想定 0 件。022 の手順に入れる）。
+Stripe の引き継ぎスクリプトの入力 `v1-subscriptions.csv` は rake では出さない。`import.ts` が書く（§6.1 の「Stripe 用の CSV」）。
 
 - `shift_cycle` / `kind` は **enum の名前**（`month` / `workday`）で書く（整数を v2 で読み替えない）
 - YAML 列は `staff.available_wdays`（配列）・`staff.available_patterns`（配列）・`staff.default_patterns`（Hash）・`pattern.default_required_nums`（Hash）を**モデルの属性として読んだ値**をそのまま書く。
   `default_required_nums` は **json 列に `serialize :default_required_nums, Hash`**（`app/models/pattern.rb`）なので、DB には YAML の文字列が JSON の文字列として入っている（二重エンコード。v1 分析 §2.2 の疑いは事実）。モデルの属性として読めば Hash に戻る。値は `to_i` されていないので `"2"` のような文字列が混じる（v2 の `parseRequiredNums()` が数値に寄せる）。念のため、読んだ値が `String` なら `YAML.safe_load(..., permitted_classes: [ActiveSupport::HashWithIndifferentAccess, Symbol])` でもう一段ほどき、`manifest.json` に「文字列だった件数」を出す
 - YAML 列が NULL のスタッフは、**モデルを通して読んだ値をそのまま書く** = `available_wdays` / `available_patterns` は `[]`、`default_patterns` は `{}`（**決定。2026-10-10**。§13-3）。
-  v1 は `serialize :available_wdays, Array` で、Rails は NULL を `[]` として読む。画面の「担当可 / 不可」（`Staff#available_wday?`）・ポップオーバーの絞り込み・自動アサインはすべてモデル経由なので、v1 でも NULL と `[]` は区別されていない（= 全日「担当不可」）。rake に特別な読み替えは書かない。NULL の件数だけ manifest に出す（列は 2018-01-04 に足され、クローズドベータは 2019-02 からなので 0 件のはず）
-- `find_each`（1000 件ずつ）で書く。`shifts` は数十万〜数百万行を見込む（件数は §9.1 で埋める）
+  v1 は `serialize :available_wdays, Array` で、Rails は NULL を `[]` として読む。画面の「担当可 / 不可」（`Staff#available_wday?`）・ポップオーバーの絞り込み・自動アサインはすべてモデル経由なので、v1 でも NULL と `[]` は区別されていない（= 全日「担当不可」）。rake に特別な読み替えは書かない。NULL の件数だけ manifest に出す（`available_wdays` / `available_patterns` は 2018-01 に足されたので 0 件のはず。`default_patterns` は 2019-11 なので NULL がありうる。§5.2-2）
+- `find_each`（1000 件ずつ）で書く。`shifts` は数十万〜数百万行を見込む（件数は §15 に書く）
 - 個人情報を含むので、出力先はリポジトリの外（`~/v1-export/`）。`.gitignore` に `v1-export/` を足しておく
 
 ### 5.2 manifest に出す集計（v1 分析 §7.2 の「必ず確認すること」）
@@ -148,20 +153,21 @@ MIGRATION_DATABASE_URL=postgresql://... \
 | 接続 | `pg`（新しい devDependency）。`MIGRATION_DATABASE_URL`（ローカルは `postgresql://postgres:postgres@127.0.0.1:54322/postgres`、本番は Session pooler の URL + `sslmode=require`）。`.env.local` には書かず、実行する shell で渡す |
 | 名前空間 | `V1_UUID_NAMESPACE`（`lib/migration/v1Ids.ts` の定数。§3-6）。アプリの旧 URL 解決と同じ import を読むので、環境ごとの設定も突き合わせも要らない |
 | 実行の単位 | `BEGIN` → 全テーブル → 件数の突合（§8.1）→ `COMMIT`（`--rollback` なら `ROLLBACK`）。途中の例外は `ROLLBACK` して非 0 で終わる |
-| 順序 | `auth.users` → `auth.identities` → `tenants` → `patterns`（`pair_pattern_id` は後から UPDATE）→ `staffs` → `profiles`（UPDATE。`staff_cap` に在籍数が要るので staffs の後）→ `staff_patterns` → `staff_default_patterns` → `shifts` → `required_nums` → `restrictions` → `date_notes` → `shares` → `staff_count_history`。在籍数は TS が変換済みの `staffs` から数え、`profiles.staff_cap` と `staff_count_history` の両方に同じ値を使う（§8.1 で DB の `private.active_staff_count()` と突き合わせる） |
+| 順序 | `auth.users` → `auth.identities` → `tenants` → `patterns`（`pair_pattern_id` は後から UPDATE）→ `staffs` → `profiles`（UPDATE）→ `staff_patterns` → `staff_default_patterns` → `shifts` → `required_nums` → `restrictions` → `date_notes` → `shares` → `staff_count_history`。在籍数（`staff_cap` と `staff_count_history`）は TS が変換済みの `staffs` から数えるので、順序に制約は無い。両方に同じ値を使い、§8.1 で DB の `private.active_staff_count()` と突き合わせる |
 | 書き込み | 1000 行ずつの複数行 `INSERT`（`pg` のパラメータ上限 65535 に収まる列数にする）。リハーサルで遅ければ `COPY FROM STDIN`（`pg-copy-streams`）に替える。**最後に `ANALYZE`** |
 | セッション | 冒頭で `set statement_timeout = 0` / `set idle_in_transaction_session_timeout = 0`（Supabase の既定で切られないように。自セッションなら superuser でなくても変えられる）。`pg` の型パーサは `date`（OID 1082）と `timestamptz`（1184）を**文字列のまま**受ける（`types.setTypeParser`。既定は JS の `Date` にして実行環境の TZ で 1 日ずれる）。`verify.ts` も同じ |
 | トリガ | 冒頭で `staffs_record_staff_count` / `patterns_set_updated_at` / `profiles_set_updated_at` を `disable trigger`、末尾で `enable`（§3-2）。`on_auth_user_created` は**止めない**（`profiles` を作らせる。`handle_new_user` は `on conflict do nothing`）。`alter table … disable trigger` は SHARE ROW EXCLUSIVE ロックをトランザクションの間ずっと持つ。読み取りは通るが、その表への書き込み（Webhook や cron の同期による `profiles` の UPDATE）はコミットまで待つ。保守的に **Vercel の cron（23:20 / 23:50 JST）と重ねない**（§10） |
 | 既存データ | 起動時に `auth.users` と `public.tenants` の件数を表示し、`tenants` が 0 件でなければ `--allow-existing` が無い限り止まる（本番は管理用アカウント 1 件だけの状態で流す。ローカルは seed が入っているので `--allow-existing`） |
 | 上書き | `--overrides <json>`: 規則の外で手で決めたことをスクリプトに渡す口。`customerOwner`（`stripe_customer_id` を複数人が持つ組の持ち主。§7.1）と `forceMigrateUsers`（移行しない判定だが店舗を持つ人を確認済みで入れる。§7.1）。適用した上書きは `report.json` に残す。想定は空のファイルで、空でも手順は同じ（決めた結果を次の実行で再現できる） |
-| レポート | `report.json`（`--input` と同じ場所）: テーブルごとの `BEGIN 直後の count(*) / 読んだ / 入れた / 捨てた（理由別）/ 直した（理由別）`、捨てた行の id と理由、切り詰めた値の前後、移行しないのに店舗を持つ人、適用した上書き。同じ場所に `v1-subscriptions.csv` と `v1-subscriptions-not-migrated.csv`（§5.1）。`--rollback` でも書く。**個人情報（名前・メモ）を含む**のでエクスポートと同じ場所に置き、暗号化して 1 年で消す（§10-8） |
+| レポート | `report.json`（`--input` と同じ場所）: テーブルごとの `BEGIN 直後の count(*) / 読んだ / 入れた / 捨てた（理由別）/ 直した（理由別）`、捨てた行の id と理由、切り詰めた行の id と前後の文字数（**値そのものは書かない**。名前・メモは 3 か月で消える JSONL から id で引ける。§10-8）、移行しないのに店舗を持つ人、適用した上書き。同じ場所に `v1-subscriptions.csv` と `v1-subscriptions-not-migrated.csv`（§5.1）。`--rollback` でも書く。メールと id を含むのでエクスポートと同じ場所に置き、暗号化して 1 年で消す（§10-8） |
+| Stripe 用の CSV | 019 §8.2 の引き継ぎスクリプトの入力 `v1-subscriptions.csv`（`v1_user_id, email, stripe_customer_id, stripe_subscription_id, max_staffs_count, last_edited_at`）を **`import.ts` が書く**（rake ではない。「移行する人」の判定 §7.1 を Ruby と TS の 2 か所に持たないため）。`last_edited_at` は `shifts.jsonl` の `updated_at` の最大を **pattern → tenant → user** でたどり、**§7.6 で捨てる前の全行**（`staff_id IS NULL` の自動アサインの一時行や、消えたスタッフの行を含む）から出す。019 §8.2.1 の集計（`Shift.joins(pattern: :tenant)`）と同じ母集合にしないと、rescue / cancel_unpaid の 90 日の境目が動く。移行しない人の Subscription は `v1-subscriptions-not-migrated.csv` に分け、引き継ぎスクリプトには渡さず Dashboard で解約する（想定 0 件。022 の手順に入れる） |
 | 実行環境 | `tsx --conditions=react-server`（`stripe:*` と同じ。`server-only` の `lib/calendar/holidays.ts` を読むため） |
 
 ### 6.2 変換は純関数（`src/lib/migration/`）
 
 | ファイル | 役割 |
 | --- | --- |
-| `v1Ids.ts` | 既存。`v1Uuid(table, id, ns)`。**id の導出はここ以外に書かない**（005 §3.2） |
+| `v1Ids.ts` | 既存。`v1Uuid(table, id)`（名前空間は内部の定数。§3-6）。**id の導出はここ以外に書かない**（005 §3.2） |
 | `v1Types.ts` | JSONL の行の型と Zod（読み込み時に 1 行ずつ検査。形が違えばその場で止まる） |
 | `transform.ts` (+ test) | テーブルごとの `transformXxx(rows, context) → { rows, dropped, fixed }`。context は「移行する users の id 集合」「tenant → owner」「pattern → tenant」など、親テーブルの変換結果 |
 | `truncate.ts` (+ test) | 文字数の切り詰め（コードポイント単位。`char_length` と同じ数え方）。切り詰めの前後を返す |
@@ -173,12 +179,12 @@ MIGRATION_DATABASE_URL=postgresql://... \
 
 共通:
 
-- id は `v1Uuid('<table>', id, ns)`。tenants だけ 22 文字トークン（`uuid` 列）を名前にする
+- id は `v1Uuid('<table>', id)`。tenants だけ 22 文字トークン（`uuid` 列）を名前にする
 - `created_at` / `updated_at` は v1 の値をそのまま。`profiles` はトリガが `now()` で作るので、§7.1 の UPDATE で v1 の値に直す（管理画面の「登録日」が `profiles.created_at`）
-- 文字数超過は CHECK と同じ長さに切り詰め、前後を記録する（003 §3.10）。切り詰めは `.trim()` の後
+- 文字数超過は CHECK と同じ長さに切り詰め、id と前後の文字数を記録する（003 §3.10。値は report に書かない。§6.1）。切り詰めは `.trim()` の後
 - 親が移行されない行（捨てた user の店舗、捨てた店舗のスタッフ…）は連鎖して捨て、理由に `parent_dropped` を付ける
 - **v1 で nullable の列は、`v1Types.ts` の Zod も `nullable()` で受ける**（`position` / `color_hex` / `note` / `name` / `provider` / `uid` / `stripe_*` / `trial_end` など。non-null で書くとリハーサルの最初の行で止まる）。`position` が null の行は末尾（id 順）。`stripe_customer_id` / `stripe_subscription_id` の空文字は null
-- **親の id が NULL の行は `parent_missing` で捨てて記録する。** v1 の親を指す列はほぼすべて nullable（FK はあっても NULL は通る）。`v1Types.ts` の Zod も `nullable()` で受ける（0 件のはずだが、モデル経由の書き込み以外に保証が無い）
+- **親の id が NULL の行は `parent_missing` で捨てて記録する。** v1 の親を指す列はほぼすべて nullable（FK はあっても NULL は通る。0 件のはずだが、モデル経由の書き込み以外に保証が無い）
 - `position` は v1 の `(position, id)` 順に **0 から振り直す**（v1 の acts_as_list は 1 始まり。v2 は 0 始まりで並べ替え RPC が振り直すので、値そのものに意味は無い）
 
 ### 7.1 users → `auth.users` / `auth.identities` / `profiles`
@@ -197,10 +203,21 @@ MIGRATION_DATABASE_URL=postgresql://... \
 | `auth.identities` の共通の列 | `id = gen_random_uuid()`、`identity_data` の `email` は小文字、`last_sign_in_at` / `created_at` / `updated_at` は v1 の `created_at`（seed と同じく明示する。本番の `auth` スキーマは GoTrue が管理していて既定値が版で変わりうる） |
 | その他の列 | `instance_id = '00000000-…'`、`aud = role = 'authenticated'`、`raw_user_meta_data = '{}'`、`last_sign_in_at = current_sign_in_at`、token 系 4 列は `''`（seed の注記。null だと GoTrue が落ちる） |
 | `locked_at` | 無視する（ロックは解除）。件数だけ記録。`unconfirmed_email` は v1 に無い（`reconfirmable = false`） |
-| `profiles`（トリガが作った後、staffs の後に UPDATE） | `stripe_customer_id`（そのまま。v1 に一意制約が無く v2 は `unique` なので、同じ Customer を持つユーザーが 2 人以上いれば、`stripe_subscription_id` を持つ人を優先し、それでも決まらなければ `created_at` が古い 1 人に残して他は null にして記録。Customer を失った側に `stripe_subscription_id` があれば、その人は `v1-subscriptions-not-migrated.csv` に出して Dashboard で扱う（引き継ぎスクリプトに渡すと Customer 一致で schedule が付き、同期の `chooseSubscription()` が後から解約する形になる）。Customer を失った側の Subscription は v2 に結び付かないので、§5.2-8 が 0 件でなければ Stripe の Dashboard でその Customer の Subscription の持ち主を確かめてから決める）/ `trial_end`（そのまま）/ `created_at` / `updated_at`（v1 の値。トリガは止めてある）/ `max_staffs_count`（**`stripe_subscription_id IS NULL AND max_staffs_count >= 11` のときだけ**その値。個別契約）/ `staff_cap`（**`stripe_subscription_id IS NOT NULL AND max_staffs_count >= 11` のとき** `least(greatest(max_staffs_count, 移行時点の在籍数), 1000)`。019 §13.7）/ `is_admin` は **立てない**（§3-3）。v1 は `stripe_subscription_id` を退会以外で消さない（解約は上限を 10 人に下げるだけ。`user.rb`・`charges_controller.rb`）ので、「Subscription なし」= 一度も申し込んでいない人で、`max_staffs_count >= 11` なら管理者が SQL で入れた個別契約 |
+| `profiles`（トリガが作った後に UPDATE） | `stripe_customer_id`（そのまま。重複は §7.1.1）/ `trial_end`（そのまま）/ `created_at` / `updated_at`（v1 の値。トリガは止めてある）/ `max_staffs_count`（**`stripe_subscription_id IS NULL AND max_staffs_count >= 11` のときだけ**その値。個別契約）/ `staff_cap`（**`stripe_subscription_id IS NOT NULL AND max_staffs_count >= 11` のとき** `least(greatest(max_staffs_count, 移行時点の在籍数), 1000)`。019 §13.7）/ `is_admin` は **立てない**（§3-3） |
 
 - `email` は Devise が小文字で保存している。念のため `.toLowerCase().trim()` し、重複があれば止まる（`auth.users` の一意制約に任せず、変換で先に検出して理由を出す）
 - 店舗を 1 つも持たないユーザーも移行する（ログインできて `/tenants/new` に着く）
+- 「Subscription なし」= 一度も申し込んでいない人。v1 は `stripe_subscription_id` を退会以外で消さない（解約は上限を 10 人に下げるだけ。`user.rb`・`charges_controller.rb`）ので、`stripe_subscription_id IS NULL AND max_staffs_count >= 11` は管理者が SQL で入れた個別契約
+
+#### 7.1.1 `stripe_customer_id` を複数のユーザーが持つとき
+
+v1 に一意制約が無く、v2 は `unique`。想定は 0 件（§5.2-8）で、あれば次の規則で 1 人に残し、他は null にして記録する。
+
+1. `stripe_subscription_id` を持つ人を優先する
+2. それでも決まらなければ `created_at` が古い人
+3. 規則で決めたくないときは `--overrides` の `customerOwner`（§6.1）で持ち主を指定する。Stripe の Dashboard でその Customer の Subscription の持ち主を確かめてから決める
+
+Customer を失った側に `stripe_subscription_id` があれば、その人は `v1-subscriptions-not-migrated.csv` に出して Dashboard で扱う。引き継ぎスクリプトに渡すと Customer 一致で schedule が付き、同期の `chooseSubscription()` が後から解約する形になる。
 
 ### 7.2 tenants
 
@@ -219,7 +236,7 @@ MIGRATION_DATABASE_URL=postgresql://... \
 | `name` | trim → 10 文字。空なら `'スタッフ'` にして記録 |
 | `disabled = true` | `retired_at = updated_at`（001） |
 | `max_work_week` | 0..7 の外は 5（既定）にして記録 |
-| `available_wdays` | 整数に寄せ、0..6 だけ残し、重複を除いて昇順。nil は §5.1 の読み替え |
+| `available_wdays` | 整数に寄せ、0..6 だけ残し、重複を除いて昇順。NULL はモデルが `[]` にしている（§5.1） |
 | `available_patterns` → `staff_patterns` | 整数に寄せて重複を除き（PK が `(staff_id, pattern_id)`）、要素ごとに `v1Uuid('patterns', id)`。**同じ店舗に存在するパターンだけ**残す（他店舗・削除済みは捨てて記録） |
 | `default_patterns` → `staff_default_patterns` | キーは `'0'..'6'` / `'holiday'` だけ。値が空・0・存在しない・他店舗なら捨てる |
 | `kana`・`group_id` | 捨てる（廃止） |
@@ -316,7 +333,7 @@ SQL で数え直さない（2 つの数え方を持たない）。§8.1 で DB �
 | `tenants` で `setup_completed_at is null` の件数 | = スタッフ 0 人の店舗の数 |
 | 切り詰めた値の件数（列ごと） | 報告する。想定外に多ければ 003 §3.10 の 2 を再検討 |
 
-どれかが合わなければ `ROLLBACK` して非 0 で終わる。
+「期待」に数や等式が書いてある行が合わなければ `ROLLBACK` して非 0 で終わる。「報告する」の行は止めず、レポートに出すだけ。
 
 ### 8.2 移行後の DB に対して（`scripts/migrate-v1/verify.ts` + 手で）
 
@@ -328,7 +345,7 @@ SQL で数え直さない（2 つの数え方を持たない）。§8.1 で DB �
 | 4 | 共有 URL | 有効な `shares` を 3 件選び `/share/<code>` が v1 と同じ表を出す。期限切れは 404。v1 の共有ページはスタッフグループ順（`ordered_shift_groups`）なので、グループを使っていた店舗では行の並びが違って正しい（グループは廃止） |
 | 5 | **CSV の一致** | サンプル店舗 5 件（スタッフ数の多い店・ペアのある店・退職者のいる店・半月表示の店・必要人数の上書きが多い店）で、v1 の `shifts.csv?encoding=utf8` と v2 の `/api/tenants/<id>/shifts/csv?encoding=utf8` を同じ `start` で取り `diff`。違いは 1 つずつ理由を書く（CSV は 010 で v1 と同じ形に作った）。v1 の CSV は名前を切り詰めないので、切り詰めたスタッフ名・パターン名の行は違って正しい（`report.json` の切り詰めの一覧と突き合わせる） |
 | 6 | 必要人数 | 5 のサンプルで、**「デフォルト人数をセット」を押してある期間**について v1 の表の `required / assigned` と v2 の表の数字が同じ（§7.7 で消した行が表示を変えていない）。押していない期間は v1 が 0、v2 が基本の人数で、違って正しい（§7.7） |
-| 7 | 準備中 | 移行した店舗を開いて `/setup` に送られない（§7.2） |
+| 7 | 準備中 | スタッフのいる店舗を開いて `/setup` に送られない。スタッフ 0 人の店舗は送られる（§7.2） |
 | 8 | Google の人 | `auth.identities` に `google` と `email` の 2 行があり、v1 のパスワードでログインでき、アカウント画面にパスワード欄が出る。実際の Google ログインは本番の Google の資格情報が要るので 022 で |
 | 8b | 代理承認の人（`password_is_email`） | `encrypted_password` が null で、メール + パスワードのログインが「メールアドレスまたはパスワードが違います」で止まり GoTrue が落ちない。`/password/forgot` から再設定できる（`providers` に `email` があるので guard を通る） |
 | 9 | 課金の列 | `profiles` の `stripe_customer_id` / `trial_end` / `max_staffs_count` / `staff_cap` を数件、v1 の値と目で比べる。`staff_count_history` が全員 1 行 |
@@ -341,7 +358,7 @@ SQL で数え直さない（2 つの数え方を持たない）。§8.1 で DB �
 1. Heroku からダンプを取る（`heroku pg:backups:capture` → `download`）。**取った日時と件数を本プランの §15 に書く**（`shifts` の行数で所要時間を見込む）
 2. 手元の v1 に restore（`pg_restore`。Heroku の Postgres と同じメジャー版を使う）→ `rails v2:export`
 3. `npx supabase db reset`（seed あり）→ `npm run migrate:v1 -- --input … --allow-existing`
-4. §8.2 の 1〜10（Google は 8 の範囲まで）
+4. §8.2 の 1〜10（実際の Google ログインを除く）
 5. 所要時間と `import.ts` の最大メモリ（RSS）を記録する。エクスポート・インポート・検証のそれぞれ。変換は全行をメモリに載せる（重複の判定に全行が要る）ので、Node の既定のヒープで足りなければ `--max-old-space-size` を手順に書く
 
 ### 9.2 直すものが出たら
@@ -368,7 +385,7 @@ SQL で数え直さない（2 つの数え方を持たない）。§8.1 で DB �
 | 5 | `npm run stripe:migrate-v1 -- --input <report と同じ場所>/v1-subscriptions.csv`（dry-run → `--limit 5` → 全部。019 §8.2.3）。dry-run の結果 CSV で、`skip`（Stripe で解約済み）・`review`・取得できません・Customer が一致しません のいずれかで `max_staffs_count >= 11` の人がいれば（どれも `billing_subscriptions` に写しが作られない）、Dashboard から解約した個別契約かを確かめる（§7.1 の規則では `staff_cap` が入り `max_staffs_count` は null になるので、同期の後に無料扱いでロックされうる。該当なら `profiles.max_staffs_count` を管理画面で入れる） | |
 | 6 | 全員の同期（019 §8.3-4）→ Stripe の Dashboard の設定を切り替える | |
 | 7 | DNS を Vercel へ | |
-| 8 | 保管（**決定。2026-10-10**。§13-6）。暗号化して 1 か所に置き、ファイル名に消す日を入れ、022 のチェックリストに削除の日付を 2 つ書く: (a) **pg_dump と JSONL はカットオーバーから 3 か月**で消す（復旧の窓はシフトの 3 周期で足り、以降は v2 のほうが新しくて戻せない。パスワードのハッシュと第三者であるスタッフの名前を本番の外に置き続けない。プライバシーポリシーの「バックアップに一定期間残り、復旧にのみ使う」と揃う）。(b) **`manifest.json` / `report.json` / Stripe の引き継ぎの結果 CSV と旧料金の対象者の一覧（019 §8.1）/ ダンプから抜いた `usage_records` の CSV（user id・人数・日時だけ）は 1 年**（「スタッフが消えた」「旧料金のはず」の問い合わせと、半年後に旧料金をやめる作業 019 §8.5 に使う）。Heroku の自動バックアップはアプリの停止（001 §5.4）で消える | |
+| 8 | 保管（**決定。2026-10-10**。§13-6）。暗号化して 1 か所に置き、ファイル名に消す日を入れ、022 のチェックリストに削除の日付を 2 つ書く: (a) **pg_dump と JSONL はカットオーバーから 3 か月**で消す（復旧の窓はシフトの 3 周期で足り、以降は v2 のほうが新しくて戻せない。パスワードのハッシュと第三者であるスタッフの名前を本番の外に置き続けない。プライバシーポリシーの「バックアップに一定期間残り、復旧にのみ使う」と揃う）。(b) **`manifest.json` / `report.json` / Stripe の引き継ぎの結果 CSV と旧料金の対象者の一覧（019 §8.1）/ ダンプから抜いた `usage_records` の CSV（user id・人数・日時だけ）は 1 年**（「スタッフが消えた」「旧料金のはず」の問い合わせと、半年後に旧料金をやめる作業 019 §8.5 に使う。どれもスタッフの名前・メモを含まない。`report.json` は切り詰めを id と文字数で持つ。§6.1）。Heroku の自動バックアップはアプリの停止（001 §5.4）で消える | |
 
 3 で失敗したら: トランザクションごと戻っているので、原因を直して 3 からやり直す。v1 は止まったままなのでデータはずれない。
 直すのに時間がかかるなら Heroku のメンテナンスモードを解いて日を改める（v2 には何も入っていない）。
@@ -381,33 +398,35 @@ scripts/migrate-v1/
   verify.ts                      移行後の DB と manifest / report の突合
   overrides.example.json         --overrides の形（§6.1。中身は空）
   v1/v2_export.rake              v1 に写して流す rake（§5）
-  (scripts/stripe/migrate-v1-subscriptions.ts と src/lib/billing/migration.ts の冒頭コメント「入力の CSV は rails runner で出す」を「import.ts が書く」に直す)
   fixtures/                      手で作った小さな JSONL（§12-4。個人情報を含まない架空の値。Vitest の通しのテストも読む）
 src/lib/migration/
-  v1Ids.ts (+ test)              既存。V1_UUID_NAMESPACE を定数にし、getV1UuidNamespace() を消す。テストで値を固定する
+  v1Ids.ts (+ test)              既存。V1_UUID_NAMESPACE を定数にし、v1Uuid(table, id) が内部で使う。getV1UuidNamespace() を消す。テストで値を固定する
   v1Types.ts                     JSONL の行の Zod
   transform.ts (+ test)          テーブルごとの変換（§7）
   truncate.ts (+ test)           文字数の切り詰め
   requiredNums.ts (+ test)       焼き付けられた行の判定（§7.7）
 package.json                     "migrate:v1" / "migrate:v1:verify"（tsx --conditions=react-server）、pg / @types/pg
 src/lib/tenants/legacyUrl.ts     resolveLegacyTenantUrl() から名前空間の取得と未設定の警告を消す（常に解決する）
-.env.example / README.md         V1_UUID_NAMESPACE の項目を消し、MIGRATION_DATABASE_URL をコメントで書く（.env.local には書かない）
+scripts/stripe/migrate-v1-subscriptions.ts / src/lib/billing/migration.ts
+                                 冒頭コメント「入力の CSV は rails runner で出す」を「import.ts が書く」に直す
+.env.example / README.md         V1_UUID_NAMESPACE の項目を消し、MIGRATION_DATABASE_URL をコメントで書く（.env.local には書かない）。
+                                 README の「旧 URL（v1）の確認」の例を今の着地（/tenants/<uuid>?start=…。/shifts を落とす）に直す
 .gitignore                       v1-export/
-AGENTS.md                        scripts/migrate-v1 と lib/migration の説明。「uuid の扱い」の V1_UUID_NAMESPACE を定数に読み替える
-docs/plans/001-…/README.md       §5 の冒頭に「021 で上書き」の注記
+AGENTS.md                        scripts/migrate-v1 と lib/migration の説明。「uuid の扱い」の 2 か所（V1_UUID_NAMESPACE の環境変数、getV1UuidNamespace() が validate() で弾く）を定数に読み替える
+docs/plans/001-…/README.md       §3.1（環境変数・ON CONFLICT）と §5 の冒頭に「021 で上書き」の注記
+docs/plans/005-…/README.md       §3.1（未設定時の警告・本番の env）に「021 §3-6 で定数化」の注記
 docs/plans/019-…/README.md       §8.1 の「session_replication_role = replica」に「021 §3-2 で上書き」の注記
 ```
 
 ## 12. 実装の順序と確認
 
-1. `uuidgen` で v4 を 1 つ作り、`v1Ids.ts` の定数 `V1_UUID_NAMESPACE` にする（コメント: 秘密ではないが絶対に変えない。変えると移行した全行の id と旧 URL がずれる）。
-   テストで値を固定し、`getV1UuidNamespace()` と `legacyUrl.ts` の警告、`.env.example` / README の項目を消す。**この時点で 1 回コミットし、以降は値に触らない**
+1. 名前空間の定数化（§3-6）: `uuidgen` で v4 を 1 つ作って `v1Ids.ts` の定数にし、`v1Uuid(table, id)` が内部で使う形に変える。テストで値を固定し、`getV1UuidNamespace()`・`legacyUrl.ts` の警告・`.env.example` / README / AGENTS.md の項目を直す（§11）。**この時点で 1 回コミットし、以降は値に触らない**
 2. `v1Types.ts` と `v2_export.rake` を先に書き、**形を 1 つに決める**（JSONL の 1 行 = Zod の 1 型）
 3. `truncate.ts` / `requiredNums.ts` / `transform.ts` と Vitest（§7 の各行に 1 ケース以上。重複・他店舗・自己参照・空文字・範囲外）
 4. `import.ts`。`scripts/migrate-v1/fixtures/` に手で作った小さな JSONL（2 ユーザー・2 店舗・Google の人・代理承認の人・捨てる行・切り詰める値・焼き付けと上書きの必要人数を含む）を置き、変換の通し（JSONL → v2 の行 + report）を Vitest で固定してから、手元の seed だけの DB に入れて通す
 5. `verify.ts`
 6. 9.1 のリハーサル（本物のダンプ）。件数と所要時間を §15 に記録
-7. AGENTS.md・001 の注記・`.env.example`
+7. AGENTS.md・001 / 005 / 019 の注記・Stripe のスクリプトの冒頭コメント（§11 の残り）
 8. PR の前に `npm run lint` / `typecheck` / `test`。`npx supabase test db` はスキーマを触らないので変化なし
 
 ## 13. 決定と未確定
@@ -415,14 +434,14 @@ docs/plans/019-…/README.md       §8.1 の「session_replication_role = replic
 | # | 論点 | 状態 |
 | --- | --- | --- |
 | 1 | 未確認ユーザー（`confirmed_at IS NULL`、招待は承認済み）の扱い | **決定（2026-10-10）**: v1 でログインできた人（`confirmed_at IS NOT NULL OR sign_in_count > 0`）だけを確認済みで入れ、それ以外は入れない。未確認の行は作らない（§7.1）。devise_invitable は招待の承認で `confirmed_at` を埋め、Devise の confirmable は未確認のログインを拒むので、該当は僅少のはず。§5.2-5 の内訳と「移行しないのに店舗を持つ人」が 0 件であることをリハーサルで確かめる |
-| 2 | `V1_UUID_NAMESPACE` の管理場所と値 | **決定（2026-10-10）**: 環境変数をやめ、`lib/migration/v1Ids.ts` の定数にする。値は `uuidgen` のランダムな v4（意味のある値にしない。理由は §3-6）。実装の最初に作ってコミットし、テストで固定する |
+| 2 | `V1_UUID_NAMESPACE` の管理場所と値 | **決定（2026-10-10）**: §3-6 のとおり（定数・ランダムな v4） |
 | 3 | `staffs.available_wdays` が nil のときの読み替え | **決定（2026-10-10）**: `[]`（全日「担当不可」）。v1 の `Staff` は `serialize ..., Array` で NULL を `[]` と読み、判定はすべてモデル経由なので、v1 の見え方と同じ。`available_patterns` → `[]`、`default_patterns` → `{}` も同じ理由（§5.1） |
-| 4 | 本番の `postgres` ロールで `auth.users` への INSERT と `disable trigger` ができるか | **9.3 で確かめる**。できなければ: INSERT は `supabase_auth_admin` 相当の権限を一時的に付ける / トリガは止めずに `staff_count_history` を最後に `delete` して入れ直す |
-| 5 | 1 トランザクション（§3-1）・トリガの止め方（§3-2）・`is_admin` を立てない（§3-3）・必要人数の間引き（§3-4） | §3-1〜§3-5 は **決定（2026-10-11）**。§3-6 は #2 で決定済み |
-| 9 | 変換を TypeScript で書くか SQL で書くか（`pg_restore` で `v1` スキーマに入れて `INSERT … SELECT`） | **決定（2026-10-11）: TypeScript**。SQL でも成立する（速く部品が少ない）が、YAML の列は SQL で読めず Ruby の工程が消えないこと、uuid の導出・祝日・必要人数の数値化をアプリの関数と共有できること、Vitest で規則を固定できることを優先した |
+| 4 | 本番の `postgres` ロールで `auth.users` への INSERT と `disable trigger` ができるか | **9.3 で確かめる**。`public` の表は migration を流した `postgres` が所有者なので `disable trigger` はできるはず（できなければ 3 つとも代替が無い。`set_updated_at` は BEFORE UPDATE で毎回 `now()` にするので後から直せない）。止められることを §9.3 の必須条件にする。`auth.users` への INSERT ができなければ `supabase_auth_admin` 相当の権限を一時的に付ける |
+| 5 | §3 の 6 点（1 トランザクション・トリガ 3 つ・`is_admin`・必要人数の間引き・`assist_run_id`・名前空間） | §3-1〜§3-5 は **決定（2026-10-11）**、§3-6 は #2 で決定済み |
 | 6 | ダンプ・エクスポート・レポートの保管期間 | **決定（2026-10-10）**: pg_dump と JSONL は 3 か月、manifest / report / Stripe の結果 CSV / `usage_records` の CSV は 1 年（§10-8）。当初の案（全部 1 年）は、フルのダンプの価値が数週間で尽きる一方で負債が 1 年残るのでやめた |
 | 7 | リハーサルのダンプをいつ取るか | **未確定**。実装の 6（§12）の前。古いダンプでよい |
 | 8 | 書き込みが遅い・メモリが足りないときの対処 | 9.1 の所要時間と RSS で判断。目安: インポート全体が 10 分を超えるなら `COPY` に切り替える。ヒープが足りなければ `--max-old-space-size` |
+| 9 | 変換を TypeScript で書くか SQL で書くか（`pg_restore` で `v1` スキーマに入れて `INSERT … SELECT`） | **決定（2026-10-11）: TypeScript**。SQL でも成立する（速く部品が少ない）が、YAML の列は SQL で読めず Ruby の工程が消えないこと、uuid の導出・祝日・必要人数の数値化をアプリの関数と共有できること、Vitest で規則を固定できることを優先した |
 
 ## 14. プランのレビュー（指摘が出なくなるまで）
 
@@ -523,6 +542,26 @@ docs/plans/019-…/README.md       §8.1 の「session_replication_role = replic
 | 3 | §10-3 の括弧の理由が 5 回目 #5 の修正に追いついていなかった | 揃えた |
 | 4 | `default_patterns` は 2019-11 に足された列で、NULL は 0 件とは限らない | §5.2-2 の期待値を列ごとに分けた |
 | 5 | `stripe_customer_id` の重複で Customer を失った側の Subscription をどちらの CSV に書くかが未定 | not-migrated に出して Dashboard で扱う（§7.1） |
+
+### 7 回目（2026-10-11。§3 の決定を入れた後、利用者の依頼で全体を通読。私の通読と、別の担当の通読を合わせた）
+
+結果を変える指摘は無し。本文の矛盾・参照・構造だけ。
+
+| # | 指摘 | 対応 |
+| --- | --- | --- |
+| 1 | §3-2 の理由欄が「履歴のトリガだけ止める」のまま（3 回目 #6 で 3 つにした） | 理由に 2 つの `set_updated_at` を足した |
+| 2 | 冒頭の状態行が 10-11 の決定（§3・#9）を反映していない。§13-5 の論点に §3-5・§3-6 が無い。#9 が #5 と #6 の間にある | 状態行と §13-5 を直し、#9 を末尾へ |
+| 3 | §5.1「件数は §9.1 で埋める」の参照先が違う（§15） | 直した |
+| 4 | 定数化で消す場所が足りない: AGENTS.md の「`getV1UuidNamespace()` が `validate()` で弾く」、README の旧 URL の例（`/shifts` を落とす今の着地とずれ）、001 §3.1・005 §3.1 の注記 | §11・§12 に足した |
+| 5 | `v1Uuid(table, id, ns)` が名前空間を引数で受けたままで、§3-6 の「構造的にずれない」が成り立たない | `v1Uuid(table, id)` が内部で定数を使う形に（§3-6・§6.2・§7・§11・§12-1） |
+| 6 | §13-4 の代替案が履歴のトリガだけで、`set_updated_at` の代替（無い）に触れていない | 止められることを §9.3 の必須条件にした |
+| 7 | §10-8 の「名前を本番の外に置き続けない」と、1 年残す `report.json` が切り詰めた値（名前・メモ）を含むことが食い違う | report の切り詰めは id と文字数だけにし、値を書かない（§6.1・§7 共通・§10-8） |
+| 8 | §6.1「順序」の `profiles` を staffs の後に置く理由（在籍数が要る）が、TS で数えると決めた後は無い | 順序に制約が無いと書き直した |
+| 9 | §8.2-7「`/setup` に送られない」はスタッフ 0 人の店舗では逆 | 分けて書いた |
+| 10 | §8.1 で「報告するだけ」の行と「合わなければ ROLLBACK」が同じ表にあり、どれが止める条件か読めない | 数・等式のある行だけが止める条件、と明記 |
+| 11 | §5.1 の「NULL は 0 件のはず」が §5.2-2（`default_patterns` は 2019-11）と食い違う。§7.3 の「§5.1 の読み替え」も古い。§7 共通で Zod の nullable を 2 回書いている | 直した |
+| 12 | §9.1-4「Google は 8 の範囲まで」が、5 回目 #6（既知のパスワードで確かめる）の後は不要 | 「実際の Google ログインを除く」に |
+| 13 | 構造: §7.1 の `profiles` 行に重複の規則・条件・根拠が詰まっている / `v1-subscriptions.csv` の説明が §5 にある（書くのは `import.ts`）/ §3-6・§13-2 に同じ論証が 3 か所 | `stripe_customer_id` の重複を §7.1.1 に、CSV を §6.1 に移し、§3-6 の理由を表の下の箇条書きに、§13-2 は参照だけに |
 
 以降の指摘は出ていない。ここで収束とする。
 
