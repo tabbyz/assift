@@ -5,17 +5,11 @@
  *   STRIPE_SECRET_KEY=... npm run stripe:migrate-v1 -- --input v1-subscriptions.csv --apply --limit 5 # 区分ごとに 5 件だけ
  *   STRIPE_SECRET_KEY=... npm run stripe:migrate-v1 -- --input v1-subscriptions.csv --apply           # 残り全部
  *
- * 入力の CSV は v1 の本番で `rails runner` で出す（列: v1_user_id, email, stripe_customer_id, stripe_subscription_id,
- * max_staffs_count, last_edited_at）:
- *
- *   require 'csv'
- *   puts CSV.generate { |csv|
- *     csv << %w[v1_user_id email stripe_customer_id stripe_subscription_id max_staffs_count last_edited_at]
- *     User.where.not(stripe_subscription_id: nil).find_each { |u|
- *       last = Shift.joins(pattern: :tenant).where(tenants: { user_id: u.id }).maximum(:updated_at)
- *       csv << [u.id, u.email, u.stripe_customer_id, u.stripe_subscription_id, u.max_staffs_count, last&.iso8601]
- *     }
- *   }
+ * 入力の CSV（列: v1_user_id, email, stripe_customer_id, stripe_subscription_id, max_staffs_count, last_edited_at）は
+ * **データ移行の `import.ts` が書く**（`scripts/migrate-v1/`。021 §6.1）。「移行する人」の判定を Ruby と TS の 2 か所に
+ * 持たないため、rake ではなくインポートが `v1-subscriptions.csv` を出す。移行しない人の Subscription は
+ * `v1-subscriptions-not-migrated.csv` に分かれ、このスクリプトには渡さず Dashboard で解約する。
+ * `last_edited_at` は v1 の全 `shifts`（自動アサインの一時行を含む）の `updated_at` の最大を pattern → tenant → user でたどった値。
  *
  * 結果（区分・するはずの操作・結果）は `--output`（既定 `v1-subscriptions-result.csv`）に書く。v1 のダンプと一緒に保管する（§8.2.3）。
  * 旧 metered の明細を含む Subscription を触るので、**すべての呼び出しを API `2025-02-24.acacia` で行う**（basil 以降は扱えない）

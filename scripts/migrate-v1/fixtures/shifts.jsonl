@@ -1,0 +1,11 @@
+{"fixed":true,"created_at":"2026-09-01T10:00:00.000000Z","updated_at":"2026-09-03T10:00:00.000000Z","id":1000,"date":"2026-10-05","pattern_id":10,"staff_id":100}
+{"fixed":false,"created_at":"2026-09-01T10:00:00.000000Z","updated_at":"2026-09-02T10:00:00.000000Z","id":1001,"date":"2026-10-05","pattern_id":11,"staff_id":100}
+{"fixed":false,"created_at":"2026-09-01T10:00:00.000000Z","updated_at":"2026-09-01T10:00:00.000000Z","id":1002,"date":"2026-10-06","pattern_id":11,"staff_id":101}
+{"fixed":false,"created_at":"2026-09-01T10:00:00.000000Z","updated_at":"2026-09-30T23:59:59.000000Z","id":1003,"date":"2026-10-06","pattern_id":10,"staff_id":null}
+{"fixed":false,"created_at":"2026-09-01T10:00:00.000000Z","updated_at":"2026-09-01T10:00:00.000000Z","id":1004,"date":"2026-10-07","pattern_id":20,"staff_id":100}
+{"fixed":false,"created_at":"2026-09-01T10:00:00.000000Z","updated_at":"2026-09-01T10:00:00.000000Z","id":1005,"date":"2026-10-07","pattern_id":10,"staff_id":999}
+{"fixed":false,"created_at":"2026-09-01T10:00:00.000000Z","updated_at":"2026-09-01T10:00:00.000000Z","id":1006,"date":"2026-10-07","pattern_id":30,"staff_id":300}
+{"fixed":false,"created_at":"2026-09-01T10:00:00.000000Z","updated_at":"2026-09-01T10:00:00.000000Z","id":1007,"date":"2026-10-08","pattern_id":12,"staff_id":102}
+{"fixed":false,"created_at":"2026-09-01T10:00:00.000000Z","updated_at":"2026-09-01T10:00:00.000000Z","id":1008,"date":"2026-10-09","pattern_id":13,"staff_id":102}
+{"fixed":false,"created_at":"2026-09-01T10:00:00.000000Z","updated_at":"2026-09-04T10:00:00.000000Z","id":1009,"date":"2026-10-05","pattern_id":20,"staff_id":200}
+{"fixed":false,"created_at":"2026-09-01T10:00:00.000000Z","updated_at":"2026-09-01T10:00:00.000000Z","id":1010,"date":"2026-10-10","pattern_id":null,"staff_id":100}

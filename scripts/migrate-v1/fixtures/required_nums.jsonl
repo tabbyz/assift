@@ -1,0 +1,11 @@
+{"id":2000,"date":"2026-10-05","pattern_id":10,"num":2}
+{"id":2001,"date":"2026-10-06","pattern_id":10,"num":3}
+{"id":2002,"date":"2026-10-12","pattern_id":10,"num":1}
+{"id":2003,"date":"2026-10-12","pattern_id":11,"num":1}
+{"id":2004,"date":"2026-10-07","pattern_id":11,"num":0}
+{"id":2005,"date":"2026-10-05","pattern_id":13,"num":1}
+{"id":2006,"date":null,"pattern_id":10,"num":1}
+{"id":2007,"date":"2026-10-08","pattern_id":10,"num":-1}
+{"id":2008,"date":"2026-10-08","pattern_id":null,"num":1}
+{"id":2009,"date":"2026-10-08","pattern_id":30,"num":1}
+{"id":2010,"date":"2026-10-09","pattern_id":10,"num":40000}

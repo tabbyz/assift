@@ -8,7 +8,7 @@
 > 番号: 013 / 014 の冒頭注記では移行を 015 / 016 に繰り下げていたが、015〜020 が別の用途に使われたので本プランを **021** とし、
 > カットオーバー（本番の構築・DNS・告知・当日の手順）は **022** にする。本プランはカットオーバーのうち「データを v2 に入れて確かめる」部分だけを扱う。
 
-**状態: プラン（レビュー済み・未実装）。2026-10-10 に作成し、§13 の #1・2・3・6（未確認ユーザー・名前空間の定数化・YAML 列の NULL・保管期間）を決め、レビューを 6 回行った。2026-10-11 に §3 の 6 点（#5）と変換を TS で書くこと（#9）を決め、全体をもう一度レビューした（7 回目。§14）。残りはリハーサルのダンプの時期（#7）と、リハーサルで確かめること（#4・#8）だけ。**
+**状態: 実装済み（§12 の 1〜5・7・8。2026-10-11）。本物のダンプでのリハーサル（§12-6・§9.1）と本番の予行（§9.3）は未実施。** 2026-10-10 に作成し、§13 の #1・2・3・6 を決め、レビューを 6 回行った。2026-10-11 に §3 の 6 点（#5）と変換を TS で書くこと（#9）を決め、全体をもう一度レビューした（7 回目。§14）うえで実装した（§15）。残りはリハーサルのダンプの時期（#7）と、リハーサルで確かめること（#4・#8）。
 
 ---
 
@@ -21,13 +21,14 @@ v1（Rails / Heroku Postgres）の全データを v2（Supabase）に移し、**
 
 ### 完了条件
 
-- [ ] v1 の本番ダンプから `v1-export/<日時>/` の JSONL 一式が出る（Ruby 側で YAML を復元済み）
-- [ ] `npm run migrate:v1 -- --input <dir>` が、`tenants` が 0 件の v2 DB（本番は管理用アカウントだけ）に対して **1 トランザクション**で全テーブルを入れ、件数の突合（v1 の件数 − 捨てた件数 = v2 の件数）を自分で確かめて通る
-- [ ] 捨てた行・切り詰めた値・直した値が、理由つきでレポート（JSON）に残る
+- [ ] v1 の本番ダンプから `v1-export/<日時>/` の JSONL 一式が出る（Ruby 側で YAML を復元済み）。rake は書いた（構文チェックのみ。本物の v1 で未実行。§15）
+- [x] `npm run migrate:v1 -- --input <dir>` が、`tenants` が 0 件の v2 DB（本番は管理用アカウントだけ）に対して **1 トランザクション**で全テーブルを入れ、件数の突合（v1 の件数 − 捨てた件数 = v2 の件数）を自分で確かめて通る（fixtures で確認。§15）
+- [x] 捨てた行・切り詰めた値・直した値が、理由つきでレポート（JSON）に残る
 - [ ] ローカルのリハーサルで: v1 と同じパスワードでログインできる / v1 の店舗 URL（22 文字トークン）が 308 で移行後の店舗に着く / `/share/<code>` が開く /
       サンプル店舗の CSV が v1 と一致する（切り詰めた名前を除く）/ 移行後の店舗が「準備中」にならない / 必要人数の表示が焼き付け済みの期間で v1 と同じ
+      （fixtures ではログイン・308・共有の読み取り・準備中を確認。本物のダンプでの CSV の `diff` と必要人数の比較は §12-6 で）
 - [ ] 本番の Supabase に対して `--rollback`（全部入れて最後に ROLLBACK）で通り、所要時間が分かっている
-- [ ] 019 §8.2 の Stripe の引き継ぎスクリプトの入力（`v1-subscriptions.csv`）が、インポートと同じ判定（移行する人）で出る
+- [x] 019 §8.2 の Stripe の引き継ぎスクリプトの入力（`v1-subscriptions.csv`）が、インポートと同じ判定（移行する人）で出る
 
 ## 2. 範囲
 
@@ -567,4 +568,43 @@ docs/plans/019-…/README.md       §8.1 の「session_replication_role = replic
 
 ## 15. 実装ログ
 
-（未着手）
+### 2026-10-11（§12 の 1〜5・7・8）
+
+クラウドのセッションで実装した。v1 のコードは `tabbyz/assift-v1` を clone して突き合わせた。
+
+| § | やったこと |
+| --- | --- |
+| 12-1 | `V1_UUID_NAMESPACE = 4b880c2f-808c-4326-9bbd-3497ab1056e1`（`uuidgen` の v4）を `lib/migration/v1Ids.ts` の定数にし、`v1Uuid(table, id)` が内部で使う。テストで値と RFC 準拠を固定（Python の `uuid5` と相互確認した値も固定）。`getV1UuidNamespace()` と `legacyUrl.ts` の `resolveLegacyTenantUrl()`・警告を消し、proxy は `rewriteLegacyTenantUrl(pathname, search)` を直接呼ぶ。`.env.example` / README / AGENTS.md を直した。**ここで 1 回コミット**（`5210380`） |
+| 12-2 | `v1Types.ts`（JSONL の 1 行 = Zod の 1 型。親を指す列と v1 で nullable の列は `nullable()`。`required_nums.date` は壊れていても読んで変換で捨てる）と `scripts/migrate-v1/v1/v2_export.rake`（§5.1 の列・§5.2 の 13 の集計・`usage_records.csv`。`ruby -c` のみ。**本物の v1 では未実行**） |
+| 12-3 | `truncate.ts`（コードポイント。サロゲートペアを途中で切らない）/ `requiredNums.ts`（`judgeBakedRequiredNum()`。祝日は呼び出し側）/ `transform.ts`（§7 の表ごと。親は `Map<v1 id, 変換後 \| null>` で受け、`has()` が false なら `parent_missing`、null なら `parent_dropped`）。Vitest 79 件 |
+| 12-4 | `convert.ts`（全体の配線 + レポートの材料: 件数・移行しないのに店舗を持つ人・上限超過・準備中でデータあり・Stripe の CSV）/ `readExport.ts`（1 行ずつ Zod。manifest の件数と突合）/ `scripts/migrate-v1/import.ts` / `fixtures/`（架空の 8 ユーザー・5 店舗。中身は `fixtures/README.md`）。`convert.test.ts` が fixtures の通しを固定。seed 入りのローカル DB に `--rollback` → COMMIT で通した |
+| 12-5 | `verify.ts`。`report.json` の BEGIN 直後の `count(*)` を基準に `現在 − 基準 = 入れた`、manifest の行数 = 読んだ、v1 の表の「入れた」= v2 の表の差分、`shifts.date` の文字列一致 |
+| 12-7 | AGENTS.md（`lib/migration` / `scripts/migrate-v1` / スクリプト）、001 §3.1・§5.1、005 §3.1、019 §8.1 の注記、Stripe のスクリプトと `lib/billing/migration.ts` の冒頭コメント |
+| 12-8 | `npm run lint`（警告 1 件は main 由来の `reasons.test.ts`）/ `typecheck` / `test`（894 件）/ `npx supabase test db`（241 件）すべて通過。`format:check` の 4 ファイルも main 由来 |
+
+#### fixtures での通し（ローカル Supabase。seed あり → `--allow-existing`）
+
+- `--rollback` と COMMIT の両方で §8.1 の突合 20 件がすべて OK。所要 0.2 秒（fixtures は 70 行なので時間の目安にはならない）
+- `verify.ts` が 30 件すべて一致
+- **GoTrue でのログイン**: `$2a$11$…`（Postgres の `crypt('password', gen_salt('bf', 11))` で作った Devise と同じ形）で通常の人・Google の人（`providers = ["google","email"]`）が入れた。`encrypted_password = null`（代理承認・空）の人はメール + パスワードが 400（`invalid_credentials`）で GoTrue は落ちない。Devise の bcrypt gem が作った実物のハッシュは本物のダンプで確かめる（§8.2-2）
+- **旧 URL**: `next dev` で `/tenants/FixtureTenant00000001A/shifts?start_date=2026-10-01` → `308 /tenants/<uuid>?start=2026-10-01`。uuid は `v1Uuid('tenants', token)` と一致
+- **共有ページ**: `getSharedShiftTable()` を直接呼んで、移行した店舗名・在籍スタッフ・勤務パターン・シフト・メモが返り、捨てた店舗の code は null。ページそのものはこのセッションの環境で `next dev` が Google Fonts を取れず（`next/font/google` の fetch がプロキシを通らない）500 になるため、表示はリハーサルで見る
+- DB の中身を目で確認: ペアの UPDATE（夜勤 → 明け）、`position` の 0 始まり、`retired_at`、`available_wdays` の正規化、`profiles` の `stripe_customer_id` / `trial_end` / `max_staffs_count` / `staff_cap`、`created_at` / `updated_at` が v1 の値のまま（`set_updated_at` を止めた効果）、`staff_count_history` が全員 1 行、トリガが 3 つとも `enable` に戻っている（`tgenabled = O`）
+
+#### プランとの差分（実装で決めたこと）
+
+- `lib/migration/` に `convert.ts`（全体の配線）と `readExport.ts`（JSONL の読み込み）を足した（§6.2 の 4 ファイルに加えて）。`import.ts` を「読む → 変換 → 書く」だけにしつつ、fixtures の通しを Vitest で固定するには、配線が import できる場所に要る
+- `scripts/migrate-v1/pg.ts`（`keepDateStrings()`。`import.ts` と `verify.ts` が共有する型パーサの設定）を足した
+- `resolveLegacyTenantUrl()` は残さず消した。名前空間を受けない `rewriteLegacyTenantUrl(pathname, search)` と同じものが 2 つになるため
+- `v1UuidIn(namespace, table, id)` をテスト専用に残した（§3-6 の「テスト用に名前空間を渡す関数は別名で残す」）
+- `report.json` の `dropped` は、件数が数十万になりうる理由（`shifts` の `unassigned`・`required_nums` の `baked`）だけ id を並べない。件数は `source[table].dropped` にある。`fixed` は全部並べる（切り詰めは id と前後の文字数だけ）
+- `--overrides` は Zod で形を検査する（`customerOwner` に指定した人がその Customer を持っていなければ `MigrationError` で止まる）
+- `restrictions` の `max_work_consecutive` で `pattern1_id` が壊れた参照（他店舗・存在しない）の行は §7.8 のとおり捨てる。`days` が 1..7 の外も `missing_column` に含めて記録（`detail` に `days=<値>`）
+- `transformShares` の重複判定は店舗をまたぐ（v2 の `code` は全体で一意）
+- インポートの突合に「`shifts.date` が文字列のまま一致する」を足し、`report.json` の `sample` に id と日付を残して `verify.ts` も同じ 1 件を見る（§8.2-1）
+- `verify.ts` は `report.committed` が false（`--rollback` や失敗）なら止まる
+
+#### 未実施（次にやること）
+
+- **§12-6**: Heroku のダンプを取って手元の v1 に restore し、`rails v2:export` → `npm run migrate:v1` → `verify.ts` → §8.2 の 1〜10。件数・所要時間・RSS をここに記録する。rake は本物の v1 で初めて動かすので、YAML 列（`hash_or_empty` / `raw_json_type`）の読み方で直すものが出るかもしれない（§9.2: 直すのは YAML の読み方だけ）
+- **§9.3**: 本番の Supabase に対する `--rollback`（`postgres` ロールで `auth.users` に INSERT できるか・`disable trigger` できるか・Session pooler の SSL）

@@ -1,0 +1,20 @@
+{
+  "exported_at": "2026-10-11T00:00:00.000000Z",
+  "v1_commit": "fixture",
+  "rails_env": "fixture",
+  "counts": {
+    "users": 8,
+    "tenants": 5,
+    "staffs": 8,
+    "patterns": 11,
+    "shifts": 11,
+    "required_nums": 11,
+    "restrictions": 8,
+    "events": 5,
+    "shares": 6,
+    "usage_records": 0
+  },
+  "stats": {
+    "note": "手で作った架空の値（021 §12-4）"
+  }
+}

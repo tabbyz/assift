@@ -73,7 +73,8 @@ src/
   lib/
     actions/                      result / run / error / guards
     admin/                        管理画面（020）。host（ホストの振り分け）/ paths / guard / client（service_role）/ queries / trial / planView
-    migration/v1Ids.ts            v1 の ID → uuid v5（旧 URL 解決と 012 が共有）
+    migration/                    v1 データ移行（021）。v1Ids（ID → uuid v5。名前空間は定数。旧 URL 解決と共有）/ v1Types（JSONL の 1 行の Zod。rake と 1:1）/
+                                  readExport / truncate（コードポイントで切る）/ requiredNums（焼き付けの判定）/ transform（表ごとの変換。§7）/ convert（全体の配線 + レポートの材料）
     tenants/                      旧 URL の書き換え・直近店舗 cookie の純関数
     queries/                      読み取り（Server から呼ぶ）。publicShare.ts だけが service_role（下記）
     <domain>/                     ドメインロジック（calendar, patterns, shifts, pdf, csv ...）
@@ -100,6 +101,8 @@ src/
     supabase/{server,client,proxy,env}.ts
 assets/fonts/                     PDF に埋め込む Noto Sans JP（public/ に置かない。下記）
 scripts/stripe/                   setup（Product / Meter / Price / Coupon / Portal。冪等）/ migrate-v1-subscriptions（カットオーバーで 1 回）
+scripts/migrate-v1/               v1 データ移行（021）。import（読む → 変換 → 1 トランザクション → 突合 → COMMIT / ROLLBACK）/ verify（移行後の突合）/
+                                  v1/v2_export.rake（v1 に写して流す）/ fixtures（架空の JSONL。Vitest の通しとローカルの通しに使う）
 supabase/
   config.toml
   schemas/                        宣言的スキーマ（正）。RPC は schemas/public/functions.sql
@@ -462,6 +465,8 @@ npm test               # vitest run
 npm run format         # prettier --write .
 npm run format:check
 npm run assist:eval    # 自動アサインの評価（012 §6.3。手動。LLM を使う評価は AI_GATEWAY_API_KEY が要る）
+npm run migrate:v1 -- --input <dir> [--rollback] [--allow-existing]   # v1 データのインポート（021。MIGRATION_DATABASE_URL で直接つなぐ）
+npm run migrate:v1:verify -- --input <dir>                             # 移行後の突合
 ```
 
 Prettier: `{ "semi": false, "singleQuote": true, "tabWidth": 2, "trailingComma": "es5", "printWidth": 100 }`

@@ -81,6 +81,7 @@ v1 の URL は `/tenants/<token>/shifts?start_date=…` のようにクエリも
 - ステータスは 308（`permanentRedirect` と同じ。001 の「301」は Next では 308 に読み替える）。308 はブラウザに永続キャッシュされるので、**本番の namespace は一度決めたら変えない**前提。ローカルで namespace を変えて試すときはキャッシュに注意
 - 遷移先は `request.nextUrl.clone()` に `pathname` / `search` を代入して作る（文字列連結で `Location` を組まない）。同一オリジンしか指せないので open redirect にならない
 - `V1_UUID_NAMESPACE` が未設定または uuid 形式でないときは書き換えを行わない（トークン URL はそのまま layout で 404）。起動時に一度だけ警告を出す。013 のチェックリストに「本番の env に必ず入れる」を足す
+  - **021 §3-6 で定数化**: 名前空間は `lib/migration/v1Ids.ts` の定数 `V1_UUID_NAMESPACE` になり、未設定の状態が無くなった（警告と本番の env の項目は消した。旧 URL は常に解決する）
 
 ### 3.2 uuid v5 は `uuid` パッケージを使う（初稿の「自前実装」を撤回）
 

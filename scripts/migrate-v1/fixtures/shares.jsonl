@@ -1,0 +1,6 @@
+{"id":5000,"tenant_id":1,"code":"AbCd2345","start_date":"2026-10-01","end_date":"2026-10-31","created_at":"2026-09-01T10:00:00.000000Z"}
+{"id":5001,"tenant_id":2,"code":"AbCd2345","start_date":"2026-10-01","end_date":"2026-10-15","created_at":"2026-09-02T10:00:00.000000Z"}
+{"id":5002,"tenant_id":1,"code":"bad","start_date":"2026-10-01","end_date":"2026-10-31","created_at":"2026-09-01T10:00:00.000000Z"}
+{"id":5003,"tenant_id":1,"code":"LongSpan","start_date":"2026-10-01","end_date":"2026-12-31","created_at":"2026-09-01T10:00:00.000000Z"}
+{"id":5004,"tenant_id":1,"code":"Rev12345","start_date":"2026-10-05","end_date":"2026-10-04","created_at":"2026-09-01T10:00:00.000000Z"}
+{"id":5005,"tenant_id":3,"code":"Ghost123","start_date":"2026-10-01","end_date":"2026-10-31","created_at":"2026-09-01T10:00:00.000000Z"}

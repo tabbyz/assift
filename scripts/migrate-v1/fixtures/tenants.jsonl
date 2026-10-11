@@ -1,0 +1,5 @@
+{"shift_cycle":"month","start_of_week":1,"id":1,"uuid":"FixtureTenant00000001A","user_id":1,"name":"小石川ストア","created_at":"2019-05-01T00:00:00.000000Z","updated_at":"2026-09-01T10:00:00.000000Z"}
+{"shift_cycle":"half_month","start_of_week":7,"id":2,"uuid":"FixtureTenant00000002B","user_id":2,"name":"とてもとても長い名前の店舗をここに書いてみる","created_at":"2020-02-02T00:00:00.000000Z","updated_at":"2026-09-02T10:00:00.000000Z"}
+{"shift_cycle":"month","start_of_week":0,"id":3,"uuid":"FixtureTenant00000003C","user_id":5,"name":"幽霊店舗","created_at":"2022-05-05T00:00:00.000000Z","updated_at":"2022-05-05T00:00:00.000000Z"}
+{"shift_cycle":"month","start_of_week":0,"id":4,"uuid":"FixtureTenant00000004D","user_id":6,"name":"  ","created_at":"2023-06-06T00:00:00.000000Z","updated_at":"2026-09-03T10:00:00.000000Z"}
+{"shift_cycle":"month","start_of_week":0,"id":5,"uuid":"FixtureTenant00000005E","user_id":null,"name":"親なし","created_at":"2023-06-06T00:00:00.000000Z","updated_at":"2023-06-06T00:00:00.000000Z"}

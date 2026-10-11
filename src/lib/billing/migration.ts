@@ -50,7 +50,7 @@ export function shouldVoidDrafts(category: MigrationCategory, status: string): b
   return category === 'cancel_free' && status === 'unpaid'
 }
 
-/** 最小限の CSV（v1 の `rails runner` の出力を読む・結果を書く）。ダブルクォートと改行を扱う */
+/** 最小限の CSV（データ移行の `import.ts` が書いた `v1-subscriptions.csv` を読む・結果を書く。021 §6.1）。ダブルクォートと改行を扱う */
 export function parseCsv(text: string): Record<string, string>[] {
   const rows: string[][] = []
   let row: string[] = []

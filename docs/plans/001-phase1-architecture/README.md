@@ -72,6 +72,8 @@ v1（Rails）の分析（`docs/v1-analysis.md`）と Phase 1 の決定事項を�
 
 移行する行の PK は v1 の ID から **uuid v5 で決定的に導出**する。`uuidv5('<table>:<v1 id>', NS)` とし、tenants だけは整数 ID ではなく 22 文字トークンを名前にする。対応表や `legacy_id` 列は持たず、FK も同じ式で書き換える。再実行は `ON CONFLICT (id)` で冪等。名前空間 `NS` は固定の UUID で、移行スクリプトと（旧 URL 解決のため）アプリの両方が環境変数 `V1_UUID_NAMESPACE` として参照する。
 
+> **021 で上書き**: 名前空間は環境変数ではなく**リポジトリの定数** `V1_UUID_NAMESPACE`（`lib/migration/v1Ids.ts`。021 §3-6）。再実行の冪等（`ON CONFLICT`）はやめ、**1 トランザクションで入れて失敗したら全部戻す**（021 §3-1）。
+
 ### 3.2 DDL（`supabase/schemas/` に置く SQL の骨子）
 
 ```sql
@@ -394,6 +396,8 @@ staffs（在籍・position 順）、patterns（position 順）、staff_patterns�
 ## 5. データ移行
 
 ### 5.1 方針
+
+> **021 で上書き**: この節の `ON CONFLICT (id) DO UPDATE`・環境変数の名前空間・`session_replication_role` は 021 §3 で変えた（1 トランザクション・定数・止めるトリガは 3 つだけ）。テーブルごとの変換の最新は 021 §7。
 
 2 段階にして YAML デシリアライズを Rails に任せる。
 
