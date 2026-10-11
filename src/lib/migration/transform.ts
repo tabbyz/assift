@@ -66,6 +66,7 @@ export type FixReason =
   | 'pair_pattern'
   | 'staff_cap_clipped'
   | 'end_date_clipped'
+  | 'legacy_url_unmatched'
 
 export type Dropped = { table: V1Table; id: number; reason: DropReason; detail?: string }
 export type Fixed = {
@@ -393,6 +394,9 @@ export type TenantsResult = {
   fixed: Fixed[]
 }
 
+/** `SecureRandom.urlsafe_base64`（16 バイト）の 22 文字。`lib/tenants/legacyUrl.ts` の `LEGACY_TENANT_PATH` と同じ */
+const LEGACY_TOKEN = /^[A-Za-z0-9_-]{22}$/
+
 export function transformTenants(
   tenants: V1Tenant[],
   ctx: {
@@ -413,6 +417,8 @@ export function transformTenants(
       continue
     }
     const id = v1Uuid('tenants', tenant.uuid)
+    // 旧 URL の 308（lib/tenants/legacyUrl.ts）は 22 文字のトークンだけを見る。それ以外の uuid は id は導出できるが旧 URL が効かない
+    if (!LEGACY_TOKEN.test(tenant.uuid)) rec.fix(tenant.id, 'uuid', 'legacy_url_unmatched')
     const name = rec.text(tenant.id, 'name', tenant.name, TENANT_NAME_MAX_LENGTH, '店舗')
 
     let startOfWeek = tenant.start_of_week

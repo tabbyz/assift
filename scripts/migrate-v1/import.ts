@@ -13,8 +13,8 @@
  * - レポート（`report.json`）と Stripe の引き継ぎ用 CSV は `--input` と同じ場所に書く。メールと id を含むので
  *   エクスポートと同じ扱いで保管する（§10-8）
  */
-import { readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { accessSync, constants, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { parseArgs } from 'node:util'
 import { Client } from 'pg'
 import { z } from 'zod'
@@ -143,6 +143,9 @@ async function main() {
   if (values.overrides) {
     overrides = overridesSchema.parse(JSON.parse(readFileSync(values.overrides, 'utf8')))
   }
+
+  // COMMIT の後に report / CSV を書けないと、verify.ts の基準と Stripe の引き継ぎの入力を失う。先に書けることを確かめる
+  for (const dir of new Set([dirname(reportPath), inputDir])) accessSync(dir, constants.W_OK)
 
   console.log(`読み込み: ${inputDir}`)
   const input = await readExport(inputDir)
@@ -531,9 +534,13 @@ async function main() {
       await client.query('commit')
       committed = true
       console.log('COMMIT')
-      // 書いた表だけ。裸の ANALYZE は postgres が所有しない表（auth.* など）で WARNING を出し、全表のロックを持つ
+      // 書いた表だけ。裸の ANALYZE は postgres が所有しない表（auth.* など）で WARNING を出し、全表のロックを持つ。
+      // 失敗しても COMMIT は済んでいるので警告だけ（統計は autovacuum が追いつく）
       for (const table of TARGET_TABLES) {
-        if (table.startsWith('public.')) await client.query(`analyze ${table}`)
+        if (!table.startsWith('public.')) continue
+        await client.query(`analyze ${table}`).catch((error: unknown) => {
+          console.warn(`analyze ${table} に失敗: ${error instanceof Error ? error.message : error}`)
+        })
       }
     }
   } catch (error) {
@@ -544,15 +551,14 @@ async function main() {
     await client.end()
   }
 
-  writeOutputs(c, {
-    startedAt,
-    committed,
-    before,
-    after,
-    checks,
-    overrides,
-    sample,
-  })
+  try {
+    writeOutputs(c, { startedAt, committed, before, after, checks, overrides, sample })
+  } catch (error) {
+    console.error(
+      `${committed ? 'COMMIT 済みだが' : ''}report / CSV を書けなかった: ${error instanceof Error ? error.message : error}`
+    )
+    process.exitCode = 1
+  }
 }
 
 function countByColumn(items: { table: string; column: string }[]): Record<string, number> {
@@ -627,7 +633,7 @@ function writeOutputs(
 }
 
 main().catch((error) => {
-  // 読み込み・変換の失敗（JSONL の形・メールの重複・overrides の矛盾）。DB にはまだ触っていない
+  // 読み込み・変換の失敗（JSONL の形・メールの重複・overrides の矛盾）。DB の失敗は main() の中で ROLLBACK 済み
   console.error(error instanceof Error ? error.message : error)
   process.exit(1)
 })

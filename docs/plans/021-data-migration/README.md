@@ -109,7 +109,7 @@ Heroku 本番 ──pg_dump──▶ 手元の v1（ローカル DB に restore�
 | `restrictions.jsonl` | `restrictions` | `id tenant_id kind days pattern1_id pattern2_id position created_at updated_at` |
 | `events.jsonl` | `events` | `id tenant_id date note created_at updated_at` |
 | `shares.jsonl` | `shares` | `id tenant_id code start_date end_date created_at` |
-| `manifest.json` | — | 各テーブルの行数・ダンプの取得時刻・v1 の最終コミット・`Rails.env`・YAML 列の形の集計（§5.2） |
+| `manifest.json` | — | 各テーブルの行数・rake の開始時刻（`exported_at`）・ダンプの取得時刻（`dumped_at`。rake の 2 つ目の引数で渡す。`heroku pg:backups:info` の Started）・v1 の最終コミット・`Rails.env`・YAML 列の形の集計（§5.2） |
 | `usage_records.csv` | `usage_records` | `user_id, staffs_count, created_at`（名前を含まない。1 年残す記録。§10-8） |
 
 Stripe の引き継ぎスクリプトの入力 `v1-subscriptions.csv` は rake では出さない。`import.ts` が書く（§6.1 の「Stripe 用の CSV」）。
@@ -132,7 +132,7 @@ Stripe の引き継ぎスクリプトの入力 `v1-subscriptions.csv` は rake �
 | 4 | `patterns.pair_pattern_id` が自分自身・他店舗・存在しない id を指す件数 | §7.4 |
 | 5 | `users` の未確認（`confirmed_at IS NULL`）の内訳: 招待未承認 / 承認済みだが未確認 / ログイン実績あり | §7.1 の規則の確認（移行しないのに店舗を持つ人の一覧は `report.json` に出る。0 件のはず） |
 | 6 | `provider = 'google_oauth2'` の件数 | §7.1 |
-| 7 | 文字数超過の件数（店舗名 20 / スタッフ名 10 / パターン名 6 / 説明 10 / メモ 12） | 003 §3.10。想定外に多ければ CHECK の緩和を再検討 |
+| 7 | 文字数超過の件数（店舗名 20 / スタッフ名 10 / パターン名 6 / 説明 10 / メモ 12） | 003 §3.10。想定外に多ければ CHECK の緩和を再検討。目安の数で、TS の切り詰めの件数（`report.truncated`）とは厳密には一致しない（SQL の `trim()` は ASCII の空白だけ、JS の `.trim()` は全角空白なども落とす） |
 | 8 | `password_is_email` の件数と、`stripe_customer_id` を複数のユーザーが持つ組 | §7.1 |
 | 9 | `restrictions` のうち種別に必要な列が無い行の件数（§7.8） | 捨てる件数の見込み |
 | 10 | `required_nums` の `num > 32767` の件数、親の id が NULL の行の件数（`tenants.user_id` / `staffs.tenant_id` / `patterns.tenant_id` / `restrictions.tenant_id` / `events.tenant_id` / `shares.tenant_id` / `required_nums.pattern_id` / `shifts.pattern_id`）、`required_nums` の `date` が NULL・`num < 0` の件数、`shares.code` の重複の組 | §7 共通・§7.7・§7.10（v1 の列はほぼすべて nullable で、FK はあっても NULL は通る） |
@@ -348,7 +348,7 @@ SQL で数え直さない（2 つの数え方を持たない）。§8.1 で DB �
 | 6 | 必要人数 | 5 のサンプルで、**「デフォルト人数をセット」を押してある期間**について v1 の表の `required / assigned` と v2 の表の数字が同じ（§7.7 で消した行が表示を変えていない）。押していない期間は v1 が 0、v2 が基本の人数で、違って正しい（§7.7） |
 | 7 | 準備中 | スタッフのいる店舗を開いて `/setup` に送られない。スタッフ 0 人の店舗は送られる（§7.2） |
 | 8 | Google の人 | `auth.identities` は `email` の 1 行だけ（通常の人と同じ）で、v1 のパスワードでログインでき、アカウント画面にパスワード欄が出る。実際の Google ログイン（自動リンクで `google` の identity が足される）は本番の Google の資格情報が要るので 022 で |
-| 8b | 代理承認の人（`password_is_email`） | `encrypted_password` が null で、メール + パスワードのログインが「メールアドレスまたはパスワードが違います」で止まり GoTrue が落ちない。`/password/forgot` から再設定できる（`providers` に `email` があるので guard を通る） |
+| 8b | 代理承認の人（`password_is_email`） | `encrypted_password` が null で、メール + パスワードのログインが「メールアドレスまたはパスワードが違います」で止まり GoTrue が落ちない。`/password/forgot` から再設定できる（`providers` に `email` があるので guard を通る）。**アカウント画面からは設定できない**（「現在のパスワード」を求める。GoTrue はパスワードの有無を返さないので画面で見分けられない）。v2 で Google ログインの自動リンクで入った人も同じなので、022 の案内に「パスワードは『パスワードを忘れた方』から作る」を入れる |
 | 9 | 課金の列 | `profiles` の `stripe_customer_id` / `trial_end` / `max_staffs_count` / `staff_cap` を数件、v1 の値と目で比べる。`staff_count_history` が全員 1 行 |
 | 10 | 制約 | 制約を持つ店舗を 2 件開き、設定画面に v1 と同じ行が出る |
 
@@ -383,7 +383,7 @@ SQL で数え直さない（2 つの数え方を持たない）。§8.1 で DB �
 | 2 | `heroku pg:backups:capture` → download → 手元に restore → `rails v2:export` | |
 | 3 | `npm run migrate:v1 -- --input … --rollback`（最終確認）→ `--rollback` 無しで本番へ。**23 時台（Vercel の cron の同期が `profiles` に書く）を避ける** | |
 | 4 | `verify.ts` + §8.2 の 2〜4・7・9 を本番で | |
-| 5 | `npm run stripe:migrate-v1 -- --input <report と同じ場所>/v1-subscriptions.csv`（dry-run → `--limit 5` → 全部。019 §8.2.3）。dry-run の結果 CSV で、`skip`（Stripe で解約済み）・`review`・取得できません・Customer が一致しません のいずれかで `max_staffs_count >= 11` の人がいれば（どれも `billing_subscriptions` に写しが作られない）、Dashboard から解約した個別契約かを確かめる（§7.1 の規則では `staff_cap` が入り `max_staffs_count` は null になるので、同期の後に無料扱いでロックされうる。該当なら `profiles.max_staffs_count` を管理画面で入れる） | |
+| 5 | `npm run stripe:migrate-v1 -- --input <report と同じ場所>/v1-subscriptions.csv`（dry-run → `--limit 5` → 全部。019 §8.2.3）。dry-run の結果 CSV で、`skip`（Stripe で解約済み）・`review`・取得できません・Customer が一致しません のいずれかで `max_staffs_count >= 11` の人がいれば（どれも `billing_subscriptions` に写しが作られない）、Dashboard から解約した個別契約かを確かめる（§7.1 の規則では `staff_cap` が入り `max_staffs_count` は null になるので、同期の後に無料扱いでロックされうる。該当なら `profiles.max_staffs_count` を管理画面で入れる。`report.json` の `over_limit.freeOverLimit` で `hasSubscription: true` の人がこの候補）。Webhook は §10-1 で先に登録してあるので、このスクリプトの実行中に Stripe のイベント → `syncCustomer()` が走る（`profiles` は入っているので持ち主が引ける。二重の有効契約は 019 §5.5 のとおり新しいほうが解約される） | |
 | 6 | 全員の同期（019 §8.3-4）→ Stripe の Dashboard の設定を切り替える | |
 | 7 | DNS を Vercel へ | |
 | 8 | 保管（**決定。2026-10-10**。§13-6）。暗号化して 1 か所に置き、ファイル名に消す日を入れ、022 のチェックリストに削除の日付を 2 つ書く: (a) **pg_dump と JSONL はカットオーバーから 3 か月**で消す（復旧の窓はシフトの 3 周期で足り、以降は v2 のほうが新しくて戻せない。パスワードのハッシュと第三者であるスタッフの名前を本番の外に置き続けない。プライバシーポリシーの「バックアップに一定期間残り、復旧にのみ使う」と揃う）。(b) **`manifest.json` / `report.json` / Stripe の引き継ぎの結果 CSV と旧料金の対象者の一覧（019 §8.1）/ ダンプから抜いた `usage_records` の CSV（user id・人数・日時だけ）は 1 年**（「スタッフが消えた」「旧料金のはず」の問い合わせと、半年後に旧料金をやめる作業 019 §8.5 に使う。どれもスタッフの名前・メモを含まない。`report.json` は切り詰めを id と文字数で持つ。§6.1）。Heroku の自動バックアップはアプリの停止（001 §5.4）で消える | |
@@ -397,22 +397,25 @@ SQL で数え直さない（2 つの数え方を持たない）。§8.1 で DB �
 scripts/migrate-v1/
   import.ts                      読む → 変換 → 1 トランザクションで書く → 突合 → COMMIT / ROLLBACK
   verify.ts                      移行後の DB と manifest / report の突合
+  pg.ts                          型パーサの設定（date / timestamp を文字列のまま。import と verify が共有）
   overrides.example.json         --overrides の形（§6.1。中身は空）
   v1/v2_export.rake              v1 に写して流す rake（§5）
-  fixtures/                      手で作った小さな JSONL（§12-4。個人情報を含まない架空の値。Vitest の通しのテストも読む）
+  fixtures/                      手で作った小さな JSONL + README（§12-4。個人情報を含まない架空の値。Vitest の通しのテストも読む）
 src/lib/migration/
   v1Ids.ts (+ test)              既存。V1_UUID_NAMESPACE を定数にし、v1Uuid(table, id) が内部で使う。getV1UuidNamespace() を消す。テストで値を固定する
   v1Types.ts                     JSONL の行の Zod
   transform.ts (+ test)          テーブルごとの変換（§7）
   truncate.ts (+ test)           文字数の切り詰め
   requiredNums.ts (+ test)       焼き付けられた行の判定（§7.7）
+  convert.ts (+ test)            全体の配線 + レポートの材料（fixtures の通しを Vitest で固定）
+  readExport.ts                  JSONL と manifest の読み込み（1 行ずつ Zod）
 package.json                     "migrate:v1" / "migrate:v1:verify"（tsx --conditions=react-server）、pg / @types/pg
-src/lib/tenants/legacyUrl.ts     resolveLegacyTenantUrl() から名前空間の取得と未設定の警告を消す（常に解決する）
+src/lib/tenants/legacyUrl.ts     resolveLegacyTenantUrl() と警告を消し、proxy が rewriteLegacyTenantUrl(pathname, search) を直接呼ぶ（常に解決する）
 scripts/stripe/migrate-v1-subscriptions.ts / src/lib/billing/migration.ts
                                  冒頭コメント「入力の CSV は rails runner で出す」を「import.ts が書く」に直す
 .env.example / README.md         V1_UUID_NAMESPACE の項目を消し、MIGRATION_DATABASE_URL をコメントで書く（.env.local には書かない）。
                                  README の「旧 URL（v1）の確認」の例を今の着地（/tenants/<uuid>?start=…。/shifts を落とす）に直す
-.gitignore                       v1-export/
+.gitignore                       v1-export/ と、fixtures を --input にしたときの report / CSV
 AGENTS.md                        scripts/migrate-v1 と lib/migration の説明。「uuid の扱い」の 2 か所（V1_UUID_NAMESPACE の環境変数、getV1UuidNamespace() が validate() で弾く）を定数に読み替える
 docs/plans/001-…/README.md       §3.1（環境変数・ON CONFLICT）と §5 の冒頭に「021 で上書き」の注記
 docs/plans/005-…/README.md       §3.1（未設定時の警告・本番の env）に「021 §3-6 で定数化」の注記
@@ -632,6 +635,21 @@ docs/plans/019-…/README.md       §8.1 の「session_replication_role = replic
 | 7 | 低: 管理用アカウントのメールが v1 のユーザーと重なると一意制約で全体が戻る | §9.3 の確かめることに足した |
 | 8 | 低: 移行しない人の Stripe 用 CSV のメールが小文字化されていない | 揃えた |
 | 9 | 低（受け入れ）: `shifts` / `events` / `shares` の日付が西暦 3 桁以下・5 桁だと Zod が止める（`required_nums` だけ捨てる規則） | v1 の画面から入ることは実質無いので止まる挙動のまま |
+
+2 回目（rake と TS のデータの契約 / 移行後の行がアプリでどう振る舞うか）:
+
+| # | 指摘 | 対応 |
+| --- | --- | --- |
+| 1 | 低〜中: パスワードが null の人（代理承認・空）と Google の人は、v2 のアカウント画面から新しいパスワードを設定できない（「現在のパスワード」を求める）。再設定メールの経路しか無い | 移行のコードでは直せない（GoTrue はパスワードの有無を返さない）。§8.2-8b に書き、022 の案内に入れる |
+| 2 | 低: `import.ts` が COMMIT の後に report / CSV を書けないと（`--input` が書けない等）、verify の基準と Stripe の入力を失う。`analyze` の失敗で exit 1 になる | 接続前に書き込み先の `W_OK` を確かめる。`writeOutputs` を try で包み「COMMIT 済みだが書けなかった」と出す。`analyze` の失敗は警告だけ |
+| 3 | 低: 22 文字のトークンでない `tenants.uuid` は id は導出されるが旧 URL の 308 が効かず、どこにも出ない | `fixed` に `legacy_url_unmatched` を記録。rake の集計にも足した |
+| 4 | 低: `staff_cap` は Stripe の状態を問わず Subscription のある人に入る。同期後に有効でない人は free でロックされる（§10-5 の網だけ） | §10-5 に `report.over_limit.freeOverLimit` の `hasSubscription: true` との対応を書いた |
+| 5 | 低: §11 のファイル一覧と AGENTS.md が差分に追いついていない | 直した |
+| 補足 | §10-5 の実行中に Webhook → `syncCustomer()` が走る（設計どおり） | §10-5 に 1 行 |
+| 6 | **中**: rake は YAML 列の読み取りが投げる例外（宣言と違う型 → `SerializationTypeMismatch`、許可外のクラス・壊れた YAML → `Psych::Exception`）を拾っておらず、1 行で全体が止まり manifest も残らない。`ts()` も Time 以外（`'infinity'`）で落ちる | `yaml_attr` で行ごとに rescue して既定値（`[]` / `{}`）にし、件数と id を manifest に出す。`safe_yaml` / `raw_json_type` も同じ。`ts()` は Time 以外を nil にして数える |
+| 7 | 低: Array 列（`available_wdays` / `available_patterns`）だけ「文字列だった」集計が無い | `array_or_empty` で数える |
+| 8 | 低: §5.2-7 の文字数超過（SQL の `trim()`）と TS の切り詰め（JS の `.trim()`）は空白の扱いが違う | 目安の数と注記 |
+| 9 | 低: `exported_at` は rake の開始時刻で、ダンプの取得時刻ではない | rake の 2 つ目の引数 `dumped_at` を manifest に残す（§5.1） |
 
 #### 未実施（次にやること）
 

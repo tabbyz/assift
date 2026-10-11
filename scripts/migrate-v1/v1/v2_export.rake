@@ -2,7 +2,10 @@
 
 # v2 へのエクスポート（021 §5）。このファイルを v1 の `lib/tasks/` に写して流す:
 #
-#   bundle exec rails v2:export[/path/to/out]        # → /path/to/out/<YYYYMMDD-HHMM>/*.jsonl, manifest.json, usage_records.csv
+#   bundle exec rails v2:export[/path/to/out,2026-10-25T01:00:00+09:00]   # → /path/to/out/<YYYYMMDD-HHMM>/*.jsonl, manifest.json, usage_records.csv
+#
+#   2 つ目の引数はダンプを取った時刻（`heroku pg:backups:info` の Started）。manifest の `dumped_at` に残す
+#   （「この時刻以降の v1 の書き込みは移っていない」の根拠。`exported_at` は rake の開始時刻で、別物）
 #
 # - 本番の Heroku ではなく、ダンプを restore した手元の v1 で流す（§4）
 # - Ruby 側は「YAML 列をモデルで復元して書き出す」だけ。移行する / しない・捨てる・直すの判断はすべて v2 の TS（§6.2）
@@ -14,12 +17,12 @@ require 'yaml'
 
 namespace :v2 do
   desc 'v2 へのエクスポート（JSONL + manifest + usage_records.csv）'
-  task :export, [:out] => :environment do |_t, args|
+  task :export, %i[out dumped_at] => :environment do |_t, args|
     out_root = args[:out].presence || File.expand_path('~/v1-export')
     dir = File.join(out_root, Time.now.strftime('%Y%m%d-%H%M'))
     FileUtils.mkdir_p(dir)
 
-    exporter = V2Exporter.new(dir)
+    exporter = V2Exporter.new(dir, dumped_at: args[:dumped_at].presence)
     exporter.run
     puts "exported to #{dir}"
   end
@@ -39,8 +42,9 @@ class V2Exporter
     'sat_or_sun_dayoff' => [],
   }.freeze
 
-  def initialize(dir)
+  def initialize(dir, dumped_at: nil)
     @dir = dir
+    @dumped_at = dumped_at
     @counts = {}
     @stats = Hash.new { |h, k| h[k] = {} }
   end
@@ -80,8 +84,13 @@ class V2Exporter
     $stdout.puts "#{table}: #{count}"
   end
 
+  # Time 以外（SQL で 'infinity' を入れた datetime は Float::INFINITY で返る）は nil にして件数を出す
   def ts(time)
-    time&.utc&.iso8601(6)
+    return nil if time.nil?
+    return time.utc.iso8601(6) if time.respond_to?(:utc)
+
+    bump(:timestamps, :not_time)
+    nil
   end
 
   def date(d)
@@ -155,9 +164,9 @@ class V2Exporter
         position: s.position,
         disabled: s.disabled,
         max_work_week: s.max_work_week,
-        available_wdays: Array(s.available_wdays),
-        available_patterns: Array(s.available_patterns),
-        default_patterns: hash_or_empty(s.default_patterns, :staffs, :default_patterns),
+        available_wdays: array_or_empty(yaml_attr(s, :available_wdays, :staffs, []), :staffs, :available_wdays),
+        available_patterns: array_or_empty(yaml_attr(s, :available_patterns, :staffs, []), :staffs, :available_patterns),
+        default_patterns: hash_or_empty(yaml_attr(s, :default_patterns, :staffs, {}), :staffs, :default_patterns),
         created_at: ts(s.created_at),
         updated_at: ts(s.updated_at),
       }
@@ -170,7 +179,7 @@ class V2Exporter
     jsonl('patterns', Pattern.unscoped) do |p|
       # json 列 + serialize Hash の二重エンコード（§5.1）。生の値の型を集計し、モデルの値を Hash に寄せる
       types[raw_json_type(p)] += 1
-      nums = hash_or_empty(p.default_required_nums, :patterns, :default_required_nums)
+      nums = hash_or_empty(yaml_attr(p, :default_required_nums, :patterns, {}), :patterns, :default_required_nums)
       string_values += 1 if nums.values.any? { |v| v.is_a?(String) }
       {
         id: p.id,
@@ -271,16 +280,45 @@ class V2Exporter
   # YAML 列
   # ---------------------------------------------------------------------------
 
+  # 属性の読み取り。YAML 列は読む時点で投げうる（宣言と違う型 → SerializationTypeMismatch、許可外のクラス・壊れた YAML →
+  # Psych::Exception）。1 行で全体を止めず、既定値にして件数と id を manifest に出す（§9.2: 直すのは YAML の読み方だけ）
+  def yaml_attr(record, column, table, default)
+    record.public_send(column)
+  rescue ActiveRecord::SerializationTypeMismatch, Psych::Exception
+    bump(table, :"#{column}_unreadable")
+    (@stats[table][:"#{column}_unreadable_ids"] ||= []) << record.id
+    default
+  end
+
   # モデルの値を Hash に寄せる。String ならもう一段 YAML をほどく（§5.1）。それでも Hash でなければ {}
   def hash_or_empty(value, table, column)
     if value.is_a?(String)
       bump(table, :"#{column}_string_values")
-      value = YAML.safe_load(value, permitted_classes: [ActiveSupport::HashWithIndifferentAccess, Symbol], aliases: true)
+      value = safe_yaml(value, table, column)
     end
     return value.to_hash.transform_keys(&:to_s) if value.respond_to?(:to_hash)
 
     bump(table, :"#{column}_not_hash") unless value.nil?
     {}
+  end
+
+  # Array 列も同じ（モデルが `---` で始まらない文字列をそのまま返した行）
+  def array_or_empty(value, table, column)
+    if value.is_a?(String)
+      bump(table, :"#{column}_string_values")
+      value = safe_yaml(value, table, column)
+    end
+    return value if value.is_a?(Array)
+
+    bump(table, :"#{column}_not_array") unless value.nil?
+    []
+  end
+
+  def safe_yaml(text, table, column)
+    YAML.safe_load(text, permitted_classes: [ActiveSupport::HashWithIndifferentAccess, Symbol], aliases: true)
+  rescue Psych::Exception
+    bump(table, :"#{column}_unreadable")
+    nil
   end
 
   # json 列の生の値（JSON の文字列）を parse して型を見る（§5.2-1）
@@ -295,7 +333,7 @@ class V2Exporter
     when nil then 'nil'
     else parsed.class.name
     end
-  rescue JSON::ParserError
+  rescue JSON::ParserError, Psych::Exception
     'unparsable'
   end
 
@@ -394,6 +432,9 @@ class V2Exporter
     @stats[:shares][:duplicate_code_groups] =
       count.call('select count(*) from (select code from shares group by code having count(*) > 1) d')
 
+    # 旧 URL の 308 は 22 文字のトークンだけを見る（v2 の lib/tenants/legacyUrl.ts）
+    @stats[:tenants][:uuid_not_22_chars] = count.call("select count(*) from tenants where uuid !~ '^[A-Za-z0-9_-]{22}$'")
+
     # 12. スタッフ 0 人の店舗のうち、勤務パターン・制約・必要人数を持つ店舗
     @stats[:tenants][:no_staff_with_data] = count.call(<<~SQL)
       select count(*) from tenants t
@@ -418,6 +459,7 @@ class V2Exporter
   def write_manifest(started)
     manifest = {
       exported_at: started.iso8601(6),
+      dumped_at: @dumped_at,
       v1_commit: (`git rev-parse HEAD`.strip rescue ''),
       rails_env: Rails.env,
       counts: @counts,

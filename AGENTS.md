@@ -102,7 +102,8 @@ src/
 assets/fonts/                     PDF に埋め込む Noto Sans JP（public/ に置かない。下記）
 scripts/stripe/                   setup（Product / Meter / Price / Coupon / Portal。冪等）/ migrate-v1-subscriptions（カットオーバーで 1 回）
 scripts/migrate-v1/               v1 データ移行（021）。import（読む → 変換 → 1 トランザクション → 突合 → COMMIT / ROLLBACK）/ verify（移行後の突合）/
-                                  v1/v2_export.rake（v1 に写して流す）/ fixtures（架空の JSONL。Vitest の通しとローカルの通しに使う）
+                                  pg（型パーサ。date を文字列のまま）/ overrides.example.json / v1/v2_export.rake（v1 に写して流す）/
+                                  fixtures（架空の JSONL。Vitest の通しとローカルの通しに使う）
 supabase/
   config.toml
   schemas/                        宣言的スキーマ（正）。RPC は schemas/public/functions.sql

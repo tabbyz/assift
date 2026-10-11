@@ -463,6 +463,15 @@ describe('transformTenants（§7.2）', () => {
     ])
   })
 
+  it('22 文字のトークンでない uuid は旧 URL が効かないので記録する', () => {
+    const r = transformTenants([tenant({ uuid: 'short' })], {
+      users,
+      staffCountByTenant: staffCounts,
+    })
+    expect(r.rows[0].id).toBe(v1Uuid('tenants', 'short'))
+    expect(reasons(r.fixed)).toEqual(['legacy_url_unmatched'])
+  })
+
   it('start_of_week が 0..6 の外なら 0 にして記録', () => {
     const r = transformTenants([tenant({ start_of_week: 7 })], {
       users,
