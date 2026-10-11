@@ -1,7 +1,7 @@
 # 移行の fixtures（021 §12-4）
 
 手で作った小さな JSONL。**架空の値で、個人情報を含まない**。`src/lib/migration/convert.test.ts` が読んで変換の通しを固定し、
-`npm run migrate:v1 -- --input scripts/migrate-v1/fixtures --allow-existing` で seed 入りのローカル DB に入れて通せる。
+`npm run migrate:v1 -- --input scripts/migrate-v1/fixtures --allow-existing` で seed 入りのローカル DB に入れて通せる（`ON CONFLICT` は無いので、一度 COMMIT した DB にもう一度流すと PK の重複で止まる。`npx supabase db reset` してから）。
 
 パスワードは全員 `password`（`$2a$11$…`。Postgres の `crypt('password', gen_salt('bf', 11))` で作った。Devise の stretches = 11 と同じ形）。
 

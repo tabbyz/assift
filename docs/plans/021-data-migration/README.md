@@ -651,6 +651,9 @@ docs/plans/019-…/README.md       §8.1 の「session_replication_role = replic
 | 8 | 低: §5.2-7 の文字数超過（SQL の `trim()`）と TS の切り詰め（JS の `.trim()`）は空白の扱いが違う | 目安の数と注記 |
 | 9 | 低: `exported_at` は rake の開始時刻で、ダンプの取得時刻ではない | rake の 2 つ目の引数 `dumped_at` を manifest に残す（§5.1） |
 
+3 回目（全体の差分の通読。直近 2 コミットの Ruby / TS を実行して確認）: **結果を変える指摘なし。ここで収束とする。**
+低い注記 4 件（`default_required_nums` の 0..99 外は黙って捨てる = v1 の画面も 99 まで / zsh の `[` / `"0"` と `0` のキーの同居 / COMMIT 済みの DB に再実行すると PK で止まる）のうち、最後だけ fixtures の README に書いた。
+
 #### 未実施（次にやること）
 
 - **§12-6**: Heroku のダンプを取って手元の v1 に restore し、`rails v2:export` → `npm run migrate:v1` → `verify.ts` → §8.2 の 1〜10。件数・所要時間・RSS をここに記録する。rake は本物の v1 で初めて動かすので、YAML 列（`hash_or_empty` / `raw_json_type`）の読み方で直すものが出るかもしれない（§9.2: 直すのは YAML の読み方だけ）
