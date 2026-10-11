@@ -54,7 +54,6 @@ export type FixReason =
   | 'empty_name'
   | 'password_is_email'
   | 'empty_password'
-  | 'google_without_uid'
   | 'unlocked'
   | 'empty_stripe_id'
   | 'stripe_customer_duplicate'
@@ -184,6 +183,12 @@ function blankToNull(value: string | null): string | null {
 
 // ---------------------------------------------------------------------------
 // §7.1 users → auth.users / auth.identities / profiles
+//
+// 全員を email のアカウントとして入れる（identity は email だけ、providers = ["email"]）。v1 の Google の人
+// （provider = 'google_oauth2'）も同じ。v2 で初めて Google ログインしたとき、GoTrue が確認済みの同じメールの
+// ユーザーに google の identity を自動で結び付ける（supabase/auth の DetermineAccountLinking）。
+// v1 の uid から identity を先に作ることはしない（利点が「Google 側のメールが後で変わった人」だけで、
+// auth.identities の行を自分で組む複雑さに見合わない。2026-10-11 に決定）
 // ---------------------------------------------------------------------------
 
 export type AuthUserRow = {
@@ -191,15 +196,16 @@ export type AuthUserRow = {
   email: string
   encrypted_password: string | null
   email_confirmed_at: string
-  raw_app_meta_data: { provider: 'email' | 'google'; providers: string[] }
+  raw_app_meta_data: { provider: 'email'; providers: ['email'] }
   last_sign_in_at: string | null
   created_at: string
   updated_at: string
 }
 
+/** email の identity だけ（seed と同じ形）。Google は GoTrue の自動リンクに任せる（§7.1） */
 export type AuthIdentityRow = {
   user_id: string
-  provider: 'email' | 'google'
+  provider: 'email'
   provider_id: string
   identity_data: { sub: string; email: string; email_verified: true }
   /** last_sign_in_at / created_at / updated_at に同じ値を入れる（v1 の created_at。§7.1） */
@@ -221,7 +227,6 @@ export type MigratedUser = {
   updatedAt: string
   /** `password_is_email` か `''` で null にした */
   passwordNull: boolean
-  google: boolean
 }
 
 export type UsersResult = {
@@ -262,7 +267,7 @@ export function transformUsers(users: V1User[], overrides: Overrides = {}): User
 
     const id = v1Uuid('users', user.id)
 
-    // パスワード: 代理承認の初期パスワードは最優先で null（Google の人でも）。空文字も null
+    // パスワード: 代理承認の初期パスワードは null。空文字も null。Google の人も残す（§7.1。v1 は Google ログインが壊れていてパスワードで入っている）
     let encryptedPassword: string | null = user.encrypted_password
     if (user.password_is_email) {
       encryptedPassword = null
@@ -272,12 +277,6 @@ export function transformUsers(users: V1User[], overrides: Overrides = {}): User
       rec.fix(user.id, 'encrypted_password', 'empty_password')
     }
 
-    // Google: uid があれば identity を 2 つ。無ければ「それ以外」と同じにして記録
-    const uid = blankToNull(user.uid)
-    const google = user.provider === 'google_oauth2' && uid !== null
-    if (user.provider === 'google_oauth2' && uid === null) {
-      rec.fix(user.id, 'provider', 'google_without_uid')
-    }
     if (user.locked_at !== null) rec.fix(user.id, 'locked_at', 'unlocked')
 
     const stripeCustomerId = blankToNull(user.stripe_customer_id)
@@ -294,9 +293,7 @@ export function transformUsers(users: V1User[], overrides: Overrides = {}): User
       email,
       encrypted_password: encryptedPassword,
       email_confirmed_at: user.confirmed_at ?? user.invitation_accepted_at ?? user.created_at,
-      raw_app_meta_data: google
-        ? { provider: 'google', providers: ['google', 'email'] }
-        : { provider: 'email', providers: ['email'] },
+      raw_app_meta_data: { provider: 'email', providers: ['email'] },
       last_sign_in_at: user.current_sign_in_at,
       created_at: user.created_at,
       updated_at: user.updated_at,
@@ -308,16 +305,6 @@ export function transformUsers(users: V1User[], overrides: Overrides = {}): User
       identity_data: { sub: id, email, email_verified: true },
       created_at: user.created_at,
     })
-    if (google) {
-      identities.push({
-        user_id: id,
-        provider: 'google',
-        provider_id: uid,
-        identity_data: { sub: uid, email, email_verified: true },
-        created_at: user.created_at,
-      })
-    }
-
     result.set(user.id, {
       v1Id: user.id,
       id,
@@ -330,7 +317,6 @@ export function transformUsers(users: V1User[], overrides: Overrides = {}): User
       createdAt: user.created_at,
       updatedAt: user.updated_at,
       passwordNull: encryptedPassword === null,
-      google,
     })
   }
 

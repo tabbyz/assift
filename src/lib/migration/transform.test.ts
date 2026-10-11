@@ -165,7 +165,6 @@ const migratedUser = (v1Id: number, over: Partial<MigratedUser> = {}): MigratedU
   createdAt: T0,
   updatedAt: T1,
   passwordNull: false,
-  google: false,
   ...over,
 })
 
@@ -276,15 +275,13 @@ describe('transformUsers（§7.1）', () => {
     ).toThrow(MigrationError)
   })
 
-  it('password_is_email は最優先で null（Google の人でも）', () => {
+  it('password_is_email は null（Google の人でも）', () => {
     const r = transformUsers([
       user({ password_is_email: true, provider: 'google_oauth2', uid: 'g-1' }),
     ])
     expect(r.rows[0].encrypted_password).toBeNull()
     expect(r.users.get(1)?.passwordNull).toBe(true)
     expect(reasons(r.fixed)).toEqual(['password_is_email'])
-    // Google の identity は付く
-    expect(r.identities.map((i) => i.provider)).toEqual(['email', 'google'])
   })
 
   it("encrypted_password = '' は null にして記録", () => {
@@ -293,27 +290,17 @@ describe('transformUsers（§7.1）', () => {
     expect(reasons(r.fixed)).toEqual(['empty_password'])
   })
 
-  it('Google の人: identity は google と email の両方、providers に email、パスワードは残す', () => {
-    const r = transformUsers([user({ provider: 'google_oauth2', uid: '1234567890' })])
-    const row = r.rows[0]
-    expect(row.encrypted_password).toBe('$2a$11$abc')
-    expect(row.raw_app_meta_data).toEqual({ provider: 'google', providers: ['google', 'email'] })
-    expect(r.identities).toHaveLength(2)
-    const google = r.identities.find((i) => i.provider === 'google')!
-    expect(google.provider_id).toBe('1234567890')
-    expect(google.identity_data).toEqual({
-      sub: '1234567890',
-      email: 'a@example.com',
-      email_verified: true,
-    })
-    expect(r.users.get(1)?.google).toBe(true)
-  })
-
-  it('Google だが uid が空: それ以外と同じにして記録', () => {
-    const r = transformUsers([user({ provider: 'google_oauth2', uid: '' })])
-    expect(r.rows[0].raw_app_meta_data).toEqual({ provider: 'email', providers: ['email'] })
-    expect(r.identities.map((i) => i.provider)).toEqual(['email'])
-    expect(reasons(r.fixed)).toEqual(['google_without_uid'])
+  it('Google の人も email のアカウント（identity は email だけ・パスワードは残す）。Google は自動リンクに任せる', () => {
+    const r = transformUsers([
+      user({ id: 1, provider: 'google_oauth2', uid: '1234567890' }),
+      user({ id: 2, email: 'b@example.com', provider: 'google_oauth2', uid: '' }),
+    ])
+    for (const row of r.rows) {
+      expect(row.encrypted_password).toBe('$2a$11$abc')
+      expect(row.raw_app_meta_data).toEqual({ provider: 'email', providers: ['email'] })
+    }
+    expect(r.identities.map((i) => i.provider)).toEqual(['email', 'email'])
+    expect(r.fixed).toEqual([])
   })
 
   it('locked_at は無視して記録', () => {

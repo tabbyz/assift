@@ -198,8 +198,8 @@ MIGRATION_DATABASE_URL=postgresql://... \
 | `encrypted_password`（Devise の bcrypt） | そのまま `encrypted_password` へ。v1 は **pepper なし・stretches 11・bcrypt 3.1.20**（`config/initializers/devise.rb`・`Gemfile.lock`）なので `$2a$11$…` の素の bcrypt で、GoTrue（Go の bcrypt）がそのまま検証できる。pepper があれば全員ログインできなくなるところだった。**リハーサルで実際にログインして確かめる**（§8.2-2・§9.1-4） |
 | `password_is_email = true`（代理承認の初期パスワード） | **Google の人でも最優先で** `encrypted_password = null`（パスワードではログインできない。「パスワードを忘れた方」で再設定してもらう）。v1 は**店舗を新しく作るときだけ**（`tenants_controller.rb` の `check_init_password!` は `only: [:new]`）`valid_password?(email)` を見て変更させていたので、既に店舗を持つ人は初期パスワードのまま使えていた。v2 にその仕組みは無く、残すとメールを知る人が誰でも入れる。件数を記録し（想定より多いかもしれない）、022 の案内の分量を決める。判定は今のメールと比べる。v1 にはメールを変える画面が無い（`users/registrations/edit` はメールを表示するだけ。Devise の `account_update` が `email` を受けるので手で組んだリクエストなら変えられた）ので、実質はこれで全員を拾える |
 | `encrypted_password = ''`（v1 の既定値）で移行対象の人 | 理屈上いない（§7.1 の条件はログインできた人）が、いれば `null` にして記録 |
-| `provider = 'google_oauth2'`・`uid` | `raw_app_meta_data = {"provider":"google","providers":["google","email"]}`、`auth.identities` に `google`（`provider_id = uid`・`identity_data = {"sub": uid, "email", "email_verified": true}`）と `email` の**両方**。`encrypted_password` は**そのまま残す**（`password_is_email` なら null）。`providers` に `email` があるので、アカウント画面のパスワード欄（`account/page.tsx` の `hasPassword`）と「パスワードを忘れた方」の guard（`requireEmailProviderAccount()`）が通る。`providers` は GoTrue が identity の link / unlink のときにしか計算し直さないので、書いた値がそのまま JWT に出る。**v1 は Google ログインが壊れていた**（`users/sessions/new.html.slim` がボタンに取り消し線を引き「現在、Google ログインできない問題が発生しています」と出している。v1 分析 §2.2）ので、この人たちは「パスワードを忘れた方」で自分のパスワードを作って入っている（Devise の recoverable は provider を見ない）。null にすると初日から締め出す。`from_omniauth` が入れた乱数の bcrypt が残っている人は誰もそれで入れないので、残しても害が無い。§5.2-11 で最近ログインしている人数を見る |
-| `provider = 'google_oauth2'` だが `uid` が空 | 「それ以外」と同じ（`providers = ["email"]`・`email` の identity だけ・パスワードは残す）にして記録。最初の Google ログインで GoTrue が確認済みの同じメールに自動で結び付ける（001 §5.2 のとおり identity は保険） |
+| `provider = 'google_oauth2'`（`uid` の有無を問わず） | **「それ以外」と同じ email のアカウントとして入れる**（`providers = ["email"]`・`email` の identity だけ。**決定。2026-10-11**）。`encrypted_password` は**そのまま残す**（`password_is_email` なら null）。**v1 は Google ログインが壊れていた**（`users/sessions/new.html.slim` がボタンに取り消し線を引き「現在、Google ログインできない問題が発生しています」と出している。v1 分析 §2.2）ので、この人たちは「パスワードを忘れた方」で自分のパスワードを作って入っている（Devise の recoverable は provider を見ない）。null にすると初日から締め出す。`from_omniauth` が入れた乱数の bcrypt が残っている人は誰もそれで入れないので、残しても害が無い。§5.2-11 で最近ログインしている人数を見る。v2 で初めて Google ログインしたとき、GoTrue が**確認済みの同じメール**のユーザーに `google` の identity を自動で結び付ける（supabase/auth の `DetermineAccountLinking`: sub の identity が無ければ、provider が verified と返したメールと同じメールの identity / ユーザーを探し、1 人に決まれば link）。v1 にメールを変える画面は無いので Google 側と assift のメールは同じ。当初（〜7 回目のレビュー）は v1 の `uid` から `google` の identity を先に作る案だったが、利点が「Google 側のメールが後で変わった人」だけで、`auth.identities` の行を自分で組む複雑さに見合わないのでやめた |
+| `uid` | 使わない（上のとおり identity は作らない）。`manifest.json` の件数（§5.2-6・11）に残るだけ |
 | それ以外 | `raw_app_meta_data = {"provider":"email","providers":["email"]}`、`auth.identities` に `provider = 'email'`・`provider_id = <v2 の id>`（seed と同じ形） |
 | `auth.identities` の共通の列 | `id = gen_random_uuid()`、`identity_data` の `email` は小文字、`last_sign_in_at` / `created_at` / `updated_at` は v1 の `created_at`（seed と同じく明示する。本番の `auth` スキーマは GoTrue が管理していて既定値が版で変わりうる） |
 | その他の列 | `instance_id = '00000000-…'`、`aud = role = 'authenticated'`、`raw_user_meta_data = '{}'`、`last_sign_in_at = current_sign_in_at`、token 系 4 列は `''`（seed の注記。null だと GoTrue が落ちる） |
@@ -347,7 +347,7 @@ SQL で数え直さない（2 つの数え方を持たない）。§8.1 で DB �
 | 5 | **CSV の一致** | サンプル店舗 5 件（スタッフ数の多い店・ペアのある店・退職者のいる店・半月表示の店・必要人数の上書きが多い店）で、v1 の `shifts.csv?encoding=utf8` と v2 の `/api/tenants/<id>/shifts/csv?encoding=utf8` を同じ `start` で取り `diff`。違いは 1 つずつ理由を書く（CSV は 010 で v1 と同じ形に作った）。v1 の CSV は名前を切り詰めないので、切り詰めたスタッフ名・パターン名の行は違って正しい（`report.json` の切り詰めの一覧と突き合わせる） |
 | 6 | 必要人数 | 5 のサンプルで、**「デフォルト人数をセット」を押してある期間**について v1 の表の `required / assigned` と v2 の表の数字が同じ（§7.7 で消した行が表示を変えていない）。押していない期間は v1 が 0、v2 が基本の人数で、違って正しい（§7.7） |
 | 7 | 準備中 | スタッフのいる店舗を開いて `/setup` に送られない。スタッフ 0 人の店舗は送られる（§7.2） |
-| 8 | Google の人 | `auth.identities` に `google` と `email` の 2 行があり、v1 のパスワードでログインでき、アカウント画面にパスワード欄が出る。実際の Google ログインは本番の Google の資格情報が要るので 022 で |
+| 8 | Google の人 | `auth.identities` は `email` の 1 行だけ（通常の人と同じ）で、v1 のパスワードでログインでき、アカウント画面にパスワード欄が出る。実際の Google ログイン（自動リンクで `google` の identity が足される）は本番の Google の資格情報が要るので 022 で |
 | 8b | 代理承認の人（`password_is_email`） | `encrypted_password` が null で、メール + パスワードのログインが「メールアドレスまたはパスワードが違います」で止まり GoTrue が落ちない。`/password/forgot` から再設定できる（`providers` に `email` があるので guard を通る） |
 | 9 | 課金の列 | `profiles` の `stripe_customer_id` / `trial_end` / `max_staffs_count` / `staff_cap` を数件、v1 の値と目で比べる。`staff_count_history` が全員 1 行 |
 | 10 | 制約 | 制約を持つ店舗を 2 件開き、設定画面に v1 と同じ行が出る |
@@ -442,6 +442,7 @@ docs/plans/019-…/README.md       §8.1 の「session_replication_role = replic
 | 6 | ダンプ・エクスポート・レポートの保管期間 | **決定（2026-10-10）**: pg_dump と JSONL は 3 か月、manifest / report / Stripe の結果 CSV / `usage_records` の CSV は 1 年（§10-8）。当初の案（全部 1 年）は、フルのダンプの価値が数週間で尽きる一方で負債が 1 年残るのでやめた |
 | 7 | リハーサルのダンプをいつ取るか | **未確定**。実装の 6（§12）の前。古いダンプでよい |
 | 8 | 書き込みが遅い・メモリが足りないときの対処 | 9.1 の所要時間と RSS で判断。目安: インポート全体が 10 分を超えるなら `COPY` に切り替える。ヒープが足りなければ `--max-old-space-size` |
+| 10 | Google の人（`provider = 'google_oauth2'`）の identity を v1 の `uid` から先に作るか | **決定（2026-10-11）: 作らない**。全員 email のアカウントとして入れ、Google ログインは GoTrue の自動リンク（確認済みの同じメール）に任せる。先に作る利点は「Google 側のメールが後で変わった人」だけ（v1 にメールを変える画面は無い）で、`auth.identities` を自分で組む複雑さに見合わない（§7.1） |
 | 9 | 変換を TypeScript で書くか SQL で書くか（`pg_restore` で `v1` スキーマに入れて `INSERT … SELECT`） | **決定（2026-10-11）: TypeScript**。SQL でも成立する（速く部品が少ない）が、YAML の列は SQL で読めず Ruby の工程が消えないこと、uuid の導出・祝日・必要人数の数値化をアプリの関数と共有できること、Vitest で規則を固定できることを優先した |
 
 ## 14. プランのレビュー（指摘が出なくなるまで）
@@ -586,7 +587,7 @@ docs/plans/019-…/README.md       §8.1 の「session_replication_role = replic
 
 - `--rollback` と COMMIT の両方で §8.1 の突合 20 件がすべて OK。所要 0.2 秒（fixtures は 70 行なので時間の目安にはならない）
 - `verify.ts` が 30 件すべて一致
-- **GoTrue でのログイン**: `$2a$11$…`（Postgres の `crypt('password', gen_salt('bf', 11))` で作った Devise と同じ形）で通常の人・Google の人（`providers = ["google","email"]`）が入れた。`encrypted_password = null`（代理承認・空）の人はメール + パスワードが 400（`invalid_credentials`）で GoTrue は落ちない。Devise の bcrypt gem が作った実物のハッシュは本物のダンプで確かめる（§8.2-2）
+- **GoTrue でのログイン**: `$2a$11$…`（Postgres の `crypt('password', gen_salt('bf', 11))` で作った Devise と同じ形）で通常の人・Google の人（email として入れる。`providers = ["email"]`）が入れた。`encrypted_password = null`（代理承認・空）の人はメール + パスワードが 400（`invalid_credentials`）で GoTrue は落ちない。Devise の bcrypt gem が作った実物のハッシュは本物のダンプで確かめる（§8.2-2）
 - **旧 URL**: `next dev` で `/tenants/FixtureTenant00000001A/shifts?start_date=2026-10-01` → `308 /tenants/<uuid>?start=2026-10-01`。uuid は `v1Uuid('tenants', token)` と一致
 - **共有ページ**: `getSharedShiftTable()` を直接呼んで、移行した店舗名・在籍スタッフ・勤務パターン・シフト・メモが返り、捨てた店舗の code は null。ページそのものはこのセッションの環境で `next dev` が Google Fonts を取れず（`next/font/google` の fetch がプロキシを通らない）500 になるため、表示はリハーサルで見る
 - DB の中身を目で確認: ペアの UPDATE（夜勤 → 明け）、`position` の 0 始まり、`retired_at`、`available_wdays` の正規化、`profiles` の `stripe_customer_id` / `trial_end` / `max_staffs_count` / `staff_cap`、`created_at` / `updated_at` が v1 の値のまま（`set_updated_at` を止めた効果）、`staff_count_history` が全員 1 行、トリガが 3 つとも `enable` に戻っている（`tgenabled = O`）
@@ -613,6 +614,10 @@ docs/plans/019-…/README.md       §8.1 の「session_replication_role = replic
 | 3 | fixtures の README の手順どおりに流すと、追跡中の `fixtures/` に report と CSV が落ちる | `.gitignore` に足した |
 | 4 | `verify.ts` の `before` / `after` が non-null で、BEGIN 前に失敗した report は Zod のエラーで止まる | `nullable()` にし、`committed` と同じ文言で止める |
 | 5 | `password_is_email` は今のメールとしか比べられない（メールを変えた代理承認の人は検出できない） | v1 にメールを変える画面が無いことを確かめ（`users/registrations/edit.html.slim`）、§7.1 に「実質は全員を拾える」と注記 |
+
+#### Google の人の identity をやめた（2026-10-11。§13-10）
+
+利用者の指摘で、v1 の `uid` から `google` の identity を先に作るのをやめ、全員を email のアカウントとして入れる形にした（`transformUsers()` から `google` の identity と `providers` の `google` を外した。`google_without_uid` の記録も不要になった）。GoTrue の自動リンクの規則は supabase/auth の `internal/models/linking.go` で確かめた。fixtures で、Google の人（`hanako`）が `email` の identity 1 行でパスワードログインできることを確かめ直した。
 
 #### 未実施（次にやること）
 

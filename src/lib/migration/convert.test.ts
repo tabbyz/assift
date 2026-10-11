@@ -117,7 +117,7 @@ describe('convertExport（fixtures の通し）', () => {
         fixed: { end_date_clipped: 1 },
       },
     })
-    expect(c.identities).toHaveLength(7) // email 6 + google 1
+    expect(c.identities).toHaveLength(6) // 全員 email だけ
     expect(c.pairs).toEqual([{ id: p(12), pair_pattern_id: p(13) }])
     expect(c.staffPatterns).toHaveLength(3 + 1 + 2 + 2 + 2 + 1)
     expect(c.staffDefaultPatterns).toEqual([
@@ -133,10 +133,9 @@ describe('convertExport（fixtures の通し）', () => {
     const byId = new Map(c.authUsers.map((row) => [row.id, row]))
     expect(byId.get(u(1))?.encrypted_password).toMatch(/^\$2a\$11\$/)
     expect(byId.get(u(2))?.email).toBe('hanako@example.test')
-    expect(byId.get(u(2))?.raw_app_meta_data).toEqual({
-      provider: 'google',
-      providers: ['google', 'email'],
-    })
+    // Google の人も email のアカウント（パスワードは残る）
+    expect(byId.get(u(2))?.raw_app_meta_data).toEqual({ provider: 'email', providers: ['email'] })
+    expect(byId.get(u(2))?.encrypted_password).toMatch(/^\$2a\$11\$/)
     expect(byId.get(u(3))?.encrypted_password).toBeNull()
     expect(byId.get(u(8))?.encrypted_password).toBeNull()
     expect(byId.has(u(4))).toBe(false)
