@@ -1,4 +1,4 @@
-import { getV1UuidNamespace, v1Uuid } from '@/lib/migration/v1Ids'
+import { v1Uuid } from '@/lib/migration/v1Ids'
 import { lookup } from '@/utils/record'
 
 /**
@@ -29,18 +29,13 @@ export type RewrittenUrl = { pathname: string; search: string }
  *
  * @param pathname `/tenants/<token>/shifts` のような URL のパス部分
  * @param search `?start_date=2026-10-01` のようなクエリ（`?` 込み。空文字可）
- * @param namespace uuid v5 の名前空間（RFC 準拠の uuid）
  */
-export function rewriteLegacyTenantUrl(
-  pathname: string,
-  search: string,
-  namespace: string
-): RewrittenUrl | null {
+export function rewriteLegacyTenantUrl(pathname: string, search: string): RewrittenUrl | null {
   const matched = LEGACY_TENANT_PATH.exec(pathname)
   if (!matched) return null
 
   const [, token, rest] = matched
-  const tenantId = v1Uuid('tenants', token, namespace)
+  const tenantId = v1Uuid('tenants', token)
   const nextSearch = rewriteSearch(search)
 
   // `/tenants/<token>/shifts.pdf` → `/api/tenants/<uuid>/shifts/pdf`（着地は 010）。
@@ -68,28 +63,4 @@ function rewriteSearch(search: string): string {
     rewritten.append(key === 'start_date' ? 'start' : key, value)
   }
   return `?${rewritten.toString()}`
-}
-
-/**
- * proxy から使う入口。env の名前空間が無ければ書き換えない（旧 URL はそのまま 404 になる）。
- * 名前空間が RFC 非準拠だと `v1Uuid` が例外を投げるので、`getV1UuidNamespace()` で先に弾く。
- */
-export function resolveLegacyTenantUrl(pathname: string, search: string): RewrittenUrl | null {
-  const namespace = getV1UuidNamespace()
-  if (!namespace) {
-    warnMissingNamespace(pathname)
-    return null
-  }
-  return rewriteLegacyTenantUrl(pathname, search, namespace)
-}
-
-let warned = false
-
-/** 旧 URL が来たのに解決できないときだけ、プロセスに一度だけ警告する */
-function warnMissingNamespace(pathname: string) {
-  if (warned || !LEGACY_TENANT_PATH.test(pathname)) return
-  warned = true
-  console.warn(
-    '[tenants] V1_UUID_NAMESPACE が未設定か uuid 形式ではないため、v1 の店舗 URL を解決できません'
-  )
 }
