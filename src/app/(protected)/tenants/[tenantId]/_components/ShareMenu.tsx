@@ -2,6 +2,7 @@
 
 import { Menu, MenuDivider, MenuDropdown, MenuItem, MenuTarget } from '@mantine/core'
 import { IconFileTypeCsv, IconFileTypePdf, IconLink, IconShare2 } from '@tabler/icons-react'
+import { exportPath, type ExportKind } from '@/lib/export/path'
 import { ToolbarButton } from './ToolbarButton'
 
 type Props = { tenantId: string; start: string; onOpenShare: () => void; disabled: boolean }
@@ -10,8 +11,7 @@ type Props = { tenantId: string; start: string; onOpenShare: () => void; disable
  * ツールバーの「共有」。URL / PDF / CSV。
  */
 export function ShareMenu({ tenantId, start, onOpenShare, disabled }: Props) {
-  const exportUrl = (kind: 'pdf' | 'csv') =>
-    `/api/tenants/${tenantId}/shifts/${kind}?start=${start}`
+  const exportUrl = (kind: ExportKind) => `${exportPath(tenantId, kind)}?start=${start}`
 
   return (
     <Menu position="bottom-end" withinPortal>

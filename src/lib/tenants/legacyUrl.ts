@@ -1,3 +1,4 @@
+import { exportPath, type ExportKind } from '@/lib/export/path'
 import { v1Uuid } from '@/lib/migration/v1Ids'
 import { lookup } from '@/utils/record'
 
@@ -17,7 +18,7 @@ import { lookup } from '@/utils/record'
 const LEGACY_TENANT_PATH = /^\/tenants\/([A-Za-z0-9_-]{22})(?:\/(.*))?$/
 
 /** v1 のエクスポートは `shifts.pdf` / `shifts.csv`。v2 は Route Handler なので別のパスになる */
-const EXPORT_PATHS: Record<string, string> = {
+const EXPORT_PATHS: Record<string, ExportKind> = {
   'shifts.pdf': 'pdf',
   'shifts.csv': 'csv',
 }
@@ -43,7 +44,7 @@ export function rewriteLegacyTenantUrl(pathname: string, search: string): Rewrit
   // プロトタイプ上の値を返し、でたらめなパスへリダイレクトしてしまう）
   const exportKind = lookup(EXPORT_PATHS, rest)
   if (exportKind) {
-    return { pathname: `/api/tenants/${tenantId}/shifts/${exportKind}`, search: nextSearch }
+    return { pathname: exportPath(tenantId, exportKind), search: nextSearch }
   }
 
   // v1 のシフト表は `/shifts`。v2 は店舗のトップなので落とす（`/shifts` へ送ると redirect が 2 回になる）
