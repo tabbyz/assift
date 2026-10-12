@@ -42,10 +42,11 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ```
 src/
-  proxy.ts                        管理画面のホストの振り分け + cookie 更新 + 保護ルートの未ログイン redirect
-  theme.ts                        createTheme（色・半径・フォントはここに集約）
+  proxy.ts                        CSP の nonce（022）+ 管理画面のホストの振り分け + cookie 更新 + 保護ルートの未ログイン redirect
+  instrumentation-client.ts       ブラウザでアプリのコードより先に走る（Next の規約。ここに書くものはブラウザ専用）。Zod の jitless（022）
+  theme.ts                        createTheme（色・半径・フォントはここに集約。Client の AppProviders / ShiftDemo からだけ読む）
   app/
-    layout.tsx                    MantineProvider > ModalsProvider > NuqsAdapter > children + Notifications
+    layout.tsx                    headers() で CSP の nonce を読み、ColorSchemeScript と AppProviders（Client。MantineProvider > ModalsProvider > NuqsAdapter > children + Notifications）に渡す（022）
     (public)/                     認証不要
       (site)/                     LP（/）と静的ページ（terms / privacy / law）。layout がヘッダー・フッター・LP の書体（016 / 018）
       share/[code]/               公開シフト表（未ログインで開く。読み取りは service_role）。(site) の枠を被せない
@@ -66,6 +67,7 @@ src/
     api/stripe/webhook/route.ts   Stripe の Webhook（POST。署名で守る。019）
     api/cron/billing-usage/route.ts  毎日の同期と最大人数の送信（GET。CRON_SECRET で守る。vercel.json の crons）
   components/                     横断 UI（SortableList = 上下ボタンの並べ替え一覧 など）
+    AppProviders.tsx              root layout の Provider 群（Client）。CSP の nonce を文字列で受け、Mantine の getStyleNonce に関数で渡す（022）
     restrictions/                 制約の行（説明・種類・強さの札・編集）。制約ページとスタッフの編集画面で共有（013）
     setup/                        初期設定のウィザード（ステップ・ヘッダー・完成イメージ）。/tenants/new と /tenants/<id>/setup で共有（014）
     billing/                      上限のモーダル（openStaffLimitModal）・トライアル / 支払い失敗の帯・シフト表のロック・ポータルのボタン（019）
@@ -86,7 +88,9 @@ src/
     calendar/                     dateString（YYYY-MM-DD の道具。dayjs はここだけ）/ dateRange / today / weekdays / holidays（server-only）
     shifts/                       key（セルの Map）/ applyAssign（楽観更新。assign_shift と同じ規則）/ satisfaction（必要人数の充足）/ count（集計）/ planDefaultPatterns（デフォルト勤務パターンの行を組む純関数）/ table（エクスポートが共有する表の型）
     shares/                       expiry（公開期限。v1 の DATE_LIMIT = 6）/ code（8 文字のコード）
-    export/                       request（認証 → 店舗 → 期間 → 表。PDF / CSV 共通の入口）/ filename
+    security/                     CSP（022）。csp（nonce の生成・方針の文字列・ヘッダ名。純関数。proxy と root layout が使う。
+                                  レスポンスの方針を付けない唯一の例外は PDF の応答で、その判定は lib/export/path の isPdfExportPath）
+    export/                       request（認証 → 店舗 → 期間 → 表。PDF / CSV 共通の入口）/ filename / path（URL を組む。リンクと旧 URL の書き換えが共有）
     csv/                          shiftCsv（純関数）/ encode（CP932 か BOM 付き UTF-8。iconv-lite）
     pdf/                          fonts（Font.register + 折り返し）/ styles / paginate / pdfCellStyle / ShiftPdfDocument
     actions/reorder.ts              reorder_positions RPC の共通ラッパ（staffs / patterns。restrictions は 013 で並べ替えをやめた）
@@ -291,16 +295,39 @@ Stripe の API の版は SDK が固定する最新（`lib/billing/stripe.ts`）�
 - 例外は uuid v5 の**名前空間**だけ。`v5()` は RFC 非準拠の値に例外を投げるので、`V1_UUID_NAMESPACE`（`lib/migration/v1Ids.ts` の定数。環境変数ではない。021 §3-6）は `uuidgen` で作った v4 で、テストが `validate()` で確かめている
 - v1 の ID からの導出は `v1Uuid(table, id)` に集約する（名前空間は内部の定数。引数で受けない）。旧 URL の解決（005）と移行スクリプト（021）が同じ関数を使う
 
+## CSP（022）
+
+本番の方針は `lib/security/csp.ts`（`buildCsp()`）。`script-src` は nonce + `'strict-dynamic'`、外部のオリジンは 0、`frame-ancestors 'none'`。
+開発（`NODE_ENV === 'development'`）だけ `'unsafe-eval'`・インラインスタイル・HMR の WebSocket を許す。
+
+- **外部のオリジン（スクリプト・画像・フォント・fetch・iframe）を足すときは `csp.ts` と `csp.test.ts`、022 §3 の表を直す。** 足し忘れの症状は「本番でだけ黙って動かない」（コンソールの `Refused to …`）
+- インラインの `<script>` / `<style>` を足すときは nonce を付ける（Mantine の `<style>` は `AppProviders` の `getStyleNonce` が付ける。`next/script` は `nonce` prop）。
+  `style` 属性（Mantine の style props・`style={{…}}`）はそのままでよい（`style-src-attr 'unsafe-inline'`）
+- `eval` / `new Function` はブラウザで使えない。Zod は `z.object()` を作った時点で `Function("")` を試すので `src/instrumentation-client.ts` が `jitless` にしている
+- nonce はリクエストごとに違うので**全ルートが動的描画**（root layout が `headers()` を読む）。静的化・ISR・PPR は nonce と両立しない
+- `AppProviders` は最初に受けた nonce だけを使う（Server Action の描き直しで root layout の nonce が変わるが、文書の CSP は最初の HTML のまま）
+- HTML を描くのに nonce が無ければ root layout の `assertNonce()` が名指しする（開発は例外、本番はログ）。proxy の matcher から外れた・段が `{ request }` を渡し忘れた、のどちらか。
+  nonce は Client の props として RSC の flight データに入る（nonce hiding は効かない）。受け入れたトレードオフ（022 §4.5）
+- 確かめ方: `npm run build && npm run start` のうえで、Playwright で各ページを開き `securitypolicyviolation` を数える（022 §6）。`next dev` は方針が緩いので本番の確認にならない
+
 ## proxy（`src/proxy.ts`）
 
-4 段の合成にとどめ、ロジックは `lib/tenants/`・`lib/admin/host.ts` の純関数に置く。
+4 段の合成にとどめ、ロジックは `lib/tenants/`・`lib/admin/host.ts`・`lib/security/csp.ts` の純関数に置く。
+
+- 最初に CSP の nonce（022）を作り、**リクエストヘッダ**（`x-nonce` と `Content-Security-Policy`。Next が後者から nonce を拾って自分の `<script>` に付ける）と
+  返す**レスポンス**に載せる（段ごとではなく `proxy()` の末尾で 1 回。段を足しても付け忘れない）。例外は PDF の応答（`isPdfExportPath()`。完全一致。
+  HTML を描かない経路で、ブラウザのビューアへの影響を実機で確かめられないため）だけで、**ほかはパスで除外しない**（proxy は応答の種類を見られず、
+  存在しないパスはどれも 404 の HTML になる。Route Handler の中の `notFound()` は本文の無い 404。CSV に付いても害は無い）。
+  段が `{ request }` を渡し忘れると描画側に nonce が届かない。root layout の `assertNonce()` が名指しする（下記「CSP」）。
+  rewrite（`/404`）には `{ request }` を渡す（渡さないと nonce の無い元のヘッダで描かれる）
 
 0. 管理画面のホストの振り分け（020。管理画面のホストでは `/-` だけ、本体のホストでは `/-` を 404）
 1. v1 の店舗 URL（22 文字トークン）を新 URL へ 308
 2. `updateSession()`: Supabase の cookie 更新 + 保護ルートの未ログイン redirect
 3. 開いている `/tenants/<uuid>` を直近店舗の cookie に記録
 
-- `config.matcher` から外すのは静的アセットと `api/stripe`・`api/cron`（ログイン状態と無関係で、セッションの更新が要らない）だけ
+- `config.matcher` から外すのは静的アセット（`_next/static` / `_next/image` / `favicon.ico`）と Stripe の Webhook・cron（ログイン状態と無関係で、セッションの更新が要らない）だけ。
+  **除外は実在するパスに完全一致（`$`）で書く。** 前方一致や拡張子で除外すると、存在しない URL が 404 の HTML になるのに proxy を通らず、CSP の付かない HTML ができる（`public/` は無い）
 - **`config.matcher` から prefetch を除外しない。** セッション cookie を書けるのは proxy だけで、除外するとトークン更新が Server Component の描画中に起き、新しい refresh token を保存できずに次の遷移でログアウトする（`enable_refresh_token_rotation = true`）
 - proxy のコード内では RSC / prefetch のヘッダが剥がされていて prefetch を判別できない。先読みで困る導線は、リンク側に `prefetch={false}` を付けて塞ぐ（他店舗を指す `TenantSwitcher`、006 で作るページへのリンク）
 - URL 由来の文字列で定数マップを引くときは `lookup()`（`src/utils/record.ts`）。素の添字はプロトタイプ上の値を返す
@@ -313,7 +340,7 @@ Stripe の API の版は SDK が固定する最新（`lib/billing/stripe.ts`）�
 - Client: `useQueryStates(parsers)`。**既定は shallow（クライアントだけ更新）**
 - Server Component の再フェッチが必要なときだけ `{ shallow: false }`
 - 検索入力など連続更新は `throttleMs`（目安 300）
-- `NuqsAdapter` は root `layout.tsx` に 1 回だけ
+- `NuqsAdapter` は `components/AppProviders.tsx`（root layout が 1 回描く）に 1 回だけ
 
 ```ts
 // searchParams.ts

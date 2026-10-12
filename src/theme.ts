@@ -14,8 +14,9 @@ import { PATTERN_COLORS } from '@/lib/patterns/colors'
 const DATE_VALUE_FORMAT = 'YYYY/MM/DD'
 
 export const theme = createTheme({
-  // `DateInput.extend()` は使わない: このファイルは Server（root layout）からも読まれ、
-  // `@mantine/dates` のコンポーネントは Server 側のバンドルでは静的メソッドを持たない。素のオブジェクトで足りる
+  // このファイルは Client（`AppProviders` / `ShiftDemo`）からだけ読む（022 で root layout から外した）。
+  // 以前は Server の root layout から Client へ props で渡していたので関数や `DateInput.extend()` を置けなかったが、いまは置ける。
+  // 素のオブジェクトで足りているので、要るようになるまでこのまま
   components: {
     Button: { defaultProps: { color: 'dark' } },
     Checkbox: { defaultProps: { color: 'dark' } },
@@ -26,7 +27,6 @@ export const theme = createTheme({
      */
     Chip: {
       defaultProps: { color: 'dark', radius: 'sm' },
-      // 関数（`vars`）は使えない: theme は Server（root layout）から Client の MantineProvider へ渡る
       styles: {
         iconWrapper: { display: 'none' },
         label: { paddingInline: 'var(--chip-padding)' },

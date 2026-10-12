@@ -6,11 +6,28 @@ import {
   CURRENT_TENANT_MAX_AGE,
   tenantIdFromPathname,
 } from '@/lib/tenants/currentTenant'
+import { isPdfExportPath } from '@/lib/export/path'
+import { CSP_HEADER, NONCE_HEADER, buildCsp, generateNonce } from '@/lib/security/csp'
 import { rewriteLegacyTenantUrl } from '@/lib/tenants/legacyUrl'
 import { updateSession } from '@/utils/supabase/proxy'
 
 // Next 16 では middleware.ts が proxy.ts に改名された。ロジックは lib / utils の純関数に置く
 export async function proxy(request: NextRequest) {
+  // CSP の nonce（022）。リクエストヘッダに載せると Next がレンダリング時に拾い、自分の <script> に付ける
+  const csp = attachCsp(request)
+
+  // レスポンスの方針は、どの段が返した Response にも末尾で 1 回載せる（段ごとに付けると、段を足したときに付け忘れる）。
+  // PDF の応答（`isPdfExportPath()`。完全一致）だけ付けない: Route Handler にしか届かず HTML を描かない経路で、
+  // ブラウザのビューアへの影響を実機で確かめられないため（022 §3）。それ以外をパスで除外しない: proxy は応答の種類を見られず、
+  // 存在しないパス（`/api/foo`・`/foo.png`）はどれも 404 の HTML（root の not-found）になり、除外した経路は CSP も nonce も無い HTML になる
+  // （022 のレビューで 3 回見つけた穴）。段が `{ request }` を渡し忘れて描画側に nonce が届かないときは root layout の `assertNonce()` が名指しする
+  const response = await route(request)
+  if (!isPdfExportPath(request.nextUrl.pathname)) response.headers.set(CSP_HEADER, csp)
+  return response
+}
+
+/** 段の合成。どれか 1 つの Response を返す */
+async function route(request: NextRequest): Promise<NextResponse> {
   // 0. 運営者の管理画面のホストの振り分け（020 §4.2）。管理画面のホストでは管理画面だけを、
   //    本体のホストでは管理画面以外だけを開く
   const admin = adminHostResponse(request)
@@ -28,6 +45,22 @@ export async function proxy(request: NextRequest) {
   rememberCurrentTenant(request, response)
 
   return response
+}
+
+/**
+ * nonce を作り、**リクエストヘッダ**に `x-nonce`（root layout が `headers()` で読む）と
+ * `Content-Security-Policy`（Next が `'nonce-…'` を抜き出す）を書く。パスを問わず常に書き、`x-nonce` を上書きするので、
+ * クライアントが送った値が layout に届くことは無い。レスポンス側に付ける規則は `proxy()`。
+ *
+ * `request.headers` を直接書き換える: `updateSession()` が `request.cookies.set()` で同じヘッダを書き換えて
+ * `NextResponse.next({ request })` に渡しているので、複製して渡すと cookie の更新と二重管理になる
+ */
+function attachCsp(request: NextRequest): string {
+  const nonce = generateNonce()
+  const csp = buildCsp(nonce, { dev: process.env.NODE_ENV === 'development' })
+  request.headers.set(NONCE_HEADER, nonce)
+  request.headers.set(CSP_HEADER, csp)
+  return csp
 }
 
 /**
@@ -50,7 +83,8 @@ function adminHostResponse(request: NextRequest) {
     return NextResponse.redirect(url)
   }
   url.pathname = '/404'
-  return NextResponse.rewrite(url)
+  // `{ request }` で書き換えたリクエストヘッダ（CSP の nonce）を rewrite 先へ渡す（無いと元のヘッダで描かれ、nonce が無い）
+  return NextResponse.rewrite(url, { request })
 }
 
 /** 旧 URL なら 308 の Response、そうでなければ null */
@@ -92,11 +126,14 @@ function rememberCurrentTenant(request: NextRequest, response: NextResponse) {
 
 export const config = {
   matcher: [
-    // 静的アセットと画像・フォントは対象外。
+    // 対象外は Next 自身が配るディレクトリ（`_next/static/`。配下は任意なので前方一致）と、
+    // 実在する単一のパス（`_next/image`（クエリで指定。pathname は 1 つ）/ favicon / Stripe の Webhook / cron。
+    // 後の 2 つはログイン状態と無関係で、署名 / CRON_SECRET でルート自身が守る。019 §5.9）だけ。
+    // **単一のパスの除外は完全一致で書く**（`$`）。前方一致や拡張子で除外すると、存在しない URL（`/favicon.ico/x`・`/foo.png`）が
+    // 404 の HTML（root の not-found）になるのに proxy を通らず、CSP の付かない HTML ができる（022 のレビューで見つけた。`public/` は無い）。
     // prefetch を除外してはいけない: セッション cookie を書けるのはここだけで、
     // 除外するとトークン更新（refresh token rotation）が prefetch のレンダリング中に起きて
     // 新しい token を保存できず、次の遷移でログアウトしてしまう。
-    // Stripe の Webhook と cron は対象外（ログイン状態と無関係。署名 / CRON_SECRET でルート自身が守る。019 §5.9）
-    '/((?!_next/static|_next/image|favicon.ico|api/stripe/|api/cron/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|ttf|woff2?)$).*)',
+    '/((?!_next/static/|_next/image$|favicon\\.ico$|api/stripe/webhook$|api/cron/billing-usage$).*)',
   ],
 }
