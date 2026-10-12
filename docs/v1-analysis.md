@@ -214,7 +214,7 @@ users ─1:N─ usage_records, invoices（Stripe 関連）
 
 | 機能 | Phase 1 |
 | --- | --- |
-| LP、利用規約、プライバシー、特商法、アップデート情報（ActiveHash 固定データ） | ○（静的ページ） |
+| LP、利用規約、プライバシー、特商法、~~アップデート情報（ActiveHash 固定データ）~~ | ○（静的ページ）。アップデート情報は 005 §13 でリリース後に回した |
 | 管理画面（グラフ、ユーザー/店舗/共有/…一覧、招待の代理承認、SendGrid 一斉メール、メンテナンスモード） | ×（Phase 2 で最小限） |
 | PWA（manifest, service worker, iOS 起動画像） | △（manifest 程度は容易） |
 | IE ブロック | × |
