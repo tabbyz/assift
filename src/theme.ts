@@ -1,4 +1,5 @@
 import { createTheme } from '@mantine/core'
+import { FONT_FAMILY } from '@/fontFamily'
 import { PATTERN_COLORS } from '@/lib/patterns/colors'
 
 /**
@@ -66,8 +67,7 @@ export const theme = createTheme({
    * 表は密度が主役なので、chrome を丸めすぎるとマスの四角さと喧嘩する。
    */
   defaultRadius: 'sm',
-  fontFamily:
-    '-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, sans-serif',
+  fontFamily: FONT_FAMILY,
   other: {
     patternColors: PATTERN_COLORS,
   },
