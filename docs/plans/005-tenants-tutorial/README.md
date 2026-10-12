@@ -371,7 +371,7 @@ revalidatePath(`/tenants/${tenantId}`, 'layout')
 - `/api/tenants/[tenantId]/shifts/{pdf,csv}`（010）。旧 URL からの redirect 先は 005 で組むが、着地は 010 まで 404
 - LP の「ログイン済みなら `/tenants` へ」（011）
 - お問い合わせ導線、Beamer、決済情報、スタッフ上限（v1 navbar / plan_status。011 と Phase 2）
-- v1 トークン以外の旧 URL（`/users/sign_in` 等 → `/login`）。認証系の旧 URL は 011 か 013 で `next.config` の `redirects` にまとめる
+- v1 トークン以外の旧 URL（`/users/sign_in` 等 → `/login`）。認証系の旧 URL は 011 か 013 で `next.config` の `redirects` にまとめる（→ §12 で `/users/sign_in` だけ入れた）
 - 店舗の共同管理・招待（Phase 1 に無い。RLS の PERMISSIVE 側をそのときに分岐する）
 
 ---
@@ -707,3 +707,101 @@ npx supabase db reset && npx supabase test db → 22 tests PASS
 | `npm run build` | 成功。ルートに `/tenants/[tenantId]` と `/tenants/[tenantId]/shifts`（受け皿）が並ぶ |
 
 `npm test` 699 件 / `typecheck` / `lint`（既存の警告 1 件のみ）。
+
+## 12. 追補: v1 のログイン画面の URL（2026-10-12）
+
+§7 で先送りした「v1 トークン以外の旧 URL」のうち、**`/users/sign_in` だけ**を `/login` へ送る。
+
+### 12.1 範囲を絞る理由
+
+- 外から踏まれるのはブックマークとアドレスバーの補完に残った URL。v1 は Devise の timeoutable（`timeout_in` 1 日）で、1 日操作しないとセッションが切れる。
+  毎日は使わない人ほど開くたびにログイン画面を通っていたので、残っているのはほぼ `/users/sign_in`
+- `/users/password/new`・`/users/edit` は画面からたどるページで、ブックマークされにくい。`/users/password/edit`・`/users/confirmation` は
+  メールのリンクで、v1 のトークンは v2 では使えない（再設定トークンは既定で 6 時間で切れる）
+- 足りないものが見つかったら同じ配列に 1 行ずつ足す（001 §4.2 の表が候補）
+
+### 12.2 決めたこと
+
+| 項目 | 内容 |
+| --- | --- |
+| 置き場 | `next.config.ts` の `redirects()`（`tutorial/*` と同じ配列）。proxy より先に走り（proxy のガイドの「Execution order」）、HTML を返さないので CSP（022）・セッションと関わらない |
+| 対応 | `/users/sign_in` → `/login`（パスの完全一致。`:path*` は付けない。大文字・小文字は区別しない（Next の既定。`/Users/Sign_In` も送る）） |
+| 状態コード | **302（`statusCode: 302`）**。理由は 2 つ。① 恒久（308）にしない: ブラウザが長く記憶するので、切り替えを v1 に戻したときにそのブラウザで v1 のログイン画面へ戻れなくなる。② 307 にしない: v1 のログインフォームは**同じパスへ POST する**（Devise の `sessions#create`）。切り替えをまたいで開いていたタブで送信されると、307 はメール・パスワードの本文ごと `/login` へ POST し直させる。302 ならブラウザは GET に変えて `/login` を開くだけ（Fetch 標準が「POST への 301 / 302 は GET に変える」と定めている。303 でも同じだが、GET には 302 が素直） |
+| クエリ | `redirects()` が素通しする（v1 のログイン画面にクエリは付かない） |
+
+ログイン済みの人は `/login` に着いたあと、proxy の `GUEST_ONLY_PATHS` が `/tenants` へ、`/tenants` が直近の店舗へ送る（移動は計 3 回）。
+管理画面のホストでも `redirects()` は先に走るので 302 で `/login` へ移り、そこで proxy の 0 段目が管理画面（`/-`）へ送る（`adminHostDecision()` の表の「管理画面のホスト × それ以外」。管理画面のホストに v1 の URL は無いので問題ない）。
+
+### 12.3 やること
+
+1. `next.config.ts` の `redirects()` に 1 行足し、コメントに理由（302 の理由を含む）を書く
+2. `lint` / `typecheck` / `build`
+3. `npm run start` で `curl` を当てて確かめる。このセッションはローカルの Supabase を起動できない（dockerd が起動しない）ので、
+   `.env.local` は使わず、Supabase の 3 つの環境変数にダミーの値を入れて **build と start の両方**を走らせる（`NEXT_PUBLIC_*` は build 時に埋め込まれるので、start だけに渡しても proxy が「環境変数が無い」で落ちる）。302 は proxy より前なので DB に依らない。
+   404 の行は proxy を通るが、cookie が無ければ `getClaims()` はネットワークに出ずに未ログインで返る（`getSession()` が空なら即座に返す）
+
+| 見るもの | 期待 |
+| --- | --- |
+| `GET /users/sign_in` | `302` で `Location: /login` |
+| `GET /users/sign_in?foo=1` | `302` で `/login?foo=1` |
+| `POST /users/sign_in`（フォームの本文付き） | `302` で `/login`（ブラウザはこのあと GET で開く） |
+| `GET /users/sign_in/` | 末尾スラッシュを落とす `308` のあと `302` で `/login` |
+| `GET /users/sign_in/x` | 404（完全一致なので送らない） |
+| `GET /users/password/new` | 404（対象外のまま） |
+
+### 12.4 プランのレビュー（2026-10-12）
+
+| # | 指摘 | 対応 |
+| --- | --- | --- |
+| 1 | 307 は POST を保つ。v1 のログインフォームの送信先は `/users/sign_in` 自身なので、開きっぱなしのタブから送ると認証情報の本文ごと `/login` へ再送される。`/login` は Server Action のページで、素の POST の扱いを当てにしたくない | 302 に変更（§12.2）。`redirects()` は `statusCode` で 301 / 302 / 303 / 307 / 308 を受ける（`permanent` とは併用不可）。検証に POST を足した |
+| 2 | 「ログイン済みは 2 回の移動」は誤り。`/tenants` も直近の店舗へ redirect する | 3 回に直した |
+| 3 | 管理画面のホストの説明が「0 段目で 404」だけだと、302 が先に返ることが読み取れない | 順序を書いた（「404」自体も誤りだった。§12.6 の 1） |
+| 4 | 検証の前提（ローカルの Supabase が無い）を書いていない | §12.3 に書いた。末尾スラッシュの行も足した |
+| 5 | §7 のスコープ外の行が「011 か 013 で」のまま | §12 への参照を足した |
+
+2 回目（2026-10-12）:
+
+| # | 指摘 | 対応 |
+| --- | --- | --- |
+| 6 | 「毎日ログインし直す」は不正確。timeoutable は最終操作からの時間で切れる（`timeout_in`）。毎日使う人はむしろ切れない | 「1 日操作しないと切れる。毎日は使わない人ほどログイン画面を通っていた」に直した |
+| 7 | 「完全一致」と書くと大文字・小文字まで区別すると読める。Next の `redirects()` は既定で区別しない | 対応の行に書き足した（送っても害は無いので設定は変えない） |
+| 8 | 302 で POST が GET に変わる根拠が書かれていない（歴史的な挙動と読める） | Fetch 標準の規定であることを書いた |
+
+3 回目（2026-10-12）:
+
+| # | 指摘 | 対応 |
+| --- | --- | --- |
+| 9 | ダミーの環境変数を「起動するときに入れる」だけでは足りない。`NEXT_PUBLIC_*` は build で埋め込まれる | build と start の両方に渡すと書いた。`getClaims()` が cookie 無しで通信しないことも auth-js のコードで確かめて書いた |
+
+4 回目（2026-10-12）: 指摘なし。収束とする。
+
+### 12.5 実装ログ（2026-10-12）
+
+`next.config.ts` の `redirects()` に `{ source: '/users/sign_in', destination: '/login', statusCode: 302 }` を足し、302 にした理由をコメントに書いた。
+
+検証（`npm run build && npx next start`。Supabase の 3 つの環境変数はダミー。302 は proxy より前なので DB は要らない）:
+
+| 見たもの | 結果 |
+| --- | --- |
+| `GET /users/sign_in` | `302` → `/login` |
+| `GET /users/sign_in?foo=1` | `302` → `/login?foo=1` |
+| `POST /users/sign_in`（`user[email]` / `user[password]` の本文付き） | `302` → `/login` |
+| 同上をブラウザ（Chromium）のフォーム送信で | `POST /users/sign_in` → **`GET /login`**（本文は再送されない）。「ログイン \| assift」が開く |
+| `GET /users/sign_in/` | `308` → `/users/sign_in` → `302` → `/login`（`-L` で 200、移動 2 回） |
+| `GET /Users/Sign_In` | `302` → `/login`（大文字・小文字を区別しない） |
+| `GET /users/sign_in/x` | 404 |
+| `GET /users/password/new` | 404（対象外のまま） |
+| 管理画面のホストで `/users/sign_in`（`ADMIN_HOST=admin.localhost:3100` で起動し、`Host: admin.localhost:3100`） | `302` → `/login` → `307` → `/-`（管理画面。§12.2） |
+
+`npm run lint`（既存の警告 1 件のみ）/ `typecheck` / `npm test`（95 ファイル・908 件）。スキーマは触っていないので `supabase test db` は流していない。
+`typecheck` は初回 `pg` が見つからず落ちた。`node_modules` が `package.json` より古かった（SessionStart フックは `node_modules` の有無しか見ない）ためで、`npm ci` のあとに通った。
+
+### 12.6 実装のレビュー（2026-10-12）
+
+| # | 指摘 | 対応 |
+| --- | --- | --- |
+| 1 | 実装ログの「管理画面のホスト」の行は `ADMIN_HOST` を設定せずに確かめていた（その場合 `admin.localhost` はただの別ホストで、管理画面のホストとして扱われない）。設定して確かめ直すと、`/login` は 404 ではなく `307` で `/-` へ送られた。§12.2 の説明が誤り | `ADMIN_HOST` を設定して確かめ直し、§12.2 とログの行を直した。動き自体は問題ない（管理画面のホストで本体の URL を開いた人を管理画面へ送る、020 の既存の振る舞い） |
+| 2 | コメントの「ブックマークと補完に残っている」は確かめた事実ではなく見込み | 「残っているはずの URL」に直した |
+
+2 回目: 指摘なし。収束とする。
+

@@ -31,6 +31,13 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       { source: '/tenants/:id/tutorial/:path*', destination: '/tenants/:id', permanent: true },
+      /**
+       * v1（Devise）のログイン画面。ブックマークやアドレスバーの補完に残っているはずの URL（005 §12）。
+       * 308 にしない: ブラウザが記憶するので、切り替えを v1 に戻すとそのブラウザで v1 のログイン画面へ戻れなくなる。
+       * 307 にしない: v1 のフォームは同じパスへ POST するので、開きっぱなしのタブから送ると本文（パスワード）ごと
+       * `/login` へ POST し直させる。302 ならブラウザは GET に変える
+       */
+      { source: '/users/sign_in', destination: '/login', statusCode: 302 },
     ]
   },
   experimental: {
