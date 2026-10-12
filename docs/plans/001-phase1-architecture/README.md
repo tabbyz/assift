@@ -16,7 +16,7 @@ v1（Rails）の分析（`docs/v1-analysis.md`）と Phase 1 の決定事項を�
 - シフト表（期間表示、アサイン、ペアパターン、下書き/確定、必要人数、日付メモ、一括操作、デフォルト勤務パターン、コピー、集計）
 - URL 共有（発行・一覧・解除、公開ページ）
 - PDF / CSV エクスポート
-- 静的ページ（LP、利用規約、プライバシー、特商法、アップデート情報）
+- 静的ページ（LP、利用規約、プライバシー、特商法）。アップデート情報はリリース後に検討（載せる履歴が無い。v1 の `/releases` は LP へ一時的に redirect）
 - v1 データ移行とカットオーバー
 
 ### Phase 1 に含まない
@@ -264,7 +264,7 @@ src/
     manifest.ts
     (public)/
       page.tsx                      LP
-      terms/ privacy/ law/ releases/
+      terms/ privacy/ law/
       share/[code]/page.tsx         公開シフト表
     (auth)/
       login/ signup/ password/forgot/ password/reset/
@@ -327,7 +327,8 @@ docs/
 | `/tenants/:uuid/settings/*` | 同じ（`staff_groups` は廃止） |
 | `/tenants/:uuid/tutorial/*` | 同じ |
 | `/share/:code` | **同一**。code も移行 |
-| `/terms` `/privacy` `/law` `/releases` | 同じ |
+| `/terms` `/privacy` `/law` | 同じ |
+| `/releases` | `/`（307。アップデート情報はリリース後に検討） |
 | `/charge` `/card` `/billing` `/admin` | Phase 2 |
 
 v1 の JS モーダル（必要人数、日付メモ、集計、コピー、共有、自動アサイン設定）は shifts ページ内の Mantine Modal に置き換える。`prev_term` / `next_term` はクライアント側で `start` を計算して nuqs 更新（`shallow: false`）。
@@ -456,7 +457,7 @@ staffs（在籍・position 順）、patterns（position 順）、staff_patterns�
 | 008 | シフト表（ツール） | 一括操作、デフォルト勤務パターン、コピー、集計 |
 | 009 | 共有 | 発行・一覧・解除、公開ページ |
 | 010 | エクスポート | PDF（react-pdf）、CSV |
-| 011 | 静的ページ | LP、規約、プライバシー、特商法、アップデート情報、manifest |
+| 011 | 静的ページ | LP、規約、プライバシー、特商法、manifest（アップデート情報はリリース後に検討） |
 | 012 | データ移行 | v1 rake エクスポート、TS インポート、検証スクリプト、リハーサル |
 | 013 | カットオーバー | 本番構築、SMTP、DNS、告知、実施 |
 

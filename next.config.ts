@@ -38,6 +38,11 @@ const nextConfig: NextConfig = {
        * `/login` へ POST し直させる。302 ならブラウザは GET に変える
        */
       { source: '/users/sign_in', destination: '/login', statusCode: 302 },
+      /**
+       * v1 のアップデート情報。v2 はリリース時に作らない（載せる履歴が無い）ので LP へ送る。
+       * 一時的（307）にする: 後で v2 の `/releases` を作ったとき、ブラウザに記憶された移動が残らないように
+       */
+      { source: '/releases', destination: '/', permanent: false },
     ]
   },
   experimental: {
