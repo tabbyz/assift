@@ -15,7 +15,7 @@
 - [x] Server Action（`refresh()` / `revalidatePath` の描き直し）のあとも違反が 0 件（§4.4 の落とし穴）
 - [x] 開発（`next dev`）でも壊れない（React の `eval`・dev overlay のインラインスタイル・HMR の WebSocket）
 - [x] 方針の文字列は純関数（Vitest）。`lint` / `typecheck` / `test` が通る
-- [ ] プレビュー（Vercel）で目で見る。Toolbar が止まる以外に違反が無いこと（§7 の 4）。PDF（CSP 無しの `inline` 応答。§3）が開くこと
+- [x] プレビュー（Vercel）で目で見る。Toolbar が止まる以外に違反が無いこと（§7 の 4）。PDF（CSP 無しの `inline` 応答。§3）が開くこと（2026-10-12。スマホで確認。§8）
 
 ## 2. 範囲
 
@@ -364,3 +364,9 @@ dev の確認は `(site)/layout.tsx` の `next/font` を**一時的に外して*
 - 見送り: `setNonce()` を `useState` の初期化（描画の段階）から `useEffect` へ移す案。effect は子から先に走るので、最初から開いている Modal の `<style>` が
   親の effect より前に足されて nonce が無いまま止まる。描画の段階で渡すのが正しく、`setNonce` は冪等なので StrictMode の二重実行でも害は無い。コメントに理由を書いた
 - 見送り（ユーザーの判断に回す）: 違反を数える Playwright をリポジトリに入れる案。§7 の未確定に、入れる場合の形と理由を書いた
+
+### 2026-10-12 プレビューでの確認（PR #25。スマホで）
+
+LP の表示とボタン → ログイン（`dev@example.com`）→ シフト表でアサインして空に戻す（Action 後の描き直し）→ 共有メニューのモーダルを開閉 →
+**PDF を別タブで開く** → 店舗情報の保存、の 7 手順がすべて動いた。CSP でスクリプトが止まっていれば 2 以降が反応しないので、本番の方針で動く確認になる。
+コンソール（違反の件数）はスマホでは見られないが、`next start` + Playwright の 35 件 0 で代える。Vercel Toolbar は想定どおり出ない。
