@@ -39,10 +39,12 @@ const nextConfig: NextConfig = {
        */
       { source: '/users/sign_in', destination: '/login', statusCode: 302 },
       /**
-       * v1 のアップデート情報。v2 はリリース時に作らない（載せる履歴が無い）ので LP へ送る。
-       * 一時的（307）にする: 後で v2 の `/releases` を作ったとき、ブラウザに記憶された移動が残らないように
+       * v1 のアップデート情報。v2 はリリース時に作らない（載せる履歴が無い）ので LP へ送る（005 §13）。
+       * 配下（`:path*`）も送る: v1 の配下の URL を確かめられず、v2 は配下にページを持たない。
+       * 一時的（307）にする: 後で v2 の `/releases` を作ったとき、ブラウザに記憶された移動が残らないように。
+       * v2 の `/releases` を作るときはこの行を消す（`redirects()` は app のページより先に走るので、残すとページに届かない）
        */
-      { source: '/releases', destination: '/', permanent: false },
+      { source: '/releases/:path*', destination: '/', permanent: false },
     ]
   },
   experimental: {
