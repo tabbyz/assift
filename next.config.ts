@@ -1,4 +1,8 @@
 import type { NextConfig } from 'next'
+import { assertSupabaseBuildEnv } from './src/lib/supabase/buildEnv'
+
+// Vercel のビルドで Supabase の公開設定が無ければ止める（プレビューの最初のデプロイが黙って 500 になるのを防ぐ。023 §6）
+assertSupabaseBuildEnv(process.env)
 
 const nextConfig: NextConfig = {
   /**

@@ -193,3 +193,31 @@ global-error の依存と直書きの値を Next 16.3.5 の実装と突き合わ
 ### 2026-10-12 レビュー 5 回目（0 件）
 
 指摘なし。収束した。`npm run lint`（既存の warning 1 件のみ）/ `npm run typecheck` / `npm test`（96 ファイル・911 件）を通した。
+
+### 2026-10-12 プレビューの最初のデプロイが 500（§6）
+
+`src/lib/supabase/buildEnv.ts`（+ Vitest 5 件）と `next.config.ts` の呼び出し、AGENTS.md の「PR の流れ」に 1 項目。
+
+- `.env.local` を外して `VERCEL=1 npx next build` → 設定の読み込みでビルドが止まり、名前と直し方が出る
+- `.env.local` ありで `VERCEL=1 npx next typegen` → 通る（`.env*` は `next.config.ts` より先に読まれる）
+- `.env.local` 無しで `VERCEL` 無し → 通る（ローカルには影響しない）
+
+## 6. 追加: プレビューの最初のデプロイが 500 になる（PR #28 で見つけた）
+
+PR #28 のプレビュー（`9a51ab3`）が、proxy を通るすべての URL で素の `Internal Server Error`（500）になった。
+
+- proxy の外（`/favicon.ico` は 200、`/api/stripe/webhook` は 405）は動き、500 の応答には CSP のヘッダも無い → proxy の途中で投げている。
+  エラー画面（error.tsx）は React の描画の中の例外しか受けないので出ない
+- 同じ proxy の PR #26・#27 のプレビューは 200。ローカルの本番ビルドも動く → コードではなく環境変数
+- 時刻: push 13:26:17 → PR 作成 13:26:31 → Supabase のブランチ DB 13:26:45〜13:27:50。デプロイは push で作られ、その時点の環境変数で組まれる。
+  このブランチの `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` はまだ無く、`NEXT_PUBLIC_` はビルド時に埋め込まれるので、
+  後から届いても効かない。proxy の `getSupabasePublicEnv()` が全リクエストで投げる
+- 「push したらすぐ PR を作る」（AGENTS.md）でも、push の時点でデプロイが作られるので最初の 1 回は間に合わない。以前の PR でも同じことが起きていた
+
+対応:
+
+1. **ビルドを失敗させる**（`src/lib/supabase/buildEnv.ts` の `assertSupabaseBuildEnv()` を `next.config.ts` の先頭で呼ぶ）。Vercel のビルド（`VERCEL=1`）で
+   2 つのどちらかが無ければ、直し方（Supabase Preview の完了後に Redeploy）を添えて投げる。黙って「Ready」の壊れたデプロイを作るより、失敗で知らせる。
+   - `SUPABASE_SECRET_KEY` は見ない: 実行時に読む値で、無くても壊れるのは公開シフト表などの一部（proxy は止まらない）。統合が同期する名前を確かめられていないので、必須にして毎回のビルドを落とす危険を取らない
+   - Vercel の外（ローカルの `npm run build`・`next typegen`）は見ない
+2. **AGENTS.md の「PR の流れ」に書く**（最初のプレビューが失敗したら Redeploy）
