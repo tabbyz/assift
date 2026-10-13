@@ -201,23 +201,30 @@ global-error の依存と直書きの値を Next 16.3.5 の実装と突き合わ
 - `.env.local` を外して `VERCEL=1 npx next build` → 設定の読み込みでビルドが止まり、名前と直し方が出る
 - `.env.local` ありで `VERCEL=1 npx next typegen` → 通る（`.env*` は `next.config.ts` より先に読まれる）
 - `.env.local` 無しで `VERCEL` 無し → 通る（ローカルには影響しない）
+- Vercel: `fa9c119` の Redeploy がこのチェックで止まった（ログに名前と直し方）。最初の 1 回は「Git information retrieval failed」でビルド前に失敗しており、無関係
+- PR を閉じて開き直したら、Vercel の Environment Variables に `claude/023-error-pages` 専用の値が入った。原因の説明（時間差 → ブランチ専用の値が作られていない）、
+  エラー文、AGENTS.md をこれに合わせて直した
 
-## 6. 追加: プレビューの最初のデプロイが 500 になる（PR #28 で見つけた）
+## 6. 追加: プレビューが 500 になる（PR #28 で見つけた）
 
 PR #28 のプレビュー（`9a51ab3`）が、proxy を通るすべての URL で素の `Internal Server Error`（500）になった。
 
 - proxy の外（`/favicon.ico` は 200、`/api/stripe/webhook` は 405）は動き、500 の応答には CSP のヘッダも無い → proxy の途中で投げている。
   エラー画面（error.tsx）は React の描画の中の例外しか受けないので出ない
 - 同じ proxy の PR #26・#27 のプレビューは 200。ローカルの本番ビルドも動く → コードではなく環境変数
-- 時刻: push 13:26:17 → PR 作成 13:26:31 → Supabase のブランチ DB 13:26:45〜13:27:50。デプロイは push で作られ、その時点の環境変数で組まれる。
-  このブランチの `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` はまだ無く、`NEXT_PUBLIC_` はビルド時に埋め込まれるので、
-  後から届いても効かない。proxy の `getSupabasePublicEnv()` が全リクエストで投げる
-- 「push したらすぐ PR を作る」（AGENTS.md）でも、push の時点でデプロイが作られるので最初の 1 回は間に合わない。以前の PR でも同じことが起きていた
+- **原因: このブランチ専用の環境変数が Vercel に無かった。** プレビューの `NEXT_PUBLIC_SUPABASE_URL` などは、Supabase Branching が PR のブランチ DB を
+  作るときに Vercel へ**そのブランチ専用**の値として入れる（Vercel の Environment Variables の Preview には、`claude/next-work-notes` 専用の値しか無かった。
+  Preview 全体に効く値は無く、Supabase の Vercel 連携の「Preview に同期」はオフ。Branching を使うときはオフが正しいと Supabase の画面に書いてある）。
+  PR #28 では Supabase Preview のチェックが成功したのに、`claude/023-error-pages` 専用の値が作られていなかった。
+  `NEXT_PUBLIC_` はビルド時に埋め込まれるので、proxy の `getSupabasePublicEnv()` が全リクエストで投げる
+- 最初は「push で作られたデプロイが、PR の作成後に届く値より先に組まれた（時間差）」と考えたが、ブランチ DB ができてから何時間も後の
+  Redeploy（`fa9c119`）でも 2 つとも無かった（下の対応 1 のチェックで止まった）ので否定した
+- **直し方: PR を閉じて開き直す。** ブランチ DB が作り直され（Supabase のプロジェクト id が変わる）、ブランチ専用の値が入った（Vercel の画面で確かめた）。そのあと Redeploy
 
 対応:
 
 1. **ビルドを失敗させる**（`src/lib/supabase/buildEnv.ts` の `assertSupabaseBuildEnv()` を `next.config.ts` の先頭で呼ぶ）。Vercel のビルド（`VERCEL=1`）で
-   2 つのどちらかが無ければ、直し方（Supabase Preview の完了後に Redeploy）を添えて投げる。黙って「Ready」の壊れたデプロイを作るより、失敗で知らせる。
+   2 つのどちらかが無ければ、直し方（PR を開き直す → Supabase Preview の完了後に Redeploy）を添えて投げる。黙って「Ready」の壊れたデプロイを作るより、失敗で知らせる。
    - `SUPABASE_SECRET_KEY` は見ない: 実行時に読む値で、無くても壊れるのは公開シフト表などの一部（proxy は止まらない）。統合が同期する名前を確かめられていないので、必須にして毎回のビルドを落とす危険を取らない
    - Vercel の外（ローカルの `npm run build`・`next typegen`）は見ない
-2. **AGENTS.md の「PR の流れ」に書く**（最初のプレビューが失敗したら Redeploy）
+2. **AGENTS.md の「PR の流れ」に書く**（ブランチ専用の値の仕組みと、無いときの直し方）

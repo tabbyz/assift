@@ -517,9 +517,11 @@ Prettier: `{ "semi": false, "singleQuote": true, "tabWidth": 2, "trailingComma":
 - PR の前に `npm run lint` / `npm run typecheck` / `npm test` / `npx supabase test db` を通す。
   スキーマを触ったら `npx supabase db reset` と `gen types` も行う
 - push したらすぐ PR を作る。Supabase のブランチ DB の環境変数は、PR を作ったときに Vercel へ同期される
-- **新しいブランチの最初のプレビューは、Supabase の環境変数が届く前に作られることがある**（デプロイは push の時点で作られ、その時点の環境変数で組まれる）。
+- **プレビューの Supabase の環境変数は、ブランチ DB を作るときに Supabase が Vercel へ「そのブランチ専用」で入れる**（Preview 全体の値は無い。
+  Supabase の Vercel 連携の「Preview に同期」はオフのまま）。この書き込みが抜けることがある（Supabase Preview のチェックは成功のまま）。
   そのときは `next.config.ts` の `assertSupabaseBuildEnv()` がビルドを失敗させる（`NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` が無い。023 §6）。
-  PR の Supabase Preview が終わってから Vercel でそのデプロイを **Redeploy** する（次の push でも直る）。止めずに組むと、proxy が全リクエストで投げて素の `Internal Server Error` になる
+  **PR を閉じて開き直し**（ブランチ DB が作り直され、値が入り直す）、Supabase Preview が終わってから Vercel で **Redeploy** する。
+  Vercel の Settings → Environment Variables（Preview）にそのブランチ専用の値があるかで確かめられる。止めずに組むと、proxy が全リクエストで投げて素の `Internal Server Error` になる
 - **ブランチ DB に seed が流れるのは、ブランチ DB を作ったときだけ。** 以降の push では新しい migration だけが流れ、seed の変更は届かない。
   PR を作ったあとに `seed.sql` を変えたら、**PR を閉じて開き直す**とブランチ DB が作り直され、今の seed が流れる（ブランチ DB のデータは消える。020 で `admin@example.com` が入らずに気付いた）
 - Vercel のプレビューでは seed のユーザー（`dev@example.com` / `password`）でログインできる。
