@@ -44,8 +44,11 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 src/
   proxy.ts                        CSP の nonce（022）+ 管理画面のホストの振り分け + cookie 更新 + 保護ルートの未ログイン redirect
   instrumentation-client.ts       ブラウザでアプリのコードより先に走る（Next の規約。ここに書くものはブラウザ専用）。Zod の jitless（022）
-  theme.ts                        createTheme（色・半径・フォントはここに集約。Client の AppProviders / ShiftDemo からだけ読む）
+  fontFamily.ts                   書体の文字列。theme.ts と global-error（Mantine を読まない）が共有する（023）
+  theme.ts                        createTheme（色・半径・フォントはここに集約。書体の文字列だけは fontFamily.ts。Client の AppProviders / ShiftDemo からだけ読む）
   app/
+    error.tsx / global-error.tsx  描画の例外の画面（023。本文は components/ErrorPanel）。店舗（[tenantId]/error.tsx。枠を残す）と管理画面（-/error.tsx）にも置く。
+                                  global-error は Mantine を使わない（nonce を受け取れない。色は hex を直書きし、対応する Mantine の値をコメントに書く）。やり直しは全体の読み込み
     layout.tsx                    headers() で CSP の nonce を読み、ColorSchemeScript と AppProviders（Client。MantineProvider > ModalsProvider > NuqsAdapter > children + Notifications）に渡す（022）
     (public)/                     認証不要
       (site)/                     LP（/）と静的ページ（terms / privacy / law）。layout がヘッダー・フッター・LP の書体（016 / 018）
@@ -514,6 +517,11 @@ Prettier: `{ "semi": false, "singleQuote": true, "tabWidth": 2, "trailingComma":
 - PR の前に `npm run lint` / `npm run typecheck` / `npm test` / `npx supabase test db` を通す。
   スキーマを触ったら `npx supabase db reset` と `gen types` も行う
 - push したらすぐ PR を作る。Supabase のブランチ DB の環境変数は、PR を作ったときに Vercel へ同期される
+- **プレビューの Supabase の環境変数は、ブランチ DB を作るときに Supabase が Vercel へ「そのブランチ専用」で入れる**（Preview 全体の値は無い。
+  Supabase の Vercel 連携の「Preview に同期」はオフのまま）。この書き込みが抜けることがある（Supabase Preview のチェックは成功のまま）。
+  そのときは `next.config.ts` の `assertSupabaseBuildEnv()` がビルドを失敗させる（`NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` が無い。023 §6）。
+  **PR を閉じて開き直し**（ブランチ DB が作り直され、値が入り直す）、Supabase Preview が終わってから Vercel で **Redeploy** する。
+  Vercel の Settings → Environment Variables（Preview）にそのブランチ専用の値があるかで確かめられる。止めずに組むと、proxy が全リクエストで投げて素の `Internal Server Error` になる
 - **ブランチ DB に seed が流れるのは、ブランチ DB を作ったときだけ。** 以降の push では新しい migration だけが流れ、seed の変更は届かない。
   PR を作ったあとに `seed.sql` を変えたら、**PR を閉じて開き直す**とブランチ DB が作り直され、今の seed が流れる（ブランチ DB のデータは消える。020 で `admin@example.com` が入らずに気付いた）
 - Vercel のプレビューでは seed のユーザー（`dev@example.com` / `password`）でログインできる。
