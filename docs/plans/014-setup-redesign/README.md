@@ -754,5 +754,8 @@ v1 の `tutorial_completed?`（勤務あり かつ 在籍スタッフあり）�
 **未検証**
 
 - `global-error.tsx` はブラウザで出していない（root layout を落とす必要がある）。インラインの `style` なので読まれた CSS より強い
-- iPhone の Safari と LINE のアプリ内ブラウザはプレビューの実機で見る（iOS の WebKit は強制ダークを持たないので、変わらないことの確認）。
-  Android の実機と Samsung Internet は見ていない（Chromium の強制ダークで代えた）
+- Android の実機と Samsung Internet は見ていない（Chromium の強制ダークで代えた）
+
+**実機（プレビュー、PR #32）**
+
+- iPhone の端末をダークにして、Safari で LP・ログイン・シフト表、LINE のアプリ内ブラウザで共有リンク（`/share/...`）を開き、どちらもライトのまま変わらないことを確かめた
