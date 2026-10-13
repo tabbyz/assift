@@ -584,8 +584,14 @@ function writeOutputs(
   }
 ) {
   const finishedAt = new Date()
-  /** 件数が多い理由は id を並べない（数十万件になりうる。件数は source[table].dropped にある） */
-  const BULK: Record<string, string[]> = { shifts: ['unassigned'], required_nums: ['baked'] }
+  /**
+   * 件数が多い理由は id を並べない（数十万件になりうる。件数は source[table].dropped にある）。
+   * shifts の parent_missing は消えたスタッフのシフトで、本物では 129 万件ある（リハーサル 2026-10-13。§15）
+   */
+  const BULK: Record<string, string[]> = {
+    shifts: ['unassigned', 'parent_missing', 'parent_dropped'],
+    required_nums: ['baked'],
+  }
   const report = {
     input: inputDir,
     started_at: meta.startedAt.toISOString(),

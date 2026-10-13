@@ -185,8 +185,10 @@ export function convertExport(input: V1Export, options: ConvertOptions): Convert
   const source = {} as Record<V1ExportTable, SourceStats>
   for (const table of V1_EXPORT_TABLE_NAMES) {
     const r = results[table]
-    dropped.push(...r.dropped)
-    fixed.push(...r.fixed)
+    // push(...xs) は引数を積むので、数十万件（本物の shifts は 129 万件を捨てる）で
+    // Maximum call stack size exceeded になる（リハーサル 2026-10-13。§15）
+    for (const d of r.dropped) dropped.push(d)
+    for (const f of r.fixed) fixed.push(f)
     const read = input[table].length
     source[table] = {
       read,

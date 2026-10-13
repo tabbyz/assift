@@ -789,3 +789,11 @@ manifest の要点（§5.2）:
 - v1 の date 列（Postgres の `date`）は西暦 5 桁も受ける。v1 の画面からは入らないはずだが、実在した（レビュー 2 周目の #9 で「止まる挙動のまま」と受け入れていた箇所）
 - 直したこと: `shifts.date` / `events.date` / `shares.start_date`・`end_date` の Zod を「文字列なら受ける」にし、変換が `isDateString()` で見て `invalid_date` で捨てて記録する（`required_nums` と同じ規則。§7.6・§7.9・§7.10）。西暦 5 桁の日付は v1 の表にも出ていない行なので、見え方は変わらない
 - Vitest（移行 88 件・全体 916 件）と `npm run typecheck` が通る
+
+#### インポート 2 回目（2026-10-13。変換で停止）
+
+読み込みは通り、変換で `Maximum call stack size exceeded`（開始から 139 秒、最大 RSS 6.4 GB）。
+
+- 原因: `convert.ts` が表ごとの捨てた行を `dropped.push(...r.dropped)` で集めていた。スプレッドは要素を引数に積むので、`shifts` の 129 万件（消えたスタッフのシフト）で V8 の引数の上限を超える。fixtures（70 行）では起きない
+- 直したこと: `for … of` で 1 件ずつ積む。あわせて `report.json` で id を並べない理由に `shifts` の `parent_missing` / `parent_dropped` を足した（129 万件の id は調べる役に立たず、report が数十 MB になる。件数は `source.shifts.dropped` に残る）
+- 確かめ方: fixtures に合成の行（消えたスタッフのシフト 150 万・重複 100 万・必要人数 250 万）を足して `convertExport()` を通し、31 秒・RSS 1.3 GB で通ることを確かめた（クラウドのセッション）
