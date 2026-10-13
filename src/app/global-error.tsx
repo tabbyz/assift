@@ -21,7 +21,7 @@ import { FONT_FAMILY } from '@/fontFamily'
 export default function GlobalError({ error }: ErrorPageProps) {
   const digest = errorDigest(error)
   return (
-    <html lang="ja">
+    <html lang="ja" style={styles.html}>
       <head>
         {/* Next の viewport・metadata は root の境界の内側で描かれ、ここに差し替わると外れる。viewport は自分で書く（無いとスマホで 980px 幅に縮む） */}
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -57,6 +57,8 @@ export default function GlobalError({ error }: ErrorPageProps) {
  * `boxSizing` は Mantine の CSS（`* { box-sizing: border-box }`）が無い前提で書く
  */
 const styles = {
+  // ライト専用。root layout の viewport（meta）と `globals.css` の代わり（014 §10.10）。属性なので読まれた CSS より強い
+  html: { colorScheme: 'only light' },
   body: {
     margin: 0,
     fontFamily: FONT_FAMILY,

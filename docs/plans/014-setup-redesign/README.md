@@ -658,7 +658,7 @@ v1 の `tutorial_completed?`（勤務あり かつ 在籍スタッフあり）�
   uuid の `/tutorial/pattern` が店舗のトップへ送られることだけ確かめた
 - 「あとで続ける」で保存できない変更があるときの確認ダイアログ、二度押しはブラウザでは押していない
   （二度押しの DB 側は pgTAP と `psql` で確かめた）
-- ダークモードは見ていない
+- ~~ダークモードは見ていない~~ → §10.10 で見た（ライト専用のまま、端末のダーク設定・ブラウザの強制ダークでも色が変わらないようにした）
 - 業種テンプレートは仮の値（§3.2）。015 の移行後に実データで見直す
 
 ### 10.5 実装レビューの反映
@@ -701,3 +701,61 @@ v1 の `tutorial_completed?`（勤務あり かつ 在籍スタッフあり）�
 
 - 入れた勤務はその場でマスに見えるので重ねて伝えなくてよい。画面の端に出て目線をずらし、2 つ目からは出ないので特別なことが起きたように見える
 - 案内の吹き出しは、最初に勤務を入れたときに閉じて次から出ない（これまでどおり）
+
+### 10.10 ダークモード（2026-10-13）
+
+ダークモードには対応しない（ライト専用）。端末がダークのときにスタイルが壊れないことだけを確かめた。
+
+**見つけたこと（修正前）**
+
+- 端末のダーク設定（`prefers-color-scheme: dark`）は効かない。Mantine は `defaultColorScheme="light"`、CSS Modules に
+  `prefers-color-scheme` は無く、`light-dark()` は `postcss-preset-mantine` が `[data-mantine-color-scheme]` のセレクタにするのでダーク側は使われない
+- **ブラウザの強制ダークは掛かっていた。** Android の Chrome の「ウェブサイトをダークに」・Samsung Internet・アプリ内ブラウザ（WebView）は、利用者やアプリの設定によって、
+  ページが `color-scheme` に `dark` も `only` も書いていなければ色を自動で反転する。Mantine の CSS は `:root { color-scheme: light }` しか書かない。
+  Chromium の強制ダーク（`--enable-features=WebContentsForceDark --blink-settings=forceDarkModeEnabled=true`）では全画面の 90〜99% の画素が変わり、
+  マスの斜線・土日の色・必要人数の赤まで暗く置き換わった
+- **localStorage の `mantine-color-scheme-value` に `dark` があると Mantine がダークになる**（`ColorSchemeScript` は `defaultColorScheme` より
+  localStorage を優先する）。CSS Modules のライト前提の色と混ざり、白いマスが黒い地に浮く崩れた見た目になる。本番で書き込む経路は無いが、
+  開発で `localhost:3000` を別の Mantine のプロジェクトと共有していると起こる
+- 認証メール（`supabase/templates/*.html`）は色を指定していないので、メールアプリのダークモードでもそのまま読める。PDF / CSV は関係しない
+
+**直したこと**
+
+- `src/app/layout.tsx`: `export const viewport = { colorScheme: 'only light' }`（`<meta name="color-scheme" content="only light">`）。
+  `ColorSchemeScript` を `forceColorScheme="light"` にした（localStorage を読まない）
+- `src/components/AppProviders.tsx`: `MantineProvider` を `forceColorScheme="light"` にした
+- `src/app/globals.css`: `:root { color-scheme: only light }`。**meta だけでは効かない**: Mantine の `:root, :host { color-scheme: var(--mantine-color-scheme) }` が
+  meta を上書きして `only` が外れる。素の HTML で確かめた（強制ダークで白地が `rgb(18,18,18)` になるか）:
+
+  | 宣言                                      | 結果     |
+  | ----------------------------------------- | -------- |
+  | なし                                      | 暗くなる |
+  | meta `only light` だけ                    | 白のまま |
+  | meta `only light` + `:root{color-scheme:light}`（今の Mantine） | 暗くなる |
+  | CSS `:root{color-scheme:only light}`      | 白のまま |
+
+- `src/app/global-error.tsx`: root layout の外なので viewport の meta が付かない。`<html style={{ colorScheme: 'only light' }}>`
+
+**確かめたこと（`npm run build && npm run start`、Playwright の Chromium、1280px と 390px）**
+
+31 画面（LP・規約 3 つ・ログイン / 登録 / 再設定・共有ページ・404・管理画面のログイン / 一覧 / 詳細・シフト表とポップオーバー /
+集計 / URL 共有 / 操作メニュー / コピー・設定 9 画面・アカウント・プラン・店舗作成・初期設定）を 4 通りで撮り、ライトとの画素差を数えた。
+
+| 撮り方                                          | 修正前          | 修正後 |
+| ----------------------------------------------- | --------------- | ------ |
+| 端末がダーク（`colorScheme: 'dark'`）           | 0               | 0      |
+| Chromium の強制ダーク                           | 全画面 90〜99%  | 0      |
+| localStorage に `dark`                          | 全画面 56〜99%  | 0      |
+
+- 差が 0 でないのは管理画面の「最終ログイン」の時刻だけ（撮るたびにログインするので分が変わる）
+- 修正前後のライトの表示も同じ（同じく管理画面の時刻だけ）。console のエラーは 404 の画面のリソースの 404 だけ
+- `npm run lint`（0 errors。警告 1 件は main からある `reasons.test.ts`）/ `npm run typecheck` / `npm test`（97 files・916 tests）/ `npx supabase test db`
+
+**未検証**
+
+- `global-error.tsx` はブラウザで出していない（root layout を落とす必要がある）。インラインの `style` なので読まれた CSS より強い
+- Android の実機と Samsung Internet は見ていない（Chromium の強制ダークで代えた）
+
+**実機（プレビュー、PR #32）**
+
+- iPhone の端末をダークにして、Safari で LP・ログイン・シフト表、LINE のアプリ内ブラウザで共有リンク（`/share/...`）を開き、どちらもライトのまま変わらないことを確かめた

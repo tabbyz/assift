@@ -2,7 +2,7 @@ import '@mantine/core/styles.css'
 import '@mantine/dates/styles.css'
 import '@mantine/notifications/styles.css'
 import './globals.css'
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { headers } from 'next/headers'
 import { ColorSchemeScript, mantineHtmlProps } from '@mantine/core'
 import { AppProviders } from '@/components/AppProviders'
@@ -13,6 +13,15 @@ export const metadata: Metadata = {
   description:
     'assift（アシフト）はスマホだけでシフト表の作成・共有ができるシンプルな Web サービスです。',
 }
+
+/**
+ * ライト専用（ダークモードは作らない）。`only` はブラウザの強制ダーク（Android の Chrome の「ウェブサイトをダークに」・
+ * Samsung Internet・アプリ内ブラウザ）に色を変えさせない宣言。ただし Mantine の CSS が `:root` に `color-scheme: light` を
+ * 書いてこの meta を上書きするので、`globals.css` でも `only light` に戻す。
+ * Mantine の配色は `forceColorScheme="light"`（`ColorSchemeScript` と `AppProviders`）で固定する。`defaultColorScheme` は
+ * localStorage の `mantine-color-scheme-value` が優先され、`dark` が残っていると CSS Modules の色と混ざって崩れる（014 §10.10）
+ */
+export const viewport: Viewport = { colorScheme: 'only light' }
 
 /**
  * CSP の nonce（022）は proxy がリクエストごとに作り、`x-nonce` を**常に上書きする**ので、ここで読む値はクライアントが送ったものではない
@@ -29,7 +38,7 @@ export default async function RootLayout({ children }: LayoutProps<'/'>) {
   return (
     <html lang="ja" {...mantineHtmlProps}>
       <head>
-        <ColorSchemeScript defaultColorScheme="light" nonce={nonce} />
+        <ColorSchemeScript forceColorScheme="light" nonce={nonce} />
       </head>
       <body>
         <AppProviders nonce={nonce}>{children}</AppProviders>
