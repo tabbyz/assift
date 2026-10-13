@@ -36,7 +36,7 @@ export function AppProviders({ nonce, children }: Props) {
     return nonce ? () => nonce : undefined
   })
   return (
-    <MantineProvider theme={theme} defaultColorScheme="light" getStyleNonce={getStyleNonce}>
+    <MantineProvider theme={theme} forceColorScheme="light" getStyleNonce={getStyleNonce}>
       <ModalsProvider>
         <NuqsAdapter>
           {children}

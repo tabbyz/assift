@@ -12,6 +12,15 @@ html {
   touch-action: manipulation;
 }
 
+/*
+ * ライト専用。ブラウザの強制ダーク（Android の Chrome・Samsung Internet・アプリ内ブラウザ）に色を変えさせない。
+ * Mantine の `:root, :host { color-scheme: var(--mantine-color-scheme) }`（= light）は root layout の
+ * `<meta name="color-scheme" content="only light">` より強く、`only` が外れて強制ダークが掛かる。同じ詳細度で後に読まれるここで戻す（014 §10.10）
+ */
+:root {
+  color-scheme: only light;
+}
+
 body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
