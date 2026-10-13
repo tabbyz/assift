@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { hasRecoverySession } from '@/lib/auth/recoveryFlow'
 import { getAuthUser } from '@/utils/auth/current'
+import { AuthCard } from '../../_components/AuthCard'
 import { ResetPasswordForm } from './_components/ResetPasswordForm'
 
 export const metadata: Metadata = { title: '新しいパスワードを設定' }
@@ -14,5 +15,9 @@ export const metadata: Metadata = { title: '新しいパスワードを設定' }
 export default async function ResetPasswordPage() {
   const user = await getAuthUser()
   if (!user || !(await hasRecoverySession())) redirect('/password/forgot?error=expired')
-  return <ResetPasswordForm />
+  return (
+    <AuthCard>
+      <ResetPasswordForm />
+    </AuthCard>
+  )
 }

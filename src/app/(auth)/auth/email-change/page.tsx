@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Stack, Text, ThemeIcon, Title } from '@mantine/core'
 import { IconMailCheck } from '@tabler/icons-react'
 import { LinkAnchor } from '@/components/LinkAnchor'
+import { AuthCard } from '../../_components/AuthCard'
 
 export const metadata: Metadata = { title: 'メールアドレス変更の確認' }
 
@@ -12,20 +13,22 @@ export const metadata: Metadata = { title: 'メールアドレス変更の確認
  */
 export default function EmailChangePendingPage() {
   return (
-    <Stack gap="md" align="center">
-      <ThemeIcon size={72} radius="xl" variant="light">
-        <IconMailCheck size={40} />
-      </ThemeIcon>
-      <Title order={2} ta="center">
-        確認しました
-      </Title>
-      <Text ta="center">
-        メールアドレスの変更には、変更前と変更後の両方のメールアドレスでの確認が必要です。
-        もう一方に届いているメールのリンクも開いてください。
-      </Text>
-      <Text size="sm">
-        <LinkAnchor href="/account">アカウント画面へ</LinkAnchor>
-      </Text>
-    </Stack>
+    <AuthCard>
+      <Stack gap="md" align="center">
+        <ThemeIcon size={72} radius="xl" variant="light">
+          <IconMailCheck size={40} />
+        </ThemeIcon>
+        <Title order={2} ta="center">
+          確認しました
+        </Title>
+        <Text ta="center">
+          メールアドレスの変更には、変更前と変更後の両方のメールアドレスでの確認が必要です。
+          もう一方に届いているメールのリンクも開いてください。
+        </Text>
+        <Text size="sm">
+          <LinkAnchor href="/account">アカウント画面へ</LinkAnchor>
+        </Text>
+      </Stack>
+    </AuthCard>
   )
 }
