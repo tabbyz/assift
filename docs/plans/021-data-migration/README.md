@@ -8,7 +8,7 @@
 > 番号: 013 / 014 の冒頭注記では移行を 015 / 016 に繰り下げていたが、015〜020 が別の用途に使われたので本プランを **021** とし、
 > カットオーバー（本番の構築・DNS・告知・当日の手順）は **022** にする。本プランはカットオーバーのうち「データを v2 に入れて確かめる」部分だけを扱う。
 
-**状態: 実装済み（§12 の 1〜5・7・8。2026-10-11）。本物のダンプでのリハーサルはダンプの取得（§9.1-1。2026-10-13）まで済み。restore 以降（§12-6・§9.1-2〜5）と本番の予行（§9.3）は未実施。** 2026-10-10 に作成し、§13 の #1・2・3・6 を決め、レビューを 6 回行った。2026-10-11 に §3 の 6 点（#5）と変換を TS で書くこと（#9）を決め、全体をもう一度レビューした（7 回目。§14）うえで実装した（§15）。2026-10-13 にリハーサルのダンプを取った（#7。§15）。残りはリハーサルで確かめること（#4・#8）。
+**状態: 実装済み（§12 の 1〜5・7・8。2026-10-11）。本物のダンプでのリハーサルは restore とエクスポート（§9.1-1〜2。2026-10-13）まで済み。インポート以降（§12-6・§9.1-3〜5）と本番の予行（§9.3）は未実施。** 2026-10-10 に作成し、§13 の #1・2・3・6 を決め、レビューを 6 回行った。2026-10-11 に §3 の 6 点（#5）と変換を TS で書くこと（#9）を決め、全体をもう一度レビューした（7 回目。§14）うえで実装した（§15）。2026-10-13 にリハーサルのダンプを取った（#7。§15）。残りはリハーサルで確かめること（#4・#8）。
 
 ---
 
@@ -100,7 +100,7 @@ Heroku 本番 ──pg_dump──▶ 手元の v1（ローカル DB に restore�
 
 | ファイル | 元 | 列 |
 | --- | --- | --- |
-| `users.jsonl` | `users` | `id email encrypted_password password_is_email confirmed_at invitation_accepted_at invitation_token provider uid sign_in_count current_sign_in_at locked_at stripe_customer_id stripe_subscription_id trial_end max_staffs_count created_at updated_at`。`password_is_email` は `user.valid_password?(user.email)`（v1 の管理画面の「代理承認」が初期パスワードをメールにした人。§7.1。bcrypt の検証 1 回 ≈ 0.2 秒なので全員分で数分） |
+| `users.jsonl` | `users` | `id email encrypted_password password_is_email confirmed_at invitation_accepted_at invitation_token provider uid sign_in_count current_sign_in_at locked_at stripe_customer_id stripe_subscription_id trial_end max_staffs_count created_at updated_at`。`password_is_email` はパスワードがメールのままか（v1 の管理画面の「代理承認」が初期パスワードをメールにした人と、自分でメールにした人。§7.1）。照合するのは **v1 でログインできた人（`confirmed_at` か `sign_in_count > 0`）のうち店舗を持たない人だけ**で、それ以外は照合せず false（店舗を持つ人は `check_init_password!` が変えさせていた。移さない人の値は使わない）。bcrypt の検証は 1 回 ≈ 0.1 秒で、全員を照合すると 84,226 人で 2 時間 41 分かかった（§15。当初の「数分」は人数の見込み違い）。絞ると約 3,500 人で 6〜7 分 |
 | `tenants.jsonl` | `tenants` | `id uuid user_id name shift_cycle start_of_week created_at updated_at` |
 | `staffs.jsonl` | `staffs` | `id tenant_id name position disabled max_work_week available_wdays(配列) available_patterns(配列) default_patterns(Hash) created_at updated_at` |
 | `patterns.jsonl` | `patterns` | `id tenant_id name description color_hex kind pair_pattern_id position default_required_nums(Hash) created_at updated_at` |
@@ -196,7 +196,7 @@ MIGRATION_DATABASE_URL=postgresql://... \
 | それ以外（招待未承認・未確認でログイン実績なし） | **移行しない**。招待未承認はパスワードが無い（001 §5.2）。未確認の人は Devise の confirmable が v1 でもログインを拒んでいる（`active_for_authentication?` が false）ので、店舗も作れていない。v2 で登録し直せば同じメールで新しく始められる。未確認の行を v2 に残すと、同じメールでの登録（GoTrue は既存の未確認ユーザーに確認メールを再送する）がパスワードを引き継ぐのか置き換えるのかが読みにくくなる |
 | 保険 | `import.ts` が、移行しないユーザーのうち**店舗（スタッフかシフトのあるもの）を持つ人**を `report.json` に出す。想定は 0 件。1 件でもあれば個別に見て、入れるなら `--overrides` の `forceMigrateUsers`（§6.1）で確認済みとして入れる（その人は v1 で使えていたはず） |
 | `encrypted_password`（Devise の bcrypt） | そのまま `encrypted_password` へ。v1 は **pepper なし・stretches 11・bcrypt 3.1.20**（`config/initializers/devise.rb`・`Gemfile.lock`）なので `$2a$11$…` の素の bcrypt で、GoTrue（Go の bcrypt）がそのまま検証できる。pepper があれば全員ログインできなくなるところだった。**リハーサルで実際にログインして確かめる**（§8.2-2・§9.1-4） |
-| `password_is_email = true`（代理承認の初期パスワード） | **Google の人でも最優先で** `encrypted_password = null`（パスワードではログインできない。「パスワードを忘れた方」で再設定してもらう）。v1 は**店舗を新しく作るときだけ**（`tenants_controller.rb` の `check_init_password!` は `only: [:new]`）`valid_password?(email)` を見て変更させていたので、既に店舗を持つ人は初期パスワードのまま使えていた。v2 にその仕組みは無く、残すとメールを知る人が誰でも入れる。件数を記録し（想定より多いかもしれない）、022 の案内の分量を決める。判定は今のメールと比べる。v1 にはメールを変える画面が無い（`users/registrations/edit` はメールを表示するだけ。Devise の `account_update` が `email` を受けるので手で組んだリクエストなら変えられた）ので、実質はこれで全員を拾える |
+| `password_is_email = true`（代理承認の初期パスワード） | **Google の人でも最優先で** `encrypted_password = null`（パスワードではログインできない。「パスワードを忘れた方」で再設定してもらう）。v1 は**店舗を新しく作るときだけ**（`tenants_controller.rb` の `check_init_password!` は `only: [:new]`）`valid_password?(email)` を見て変更させていた。店舗を作る入口は `/tenants/new` だけで、このチェックは承認機能と同じコミット（`46d38b2`、2019-03-30）で入ったので、**店舗を持つ人はメールのままにならない**（承認の対象は未確認 = ログインできなかった人で、承認の前に店舗は持てない）。残るのは店舗を持たない人で、v1 では何もできないが、v2 にその仕組みは無く、残すとメールを知る人が誰でも入れる（本人が v2 で店舗を作ればその店舗も）。リハーサル（2026-10-13）では全員を照合して 3 人（代理承認 1・自分でメールにした人 2。3 人とも店舗なし）で、rake の照合を「ログインできた人のうち店舗を持たない人」に絞った（§5.1・§15）。件数を記録し（想定より多いかもしれない）、022 の案内の分量を決める。判定は今のメールと比べる。v1 にはメールを変える画面が無い（`users/registrations/edit` はメールを表示するだけ。Devise の `account_update` が `email` を受けるので手で組んだリクエストなら変えられた）ので、実質はこれで全員を拾える |
 | `encrypted_password = ''`（v1 の既定値）で移行対象の人 | 理屈上いない（§7.1 の条件はログインできた人）が、いれば `null` にして記録 |
 | `provider = 'google_oauth2'`（`uid` の有無を問わず） | **「それ以外」と同じ email のアカウントとして入れる**（`providers = ["email"]`・`email` の identity だけ。**決定。2026-10-11**）。`encrypted_password` は**そのまま残す**（`password_is_email` なら null）。**v1 は Google ログインが壊れていた**（`users/sessions/new.html.slim` がボタンに取り消し線を引き「現在、Google ログインできない問題が発生しています」と出している。v1 分析 §2.2）ので、この人たちは「パスワードを忘れた方」で自分のパスワードを作って入っている（Devise の recoverable は provider を見ない）。null にすると初日から締め出す。`from_omniauth` が入れた乱数の bcrypt が残っている人は誰もそれで入れないので、残しても害が無い。§5.2-11 で最近ログインしている人数を見る。v2 で初めて Google ログインしたとき、GoTrue が**確認済みの同じメール**のユーザーに `google` の identity を自動で結び付ける（supabase/auth の `DetermineAccountLinking`: sub の identity が無ければ、provider が verified と返したメールと同じメールの identity / ユーザーを探し、1 人に決まれば link）。v1 にメールを変える画面は無いので Google 側と assift のメールは同じ。当初（〜7 回目のレビュー）は v1 の `uid` から `google` の identity を先に作る案だったが、利点が「Google 側のメールが後で変わった人」だけで、`auth.identities` の行を自分で組む複雑さに見合わないのでやめた |
 | `uid` | 使わない（上のとおり identity は作らない）。`manifest.json` の件数（§5.2-6・11）に残るだけ |
@@ -704,3 +704,76 @@ docs/plans/019-…/README.md       §8.1 の「session_replication_role = replic
 #### 次にやること
 
 - 手元に Postgres 16 を用意して `b2818` を restore → `rails v2:export[<out>,2026-10-13T13:27:56+09:00]` → 以降は 2026-10-11 の「未実施」の §12-6 のとおり
+
+### 2026-10-13（§9.1-2。restore とエクスポート）
+
+利用者が手元の Mac（メモリ 24 GB）で行った。
+
+#### restore
+
+| 項目 | 値 |
+| --- | --- |
+| Postgres | Postgres.app 2.9.6 の **PostgreSQL 16.15**（port 5433。既存の PG 15 の 5432 と同居）。Postgres.app は「all currently supported versions」の配布物を入れる（PG 18 だけの配布物で置き換えると、既存の PG 15 のサーバーが「version not installed」で起動しなくなる。データは残っていて、版を戻せば起動した） |
+| コマンド | `createdb -p 5433 assift_v1_rehearsal` → `pg_restore -p 5433 -d assift_v1_rehearsal --no-owner --no-acl -j 4 <dump>` → `vacuumdb -p 5433 --analyze-only` |
+| 所要 | **1 分 17 秒** |
+| エラー | `errors ignored on restore: 2`。どちらも `pg_stat_statements`（Heroku の `heroku_ext` スキーマに置かれた監視用の拡張）で、v1 の表とは無関係 |
+| 件数 | `users` 84,226 / `tenants` 27,609 / `staffs` 160,272 / `patterns` 167,253 / `shifts` 12,790,904 / `required_nums` 2,517,661 / `restrictions` 10,145 / `events` 157,025 / `shares` 57,978 / `usage_records` 2,721。13:36 に Heroku で数えた値（上の節）と同じか少し少ない（差は最大で `shifts` の 16 件。ダンプ後 8 分の書き込み） |
+
+#### v1 をつなぐ
+
+- v1 は `master`（`a8bb5ad`）。本番の最後のデプロイ（Heroku `v215`、2025-11-14）と同じコミット
+- `DATABASE_URL` にユーザー名を入れる（`postgres://$(whoami)@localhost:5433/assift_v1_rehearsal`）。v1 の `config/database.yml` の development が `username: rails_user` を持っていて、URL に無いとそれが使われる
+- `STRIPE_SECRET_KEY` にダミーの値を入れる（`config/initializers/stripe.rb` が起動時に `ENV.fetch` する。エクスポートは Stripe を呼ばない。本番のキーは入れない）。起動に必須の環境変数はこれだけ
+- `rails_env` は `development`（manifest に残る）
+- §8.2-2 のログインの確認用に 2 人を決めた: 利用者本人のアカウント（Google の人。本物のハッシュのまま、本人のパスワードで確かめる）と、Google でない人 1 人（戻した DB でだけ既知のパスワードに置き換えた）。id は利用者の手元に控える
+- 戻した DB は、ダンプと同じくカットオーバーのダンプを取った時点で消す（`dropdb -p 5433 assift_v1_rehearsal`）
+
+#### エクスポート（`rails v2:export`。照合を絞る前の rake）
+
+開始 16:55:33（`exported_at`）、所要 **10,064 秒（2 時間 48 分）**、最大 RSS **495 MB**。各ファイルの更新時刻からの内訳:
+
+| 段 | 所要 |
+| --- | ---: |
+| `users`（全員の bcrypt の照合） | **2 時間 41 分** |
+| `tenants` / `staffs` / `patterns` | 32 秒 |
+| `shifts`（1,279 万行） | 5 分 10 秒 |
+| `required_nums` 〜 `usage_records` | 46 秒 |
+| 集計 → `manifest.json` | 3 秒 |
+
+ファイルの大きさ: `shifts.jsonl` 2.0 GB / `required_nums.jsonl` 149 MB / `staffs.jsonl` 56 MB / `patterns.jsonl` 50 MB / `users.jsonl` 46 MB / ほか合わせて約 2.4 GB。件数は 10 表とも restore した DB と一致。
+
+manifest の要点（§5.2）:
+
+| 集計 | 値 | 扱い |
+| --- | ---: | --- |
+| 未確認（すべて招待未承認） | 55,216 | 移さない（§7.1）。移すのは 29,010 人 |
+| Google の人 / うち 90 日以内にログイン | 8,707 / 439 | email のアカウントとして入れる（§7.1） |
+| `default_required_nums` が文字列（二重エンコード） | 142,736（Hash は 24,517） | §5.1 の想定どおり。rake がほどく |
+| ペアが自分自身を指す | 390 | §7.4 |
+| スタッフの YAML 列が NULL（`available_wdays` / `available_patterns` / `default_patterns`） | 567 / 596 / 27,978 | 前 2 つは 0 件の見込みだったがあった。v1 と同じく `[]` / `{}` で入る（§13-3 のまま） |
+| 存在しないスタッフを指す `shifts` | **1,291,327**（約 1 割） | 捨てる（§7.6）。v1 の画面にも出ていない行 |
+| `(staff_id, date)` の重複 | 3,769 組 | 新しいほうを残す（§7.6） |
+| 文字数の超過（店舗名 / スタッフ名 / パターン名 / 説明 / メモ） | 3 / 24 / 127 / 247 / 0 | 切り詰める（003 §3.10）。少ないので CHECK は緩めない |
+| スタッフ 0 人でデータのある店舗 | 1,845 | 準備中になる（§7.2）。022 の告知で触れるかを決める |
+| `stripe_customer_id` の共有 / `max_staffs_count > 1000` / 空のパスワード / 親の id が NULL / `restrictions` の欠け / `shares.code` の重複 / 22 文字でない `tenants.uuid` | すべて 0 | — |
+
+#### `password_is_email` の照合を絞った
+
+全員（84,226 人）を照合した結果は **3 人**で、3 人とも店舗を持たない:
+
+| 区分 | 人数 | 記録の形 |
+| --- | ---: | --- |
+| 管理者の承認（2019-04。承認機能が入った直後） | 1 | `invitation_created_at` = 承認の時刻、`invitation_sent_at` = 最初の登録のまま、`invitation_accepted_at` が同じ秒。ログインなし |
+| 本人が自分でパスワードをメールにした | 2 | ふつうの登録（`invitation_sent_at` = `invitation_created_at`、数分後に本人が承認）。ログインは 0 回と 1 回 |
+
+- 承認機能は v1 の管理画面のユーザー一覧の「招待」リンク（`Admin::UsersController#accept_invitation`。`password = email`）。利用者は機能を認識しておらず、承認の記録の形をした人は移す人の中で 4 人（3 人は店舗を作るときにパスワードを変えていた）
+- 案 B（記録の形から承認された人だけを照合）は、自分でメールにした 2 人を取りこぼすのでやめた
+- **案 A を採った**: 照合は「v1 でログインできた人（`confirmed_at` か `sign_in_count > 0`）のうち店舗を持たない人」（3,466 人）だけ。それ以外は照合せず false。根拠は v1 の `check_init_password!`（§7.1）と、全員を照合したこの結果（3 人とも範囲の内側）。見込みは 6〜7 分で、エクスポート全体は約 13 分
+- rake が「移す人」の条件を持つことになるが、照合を省くためだけで、照合しなかった人の値はインポートで使わない（移す / 移さないの判断は TS のまま）
+- manifest に照合した人数（`users.password_is_email_checked`）を出す。**rake の変更は `ruby -c` のみ**。次にエクスポートを流したときに `password_is_email_checked = 3466`・`password_is_email = 3` になることを確かめる
+
+#### 次にやること
+
+- 手元の v2 を最新の `main` にして `npm ci`（利用者の clone は 10/05 のままだった）→ `npx supabase start` → `npx supabase db reset` → `NODE_OPTIONS=--max-old-space-size=16384`（24 GB の Mac）で `npm run migrate:v1 -- --input ~/v1-export/20261013-1655 --allow-existing`。所要時間と RSS を記録し、§13-8（10 分を超えたら `COPY`）を判断する
+- `verify.ts` → §8.2 の 1〜10
+- 直した rake でエクスポートを流し直し、照合の人数と所要時間を確かめる（インポートの検証と並行してよい）
