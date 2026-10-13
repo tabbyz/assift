@@ -249,3 +249,8 @@ v1 にあって v2 に無かった、運営を守る条項を v2 の文体で戻
 - 切り替えるのは Gehirn DNS の Web のレコード（A / CNAME）だけ。MX・SPF・DKIM・DMARC は触らない
 - v1 を止めたあと、SPF から **`a:www2298.sakura.ne.jp` を外す**（決定）。`include:spf.mta.gis.gehirn.jp` は残す
 - Resend のレコード（本番の Supabase の SMTP。017 §7 2026-10-13）は送信用のサブドメインに置く。ルートの SPF には足さない
+
+そのほか:
+
+- DMARC の `rua` の宛先 `dmarc@assift.com` は受信箱に無い（集計レポートは届かずに捨てられる）。`p=none` で配信には影響しないので、このままにする（決定）
+- `terms.ts` の冒頭のコメントを「すべて決定済み」に直した（値は変えていない）
