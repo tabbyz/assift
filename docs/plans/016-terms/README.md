@@ -86,7 +86,7 @@
 | 項目 | 仮の値 |
 | --- | --- |
 | 運営者の名称 | `assift運営`（v1 と同じ。決定） |
-| 連絡先 | `support@assift.com`（実在の受信箱にする） |
+| 連絡先 | `support@assift.com`（決定。Google Workspace のエイリアス。§7 2026-10-13（連絡先）） |
 | 制定日 | 2026 年 10 月 30 日（決定。リリース日。リリース作業は 22:00 開始） |
 | 管轄裁判所 | 東京地方裁判所（決定。v1 の規約 第 15 条と同じ） |
 | v1 の利用者への周知 | 移行時に新しい規約へ切り替わることを 548 条の 4 に沿って事前に知らせる（カットオーバーの告知に含める） |
@@ -227,3 +227,25 @@ v1 にあって v2 に無かった、運営を守る条項を v2 の文体で戻
 - そのままにしたもの（決定）: 無料プランの消費者の賠償の上限が 0 円になること（§7 2026-10-06 のとおり）と例の「売上の減少など」、メールの到達のみなし（v1 と同じ）
 - 実装と合っていることを確かめたもの: 共有リンクの期限（7 日後）と `noindex`・「共有停止」、AI の結果が下書きで入ること、AI の提供元（Gateway 経由。既定は OpenAI）、
   請求日（翌月 1 日 0:00 JST）・最大人数・トライアル（2 か月後の月末まで、1 回）・上限人数、画面の呼び方（「AIで作成」「共有」「プランとお支払い」）
+
+### 2026-10-13（連絡先）
+
+- 連絡先は **`support@assift.com`** のまま（決定）。コードの変更は無い（`terms.ts` の `contactEmail` を規約・ポリシー・特商法表記・エラー画面・課金の画面が引いている）
+- 受信箱は既存の Google Workspace（プライマリドメインは `sundbox.app`、`assift.com` はセカンダリドメイン）。ユーザー「app sundbox」に `support@` と `info@` がエイリアスとして付いていて、同じ受信箱に届く。Gmail の「他のアドレスからメールを送信」に `support@` があり、返信も `support@` から出せる
+- v1 の窓口 `info@assift.com` は**残す**（決定）。v1 の利用者や古いリンクからの問い合わせを取りこぼさない。ページには出さない（窓口は `support@` の 1 つ。018 §2）
+- `noreply@`（認証メールの差出人。Resend）への返信は受けない（決定。放置）
+- Stripe の公開情報のサポートのメールは `support@` に設定済み。Google OAuth の同意画面のユーザーサポートメールは本番環境の構築で設定する（エイリアスは選べない見込み）
+- DNS は Gehirn DNS（ネームサーバーは移さない）。2026-10-13 時点のメールのレコード:
+
+| レコード | 値 | メモ |
+| --- | --- | --- |
+| MX | `1 smtp.google.com.` | Workspace の管理画面で「完了」 |
+| SPF（`assift.com` TXT） | `v=spf1 a:www2298.sakura.ne.jp include:spf.mta.gis.gehirn.jp include:_spf.google.com ~all` | |
+| DKIM | `google._domainkey`（Workspace）/ `1556601411.gehirn._domainkey`（Gehirn の SMTP） | |
+| DMARC | `v=DMARC1; p=none; rua=mailto:dmarc@assift.com` | |
+
+カットオーバーのときにすること（カットオーバーのプランができたらそちらへ移す）:
+
+- 切り替えるのは Gehirn DNS の Web のレコード（A / CNAME）だけ。MX・SPF・DKIM・DMARC は触らない
+- v1 を止めたあと、SPF から **`a:www2298.sakura.ne.jp` を外す**（決定）。`include:spf.mta.gis.gehirn.jp` は残す
+- Resend のレコード（本番の Supabase の SMTP。017 §7 2026-10-13）は送信用のサブドメインに置く。ルートの SPF には足さない
