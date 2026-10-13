@@ -9,6 +9,6 @@ export const LAW = {
    */
   sellerName: '山下 一磨' as string | null,
   /** 制定日 / 最終更新日 */
-  enactedOn: '2026年10月6日',
-  updatedOn: '2026年10月6日',
+  enactedOn: '2026年10月30日',
+  updatedOn: '2026年10月30日',
 } as const

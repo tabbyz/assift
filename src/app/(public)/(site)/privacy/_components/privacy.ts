@@ -4,8 +4,8 @@
  */
 export const PRIVACY = {
   /** 制定日 / 最終更新日 */
-  enactedOn: '2026年10月6日',
-  updatedOn: '2026年10月6日',
+  enactedOn: '2026年10月30日',
+  updatedOn: '2026年10月30日',
   /** データベース（Supabase）を置いている国・地域 */
   databaseRegion: '日本（東京）',
 } as const
