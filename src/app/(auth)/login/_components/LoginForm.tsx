@@ -103,6 +103,18 @@ export function LoginForm({ next, initialError }: Props) {
           新規登録
         </Anchor>
       </Text>
+      {/* Google で初めてログインすると登録になり、/signup の同意チェックを通らない（016 第1条。民法 548 条の 2 の表示） */}
+      <Text ta="center" size="xs" c="dimmed">
+        Googleアカウントで続行すると、
+        <Anchor href="/terms" target="_blank" inherit>
+          利用規約
+        </Anchor>
+        と
+        <Anchor href="/privacy" target="_blank" inherit>
+          プライバシーポリシー
+        </Anchor>
+        に同意したものとみなします。
+      </Text>
     </Stack>
   )
 }
