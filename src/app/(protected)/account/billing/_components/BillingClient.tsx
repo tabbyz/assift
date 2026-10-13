@@ -185,7 +185,6 @@ export function BillingClient({ view, checkoutSuccess, portalReturned }: Props) 
         return (
           <Stack gap="xs">
             <PortalButton label="お支払い方法・請求書" variant="default" fullWidth />
-            <PortalPriceNote />
             {!subscription.cancelLastDay && (
               <Button
                 variant="subtle"
@@ -200,17 +199,12 @@ export function BillingClient({ view, checkoutSuccess, portalReturned }: Props) 
           </Stack>
         )
       }
-      return (
-        <Stack gap="xs">
-          {subscription.discountPercent > 0 ? (
-            <Button variant="default" onClick={confirmLegacyPortal} fullWidth>
-              お支払い方法・請求書・解約
-            </Button>
-          ) : (
-            <PortalButton label="お支払い方法・請求書・解約" variant="default" fullWidth />
-          )}
-          <PortalPriceNote />
-        </Stack>
+      return subscription.discountPercent > 0 ? (
+        <Button variant="default" onClick={confirmLegacyPortal} fullWidth>
+          お支払い方法・請求書・解約
+        </Button>
+      ) : (
+        <PortalButton label="お支払い方法・請求書・解約" variant="default" fullWidth />
       )
     }
     if (!view.billingAvailable && !view.trialAvailable) return null
@@ -601,19 +595,6 @@ function PriceRow({
   )
 }
 
-/**
- * ポータルは契約を「assift • ¥0 / 月」と出す（従量の price の最初の段が 0 円のため。Stripe 側で変えられない。019 §12）。
- * 料金の決まり方はこのページの「料金」（PriceCard）に任せる
- */
-function PortalPriceNote({ ta = 'center' }: { ta?: 'center' | 'left' }) {
-  return (
-    <Text size="xs" c="dimmed" ta={ta} style={{ textWrap: 'balance' }}>
-      このボタンから開くお支払いの画面では、プランが「¥0 / 月」と表示されます。これは{' '}
-      {FREE_STAFF_LIMIT} 人までの料金（0 円）で、実際のお支払いは下の「料金」の通りです。
-    </Text>
-  )
-}
-
 /** 旧料金の人はポータルへ進む前に「解約すると旧料金には戻れません」を出す（§5.4） */
 function confirmLegacyPortal() {
   modals.open({
@@ -624,7 +605,6 @@ function confirmLegacyPortal() {
           旧料金（v1
           からの継続）でご利用中です。解約すると旧料金には戻れません。解約を予約したあとでも、期間の終わりまでに取り消せば旧料金のまま続きます。
         </Text>
-        <PortalPriceNote ta="left" />
         <Group justify="flex-end">
           <PortalButton label="お支払いの管理画面へ" />
         </Group>
