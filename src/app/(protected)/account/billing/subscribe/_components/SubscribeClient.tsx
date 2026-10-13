@@ -92,7 +92,7 @@ export function SubscribeClient({ activeStaffCount, trialLastDay, billingAvailab
     {
       label: '契約期間・解約',
       value:
-        '1 か月ごとの自動更新です。いつでも解約でき、その期間の終わりまで使えます。日割り・返金はありません（法令で定める場合を除く）',
+        '1 か月ごとの自動更新です。「プランとお支払い」からいつでも解約でき、その期間の終わりまで使えます。日割り・返金はありません（法令で定める場合を除く）',
     },
   ]
 
