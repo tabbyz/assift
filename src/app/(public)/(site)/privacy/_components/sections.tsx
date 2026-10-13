@@ -191,6 +191,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
             'OpenAI・Anthropic・Google（いずれも米国）：AIを使う機能。送信したデータがAIの学習に使われることはありません',
             'Stripe（米国）：有料プランの決済',
             'Resend（米国）：メールの送信',
+            'Google（米国）：お問い合わせのメールの受信と保管（Google Workspace）',
           ]}
         />
         <P>
@@ -338,7 +339,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
             </>,
           ]}
         />
-        <P>運営者の住所と代表者の氏名は、ご請求があれば遅滞なくお知らせします。</P>
+        <P>運営者の氏名と住所は、ご請求があれば遅滞なくお知らせします。</P>
       </>
     ),
   },
