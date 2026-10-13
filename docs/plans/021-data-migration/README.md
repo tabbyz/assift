@@ -264,6 +264,7 @@ Customer を失った側に `stripe_subscription_id` があれば、その人は
 | `staff_id` が存在しない（FK 無し） | 捨てて記録 |
 | `pattern_id` が null・存在しない | 捨てて記録（v1 は FK と `dependent: :destroy` があるので 0 件のはず） |
 | スタッフの店舗 ≠ パターンの店舗 | 捨てて記録 |
+| `date` が `YYYY-MM-DD` の実在する日付でない（西暦 5 桁など） | 捨てて記録（`invalid_date`）。v1 の date 列は西暦 5 桁も受け、リハーサルで `20223-03-11` が実在した（§15）。`events` / `shares` も同じ |
 | `(staff_id, date)` の重複 | `updated_at` が最新の 1 件（同時刻なら id が大きいほう）を残し、残りを捨てて記録 |
 | `tenant_id` | スタッフの店舗 |
 | `fixed` | そのまま。`assist_token` は捨てる。`assist_run_id` は null |
@@ -300,6 +301,7 @@ Customer を失った側に `stripe_subscription_id` があれば、その人は
 | --- | --- |
 | `note` | trim → 12 文字。空は捨てる（v1 は「空で保存 = 削除」だが行が残っていることがある） |
 | `(tenant_id, date)` の重複 | `updated_at` が最新の 1 件（同時刻なら id が大きいほう。§7.6 と同じ） |
+| `date` が実在する日付でない | 捨てて記録（`invalid_date`。§7.6 と同じ） |
 
 ### 7.10 shares
 
@@ -308,6 +310,7 @@ Customer を失った側に `stripe_subscription_id` があれば、その人は
 | `code` | そのまま（`^[A-Za-z0-9]{8}$` に合わなければ捨てて記録。配った URL が壊れるので 0 件のはず）。v1 に一意制約が無い（作成時に照合するだけ）ので、重複があれば `created_at` が新しい 1 件（同時刻なら id が大きいほう）を残して捨てて記録 |
 | `end_date - start_date > 31` | `end_date = start_date + 31` にして記録（v1 は 30 日に切っていたが、CHECK は 31 なので CHECK に合わせる） |
 | `end_date < start_date` | 捨てて記録 |
+| `start_date` / `end_date` が実在する日付でない | 捨てて記録（`invalid_date`。§7.6 と同じ） |
 | 期限切れの共有 | **入れる**（v1 の一覧にも「期限切れ」として出る。009） |
 
 ### 7.11 `staff_count_history`（019 §8.1）
@@ -634,7 +637,7 @@ docs/plans/019-…/README.md       §8.1 の「session_replication_role = replic
 | 6 | 低: §8.1 の「切り詰めた値の件数（列ごと）」が理由別にしか無かった | `report.truncated`（`table.column` → 件数）を足した |
 | 7 | 低: 管理用アカウントのメールが v1 のユーザーと重なると一意制約で全体が戻る | §9.3 の確かめることに足した |
 | 8 | 低: 移行しない人の Stripe 用 CSV のメールが小文字化されていない | 揃えた |
-| 9 | 低（受け入れ）: `shifts` / `events` / `shares` の日付が西暦 3 桁以下・5 桁だと Zod が止める（`required_nums` だけ捨てる規則） | v1 の画面から入ることは実質無いので止まる挙動のまま |
+| 9 | 低（受け入れ）: `shifts` / `events` / `shares` の日付が西暦 3 桁以下・5 桁だと Zod が止める（`required_nums` だけ捨てる規則） | v1 の画面から入ることは実質無いので止まる挙動のまま。**リハーサルで実在した（`shifts` に西暦 5 桁）ので、2026-10-13 に捨てて記録する形に直した**（§7.6・§15） |
 
 2 回目（rake と TS のデータの契約 / 移行後の行がアプリでどう振る舞うか）:
 
@@ -777,3 +780,12 @@ manifest の要点（§5.2）:
 - 手元の v2 を最新の `main` にして `npm ci`（利用者の clone は 10/05 のままだった）→ `npx supabase start` → `npx supabase db reset` → `NODE_OPTIONS=--max-old-space-size=16384`（24 GB の Mac）で `npm run migrate:v1 -- --input ~/v1-export/20261013-1655 --allow-existing`。所要時間と RSS を記録し、§13-8（10 分を超えたら `COPY`）を判断する
 - `verify.ts` → §8.2 の 1〜10
 - 直した rake でエクスポートを流し直し、照合の人数と所要時間を確かめる（インポートの検証と並行してよい）
+
+#### インポート 1 回目（2026-10-13。読み込みで停止）
+
+`npm run migrate:v1 -- --input ~/v1-export/20261013-1655 --allow-existing` が、読み込みの 18 秒目（`shifts.jsonl` の 4,324,771 行目。そこまでの最大 RSS 1.26 GB）で止まった:
+`date YYYY-MM-DD の実在する日付ではありません`（`"date":"20223-03-11"`。2023-03-08 に作られた行）。
+
+- v1 の date 列（Postgres の `date`）は西暦 5 桁も受ける。v1 の画面からは入らないはずだが、実在した（レビュー 2 周目の #9 で「止まる挙動のまま」と受け入れていた箇所）
+- 直したこと: `shifts.date` / `events.date` / `shares.start_date`・`end_date` の Zod を「文字列なら受ける」にし、変換が `isDateString()` で見て `invalid_date` で捨てて記録する（`required_nums` と同じ規則。§7.6・§7.9・§7.10）。西暦 5 桁の日付は v1 の表にも出ていない行なので、見え方は変わらない
+- Vitest（移行 88 件・全体 916 件）と `npm run typecheck` が通る

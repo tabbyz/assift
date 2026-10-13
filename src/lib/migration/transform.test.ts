@@ -753,6 +753,8 @@ describe('transformShifts（§7.6）', () => {
         shift({ id: 5, pattern_id: 99 }),
         shift({ id: 6, pattern_id: 4 }),
         shift({ id: 7, staff_id: 1, pattern_id: 2 }),
+        shift({ id: 9, date: '20223-03-11' }), // v1 の date 列は西暦 5 桁も受ける（リハーサルで実在）
+        shift({ id: 10, date: '2026-02-30' }),
       ],
       { staffs, patterns }
     )
@@ -766,6 +768,8 @@ describe('transformShifts（§7.6）', () => {
       [5, 'parent_missing', 'pattern'],
       [6, 'parent_dropped', 'pattern'],
       [7, 'tenant_mismatch', undefined],
+      [9, 'invalid_date', '20223-03-11'],
+      [10, 'invalid_date', '2026-02-30'],
     ])
   })
 
@@ -979,11 +983,16 @@ describe('transformEvents（§7.9）', () => {
     expect(r.dropped).toEqual([{ table: 'events', id: 1, reason: 'duplicate', detail: 'kept 2' }])
   })
 
-  it('親が無い・捨てた → 捨てる', () => {
-    const r = transformEvents([event({ tenant_id: null }), event({ id: 2, tenant_id: 9 })], {
-      tenants,
-    })
-    expect(reasons(r.dropped)).toEqual(['parent_missing', 'parent_dropped'])
+  it('親が無い・捨てた・日付が壊れている → 捨てる', () => {
+    const r = transformEvents(
+      [
+        event({ tenant_id: null }),
+        event({ id: 2, tenant_id: 9 }),
+        event({ id: 3, date: '20223-03-11' }),
+      ],
+      { tenants }
+    )
+    expect(reasons(r.dropped)).toEqual(['parent_missing', 'parent_dropped', 'invalid_date'])
   })
 })
 
@@ -1002,17 +1011,25 @@ describe('transformShares（§7.10）', () => {
     ])
   })
 
-  it('code が 8 文字の英数字でない・end < start → 捨てる', () => {
+  it('code が 8 文字の英数字でない・end < start・日付が壊れている → 捨てる', () => {
     const r = transformShares(
       [
         share({ id: 1, code: 'abc' }),
         share({ id: 2, code: 'AbCd-345' }),
         share({ id: 3, start_date: '2026-10-05', end_date: '2026-10-04' }),
+        share({ id: 4, code: 'AbCd2346', end_date: '20223-03-11' }),
+        share({ id: 5, code: 'AbCd2347', start_date: '2026-02-30' }),
       ],
       { tenants }
     )
     expect(r.rows).toEqual([])
-    expect(reasons(r.dropped)).toEqual(['invalid_code', 'invalid_code', 'invalid_range'])
+    expect(reasons(r.dropped)).toEqual([
+      'invalid_code',
+      'invalid_code',
+      'invalid_range',
+      'invalid_date',
+      'invalid_date',
+    ])
   })
 
   it('code の重複は created_at が新しい 1 件（店舗をまたいでも）', () => {
