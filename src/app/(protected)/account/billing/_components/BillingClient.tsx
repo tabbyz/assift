@@ -603,13 +603,13 @@ function PriceRow({
 
 /**
  * ポータルは契約を「assift • ¥0 / 月」と出す（従量の price の最初の段が 0 円のため。Stripe 側で変えられない。019 §12）。
- * 解約の画面だけか一覧にも出るかは確かめていないので、場所を限らずに書く。料金の説明はこのページの「料金」（PriceCard）に任せる
+ * 料金の決まり方はこのページの「料金」（PriceCard）に任せる
  */
 function PortalPriceNote({ ta = 'center' }: { ta?: 'center' | 'left' }) {
   return (
     <Text size="xs" c="dimmed" ta={ta} style={{ textWrap: 'balance' }}>
-      お支払いの管理画面では、契約が「¥0 / 月」と表示されることがあります（{FREE_STAFF_LIMIT}{' '}
-      人までが 0 円のため）。実際の料金は、このページの「料金」のとおりです。
+      このボタンから開くお支払いの画面では、プランが「¥0 / 月」と表示されます。これは{' '}
+      {FREE_STAFF_LIMIT} 人までの料金（0 円）で、実際のお支払いは下の「料金」の通りです。
     </Text>
   )
 }
