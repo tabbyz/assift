@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
+  ActionIcon,
   Anchor,
   Button,
   Group,
@@ -17,8 +18,10 @@ import {
   TableThead,
   TableTr,
   Text,
+  Tooltip,
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
+import { IconArrowBackUp } from '@tabler/icons-react'
 import { WEEKDAY_LABELS } from '@/lib/calendar/weekdays'
 import { formatMonthDay, wday } from '@/lib/calendar/dateString'
 import { REQUIRED_NUM_MAX, REQUIRED_NUM_MIN } from '@/lib/patterns/requiredNums'
@@ -112,44 +115,37 @@ export function RequiredNumModal({ tenantId, date, rows, onClose }: Props) {
                   </TableTd>
                   <TableTd ta="center">{row.assigned}</TableTd>
                   <TableTd p={4}>
-                    <Stack gap={2}>
-                      <NumberInput
-                        aria-label={`${row.name} の必要人数`}
-                        value={valueOf(row)}
-                        placeholder={row.defaultNum === null ? '—' : String(row.defaultNum)}
-                        onChange={(value) =>
-                          setNums((current) => ({
-                            ...current,
-                            [row.patternId]: value === '' ? '' : Number(value),
-                          }))
-                        }
-                        min={REQUIRED_NUM_MIN}
-                        max={REQUIRED_NUM_MAX}
-                        clampBehavior="strict"
-                        allowDecimal={false}
-                        allowNegative={false}
-                        hideControls
-                        size="sm"
-                        styles={{ input: { textAlign: 'center', paddingInline: 4 } }}
-                      />
-                      {/* この日だけ変えてある勤務だけ。押すと空欄になり、保存で上書きが消える */}
-                      {row.overridden && (
-                        <Anchor
-                          component="button"
-                          type="button"
-                          size="xs"
-                          c="dimmed"
-                          ta="center"
-                          style={{ whiteSpace: 'nowrap' }}
-                          onClick={() => clear(row.patternId)}
-                          disabled={isPending}
-                        >
-                          {row.defaultNum === null
-                            ? '未設定に戻す'
-                            : `基本(${row.defaultNum})に戻す`}
-                        </Anchor>
-                      )}
-                    </Stack>
+                    <NumberInput
+                      aria-label={`${row.name} の必要人数`}
+                      value={valueOf(row)}
+                      placeholder={row.defaultNum === null ? '—' : String(row.defaultNum)}
+                      onChange={(value) =>
+                        setNums((current) => ({
+                          ...current,
+                          [row.patternId]: value === '' ? '' : Number(value),
+                        }))
+                      }
+                      min={REQUIRED_NUM_MIN}
+                      max={REQUIRED_NUM_MAX}
+                      clampBehavior="strict"
+                      allowDecimal={false}
+                      allowNegative={false}
+                      hideControls
+                      size="sm"
+                      // 戻すボタンは欄の中に置く。欄の下に出すと、その行だけ高さが変わる。
+                      // 左右の余白をボタンの幅で揃え、数字の位置をボタンの有無で動かさない
+                      rightSection={
+                        valueOf(row) !== '' && (
+                          <ResetButton
+                            label={resetLabel(row)}
+                            onClick={() => clear(row.patternId)}
+                            disabled={isPending}
+                          />
+                        )
+                      }
+                      rightSectionWidth={RESET_WIDTH}
+                      styles={{ input: { textAlign: 'center', paddingInline: RESET_WIDTH } }}
+                    />
                   </TableTd>
                 </TableTr>
               ))}
@@ -158,8 +154,18 @@ export function RequiredNumModal({ tenantId, date, rows, onClose }: Props) {
         )}
 
         <Text size="xs" c="dimmed">
-          ここで入れた数は<strong>この日だけ</strong>に効きます。空欄にすると基本の人数に戻ります。
-          基本の人数は
+          ここで入れた数は<strong>この日だけ</strong>に効きます。空欄にするか、
+          {/* アイコンと「を押す」の間で改行させない */}
+          <span style={{ whiteSpace: 'nowrap' }}>
+            <IconArrowBackUp
+              size={12}
+              style={{ verticalAlign: 'middle', marginInline: 2 }}
+              role="img"
+              aria-label="戻す"
+            />
+            を押すと
+          </span>
+          基本の人数に戻ります。基本の人数は
           <Anchor component={Link} href={`/tenants/${tenantId}/settings/required-nums`} size="xs">
             必要人数の設定
           </Anchor>
@@ -176,5 +182,39 @@ export function RequiredNumModal({ tenantId, date, rows, onClose }: Props) {
         </Group>
       </Stack>
     </Modal>
+  )
+}
+
+/** 入力欄の右端の「戻す」ボタンの幅（px）。左の余白にも同じ幅を取る */
+const RESET_WIDTH = 26
+
+function resetLabel(row: RequiredNumRowInput): string {
+  return row.defaultNum === null ? '未設定に戻す' : `基本(${row.defaultNum})に戻す`
+}
+
+/** 押すと欄が空になり、保存でこの日の上書きが消える（015 §3.2） */
+function ResetButton({
+  label,
+  onClick,
+  disabled,
+}: {
+  label: string
+  onClick: () => void
+  disabled: boolean
+}) {
+  return (
+    <Tooltip label={label} withArrow>
+      <ActionIcon
+        type="button"
+        variant="subtle"
+        color="gray"
+        size="sm"
+        aria-label={label}
+        onClick={onClick}
+        disabled={disabled}
+      >
+        <IconArrowBackUp size={14} />
+      </ActionIcon>
+    </Tooltip>
   )
 }

@@ -247,6 +247,11 @@ button.dateHead:focus-visible .notePlaceholder {
   overflow: hidden;
   font-size: 13px;
   line-height: 1.1;
+  /*
+   * 折り返した名前（「【希】休」など）の行揃え。flex の中央寄せは文字の塊を置くだけで、
+   * 塊の中の行は text-align に従う。UnstyledButton は `text-align: start` なので明示する
+   */
+  text-align: center;
   word-break: break-all;
   border: 1px solid transparent;
   border-radius: 3px;
