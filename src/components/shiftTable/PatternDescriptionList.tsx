@@ -21,7 +21,8 @@ export function PatternDescriptionList({ patterns, end }: Props) {
   const items = described.map((pattern) => (
     <Group key={pattern.id} gap={4} wrap="nowrap" style={{ flexShrink: 0 }}>
       <Paper withBorder px={6} py={2} radius="sm" style={chipStyle(pattern.colorHex)}>
-        <Text size="xs" fw={600} style={{ whiteSpace: 'nowrap' }}>
+        {/* 全角の括弧を詰める。セル（ShiftTable.module.css の `.cell`）と同じ */}
+        <Text size="xs" fw={600} style={{ whiteSpace: 'nowrap', fontFeatureSettings: "'halt'" }}>
           {pattern.name}
         </Text>
       </Paper>

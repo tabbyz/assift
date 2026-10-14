@@ -257,6 +257,11 @@ button.dateHead:focus-visible .notePlaceholder {
    * 塊の中の行は text-align に従う。UnstyledButton は `text-align: start` なので明示する
    */
   text-align: center;
+  /*
+   * 全角の括弧・句読点を半角幅に詰める（OpenType の halt）。「【希】休」の「【」は字形の左半分が空白で、
+   * 中央に置いても右に寄って見え、幅も 1 文字分余計に取って折り返していた
+   */
+  font-feature-settings: 'halt';
   word-break: break-all;
   border: 1px solid transparent;
   border-radius: 3px;

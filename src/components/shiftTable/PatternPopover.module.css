@@ -13,6 +13,9 @@
   overflow: hidden;
   font-size: 11px;
   line-height: 1.1;
+  /* 折り返した名前の行揃えと、全角の括弧の詰め。理由はセル（ShiftTable.module.css の `.cell`）と同じ */
+  text-align: center;
+  font-feature-settings: 'halt';
   word-break: break-all;
   border: 2px solid var(--mantine-color-default-border);
   border-radius: 3px;
