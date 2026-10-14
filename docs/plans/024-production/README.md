@@ -7,7 +7,7 @@
 - 予定: 10/14〜10/15（クリティカルパス）
 - **作業するのは人間**（Dashboard の操作と秘密の値）。リポジトリの変更は `vercel.json` の関数のリージョンだけ（§4.6）
 
-**状態: プラン（2026-10-14）。§3 の決定は 2026-10-14 に確認。**
+**状態: プラン（2026-10-14）。§3・§7 の決定は 2026-10-14 に確認。**
 
 ## 1. 目的と完了条件
 
@@ -51,12 +51,15 @@
 | --- | --- | --- | --- |
 | 1 | 既存の Supabase の親 | `ap-northeast-1`、データなし、migration 未実行。Vercel の Production の最新デプロイは Ready | 確認済み |
 | 2 | 本番のプロジェクト | **既存の親をそのまま本番にする**（新しく作らない） | 東京で空。Branching・Vercel 連携を作り直さずに済む |
-| 3 | DNS 切り替え前の確認 | **仮のサブドメイン**を Gehirn DNS に足す（本体 `v2.assift.com`・管理画面 `admin-v2.assift.com`。名前は仮。§4.6） | Google OAuth・メールのリンク・cookie・管理画面のホストを本番と同じ形で試せる。`*.vercel.app` では `ADMIN_HOST` と `SITE_URL` が本番と違う形になる |
+| 3 | DNS 切り替え前の確認 | **仮のサブドメイン**を Gehirn DNS に足す（本体 `v2.assift.com`・管理画面 `admin-v2.assift.com`。§3-11・§4.6） | Google OAuth・メールのリンク・cookie・管理画面のホストを本番と同じ形で試せる。`*.vercel.app` では `ADMIN_HOST` と `SITE_URL` が本番と違う形になる |
 | 4 | 関数のリージョン | **`vercel.json` に `"regions": ["hnd1"]`**（東京 1 つ）。大阪（`kix1`）を足すマルチリージョンにはしない | §3.1 |
 | 5 | 範囲 | Supabase / Vercel / Auth / Resend まで。Stripe の live・予行・解析は別 | §2 |
 | 6 | Supabase の設定 | PITR はリリース後に検討 / Spend cap はオンのまま / 送信の上限などは §4.3 の推奨値 | |
 | 7 | Resend のリージョン | 東京（`ap-northeast-1`） | ポリシーは「Resend（米国）」（事業者の国）なので矛盾しない |
 | 8 | Google OAuth | v2 用に**新しい Google Cloud のプロジェクト**を作る | |
+| 9 | Resend のプラン | **最初から Pro** | 当日の再設定の集中で無料プラン（1 日 100 通）を越えない |
+| 10 | migration の自動適用（Deploy to production） | **リリースまではオフ**。本プランと当日までの差分は `db push` で手で入れる。オンにするかはカットオーバーのプランで決める | 予行・移行の最中に本番のスキーマが動かない（§4.8） |
+| 11 | 仮のホストの名前 | 本体 `v2.assift.com`・管理画面 `admin-v2.assift.com` | Gehirn DNS で未使用か §4.1 で確かめる |
 
 ### 3.1 マルチリージョン（東京 + 大阪）にしない理由
 
@@ -134,7 +137,7 @@ where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity;
 
 - 送るのは確認・再設定・メール変更だけ（宣伝のメールは送らない。017 §7）。ふだんは 1 時間に数通
 - 当日は v1 の利用者が再設定を集中して送りうる（v1 と同じパスワードでログインできるので多くはない見込み）。100 通 / 時ならこれを受け、総当たりのような大量送信は止める
-- **Resend のプランの上限も効く**: 無料プランは 1 日 100 通・月 3,000 通。当日を越えられるかは §7-1 で決める
+- Resend は**最初から Pro**（§3-9）。無料プランの 1 日 100 通の上限は当日に効かない
 
 ### 4.4 Resend と Custom SMTP
 
@@ -190,8 +193,8 @@ where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity;
 ### 4.8 migration の自動適用と `config.toml` の上書き（確かめること）
 
 - Supabase の GitHub 連携の「Deploy to production」をオンにすると、main へのマージで migration が本番に入る（Vercel のデプロイとどちらが先かは決まっていない）。
-  **推奨: リリースまではオフのまま**（本プランの 1 回と、当日までの差分は `db push` で手で入れる。予行や移行の最中に本番のスキーマが動かない）。
-  リリース後にオンにするかは、当日のプランで決める（§7-2）
+  **リリースまではオフのまま**（決定。§3-10。本プランの 1 回と、当日までの差分は `db push` で手で入れる。予行や移行の最中に本番のスキーマが動かない）。
+  リリース後にオンにするかは、カットオーバーのプランで決める
 - **Branching の連携が、main へのマージで `config.toml` の `[auth]`（`site_url = localhost`・送信の上限 2 など）を本番に上書きしないか**は、
   2026-10-14 に一次資料で確かめられなかった（この環境から supabase.com に届かなかった。検索結果の要約では「本番へのデプロイで config.toml からサービスの設定を更新する」「API / Auth は既定で無視」が混在）。
   **§4.3 を入れたあと、最初に main へマージしたとき**に Authentication → URL Configuration の Site URL と Rate Limits が変わっていないことを見る。
@@ -248,13 +251,9 @@ where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity;
 | Supabase Redirect URLs | `https://v2.assift.com/auth/callback` | `https://assift.com/auth/callback` を足し、`v2` を消す |
 | Google の JavaScript 生成元 | `https://v2.assift.com` | `https://assift.com` を足し、`v2` を消す（リダイレクト URI は Supabase のものなので変えない） |
 
-## 7. 未確定（決めてほしいこと）
+## 7. 未確定
 
-| # | 項目 | 選択肢 | 推奨 |
-| --- | --- | --- | --- |
-| 1 | Resend のプラン | 無料（1 日 100 通・月 3,000 通）/ Pro（月 50,000 通。有料） | 当日の再設定の集中に備えて、**カットオーバーの月だけでも Pro**。v1 の利用者数と当日の見込みで決める |
-| 2 | migration の自動適用（Deploy to production） | リリース前からオン / リリース後にオン / ずっと手で `db push` | リリースまではオフ。オンにするかはカットオーバーのプランで |
-| 3 | 仮のホストの名前 | `v2` / `admin-v2`（仮）か、ほかの名前 | どれでもよい。Gehirn DNS で未使用のもの |
+なし（2026-10-14 に §3-9〜11 として決めた）。
 
 ## 8. ファイル
 
