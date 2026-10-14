@@ -358,4 +358,8 @@ Workspace は `sundbox.app` の 1 つだけで、`assift.com` はその追加の
 - Supabase の Google の画面の Callback URL は、有効にした後も `<ref>.supabase.co` のまま表示される（表示が追従しない）
 - Google のクライアント（`assift-production`）にリダイレクト URI を 2 つ（`assift.supabase.co` と `<ref>.supabase.co`）入れ、Supabase に Client ID / Secret を入れた。
   ブラウザで `https://assift.supabase.co/auth/v1/authorize?provider=google` を開くと、Google に渡る `redirect_uri` は `https://assift.supabase.co/...` だった（vanity subdomain が使われている）
-- 残り: Vercel の `NEXT_PUBLIC_SUPABASE_URL`（§4.7）を `assift.supabase.co` にする
+
+### 2026-10-14（Vercel の Production の環境変数）
+
+- §4.7 の値を入れて Redeploy した（`NEXT_PUBLIC_SUPABASE_URL` = `https://assift.supabase.co`、`SUPABASE_SECRET_KEY`、`AI_GATEWAY_API_KEY`、`ADMIN_HOST` = `admin-v2.assift.com`、`SITE_URL` = `https://v2.assift.com`）
+- Redeploy の後も `NEXT_PUBLIC_SUPABASE_URL` は ref の URL に戻っていない（Supabase の Vercel 連携は書き戻さなかった）
