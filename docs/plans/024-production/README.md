@@ -130,7 +130,7 @@ where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity;
 | Emails → Templates | 確認・再設定・メール変更の 3 種。件名は `config.toml`（`【assift】メールアドレスの確認` / `【assift】パスワードの再設定について` / `【assift】メールアドレス変更の確認`）、本文は `supabase/templates/*.html` を貼る。そのほかのテンプレートは使わない |
 | Emails → SMTP Settings | §4.4 |
 | Rate Limits | **メールの送信 100 通 / 時**（推奨。ローカルの 2 はテスト用。§4.3.1）。トークンの更新 150・サインイン / サインアップ 30・OTP の検証 30（いずれも 5 分あたり。`config.toml` と同じ = 既定） |
-| Emails → SMTP Settings → Minimum interval between emails being sent | **60 秒**（ローカルの `max_frequency = "1s"` はテスト用）。Custom SMTP をオンにすると出る欄（§4.4）。出なければ既定のまま |
+| Emails → SMTP Settings → Minimum interval between emails being sent | **60 秒**（ローカルの `max_frequency = "1s"` はテスト用）。Custom SMTP をオンにすると出る欄（§4.4。2026-10-14 に確認） |
 | MFA | TOTP・電話とも無効（020 §12-4 のとおり入れない） |
 
 #### 4.3.1 メールの上限の考え方
@@ -302,3 +302,9 @@ where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity;
 
 - `assift.com` を東京リージョンで追加し、Gehirn DNS に DKIM の TXT（`resend._domainkey`）と CNAME 2 本（`send`・`rsend`）を足した。Resend の画面で 3 つとも検証済み
 - ルートの SPF・DMARC・Workspace / Gehirn の DKIM は触っていない。v1 の SendGrid の CNAME（`em2978`・`s1` / `s2._domainkey` など）は v1 を止めるまで残す
+
+### 2026-10-14（Custom SMTP）
+
+- Resend の API キー `assift-production`（Sending access・`assift.com` 限定）を作り、Supabase の SMTP Settings に入れた（`smtp.resend.com:465`、user `resend`、差出人 `assift <noreply@assift.com>`）
+- 再送の間隔（Minimum interval between emails being sent）は SMTP Settings の中にあった。60 秒にした
+- Custom SMTP をオンにすると Rate Limits のメールの上限が編集できるようになった。100 通 / 時にした
