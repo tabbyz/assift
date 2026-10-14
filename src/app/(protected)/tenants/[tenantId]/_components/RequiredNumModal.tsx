@@ -144,12 +144,11 @@ export function RequiredNumModal({ tenantId, date, rows, onClose }: Props) {
         )}
 
         <Text size="xs" c="dimmed">
-          ここで入れた数は<strong>この日だけ</strong>に効きます。空欄にすると基本の人数に戻ります。
-          基本の人数は
+          空欄にすると、
           <Anchor component={Link} href={`/tenants/${tenantId}/settings/required-nums`} size="xs">
             必要人数の設定
           </Anchor>
-          で変えられます。
+          の人数に戻ります。
         </Text>
 
         <Group justify="space-between" gap="xs" wrap="nowrap">
