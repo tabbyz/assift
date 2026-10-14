@@ -14,6 +14,8 @@
 
 .scroll {
   overflow-x: auto;
+  /* 横の端の跳ね返りと「戻る」ジェスチャーを止める。縦はページのスクロールへ渡す */
+  overscroll-behavior-x: none;
 }
 
 /*

@@ -213,6 +213,8 @@
 
 .tableScroll {
   overflow-x: auto;
+  /* 横の端の跳ね返りと「戻る」ジェスチャーを止める。縦はページのスクロールへ渡す */
+  overscroll-behavior-x: none;
   border: 1px solid var(--mantine-color-default-border);
   border-radius: var(--mantine-radius-sm);
   background: var(--mantine-color-body);

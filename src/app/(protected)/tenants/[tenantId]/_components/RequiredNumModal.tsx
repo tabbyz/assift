@@ -59,8 +59,13 @@ export function RequiredNumModal({ tenantId, date, rows, onClose }: Props) {
   const valueOf = (row: RequiredNumRowInput): number | '' =>
     requiredNumInputValue(row, nums[row.patternId])
 
-  /** 「基本に戻す」= この日の上書きを消す。空欄で保存すると行が消える（015 §3.2） */
-  const clear = (patternId: string) => setNums((current) => ({ ...current, [patternId]: '' }))
+  /**
+   * 「すべて空欄にする」= 全勤務の欄を空にする。保存するとこの日の上書きが消える（015 §3.2）。
+   * 1 行だけ戻すときは欄を手で空にする（行ごとのボタンは置かない。行の高さが揃わず、アイコンは伝わりにくかった）
+   */
+  const clearAll = () =>
+    setNums(Object.fromEntries(rows.map((row) => [row.patternId, '' as const])))
+  const hasAnyValue = rows.some((row) => valueOf(row) !== '')
 
   const submit = () =>
     startTransition(async () => {
@@ -112,44 +117,25 @@ export function RequiredNumModal({ tenantId, date, rows, onClose }: Props) {
                   </TableTd>
                   <TableTd ta="center">{row.assigned}</TableTd>
                   <TableTd p={4}>
-                    <Stack gap={2}>
-                      <NumberInput
-                        aria-label={`${row.name} の必要人数`}
-                        value={valueOf(row)}
-                        placeholder={row.defaultNum === null ? '—' : String(row.defaultNum)}
-                        onChange={(value) =>
-                          setNums((current) => ({
-                            ...current,
-                            [row.patternId]: value === '' ? '' : Number(value),
-                          }))
-                        }
-                        min={REQUIRED_NUM_MIN}
-                        max={REQUIRED_NUM_MAX}
-                        clampBehavior="strict"
-                        allowDecimal={false}
-                        allowNegative={false}
-                        hideControls
-                        size="sm"
-                        styles={{ input: { textAlign: 'center', paddingInline: 4 } }}
-                      />
-                      {/* この日だけ変えてある勤務だけ。押すと空欄になり、保存で上書きが消える */}
-                      {row.overridden && (
-                        <Anchor
-                          component="button"
-                          type="button"
-                          size="xs"
-                          c="dimmed"
-                          ta="center"
-                          style={{ whiteSpace: 'nowrap' }}
-                          onClick={() => clear(row.patternId)}
-                          disabled={isPending}
-                        >
-                          {row.defaultNum === null
-                            ? '未設定に戻す'
-                            : `基本(${row.defaultNum})に戻す`}
-                        </Anchor>
-                      )}
-                    </Stack>
+                    <NumberInput
+                      aria-label={`${row.name} の必要人数`}
+                      value={valueOf(row)}
+                      placeholder={row.defaultNum === null ? '—' : String(row.defaultNum)}
+                      onChange={(value) =>
+                        setNums((current) => ({
+                          ...current,
+                          [row.patternId]: value === '' ? '' : Number(value),
+                        }))
+                      }
+                      min={REQUIRED_NUM_MIN}
+                      max={REQUIRED_NUM_MAX}
+                      clampBehavior="strict"
+                      allowDecimal={false}
+                      allowNegative={false}
+                      hideControls
+                      size="sm"
+                      styles={{ input: { textAlign: 'center', paddingInline: 4 } }}
+                    />
                   </TableTd>
                 </TableTr>
               ))}
@@ -158,21 +144,38 @@ export function RequiredNumModal({ tenantId, date, rows, onClose }: Props) {
         )}
 
         <Text size="xs" c="dimmed">
-          ここで入れた数は<strong>この日だけ</strong>に効きます。空欄にすると基本の人数に戻ります。
-          基本の人数は
+          空欄にすると、
           <Anchor component={Link} href={`/tenants/${tenantId}/settings/required-nums`} size="xs">
             必要人数の設定
           </Anchor>
-          で変えられます。
+          の人数に戻ります。
         </Text>
 
-        <Group justify="flex-end" gap="xs">
-          <Button variant="subtle" color="gray" onClick={onClose} disabled={isPending}>
-            キャンセル
-          </Button>
-          <Button onClick={submit} loading={isPending} disabled={rows.length === 0}>
-            保存
-          </Button>
+        <Group justify="space-between" gap="xs" wrap="nowrap">
+          {/*
+            欄を空にするだけ。保存で確定し、キャンセルで取り消せる。
+            ボタンにするとスマホの幅で 3 つが 1 行に収まらないので、文字のリンクにする
+          */}
+          <Anchor
+            component="button"
+            type="button"
+            size="sm"
+            c="dimmed"
+            onClick={clearAll}
+            disabled={isPending || !hasAnyValue}
+            style={isPending || !hasAnyValue ? { opacity: 0.5, cursor: 'default' } : undefined}
+            underline={isPending || !hasAnyValue ? 'never' : 'hover'}
+          >
+            すべて空欄にする
+          </Anchor>
+          <Group gap="xs" wrap="nowrap">
+            <Button variant="subtle" color="gray" onClick={onClose} disabled={isPending}>
+              キャンセル
+            </Button>
+            <Button onClick={submit} loading={isPending} disabled={rows.length === 0}>
+              保存
+            </Button>
+          </Group>
         </Group>
       </Stack>
     </Modal>

@@ -125,7 +125,8 @@ export function TenantShell({ tenant, tenants, email, banner, children }: Props)
       </AppShellHeader>
 
       <AppShellNavbar p="sm" inert={!opened}>
-        <ScrollArea>
+        {/* 端の跳ね返りを止める（globals.css の html と同じ理由） */}
+        <ScrollArea overscrollBehavior="none">
           {/* 1 項目 44px（Apple HIG のタップ領域）。隙間は 0 にして、項目そのものの高さで押しやすくする */}
           <Stack gap={0}>
             {primary.map((link) => (

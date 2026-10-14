@@ -21,6 +21,11 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
+  /*
+   * 端の跳ね返りを止め、送り切ったあとのスワイプを外へ渡さない。渡すと、左端でさらに横に払ったときに
+   * ブラウザの「戻る」ジェスチャーになり、シフト表から前のページへ飛ぶ（ページ自体は 100dvh でスクロールしない）
+   */
+  overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -247,6 +252,16 @@ button.dateHead:focus-visible .notePlaceholder {
   overflow: hidden;
   font-size: 13px;
   line-height: 1.1;
+  /*
+   * 折り返した名前（「【希】休」など）の行揃え。flex の中央寄せは文字の塊を置くだけで、
+   * 塊の中の行は text-align に従う。UnstyledButton は `text-align: start` なので明示する
+   */
+  text-align: center;
+  /*
+   * 全角の括弧・句読点を半角幅に詰める（OpenType の halt）。「【希】休」の「【」は字形の左半分が空白で、
+   * 中央に置いても右に寄って見え、幅も 1 文字分余計に取って折り返していた
+   */
+  font-feature-settings: 'halt';
   word-break: break-all;
   border: 1px solid transparent;
   border-radius: 3px;
