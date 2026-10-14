@@ -142,7 +142,9 @@ where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity;
 ### 4.4 Resend と Custom SMTP
 
 1. Resend にサインアップ → Domains → Add Domain: `assift.com`、Region **Tokyo (ap-northeast-1)**
-2. 表示されたレコードを Gehirn DNS に足す（DKIM の `resend._domainkey`、送信用のサブドメインの MX と SPF の TXT。**ルートの SPF・MX・DMARC は触らない**。016-terms §7）
+2. 表示されたレコードを Gehirn DNS に足す（2026-10-14 の指定: DKIM の TXT `resend._domainkey`、SPF 用の CNAME `send` → `send.forge.rmta.net` と `rsend` → `rsend-apne1.forge.rmta.net`）。
+   **ルートの SPF・MX・DMARC は触らない**（016-terms §7。送信元はサブドメインなので SPF はそちらで通り、DMARC は `d=assift.com` の DKIM で通る）。
+   **Receiving は有効にしない**（MX を Resend に向けることになる。受信は Google Workspace）。ドメインの **click / open tracking はオフ**（認証のリンクが書き換わらないように）
 3. Verified になったら API Keys → Create: 権限 **Sending access**、ドメイン `assift.com` に限定
 4. Supabase → Authentication → Emails → SMTP Settings:
    - Enable custom SMTP オン
@@ -295,3 +297,8 @@ where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity;
 - Rate Limits: メールの送信 2 通 / 時（Custom SMTP がオフのときの固定値で、編集できない）。ほかは `config.toml` と同じ値
 - SMTP: オフ / Templates: Supabase の既定（英語）/ Google: 無効
 - **これまでの main へのマージで `config.toml` の `[auth]` は本番に入っていない**（Site URL が `localhost` でなく、テンプレートが日本語でない）。Deploy to production がオフのあいだは上書きされないとみてよい。オンにするとき（カットオーバーのプラン）に §4.8 で確かめる
+
+### 2026-10-14（Resend のドメイン）
+
+- `assift.com` を東京リージョンで追加し、Gehirn DNS に DKIM の TXT（`resend._domainkey`）と CNAME 2 本（`send`・`rsend`）を足した。Resend の画面で 3 つとも検証済み
+- ルートの SPF・DMARC・Workspace / Gehirn の DKIM は触っていない。v1 の SendGrid の CNAME（`em2978`・`s1` / `s2._domainkey` など）は v1 を止めるまで残す
