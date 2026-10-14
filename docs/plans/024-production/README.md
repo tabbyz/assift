@@ -130,7 +130,7 @@ where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity;
 | Emails → Templates | 確認・再設定・メール変更の 3 種。件名は `config.toml`（`【assift】メールアドレスの確認` / `【assift】パスワードの再設定について` / `【assift】メールアドレス変更の確認`）、本文は `supabase/templates/*.html` を貼る。そのほかのテンプレートは使わない |
 | Emails → SMTP Settings | §4.4 |
 | Rate Limits | **メールの送信 100 通 / 時**（推奨。ローカルの 2 はテスト用。§4.3.1）。トークンの更新 150・サインイン / サインアップ 30・OTP の検証 30（いずれも 5 分あたり。`config.toml` と同じ = 既定） |
-| メールの送信間隔（同じ人への再送） | **60 秒**（既定。ローカルの `max_frequency = "1s"` はテスト用） |
+| Emails → SMTP Settings → Minimum interval between emails being sent | **60 秒**（ローカルの `max_frequency = "1s"` はテスト用）。Custom SMTP をオンにすると出る欄（§4.4）。出なければ既定のまま |
 | MFA | TOTP・電話とも無効（020 §12-4 のとおり入れない） |
 
 #### 4.3.1 メールの上限の考え方
@@ -160,7 +160,8 @@ where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity;
 4. Clients → Create: 種類 **Web application**、
    承認済みの JavaScript 生成元 `https://v2.assift.com`（当日に `https://assift.com` を足す。§6）、
    承認済みのリダイレクト URI **`https://<ref>.supabase.co/auth/v1/callback`**（Supabase のコールバック。アプリの `/auth/callback` ではない。当日も変えない）
-5. Supabase → Authentication → Sign In / Providers → Google: Enable、Client ID / Secret を入れる。**Skip nonce check オン**（`config.toml` の `skip_nonce_check = true` と同じ）
+5. Supabase → Authentication → Sign In / Providers → Google: Enable、Client ID / Secret を入れる（**ブラウザの自動入力に注意**。2026-10-14 に Client IDs へメールアドレスが自動で入っていた）。
+   **Skip nonce checks はオフ**（`config.toml` の `true` はローカルの Google ログインのためだけ。本番は `signInWithOAuth` のリダイレクト方式で、nonce の確認を飛ばす理由が無い）。Allow users without an email もオフ
 
 ### 4.6 Vercel
 
@@ -285,3 +286,12 @@ where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity;
 
 - Vercel の Settings → Functions は、以前に手で `hnd1` + `kix1` にしてあった。`vercel.json` の `regions` を入れると **Overridden** の札が出て、Dashboard の値は表示されたまま効かない（§4.6-1）
 - PR #36 のデプロイで、関数のリージョンが `hnd1` になっていることを確かめた
+
+### 2026-10-14（Auth の設定前の状態）
+
+設定を入れる前の本番プロジェクトの Authentication:
+
+- URL Configuration: Site URL `https://assift-sundbox.vercel.app/`、Redirect URLs は `assift-sundbox.vercel.app` と `assift-*-sundbox.vercel.app` の 4 件（以前に手で入れたもの）
+- Rate Limits: メールの送信 2 通 / 時（Custom SMTP がオフのときの固定値で、編集できない）。ほかは `config.toml` と同じ値
+- SMTP: オフ / Templates: Supabase の既定（英語）/ Google: 無効
+- **これまでの main へのマージで `config.toml` の `[auth]` は本番に入っていない**（Site URL が `localhost` でなく、テンプレートが日本語でない）。Deploy to production がオフのあいだは上書きされないとみてよい。オンにするとき（カットオーバーのプラン）に §4.8 で確かめる
