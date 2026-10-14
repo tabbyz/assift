@@ -795,6 +795,10 @@ export function transformShifts(
       rec.drop(shift.id, 'tenant_mismatch')
       continue
     }
+    if (!isDateString(shift.date)) {
+      rec.drop(shift.id, 'invalid_date', shift.date)
+      continue
+    }
     resolved.set(shift.id, { staff: staff.parent, pattern: pattern.parent })
 
     const key = `${shift.staff_id}:${shift.date}`
@@ -1040,6 +1044,10 @@ export function transformEvents(
       rec.drop(event.id, tenant.reason)
       continue
     }
+    if (!isDateString(event.date)) {
+      rec.drop(event.id, 'invalid_date', event.date)
+      continue
+    }
     const note = truncate(event.note ?? '', DATE_NOTE_MAX_LENGTH)
     if (note.value === '') {
       rec.drop(event.id, 'empty_note')
@@ -1111,6 +1119,10 @@ export function transformShares(
     }
     if (!SHARE_CODE.test(share.code)) {
       rec.drop(share.id, 'invalid_code')
+      continue
+    }
+    if (!isDateString(share.start_date) || !isDateString(share.end_date)) {
+      rec.drop(share.id, 'invalid_date', `${share.start_date}..${share.end_date}`)
       continue
     }
     if (share.end_date < share.start_date) {

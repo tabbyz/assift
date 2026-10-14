@@ -8,7 +8,7 @@
 > 番号: 013 / 014 の冒頭注記では移行を 015 / 016 に繰り下げていたが、015〜020 が別の用途に使われたので本プランを **021** とし、
 > カットオーバー（本番の構築・DNS・告知・当日の手順）は **022** にする。本プランはカットオーバーのうち「データを v2 に入れて確かめる」部分だけを扱う。
 
-**状態: 実装済み（§12 の 1〜5・7・8。2026-10-11）。本物のダンプでのリハーサル（§12-6・§9.1）と本番の予行（§9.3）は未実施。** 2026-10-10 に作成し、§13 の #1・2・3・6 を決め、レビューを 6 回行った。2026-10-11 に §3 の 6 点（#5）と変換を TS で書くこと（#9）を決め、全体をもう一度レビューした（7 回目。§14）うえで実装した（§15）。残りはリハーサルのダンプの時期（#7）と、リハーサルで確かめること（#4・#8）。
+**状態: 実装済み（§12 の 1〜5・7・8。2026-10-11）。本物のダンプでのリハーサルは restore とエクスポート（§9.1-1〜2。2026-10-13）まで済み。インポート以降（§12-6・§9.1-3〜5）と本番の予行（§9.3）は未実施。** 2026-10-10 に作成し、§13 の #1・2・3・6 を決め、レビューを 6 回行った。2026-10-11 に §3 の 6 点（#5）と変換を TS で書くこと（#9）を決め、全体をもう一度レビューした（7 回目。§14）うえで実装した（§15）。2026-10-13 にリハーサルのダンプを取った（#7。§15）。残りはリハーサルで確かめること（#4・#8）。
 
 ---
 
@@ -100,7 +100,7 @@ Heroku 本番 ──pg_dump──▶ 手元の v1（ローカル DB に restore�
 
 | ファイル | 元 | 列 |
 | --- | --- | --- |
-| `users.jsonl` | `users` | `id email encrypted_password password_is_email confirmed_at invitation_accepted_at invitation_token provider uid sign_in_count current_sign_in_at locked_at stripe_customer_id stripe_subscription_id trial_end max_staffs_count created_at updated_at`。`password_is_email` は `user.valid_password?(user.email)`（v1 の管理画面の「代理承認」が初期パスワードをメールにした人。§7.1。bcrypt の検証 1 回 ≈ 0.2 秒なので全員分で数分） |
+| `users.jsonl` | `users` | `id email encrypted_password password_is_email confirmed_at invitation_accepted_at invitation_token provider uid sign_in_count current_sign_in_at locked_at stripe_customer_id stripe_subscription_id trial_end max_staffs_count created_at updated_at`。`password_is_email` はパスワードがメールのままか（v1 の管理画面の「代理承認」が初期パスワードをメールにした人と、自分でメールにした人。§7.1）。照合するのは **v1 でログインできた人（`confirmed_at` か `sign_in_count > 0`）のうち店舗を持たない人だけ**で、それ以外は照合せず false（店舗を持つ人は `check_init_password!` が変えさせていた。移さない人の値は使わない）。bcrypt の検証は 1 回 ≈ 0.1 秒で、全員を照合すると 84,226 人で 2 時間 41 分かかった（§15。当初の「数分」は人数の見込み違い）。絞ると約 3,500 人で 6〜7 分 |
 | `tenants.jsonl` | `tenants` | `id uuid user_id name shift_cycle start_of_week created_at updated_at` |
 | `staffs.jsonl` | `staffs` | `id tenant_id name position disabled max_work_week available_wdays(配列) available_patterns(配列) default_patterns(Hash) created_at updated_at` |
 | `patterns.jsonl` | `patterns` | `id tenant_id name description color_hex kind pair_pattern_id position default_required_nums(Hash) created_at updated_at` |
@@ -119,7 +119,7 @@ Stripe の引き継ぎスクリプトの入力 `v1-subscriptions.csv` は rake �
   `default_required_nums` は **json 列に `serialize :default_required_nums, Hash`**（`app/models/pattern.rb`）なので、DB には YAML の文字列が JSON の文字列として入っている（二重エンコード。v1 分析 §2.2 の疑いは事実）。モデルの属性として読めば Hash に戻る。値は `to_i` されていないので `"2"` のような文字列が混じる（v2 の `parseRequiredNums()` が数値に寄せる）。念のため、読んだ値が `String` なら `YAML.safe_load(..., permitted_classes: [ActiveSupport::HashWithIndifferentAccess, Symbol])` でもう一段ほどき、`manifest.json` に「文字列だった件数」を出す
 - YAML 列が NULL のスタッフは、**モデルを通して読んだ値をそのまま書く** = `available_wdays` / `available_patterns` は `[]`、`default_patterns` は `{}`（**決定。2026-10-10**。§13-3）。
   v1 は `serialize :available_wdays, Array` で、Rails は NULL を `[]` として読む。画面の「担当可 / 不可」（`Staff#available_wday?`）・ポップオーバーの絞り込み・自動アサインはすべてモデル経由なので、v1 でも NULL と `[]` は区別されていない（= 全日「担当不可」）。rake に特別な読み替えは書かない。NULL の件数だけ manifest に出す（`available_wdays` / `available_patterns` は 2018-01 に足されたので 0 件のはず。`default_patterns` は 2019-11 なので NULL がありうる。§5.2-2）
-- `find_each`（1000 件ずつ）で書く。`shifts` は数十万〜数百万行を見込む（件数は §15 に書く）
+- `find_each`（1000 件ずつ）で書く。`shifts` は約 1,279 万行（2026-10-13 の件数。§15）
 - 個人情報を含むので、出力先はリポジトリの外（`~/v1-export/`）。`.gitignore` に `v1-export/` を足しておく
 
 ### 5.2 manifest に出す集計（v1 分析 §7.2 の「必ず確認すること」）
@@ -196,7 +196,7 @@ MIGRATION_DATABASE_URL=postgresql://... \
 | それ以外（招待未承認・未確認でログイン実績なし） | **移行しない**。招待未承認はパスワードが無い（001 §5.2）。未確認の人は Devise の confirmable が v1 でもログインを拒んでいる（`active_for_authentication?` が false）ので、店舗も作れていない。v2 で登録し直せば同じメールで新しく始められる。未確認の行を v2 に残すと、同じメールでの登録（GoTrue は既存の未確認ユーザーに確認メールを再送する）がパスワードを引き継ぐのか置き換えるのかが読みにくくなる |
 | 保険 | `import.ts` が、移行しないユーザーのうち**店舗（スタッフかシフトのあるもの）を持つ人**を `report.json` に出す。想定は 0 件。1 件でもあれば個別に見て、入れるなら `--overrides` の `forceMigrateUsers`（§6.1）で確認済みとして入れる（その人は v1 で使えていたはず） |
 | `encrypted_password`（Devise の bcrypt） | そのまま `encrypted_password` へ。v1 は **pepper なし・stretches 11・bcrypt 3.1.20**（`config/initializers/devise.rb`・`Gemfile.lock`）なので `$2a$11$…` の素の bcrypt で、GoTrue（Go の bcrypt）がそのまま検証できる。pepper があれば全員ログインできなくなるところだった。**リハーサルで実際にログインして確かめる**（§8.2-2・§9.1-4） |
-| `password_is_email = true`（代理承認の初期パスワード） | **Google の人でも最優先で** `encrypted_password = null`（パスワードではログインできない。「パスワードを忘れた方」で再設定してもらう）。v1 は**店舗を新しく作るときだけ**（`tenants_controller.rb` の `check_init_password!` は `only: [:new]`）`valid_password?(email)` を見て変更させていたので、既に店舗を持つ人は初期パスワードのまま使えていた。v2 にその仕組みは無く、残すとメールを知る人が誰でも入れる。件数を記録し（想定より多いかもしれない）、022 の案内の分量を決める。判定は今のメールと比べる。v1 にはメールを変える画面が無い（`users/registrations/edit` はメールを表示するだけ。Devise の `account_update` が `email` を受けるので手で組んだリクエストなら変えられた）ので、実質はこれで全員を拾える |
+| `password_is_email = true`（代理承認の初期パスワード） | **Google の人でも最優先で** `encrypted_password = null`（パスワードではログインできない。「パスワードを忘れた方」で再設定してもらう）。v1 は**店舗を新しく作るときだけ**（`tenants_controller.rb` の `check_init_password!` は `only: [:new]`）`valid_password?(email)` を見て変更させていた。店舗を作る入口は `/tenants/new` だけで、このチェックは承認機能と同じコミット（`46d38b2`、2019-03-30）で入ったので、**店舗を持つ人はメールのままにならない**（承認の対象は未確認 = ログインできなかった人で、承認の前に店舗は持てない）。残るのは店舗を持たない人で、v1 では何もできないが、v2 にその仕組みは無く、残すとメールを知る人が誰でも入れる（本人が v2 で店舗を作ればその店舗も）。リハーサル（2026-10-13）では全員を照合して 3 人（代理承認 1・自分でメールにした人 2。3 人とも店舗なし）で、rake の照合を「ログインできた人のうち店舗を持たない人」に絞った（§5.1・§15）。件数を記録し（想定より多いかもしれない）、022 の案内の分量を決める。判定は今のメールと比べる。v1 にはメールを変える画面が無い（`users/registrations/edit` はメールを表示するだけ。Devise の `account_update` が `email` を受けるので手で組んだリクエストなら変えられた）ので、実質はこれで全員を拾える |
 | `encrypted_password = ''`（v1 の既定値）で移行対象の人 | 理屈上いない（§7.1 の条件はログインできた人）が、いれば `null` にして記録 |
 | `provider = 'google_oauth2'`（`uid` の有無を問わず） | **「それ以外」と同じ email のアカウントとして入れる**（`providers = ["email"]`・`email` の identity だけ。**決定。2026-10-11**）。`encrypted_password` は**そのまま残す**（`password_is_email` なら null）。**v1 は Google ログインが壊れていた**（`users/sessions/new.html.slim` がボタンに取り消し線を引き「現在、Google ログインできない問題が発生しています」と出している。v1 分析 §2.2）ので、この人たちは「パスワードを忘れた方」で自分のパスワードを作って入っている（Devise の recoverable は provider を見ない）。null にすると初日から締め出す。`from_omniauth` が入れた乱数の bcrypt が残っている人は誰もそれで入れないので、残しても害が無い。§5.2-11 で最近ログインしている人数を見る。v2 で初めて Google ログインしたとき、GoTrue が**確認済みの同じメール**のユーザーに `google` の identity を自動で結び付ける（supabase/auth の `DetermineAccountLinking`: sub の identity が無ければ、provider が verified と返したメールと同じメールの identity / ユーザーを探し、1 人に決まれば link）。v1 にメールを変える画面は無いので Google 側と assift のメールは同じ。当初（〜7 回目のレビュー）は v1 の `uid` から `google` の identity を先に作る案だったが、利点が「Google 側のメールが後で変わった人」だけで、`auth.identities` の行を自分で組む複雑さに見合わないのでやめた |
 | `uid` | 使わない（上のとおり identity は作らない）。`manifest.json` の件数（§5.2-6・11）に残るだけ |
@@ -264,6 +264,7 @@ Customer を失った側に `stripe_subscription_id` があれば、その人は
 | `staff_id` が存在しない（FK 無し） | 捨てて記録 |
 | `pattern_id` が null・存在しない | 捨てて記録（v1 は FK と `dependent: :destroy` があるので 0 件のはず） |
 | スタッフの店舗 ≠ パターンの店舗 | 捨てて記録 |
+| `date` が `YYYY-MM-DD` の実在する日付でない（西暦 5 桁など） | 捨てて記録（`invalid_date`）。v1 の date 列は西暦 5 桁も受け、リハーサルで `20223-03-11` が実在した（§15）。`events` / `shares` も同じ |
 | `(staff_id, date)` の重複 | `updated_at` が最新の 1 件（同時刻なら id が大きいほう）を残し、残りを捨てて記録 |
 | `tenant_id` | スタッフの店舗 |
 | `fixed` | そのまま。`assist_token` は捨てる。`assist_run_id` は null |
@@ -300,6 +301,7 @@ Customer を失った側に `stripe_subscription_id` があれば、その人は
 | --- | --- |
 | `note` | trim → 12 文字。空は捨てる（v1 は「空で保存 = 削除」だが行が残っていることがある） |
 | `(tenant_id, date)` の重複 | `updated_at` が最新の 1 件（同時刻なら id が大きいほう。§7.6 と同じ） |
+| `date` が実在する日付でない | 捨てて記録（`invalid_date`。§7.6 と同じ） |
 
 ### 7.10 shares
 
@@ -308,6 +310,7 @@ Customer を失った側に `stripe_subscription_id` があれば、その人は
 | `code` | そのまま（`^[A-Za-z0-9]{8}$` に合わなければ捨てて記録。配った URL が壊れるので 0 件のはず）。v1 に一意制約が無い（作成時に照合するだけ）ので、重複があれば `created_at` が新しい 1 件（同時刻なら id が大きいほう）を残して捨てて記録 |
 | `end_date - start_date > 31` | `end_date = start_date + 31` にして記録（v1 は 30 日に切っていたが、CHECK は 31 なので CHECK に合わせる） |
 | `end_date < start_date` | 捨てて記録 |
+| `start_date` / `end_date` が実在する日付でない | 捨てて記録（`invalid_date`。§7.6 と同じ） |
 | 期限切れの共有 | **入れる**（v1 の一覧にも「期限切れ」として出る。009） |
 
 ### 7.11 `staff_count_history`（019 §8.1）
@@ -443,7 +446,7 @@ docs/plans/019-…/README.md       §8.1 の「session_replication_role = replic
 | 4 | 本番の `postgres` ロールで `auth.users` への INSERT と `disable trigger` ができるか | **9.3 で確かめる**。`public` の表は migration を流した `postgres` が所有者なので `disable trigger` はできるはず（できなければ 3 つとも代替が無い。`set_updated_at` は BEFORE UPDATE で毎回 `now()` にするので後から直せない）。止められることを §9.3 の必須条件にする。`auth.users` への INSERT ができなければ `supabase_auth_admin` 相当の権限を一時的に付ける |
 | 5 | §3 の 6 点（1 トランザクション・トリガ 3 つ・`is_admin`・必要人数の間引き・`assist_run_id`・名前空間） | §3-1〜§3-5 は **決定（2026-10-11）**、§3-6 は #2 で決定済み |
 | 6 | ダンプ・エクスポート・レポートの保管期間 | **決定（2026-10-10）**: pg_dump と JSONL は 3 か月、manifest / report / Stripe の結果 CSV / `usage_records` の CSV は 1 年（§10-8）。当初の案（全部 1 年）は、フルのダンプの価値が数週間で尽きる一方で負債が 1 年残るのでやめた |
-| 7 | リハーサルのダンプをいつ取るか | **未確定**。実装の 6（§12）の前。古いダンプでよい |
+| 7 | リハーサルのダンプをいつ取るか | **決定（2026-10-13）**: Heroku の手動バックアップ `b2818`（2026-10-13 13:27 JST に capture）を使う。件数と所要時間は §15 |
 | 8 | 書き込みが遅い・メモリが足りないときの対処 | 9.1 の所要時間と RSS で判断。目安: インポート全体が 10 分を超えるなら `COPY` に切り替える。ヒープが足りなければ `--max-old-space-size` |
 | 10 | Google の人（`provider = 'google_oauth2'`）の identity を v1 の `uid` から先に作るか | **決定（2026-10-11）: 作らない**。全員 email のアカウントとして入れ、Google ログインは GoTrue の自動リンク（確認済みの同じメール）に任せる。先に作る利点は「Google 側のメールが後で変わった人」だけ（v1 にメールを変える画面は無い）で、`auth.identities` を自分で組む複雑さに見合わない（§7.1） |
 | 9 | 変換を TypeScript で書くか SQL で書くか（`pg_restore` で `v1` スキーマに入れて `INSERT … SELECT`） | **決定（2026-10-11）: TypeScript**。SQL でも成立する（速く部品が少ない）が、YAML の列は SQL で読めず Ruby の工程が消えないこと、uuid の導出・祝日・必要人数の数値化をアプリの関数と共有できること、Vitest で規則を固定できることを優先した |
@@ -634,7 +637,7 @@ docs/plans/019-…/README.md       §8.1 の「session_replication_role = replic
 | 6 | 低: §8.1 の「切り詰めた値の件数（列ごと）」が理由別にしか無かった | `report.truncated`（`table.column` → 件数）を足した |
 | 7 | 低: 管理用アカウントのメールが v1 のユーザーと重なると一意制約で全体が戻る | §9.3 の確かめることに足した |
 | 8 | 低: 移行しない人の Stripe 用 CSV のメールが小文字化されていない | 揃えた |
-| 9 | 低（受け入れ）: `shifts` / `events` / `shares` の日付が西暦 3 桁以下・5 桁だと Zod が止める（`required_nums` だけ捨てる規則） | v1 の画面から入ることは実質無いので止まる挙動のまま |
+| 9 | 低（受け入れ）: `shifts` / `events` / `shares` の日付が西暦 3 桁以下・5 桁だと Zod が止める（`required_nums` だけ捨てる規則） | v1 の画面から入ることは実質無いので止まる挙動のまま。**リハーサルで実在した（`shifts` に西暦 5 桁）ので、2026-10-13 に捨てて記録する形に直した**（§7.6・§15） |
 
 2 回目（rake と TS のデータの契約 / 移行後の行がアプリでどう振る舞うか）:
 
@@ -656,5 +659,234 @@ docs/plans/019-…/README.md       §8.1 の「session_replication_role = replic
 
 #### 未実施（次にやること）
 
-- **§12-6**: Heroku のダンプを取って手元の v1 に restore し、`rails v2:export` → `npm run migrate:v1` → `verify.ts` → §8.2 の 1〜10。件数・所要時間・RSS をここに記録する。rake は本物の v1 で初めて動かすので、YAML 列（`hash_or_empty` / `raw_json_type`）の読み方で直すものが出るかもしれない（§9.2: 直すのは YAML の読み方だけ）
+- **§12-6**: Heroku のダンプを取って（2026-10-13 に取得。下の節）手元の v1 に restore し、`rails v2:export` → `npm run migrate:v1` → `verify.ts` → §8.2 の 1〜10。件数・所要時間・RSS をここに記録する。rake は本物の v1 で初めて動かすので、YAML 列（`hash_or_empty` / `raw_json_type`）の読み方で直すものが出るかもしれない（§9.2: 直すのは YAML の読み方だけ）
 - **§9.3**: 本番の Supabase に対する `--rollback`（`postgres` ロールで `auth.users` に INSERT できるか・`disable trigger` できるか・Session pooler の SSL）
+
+### 2026-10-13（§9.1-1。リハーサルのダンプ）
+
+利用者が手元の PC で取った。既存の自動バックアップではなく、当日（§10-2）と同じ `heroku pg:backups:capture` → `download` で取り、当日の所要時間の目安を兼ねた。
+
+| 項目 | 値 |
+| --- | --- |
+| Heroku | アプリ `assift` / Heroku Postgres Standard 0 / **PG 16.14** / Data Size 3.41 GB（`heroku pg:info`）。restore は Postgres 16 で行う（§9.1-2） |
+| バックアップ | `b2818`（手動）。開始 2026-10-13 04:27:56 UTC（13:27:56 JST）、完了 04:28:48 UTC（13:28:48 JST）。**capture は 52 秒** |
+| ダンプ | 265.49 MB。**download は 1〜2 分** |
+| rake の `dumped_at` | `2026-10-13T13:27:56+09:00`（`heroku pg:backups` の Created at。§5.1 の Started と同じ値のはず） |
+| 保管 | 利用者の手元の PC。FileVault（ディスク全体の暗号化）で守る（§10-8 の「暗号化して 1 か所に置く」をこれで満たす。PC の外へ写すとき（バックアップ・クラウドの同期フォルダ）はファイル自体を暗号化する）。消す日: カットオーバーのダンプを取った時点（リハーサルの役目を終えるため） |
+
+件数（13:36 JST に `heroku pg:psql` で `count(*)`。ダンプの約 8 分後なので、その間の v1 の書き込みの分だけダンプと違う。ダンプの正確な件数は rake の `manifest.json` で取る）:
+
+| 表 | 件数 |
+| --- | ---: |
+| `users` | 84,228 |
+| `tenants` | 27,610 |
+| `staffs` | 160,277 |
+| `patterns` | 167,256 |
+| `shifts` | 12,790,920 |
+| `required_nums` | 2,517,661 |
+| `restrictions` | 10,145 |
+| `events` | 157,027 |
+| `shares` | 57,978 |
+| `usage_records` | 2,721 |
+
+#### 件数から分かること（restore 以降のリハーサルで確かめる）
+
+- `shifts` は約 1,279 万行で、§5.1 で見込んでいた「数十万〜数百万」より 1 桁多い。`required_nums` も約 252 万行ある
+- `import.ts` は変換のために全行をメモリに載せる（§9.1-5）。この行数では Node の既定のヒープで足りない見込みが高いので、最初から `--max-old-space-size` を付けて RSS を測る
+- 1000 行ずつの INSERT は `shifts` だけで約 1.28 万回になる。§13-8 の目安（インポート全体が 10 分を超えたら `COPY`）に掛かりやすい。手元で測り、Session pooler 越しの往復（§9.3）を足して判断する
+- rake の `find_each` も `shifts` だけで約 1.28 万回のクエリになる。エクスポートの所要時間と JSONL の大きさ（`shifts.jsonl` だけで GB 単位の見込み）も記録する
+
+#### 022 への申し送り
+
+- Heroku Postgres のメンテナンス（DB の載せ替え）が 2026-10-17 18:00 UTC（10/18（日）03:00 JST）に予定されている（期限 11-05）。メンテナンスの時間帯は毎週 土曜 18:00〜22:00 UTC（日曜 03:00〜07:00 JST）なので、カットオーバーを重ねない
+- 自動バックアップが毎日 17:00 UTC（02:00 JST）ごろに走る（約 50 秒）。当日の capture と重ねない
+- 当日の §10-2 の目安: capture 約 1 分、download 1〜2 分（265 MB）
+- Heroku には 2019〜2025 年の手動バックアップが 8 件残っている（`b093`〜`b2287`。個人情報を含む）。§10-8 の保管の決まりの外にあるので、Heroku を止めるときにアドオンごと消すかを決める
+- 手元の Heroku CLI が 7.68.2（11.10.0 が出ている）。今回は動いた
+
+#### 次にやること
+
+- 手元に Postgres 16 を用意して `b2818` を restore → `rails v2:export[<out>,2026-10-13T13:27:56+09:00]` → 以降は 2026-10-11 の「未実施」の §12-6 のとおり
+
+### 2026-10-13（§9.1-2。restore とエクスポート）
+
+利用者が手元の Mac（メモリ 24 GB）で行った。
+
+#### restore
+
+| 項目 | 値 |
+| --- | --- |
+| Postgres | Postgres.app 2.9.6 の **PostgreSQL 16.15**（port 5433。既存の PG 15 の 5432 と同居）。Postgres.app は「all currently supported versions」の配布物を入れる（PG 18 だけの配布物で置き換えると、既存の PG 15 のサーバーが「version not installed」で起動しなくなる。データは残っていて、版を戻せば起動した） |
+| コマンド | `createdb -p 5433 assift_v1_rehearsal` → `pg_restore -p 5433 -d assift_v1_rehearsal --no-owner --no-acl -j 4 <dump>` → `vacuumdb -p 5433 --analyze-only` |
+| 所要 | **1 分 17 秒** |
+| エラー | `errors ignored on restore: 2`。どちらも `pg_stat_statements`（Heroku の `heroku_ext` スキーマに置かれた監視用の拡張）で、v1 の表とは無関係 |
+| 件数 | `users` 84,226 / `tenants` 27,609 / `staffs` 160,272 / `patterns` 167,253 / `shifts` 12,790,904 / `required_nums` 2,517,661 / `restrictions` 10,145 / `events` 157,025 / `shares` 57,978 / `usage_records` 2,721。13:36 に Heroku で数えた値（上の節）と同じか少し少ない（差は最大で `shifts` の 16 件。ダンプ後 8 分の書き込み） |
+
+#### v1 をつなぐ
+
+- v1 は `master`（`a8bb5ad`）。本番の最後のデプロイ（Heroku `v215`、2025-11-14）と同じコミット
+- `DATABASE_URL` にユーザー名を入れる（`postgres://$(whoami)@localhost:5433/assift_v1_rehearsal`）。v1 の `config/database.yml` の development が `username: rails_user` を持っていて、URL に無いとそれが使われる
+- `STRIPE_SECRET_KEY` にダミーの値を入れる（`config/initializers/stripe.rb` が起動時に `ENV.fetch` する。エクスポートは Stripe を呼ばない。本番のキーは入れない）。起動に必須の環境変数はこれだけ
+- `rails_env` は `development`（manifest に残る）
+- §8.2-2 のログインの確認用に 2 人を決めた: 利用者本人のアカウント（Google の人。本物のハッシュのまま、本人のパスワードで確かめる）と、Google でない人 1 人（戻した DB でだけ既知のパスワードに置き換えた）。id は利用者の手元に控える
+- 戻した DB は、ダンプと同じくカットオーバーのダンプを取った時点で消す（`dropdb -p 5433 assift_v1_rehearsal`）
+
+#### エクスポート（`rails v2:export`。照合を絞る前の rake）
+
+開始 16:55:33（`exported_at`）、所要 **10,064 秒（2 時間 48 分）**、最大 RSS **495 MB**。各ファイルの更新時刻からの内訳:
+
+| 段 | 所要 |
+| --- | ---: |
+| `users`（全員の bcrypt の照合） | **2 時間 41 分** |
+| `tenants` / `staffs` / `patterns` | 32 秒 |
+| `shifts`（1,279 万行） | 5 分 10 秒 |
+| `required_nums` 〜 `usage_records` | 46 秒 |
+| 集計 → `manifest.json` | 3 秒 |
+
+ファイルの大きさ: `shifts.jsonl` 2.0 GB / `required_nums.jsonl` 149 MB / `staffs.jsonl` 56 MB / `patterns.jsonl` 50 MB / `users.jsonl` 46 MB / ほか合わせて約 2.4 GB。件数は 10 表とも restore した DB と一致。
+
+manifest の要点（§5.2）:
+
+| 集計 | 値 | 扱い |
+| --- | ---: | --- |
+| 未確認（すべて招待未承認） | 55,216 | 移さない（§7.1）。移すのは 29,010 人 |
+| Google の人 / うち 90 日以内にログイン | 8,707 / 439 | email のアカウントとして入れる（§7.1） |
+| `default_required_nums` が文字列（二重エンコード） | 142,736（Hash は 24,517） | §5.1 の想定どおり。rake がほどく |
+| ペアが自分自身を指す | 390 | §7.4 |
+| スタッフの YAML 列が NULL（`available_wdays` / `available_patterns` / `default_patterns`） | 567 / 596 / 27,978 | 前 2 つは 0 件の見込みだったがあった。v1 と同じく `[]` / `{}` で入る（§13-3 のまま） |
+| 存在しないスタッフを指す `shifts` | **1,291,327**（約 1 割） | 捨てる（§7.6）。v1 の画面にも出ていない行 |
+| `(staff_id, date)` の重複 | 3,769 組 | 新しいほうを残す（§7.6） |
+| 文字数の超過（店舗名 / スタッフ名 / パターン名 / 説明 / メモ） | 3 / 24 / 127 / 247 / 0 | 切り詰める（003 §3.10）。少ないので CHECK は緩めない |
+| スタッフ 0 人でデータのある店舗 | 1,845 | 準備中になる（§7.2）。022 の告知で触れるかを決める |
+| `stripe_customer_id` の共有 / `max_staffs_count > 1000` / 空のパスワード / 親の id が NULL / `restrictions` の欠け / `shares.code` の重複 / 22 文字でない `tenants.uuid` | すべて 0 | — |
+
+#### `password_is_email` の照合を絞った
+
+全員（84,226 人）を照合した結果は **3 人**で、3 人とも店舗を持たない:
+
+| 区分 | 人数 | 記録の形 |
+| --- | ---: | --- |
+| 管理者の承認（2019-04。承認機能が入った直後） | 1 | `invitation_created_at` = 承認の時刻、`invitation_sent_at` = 最初の登録のまま、`invitation_accepted_at` が同じ秒。ログインなし |
+| 本人が自分でパスワードをメールにした | 2 | ふつうの登録（`invitation_sent_at` = `invitation_created_at`、数分後に本人が承認）。ログインは 0 回と 1 回 |
+
+- 承認機能は v1 の管理画面のユーザー一覧の「招待」リンク（`Admin::UsersController#accept_invitation`。`password = email`）。利用者は機能を認識しておらず、承認の記録の形をした人は移す人の中で 4 人（3 人は店舗を作るときにパスワードを変えていた）
+- 案 B（記録の形から承認された人だけを照合）は、自分でメールにした 2 人を取りこぼすのでやめた
+- **案 A を採った**: 照合は「v1 でログインできた人（`confirmed_at` か `sign_in_count > 0`）のうち店舗を持たない人」（3,466 人）だけ。それ以外は照合せず false。根拠は v1 の `check_init_password!`（§7.1）と、全員を照合したこの結果（3 人とも範囲の内側）。見込みは 6〜7 分で、エクスポート全体は約 13 分
+- rake が「移す人」の条件を持つことになるが、照合を省くためだけで、照合しなかった人の値はインポートで使わない（移す / 移さないの判断は TS のまま）
+- manifest に照合した人数（`users.password_is_email_checked`）を出す。2026-10-14 に本物の v1 で流し直して確かめた（下の「エクスポート 2 回目」）
+
+#### 次にやること
+
+- 手元の v2 を最新の `main` にして `npm ci`（利用者の clone は 10/05 のままだった）→ `npx supabase start` → `npx supabase db reset` → `NODE_OPTIONS=--max-old-space-size=16384`（24 GB の Mac）で `npm run migrate:v1 -- --input ~/v1-export/20261013-1655 --allow-existing`。所要時間と RSS を記録し、§13-8（10 分を超えたら `COPY`）を判断する
+- `verify.ts` → §8.2 の 1〜10
+- 直した rake でエクスポートを流し直し、照合の人数と所要時間を確かめる（インポートの検証と並行してよい）
+
+#### インポート 1 回目（2026-10-13。読み込みで停止）
+
+`npm run migrate:v1 -- --input ~/v1-export/20261013-1655 --allow-existing` が、読み込みの 18 秒目（`shifts.jsonl` の 4,324,771 行目。そこまでの最大 RSS 1.26 GB）で止まった:
+`date YYYY-MM-DD の実在する日付ではありません`（`"date":"20223-03-11"`。2023-03-08 に作られた行）。
+
+- v1 の date 列（Postgres の `date`）は西暦 5 桁も受ける。v1 の画面からは入らないはずだが、実在した（レビュー 2 周目の #9 で「止まる挙動のまま」と受け入れていた箇所）
+- 直したこと: `shifts.date` / `events.date` / `shares.start_date`・`end_date` の Zod を「文字列なら受ける」にし、変換が `isDateString()` で見て `invalid_date` で捨てて記録する（`required_nums` と同じ規則。§7.6・§7.9・§7.10）。西暦 5 桁の日付は v1 の表にも出ていない行なので、見え方は変わらない
+- Vitest（移行 88 件・全体 916 件）と `npm run typecheck` が通る
+
+#### インポート 2 回目（2026-10-13。変換で停止）
+
+読み込みは通り、変換で `Maximum call stack size exceeded`（開始から 139 秒、最大 RSS 6.4 GB）。
+
+- 原因: `convert.ts` が表ごとの捨てた行を `dropped.push(...r.dropped)` で集めていた。スプレッドは要素を引数に積むので、`shifts` の 129 万件（消えたスタッフのシフト）で V8 の引数の上限を超える。fixtures（70 行）では起きない
+- 直したこと: `for … of` で 1 件ずつ積む。あわせて `report.json` で id を並べない理由に `shifts` の `parent_missing` / `parent_dropped` を足した（129 万件の id は調べる役に立たず、report が数十 MB になる。件数は `source.shifts.dropped` に残る）
+- 確かめ方: fixtures に合成の行（消えたスタッフのシフト 150 万・重複 100 万・必要人数 250 万）を足して `convertExport()` を通し、31 秒・RSS 1.3 GB で通ることを確かめた（クラウドのセッション）
+
+#### インポート 3 回目（2026-10-13。COMMIT）
+
+ローカル Supabase（seed あり。`--allow-existing`）、`NODE_OPTIONS=--max-old-space-size=16384`。**§8.1 の突合 20 件がすべて OK で COMMIT**。
+
+| 項目 | 値 |
+| --- | --- |
+| 所要 | **1,025 秒（17 分）**。CPU は 219 秒で、残りは書き込みの待ち |
+| 最大 RSS | **7.4 GB**（読み込みの終わりで 6.4 GB） |
+| Stripe 用 CSV | 989 件（移行しない人の Subscription は 0 件） |
+| `verify.ts` | 43 件すべて一致（0.9 秒） |
+
+テーブルごと（`report.json` の `source`）:
+
+| 表 | 読んだ | 入れた | 捨てた（理由） | 直した（理由） |
+| --- | ---: | ---: | --- | --- |
+| `users` | 84,226 | 29,010 | 移さない 55,216 | `password_is_email` 3 |
+| `tenants` | 27,609 | 27,609 | — | 切り詰め 3 |
+| `staffs` | 160,272 | 160,272 | — | 消えた / 他店舗のパターンを外した: 担当できる 39,548・デフォルト 2,793 / 切り詰め 23 |
+| `patterns` | 167,253 | 167,253 | — | 切り詰め 374（名前 127・説明 247）/ ペア 390 |
+| `shifts` | 12,790,904 | 11,496,340 | 消えたスタッフ 1,291,327 / 重複 2,907 / **壊れた日付 329** / 店舗の不一致 1 | — |
+| `required_nums` | 2,517,661 | 358,507 | 焼き付け 2,094,491 / 休みのパターン 64,652 / 壊れた日付 11 | — |
+| `restrictions` | 10,145 | 10,144 | 列の欠け 1 | — |
+| `events` → `date_notes` | 157,025 | 157,025 | — | — |
+| `shares` | 57,978 | 57,978 | — | — |
+
+その他（§8.1 の「報告する」）:
+
+- 移行しないのに店舗を持つ人 0 / `staff_cap` を 1000 で切った人 0 / 個別契約で 1000 超 0
+- 準備中の店舗 3,868（うちデータのある店舗 1,845）
+- 上限超過: v1 の `over_limit?` 644 人（全員 Subscription なし）。v2 で無料の上限（10 人）を超える人 1,039 人のうち 395 人は上限 11 人以上の Subscription があり `staff_cap` が入る。残り 644 人は v1 の上限超過と同じ人数で、v1 でもシフト表にロックの画面（`shifts/index.html.slim` の `lock_panel`）が出ていた。**移行で新たにロックされる人はいない見込み**（395 人の Subscription が Stripe の引き継ぎ（§10-5）の後も有効であることが条件。§9.3 と当日の dry-run で確かめる）
+- 切り詰めの件数は manifest の目安（§5.2-7）とほぼ同じ（スタッフ名だけ 24 → 23。空白の扱いの差）
+- **所要は §13-8 の目安（10 分）を超えた**。本番は Session pooler 越しでさらに遅くなる見込み。`COPY` に替えるかは §9.3（本番の予行）で測ってから決める。当日の見込みは capture 1 分 + download 2 分 + restore 1 分 + エクスポート約 13 分（照合を絞った rake）+ インポート 17 分以上 + 検証
+
+#### 画面での確認（§8.2。v2 だけで確かめられる分。2026-10-14）
+
+`npm run dev`（ローカル Supabase）で確かめた。
+
+| # | 確認 | 結果 |
+| --- | --- | --- |
+| 2 | v1 のパスワードでログイン（Google でない人。戻した DB で Devise の `Devise::Encryptor.digest` で入れ直したパスワード） | OK |
+| 2 | ハッシュの形 | `users.jsonl` の 84,226 人すべてが `$2a$11`。1 人で全員分の確認になる。利用者本人（Google の人）は本番のパスワードを失念していたので、本物のハッシュでのログインはこの形の一致で代えた |
+| 3 | 旧 URL（`/tenants/<22 文字>/shifts?start_date=…`）が 308 で `/tenants/<uuid>?start=…` | OK |
+| 4 | 共有 URL が v1 と同じ表を出す | OK（`SEEDSHR1` は v2 の seed で、v1 では 404 が正しい。抽出の SQL は `code not like 'SEED%'` で seed を除く） |
+| 7 | スタッフのいる店舗が `/setup` に送られない | OK |
+| 8 | Google の人の `auth.identities` が `email` の 1 行、`providers = ["email"]`、パスワードが残る | OK（DB の形。実際の Google ログインは 022） |
+| 8b | パスワードが null の人（`password_is_email`）のログインが「メールアドレスまたはパスワードが違います」で止まる | OK |
+| 9 | 課金の列（Subscription あり・上限 15・在籍 9 の人）: `stripe_customer_id` あり / `trial_end` 一致 / `staff_cap = 15`（上限と在籍の大きいほう）/ `max_staffs_count` null / 履歴 1 行 | OK |
+| 10 | 制約の画面が v1 と同じ行 | OK |
+
+残り: §8.2-5（CSV の `diff`）と §8.2-6（必要人数）。手元で v1 を戻した DB につないで起動し（`rails s -p 3001`）、5 店（スタッフの多い店・ペア・退職者・半月表示・上書きの多い店）で 2026-09-01 からの CSV を比べる
+
+#### CSV と必要人数（§8.2-5・6。2026-10-14）
+
+手元で v1 を戻した DB につないで起動し（`rails s -p 3001`。`DATABASE_URL` と `STRIPE_SECRET_KEY` を export した同じターミナルで。別のターミナルだと開発用 DB を見る）、5 店の持ち主のパスワードを両方の DB で既知の値に置き換えて、2026-09-01 からの CSV（`encoding=utf8`）を比べた。比べる前に BOM と CRLF を落とす。
+
+| 店 | 選び方 | CSV の差 |
+| --- | --- | --- |
+| スタッフの多い店（63 人） | 9 月にシフトのあるスタッフが最多 | 空欄の書き方だけ |
+| ペアのある店 | ペアを持つパターンのシフトが最多 | 空欄の書き方だけ |
+| 退職者のいる店 | 退職したスタッフの 9 月のシフトが最多 | 空欄の書き方だけ（v1 と同じく在籍だけが並ぶ） |
+| 半月表示の店 | `shift_cycle = half_month` | 空欄の書き方 + スタッフ名の末尾の半角空白 1 件 |
+| 必要人数の上書きが多い店 | v2 の `required_nums`（上書き）が 9 月に最多 | 空欄の書き方 + パターン名の末尾の全角空白（「有休　」→「有休」） |
+
+- **シフト・ペア・退職者・期間の区切り（月 / 半月）・日付メモは 5 店とも一致**
+- 差 1: 左上とメモ行の先頭の空欄が、v1 は `""`（Ruby の CSV は空文字列を引用する）、v2 は空。表計算ソフトでは同じ空のセル。v2 は直さない
+- 差 2: 名前の前後の空白を移行で落としている（003 §3.10 の trim。JS の `trim()` は全角空白も落とす）
+- 必要人数（§8.2-6）: 上書きの多い店の 9/1 の 20 パターンで、v1 の「必要人数」と v2 の表示が全部一致。v2 では基本の人数と同じ値は基本（灰色）として出て、違う値（基本 0 → 2・1、基本 1 → 0 の 6 パターン）だけが上書きとして残っていた。§7.7 の焼き付けの間引きが表示を変えていない
+- 手元の v2 では有料プランの人も上限超過のモーダルが出る。`billing_subscriptions` が Stripe の同期（§10-6）まで空で、`private.staff_limit()` が無料扱いにするため。本番では同期の後に外れる（CSV の出力は上限を見ないので比べ方には影響しない）
+
+**§8.2 は、実際の Google ログイン（022）を除いてすべて確かめた。**
+
+#### 残り（2026-10-14 時点）
+
+- §9.3: 本番の Supabase に対する `--rollback`。Session pooler 越しの所要を測り、§13-8（`COPY` に替えるか）を決める
+- 片付け: 手元の v1 の `rails s` を止め、`DATABASE_URL` / `STRIPE_SECRET_KEY` を `unset`。戻した DB（パスワードを置き換えた 7 人を含む）はダンプと同じくカットオーバーのダンプを取った時点で消す
+
+#### エクスポート 2 回目（照合を絞った rake。2026-10-14）
+
+同じ戻した DB に対して、照合を絞った rake（`ecfc533`）で流し直した（出力は別のフォルダ）。**所要 817 秒（13 分 37 秒）、最大 RSS 462 MB**（1 回目は 2 時間 48 分）。
+
+| 段 | 所要（ファイルの更新時刻から） |
+| --- | ---: |
+| `users`（3,466 人の照合） | 約 7 分 |
+| `tenants` / `staffs` / `patterns` | 32 秒 |
+| `shifts` | 5 分 11 秒 |
+| `required_nums` 〜 `usage_records` | 45 秒 |
+| 集計 → `manifest.json` | 3 秒 |
+
+- `password_is_email_checked = 3466`・`password_is_email = 3`。見つかった 3 人は全員を照合した 1 回目と同じ id
+- `users` 以外の 9 ファイルは 1 回目と 1 バイトも違わない（`cmp`）
+- `users.jsonl` の差は 5 行だけで、CSV の比較のために 1 回目の後でパスワードを置き換えた 5 人（§8.2-5）。照合の結果（`password_is_email`）の差は無い
+- 当日のエクスポートの見込みは約 14 分

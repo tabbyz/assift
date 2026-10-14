@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import { isDateString } from '@/lib/calendar/dateString'
 
 /**
  * v1 のエクスポート（`scripts/migrate-v1/v1/v2_export.rake`）が書く JSONL の 1 行の形（021 §5.1・§6.2）。
@@ -22,10 +21,12 @@ const id = z.int().positive()
  */
 const parentId = z.int().nullable()
 
-const dateString = z
-  .string()
-  .refine(isDateString, { error: 'YYYY-MM-DD の実在する日付ではありません' })
-/** `date` が NULL の列（`required_nums.date`）は、形が壊れていても止めずに変換で捨てる（§7.7） */
+/**
+ * 日付の列は形が壊れていても止めずに読み、変換が `invalid_date` で捨てる（§7.6〜§7.10）。
+ * v1 の date 列は西暦 5 桁も受ける（リハーサルで `shifts.date = 20223-03-11` があった。2026-10-13。§15）
+ */
+const dateLoose = z.string()
+/** `date` が NULL の列（`required_nums.date`） */
 const dateOrInvalid = z.string().nullable()
 const timestamp = z.iso.datetime({ error: 'ISO 8601（UTC）の時刻ではありません' })
 const timestampOrNull = timestamp.nullable()
@@ -95,7 +96,7 @@ export const v1PatternSchema = z.object({
 
 export const v1ShiftSchema = z.object({
   id,
-  date: dateString,
+  date: dateLoose,
   pattern_id: parentId,
   /** NULL は自動アサインの一時 Task（§7.6） */
   staff_id: parentId,
@@ -127,7 +128,7 @@ export const v1RestrictionSchema = z.object({
 export const v1EventSchema = z.object({
   id,
   tenant_id: parentId,
-  date: dateString,
+  date: dateLoose,
   note: z.string().nullable(),
   created_at: timestamp,
   updated_at: timestamp,
@@ -137,8 +138,8 @@ export const v1ShareSchema = z.object({
   id,
   tenant_id: parentId,
   code: z.string(),
-  start_date: dateString,
-  end_date: dateString,
+  start_date: dateLoose,
+  end_date: dateLoose,
   created_at: timestamp,
 })
 

@@ -14,6 +14,7 @@
 require 'json'
 require 'csv'
 require 'yaml'
+require 'set'
 
 namespace :v2 do
   desc 'v2 へのエクスポート（JSONL + manifest + usage_records.csv）'
@@ -99,10 +100,18 @@ class V2Exporter
 
   def export_users
     password_is_email = 0
+    checked = 0
+    # 照合するのは「v1 でログインできた人（§7.1 の移す人）のうち、店舗を持たない人」だけ（§5.1）。
+    # 店舗を作る唯一の入口 `/tenants/new` が `check_init_password!` でメールのままのパスワードを変えさせていた
+    # （承認機能と同じ 2019-03-30 から）ので、店舗を持つ人はメールのままにならない。移さない人の値はインポートで使わない。
+    # 全員を照合したリハーサル（2026-10-13。84,226 人で 2 時間 41 分）の 3 人と、この絞り込みの 3 人は一致した（§15）
+    tenant_owner_ids = Tenant.unscoped.distinct.pluck(:user_id).to_set
     jsonl('users', User.unscoped) do |u|
-      # 代理承認の初期パスワード（メール）のままの人（§7.1）。bcrypt の検証 1 回 ≈ 0.2 秒。
+      # パスワードがメールのままの人（代理承認の初期パスワードと、自分でメールにした人。§7.1）。bcrypt の検証 1 回 ≈ 0.1 秒。
       # bcrypt の形でないハッシュ（Devise 以外が書いた値）は false にして件数だけ出す（1 行で全体を止めない）
-      is_email = password_is_email?(u)
+      check = (u.confirmed_at.present? || u.sign_in_count.to_i.positive?) && !tenant_owner_ids.include?(u.id)
+      checked += 1 if check
+      is_email = check && password_is_email?(u)
       password_is_email += 1 if is_email
       {
         id: u.id,
@@ -126,6 +135,7 @@ class V2Exporter
       }
     end
     @stats[:users][:password_is_email] = password_is_email
+    @stats[:users][:password_is_email_checked] = checked
   end
 
   # `user.valid_password?` は使わない: devise_invitable が上書きしていて、招待未承認（`invitation_token` あり）の人には
