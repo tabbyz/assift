@@ -166,7 +166,10 @@ where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity;
 
 1. **関数のリージョン**: `vercel.json` の `"regions": ["hnd1"]`（本プランの変更）を main に入れる。
    入ったあと Deployments → 最新の Production → Functions（または Runtime Logs）でリージョンが `hnd1` になっていることを見る。
-   Settings → Functions の Function Region は `vercel.json` が優先されるので触らなくてよい
+   Settings → Functions の Function Region は、以前に手で `hnd1` + `kix1`（東京 + 大阪）にしてあった（2026-10-14 に確認）。
+   `vercel.json` の `regions` が優先され、画面には **Overridden** の札が出る（Dashboard の値は表示されたままだが効かない。想定どおり）。
+   将来 `vercel.json` から `regions` を消したときに大阪が戻らないよう、**Dashboard も `hnd1` だけにして Save** する。
+   効いているかは Dashboard ではなく、デプロイの詳細（Functions / Runtime Logs のリージョン）で確かめる
 2. **仮のホスト**: Settings → Domains → Add
    - `v2.assift.com`（Production。main に結び付ける）
    - `admin-v2.assift.com`（Production）
