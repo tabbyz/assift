@@ -773,7 +773,7 @@ manifest の要点（§5.2）:
 - 案 B（記録の形から承認された人だけを照合）は、自分でメールにした 2 人を取りこぼすのでやめた
 - **案 A を採った**: 照合は「v1 でログインできた人（`confirmed_at` か `sign_in_count > 0`）のうち店舗を持たない人」（3,466 人）だけ。それ以外は照合せず false。根拠は v1 の `check_init_password!`（§7.1）と、全員を照合したこの結果（3 人とも範囲の内側）。見込みは 6〜7 分で、エクスポート全体は約 13 分
 - rake が「移す人」の条件を持つことになるが、照合を省くためだけで、照合しなかった人の値はインポートで使わない（移す / 移さないの判断は TS のまま）
-- manifest に照合した人数（`users.password_is_email_checked`）を出す。**rake の変更は `ruby -c` のみ**。次にエクスポートを流したときに `password_is_email_checked = 3466`・`password_is_email = 3` になることを確かめる
+- manifest に照合した人数（`users.password_is_email_checked`）を出す。2026-10-14 に本物の v1 で流し直して確かめた（下の「エクスポート 2 回目」）
 
 #### 次にやること
 
@@ -871,6 +871,22 @@ manifest の要点（§5.2）:
 
 #### 残り（2026-10-14 時点）
 
-- 照合を絞った rake（`ecfc533`）でエクスポートを流し直し、`password_is_email_checked = 3466`・`password_is_email = 3`・所要（見込み 13 分）を確かめる
 - §9.3: 本番の Supabase に対する `--rollback`。Session pooler 越しの所要を測り、§13-8（`COPY` に替えるか）を決める
 - 片付け: 手元の v1 の `rails s` を止め、`DATABASE_URL` / `STRIPE_SECRET_KEY` を `unset`。戻した DB（パスワードを置き換えた 7 人を含む）はダンプと同じくカットオーバーのダンプを取った時点で消す
+
+#### エクスポート 2 回目（照合を絞った rake。2026-10-14）
+
+同じ戻した DB に対して、照合を絞った rake（`ecfc533`）で流し直した（出力は別のフォルダ）。**所要 817 秒（13 分 37 秒）、最大 RSS 462 MB**（1 回目は 2 時間 48 分）。
+
+| 段 | 所要（ファイルの更新時刻から） |
+| --- | ---: |
+| `users`（3,466 人の照合） | 約 7 分 |
+| `tenants` / `staffs` / `patterns` | 32 秒 |
+| `shifts` | 5 分 11 秒 |
+| `required_nums` 〜 `usage_records` | 45 秒 |
+| 集計 → `manifest.json` | 3 秒 |
+
+- `password_is_email_checked = 3466`・`password_is_email = 3`。見つかった 3 人は全員を照合した 1 回目と同じ id
+- `users` 以外の 9 ファイルは 1 回目と 1 バイトも違わない（`cmp`）
+- `users.jsonl` の差は 5 行だけで、CSV の比較のために 1 回目の後でパスワードを置き換えた 5 人（§8.2-5）。照合の結果（`password_is_email`）の差は無い
+- 当日のエクスポートの見込みは約 14 分
