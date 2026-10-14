@@ -1,7 +1,10 @@
 'use client'
 
 import { Group, Paper, Stack, Text } from '@mantine/core'
-import { PatternDescriptionList } from '@/components/shiftTable/PatternDescriptionList'
+import {
+  PatternDescriptionList,
+  describedPatterns,
+} from '@/components/shiftTable/PatternDescriptionList'
 import { cellStyle } from '@/components/shiftTable/cellStyle'
 import type { ShiftCycle } from '@/lib/calendar/shiftCycle'
 import { dayOfMonth, wday } from '@/lib/calendar/dateString'
@@ -169,7 +172,7 @@ export function SetupPreview({
           <Text size="xs" c="dimmed">
             勤務の種類は、マスの色と表の下の説明に出ます
           </Text>
-          {patterns.length > 0 ? (
+          {describedPatterns(patterns).length > 0 ? (
             <Paper withBorder>
               <PatternDescriptionList
                 patterns={patterns.map((pattern) => ({ ...pattern, id: pattern.key }))}
@@ -177,7 +180,9 @@ export function SetupPreview({
             </Paper>
           ) : (
             <Text size="sm" c="dimmed">
-              業種を選ぶと、ここと表のマスに色がつきます。
+              {patterns.length > 0
+                ? '時間などの説明を入れると、ここに出ます。'
+                : '業種を選ぶと、ここと表のマスに色がつきます。'}
             </Text>
           )}
         </Stack>
