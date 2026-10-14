@@ -75,6 +75,8 @@
   min-height: 0;
   padding: 16px 20px;
   overflow-y: auto;
+  /* 端の跳ね返りを止める（globals.css の html と同じ理由） */
+  overscroll-behavior: none;
 }
 
 .body[data-mobile] .scroll {
@@ -199,6 +201,8 @@
   container-type: inline-size;
   padding-bottom: 6px;
   overflow-x: auto;
+  /* 横の端の跳ね返りと「戻る」ジェスチャーを止める。縦はページのスクロールへ渡す */
+  overscroll-behavior-x: none;
   scrollbar-color: var(--mantine-color-gray-4) transparent;
   scrollbar-width: thin;
 }
@@ -340,7 +344,6 @@
   border-radius: 0;
   text-align: left;
 }
-
 
 .leverHead {
   display: flex;

@@ -33,7 +33,13 @@ export function PatternDescriptionList({ patterns, end }: Props) {
 
   if (!end) {
     return (
-      <Group gap="md" wrap="nowrap" px={8} py={6} style={{ overflowX: 'auto' }}>
+      <Group
+        gap="md"
+        wrap="nowrap"
+        px={8}
+        py={6}
+        style={{ overflowX: 'auto', overscrollBehaviorX: 'none' }}
+      >
         {items}
       </Group>
     )
@@ -41,7 +47,11 @@ export function PatternDescriptionList({ patterns, end }: Props) {
 
   return (
     <Group gap="md" wrap="nowrap" align="center" px={8} py={6}>
-      <Group gap="md" wrap="nowrap" style={{ flex: '1 1 auto', minWidth: 0, overflowX: 'auto' }}>
+      <Group
+        gap="md"
+        wrap="nowrap"
+        style={{ flex: '1 1 auto', minWidth: 0, overflowX: 'auto', overscrollBehaviorX: 'none' }}
+      >
         {items}
       </Group>
       {end}

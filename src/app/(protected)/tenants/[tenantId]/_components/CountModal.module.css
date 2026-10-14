@@ -9,7 +9,8 @@
 .scroller {
   max-height: calc(100dvh - var(--modal-y-offset, 5dvh) * 2 - 8rem);
   overflow: auto;
-  overscroll-behavior: contain;
+  /* 端の跳ね返りも止める（globals.css の html と同じ理由） */
+  overscroll-behavior: none;
   /* オーバーレイのスクロールバーだと最終行に重なる。幅を指定するとレイアウトを取る */
   scrollbar-color: var(--mantine-color-gray-4) transparent;
   scrollbar-width: thin;

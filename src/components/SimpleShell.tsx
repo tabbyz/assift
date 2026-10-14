@@ -62,7 +62,8 @@ export function SimpleShell({ showBackToTenants = true, children }: Props) {
       </AppShellHeader>
 
       <AppShellNavbar p="sm" inert={!opened}>
-        <ScrollArea>
+        {/* 端の跳ね返りを止める（globals.css の html と同じ理由） */}
+        <ScrollArea overscrollBehavior="none">
           <Stack gap={0}>
             {showBackToTenants && (
               <>
