@@ -351,3 +351,8 @@ Workspace は `sundbox.app` の 1 つだけで、`assift.com` はその追加の
 ### 2026-10-14（Google の OAuth 同意画面）
 
 - 新しい Google Cloud のプロジェクトで OAuth の構成（External、アプリ名 `assift`）を作った。ユーザーサポートメールは Google グループ `oauth@assift.com`（§4.5.1）
+
+### 2026-10-14（vanity subdomain）
+
+- `npx supabase vanity-subdomains activate --desired-subdomain assift` → `get` が `Status: active` / `assift.supabase.co`
+- 残り: Google のリダイレクト URI（§4.5-4）と Vercel の `NEXT_PUBLIC_SUPABASE_URL`（§4.7）を `assift.supabase.co` にする
