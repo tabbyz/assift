@@ -152,6 +152,25 @@ where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity;
    - Host `smtp.resend.com`、Port `465`、Username `resend`、Password = 3 の API キー
 5. 確かめる: §5 の登録で届いたメールのヘッダーで `spf=pass`・`dkim=pass`（Gmail の「メッセージのソースを表示」）。差出人が `assift <noreply@assift.com>`
 
+### 4.4.1 Supabase の vanity subdomain（`assift.supabase.co`）
+
+Google の同意画面の移動先などに `gplvuradjykwxjbfqwnl.supabase.co` ではなく `assift.supabase.co` を出すため（決定。2026-10-14）。**§4.5 で Google のクライアントを作る前に行う。**
+
+```bash
+npx supabase login
+npx supabase vanity-subdomains check-availability --project-ref <ref> --desired-subdomain assift --experimental
+npx supabase vanity-subdomains activate --project-ref <ref> --desired-subdomain assift --experimental
+npx supabase vanity-subdomains get --project-ref <ref> --experimental
+```
+
+- **有効にすると、Auth は `<ref>.supabase.co` で動かなくなる**（CLI のヘルプ）。同時に次を替える:
+  - Google のリダイレクト URI: `https://assift.supabase.co/auth/v1/callback`（§4.5-4）
+  - Vercel の Production の `NEXT_PUBLIC_SUPABASE_URL`: `https://assift.supabase.co` → Redeploy（§4.7）。
+    **Supabase の Vercel 連携が ref の URL に書き戻さないか**、Redeploy の後に Environment Variables で見る（書き戻されると本番の Auth が止まる）
+- セッションの cookie 名は URL のホストの先頭から作られる（`sb-<ref>-auth-token` → `sb-assift-auth-token`）。切り替えた時点のセッションは切れる。利用者のいないリリース前に行う
+- 変わらないもの: CSP（ブラウザから Supabase を呼ばない。`utils/supabase/client.ts` は使われていない）/ プレビューのブランチ DB（別の ref）/ 移行の接続先（DB の pooler のホスト）
+- `activate` の前に料金を確かめる
+
 ### 4.5 Google OAuth（新しい Google Cloud のプロジェクト）
 
 1. Google Cloud Console → 新しいプロジェクト（例: `assift-v2`）
@@ -162,7 +181,7 @@ where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity;
 3. 公開ステータスを **In production** にする（テスト中のままだとテストユーザーしかログインできない）
 4. Clients → Create: 種類 **Web application**、
    承認済みの JavaScript 生成元 `https://v2.assift.com`（当日に `https://assift.com` を足す。§6）、
-   承認済みのリダイレクト URI **`https://<ref>.supabase.co/auth/v1/callback`**（Supabase のコールバック。アプリの `/auth/callback` ではない。当日も変えない）
+   承認済みのリダイレクト URI **`https://assift.supabase.co/auth/v1/callback`**（Supabase のコールバック。§4.4.1 の vanity subdomain。アプリの `/auth/callback` ではない。当日も変えない）
 5. Supabase → Authentication → Sign In / Providers → Google: Enable、Client ID / Secret を入れる（**ブラウザの自動入力に注意**。2026-10-14 に Client IDs へメールアドレスが自動で入っていた）。
    **Skip nonce checks はオフ**（`config.toml` の `true` はローカルの Google ログインのためだけ。本番は `signInWithOAuth` のリダイレクト方式で、nonce の確認を飛ばす理由が無い）。Allow users without an email もオフ
 
@@ -197,7 +216,8 @@ Workspace は `sundbox.app` の 1 つだけで、`assift.com` はその追加の
 
 | 名前 | 値 | いつ |
 | --- | --- | --- |
-| `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | 連携が入れたもの（§4.1 で確かめる） | 済み |
+| `NEXT_PUBLIC_SUPABASE_URL` | **`https://assift.supabase.co`**（§4.4.1。連携が入れた ref の URL から替える。連携が書き戻さないか見る） | 本プラン |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | 連携が入れたもの（§4.1 で確かめる） | 済み |
 | `SUPABASE_SECRET_KEY` | Project Settings → API Keys の secret key（連携が同じ名前で入れていなければ足す。**Sensitive**） | 本プラン |
 | `AI_GATEWAY_API_KEY` | Vercel AI Gateway のキー（Production にもあるか見る。**Sensitive**） | 本プラン |
 | `ADMIN_HOST` | `admin-v2.assift.com`（当日に `admin.assift.com`。§6） | 本プラン |
