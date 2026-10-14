@@ -146,6 +146,7 @@ AI シフト作成の両方から呼ぶ。`[tenantId]/actions.ts` はシフト�
 
 - コンポーネント・レイアウト・余白は Mantine（`Stack` / `Group` / `Flex` / `SimpleGrid` など）。**Tailwind は使わない**
 - 色・半径・fontSizes は `src/theme.ts` の `createTheme` に集約する。勤務パターンの 20 色は `theme.other.patternColors`
+- **ライト専用**（ダークモードは作らない）。Mantine は `forceColorScheme="light"`、`color-scheme` は `only light`（root layout の viewport と `globals.css`。ブラウザの強制ダークを止める。014 §10.10）。`light-dark()` のダーク側は使われない
 - Server Component では Mantine のドット記法不可 → `Table.Thead` ではなく `TableThead` を `@mantine/core` から import
 - Mantine コンポーネントに関数を渡すファイル（`component={Link}`、`renderRoot`、callback children など）は `'use client'` にする。Server Component から渡すと「Functions cannot be passed directly to Client Components」になる（Mantine Help Center「Can I use Mantine components as server components?」の指針）。Server の page を Client にしたくないときは `src/components/LinkButton.tsx` のように関数を渡す部分だけ Client コンポーネントへ切り出す
 - 設定画面のセクションは `src/components/SettingsSection.tsx`（見出しと説明は枠の外、入力は枠の中）
