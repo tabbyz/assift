@@ -830,3 +830,21 @@ manifest の要点（§5.2）:
 - 上限超過: v1 の `over_limit?` 644 人（全員 Subscription なし）。v2 で無料の上限（10 人）を超える人 1,039 人のうち 395 人は上限 11 人以上の Subscription があり `staff_cap` が入る。残り 644 人は v1 の上限超過と同じ人数で、v1 でもシフト表にロックの画面（`shifts/index.html.slim` の `lock_panel`）が出ていた。**移行で新たにロックされる人はいない見込み**（395 人の Subscription が Stripe の引き継ぎ（§10-5）の後も有効であることが条件。§9.3 と当日の dry-run で確かめる）
 - 切り詰めの件数は manifest の目安（§5.2-7）とほぼ同じ（スタッフ名だけ 24 → 23。空白の扱いの差）
 - **所要は §13-8 の目安（10 分）を超えた**。本番は Session pooler 越しでさらに遅くなる見込み。`COPY` に替えるかは §9.3（本番の予行）で測ってから決める。当日の見込みは capture 1 分 + download 2 分 + restore 1 分 + エクスポート約 13 分（照合を絞った rake）+ インポート 17 分以上 + 検証
+
+#### 画面での確認（§8.2。v2 だけで確かめられる分。2026-10-14）
+
+`npm run dev`（ローカル Supabase）で確かめた。
+
+| # | 確認 | 結果 |
+| --- | --- | --- |
+| 2 | v1 のパスワードでログイン（Google でない人。戻した DB で Devise の `Devise::Encryptor.digest` で入れ直したパスワード） | OK |
+| 2 | ハッシュの形 | `users.jsonl` の 84,226 人すべてが `$2a$11`。1 人で全員分の確認になる。利用者本人（Google の人）は本番のパスワードを失念していたので、本物のハッシュでのログインはこの形の一致で代えた |
+| 3 | 旧 URL（`/tenants/<22 文字>/shifts?start_date=…`）が 308 で `/tenants/<uuid>?start=…` | OK |
+| 4 | 共有 URL が v1 と同じ表を出す | OK（`SEEDSHR1` は v2 の seed で、v1 では 404 が正しい。抽出の SQL は `code not like 'SEED%'` で seed を除く） |
+| 7 | スタッフのいる店舗が `/setup` に送られない | OK |
+| 8 | Google の人の `auth.identities` が `email` の 1 行、`providers = ["email"]`、パスワードが残る | OK（DB の形。実際の Google ログインは 022） |
+| 8b | パスワードが null の人（`password_is_email`）のログインが「メールアドレスまたはパスワードが違います」で止まる | OK |
+| 9 | 課金の列（Subscription あり・上限 15・在籍 9 の人）: `stripe_customer_id` あり / `trial_end` 一致 / `staff_cap = 15`（上限と在籍の大きいほう）/ `max_staffs_count` null / 履歴 1 行 | OK |
+| 10 | 制約の画面が v1 と同じ行 | OK |
+
+残り: §8.2-5（CSV の `diff`）と §8.2-6（必要人数）。手元で v1 を戻した DB につないで起動し（`rails s -p 3001`）、5 店（スタッフの多い店・ペア・退職者・半月表示・上書きの多い店）で 2026-09-01 からの CSV を比べる
