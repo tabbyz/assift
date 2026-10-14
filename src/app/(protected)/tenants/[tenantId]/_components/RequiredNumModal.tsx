@@ -60,7 +60,7 @@ export function RequiredNumModal({ tenantId, date, rows, onClose }: Props) {
     requiredNumInputValue(row, nums[row.patternId])
 
   /**
-   * 「すべて基本に戻す」= 全勤務を空欄にする。保存するとこの日の上書きが消える（015 §3.2）。
+   * 「すべて空欄にする」= 全勤務の欄を空にする。保存するとこの日の上書きが消える（015 §3.2）。
    * 1 行だけ戻すときは欄を手で空にする（行ごとのボタンは置かない。行の高さが揃わず、アイコンは伝わりにくかった）
    */
   const clearAll = () =>
@@ -166,7 +166,7 @@ export function RequiredNumModal({ tenantId, date, rows, onClose }: Props) {
             style={isPending || !hasAnyValue ? { opacity: 0.5, cursor: 'default' } : undefined}
             underline={isPending || !hasAnyValue ? 'never' : 'hover'}
           >
-            すべて基本に戻す
+            すべて空欄にする
           </Anchor>
           <Group gap="xs" wrap="nowrap">
             <Button variant="subtle" color="gray" onClick={onClose} disabled={isPending}>
