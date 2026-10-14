@@ -125,7 +125,7 @@ where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity;
 | URL Configuration → Redirect URLs | `https://v2.assift.com/auth/callback`。プレビュー用の `https://*-sundbox.vercel.app/**` は `config.toml` と同じく残す（ブランチ DB は `config.toml` から作られるが、念のため） |
 | Sign In / Providers → Email | Enable、**Confirm email オン**、**Secure email change オン**（`double_confirm_changes`）、Secure password change オフ、パスワードの最小 **8 文字**、要件なし |
 | Sign In / Providers → そのほか | Allow new users to sign up オン / Anonymous オフ / Manual linking オフ |
-| Sessions | **Refresh token rotation オン**、reuse interval **10 秒**（`enable_refresh_token_rotation = true`。AGENTS.md の proxy の項の前提） |
+| Sessions → Refresh Tokens | **Detect and revoke potentially compromised refresh tokens オン**（= `enable_refresh_token_rotation = true`。AGENTS.md の proxy の項の前提）、Refresh token reuse interval **10 秒**。2026-10-14 の時点で既にこの値だった |
 | JWT の有効期限 | 3600 秒（既定のまま） |
 | Emails → Templates | 確認・再設定・メール変更の 3 種。件名は `config.toml`（`【assift】メールアドレスの確認` / `【assift】パスワードの再設定について` / `【assift】メールアドレス変更の確認`）、本文は `supabase/templates/*.html` を貼る。そのほかのテンプレートは使わない |
 | Emails → SMTP Settings | §4.4 |
@@ -308,3 +308,9 @@ where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity;
 - Resend の API キー `assift-production`（Sending access・`assift.com` 限定）を作り、Supabase の SMTP Settings に入れた（`smtp.resend.com:465`、user `resend`、差出人 `assift <noreply@assift.com>`）
 - 再送の間隔（Minimum interval between emails being sent）は SMTP Settings の中にあった。60 秒にした
 - Custom SMTP をオンにすると Rate Limits のメールの上限が編集できるようになった。100 通 / 時にした
+
+### 2026-10-14（Auth の設定）
+
+- URL Configuration: Site URL を `https://v2.assift.com`、Redirect URLs を `https://v2.assift.com/auth/callback` にし、`assift-sundbox` の 4 件を消した
+- Templates 3 種（件名と `supabase/templates/*.html`）、Email の設定（確認・メール変更の両方確認・パスワード 8 文字など）を入れた
+- Refresh Tokens は既に `config.toml` と同じ値（オン・10 秒）だった
