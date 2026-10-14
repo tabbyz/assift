@@ -200,7 +200,19 @@ where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity;
   リリース後にオンにするかは、カットオーバーのプランで決める
 - **Branching の連携が、main へのマージで `config.toml` の `[auth]`（`site_url = localhost`・送信の上限 2 など）を本番に上書きしないか**は、
   2026-10-14 に一次資料で確かめられなかった（この環境から supabase.com に届かなかった。検索結果の要約では「本番へのデプロイで config.toml からサービスの設定を更新する」「API / Auth は既定で無視」が混在）。
-  **§4.3 を入れたあと、最初に main へマージしたとき**に Authentication → URL Configuration の Site URL と Rate Limits が変わっていないことを見る。
+  **§4.3 を入れたあと、最初に main へマージしたとき**に確かめる（そのマージが `config.toml` を変えるかに関わらず。毎回当てるのか、変わったときだけかも分からない）。
+  マージの前に下の画面のスクリーンショットを撮り、マージから数分後に同じ画面と比べる（いずれも Dashboard → Authentication）:
+
+  | 画面 | 上書きされたときの値（`config.toml`） |
+  | --- | --- |
+  | **URL Configuration**（Site URL / Redirect URLs） | `http://localhost:3000` / localhost と `*-sundbox.vercel.app` だけ |
+  | **Rate Limits**（メールの送信） | 2 通 / 時 |
+  | Emails → SMTP Settings | Custom SMTP がオフ（`config.toml` に SMTP が無い） |
+  | Emails → Templates | 中身は同じなので見分けられない |
+  | Sign In / Providers → Google | Client ID が空（`env(...)` が解決されない） |
+  | Sign In / Providers → Email の再送間隔 | 1 秒 |
+
+  URL Configuration と Rate Limits が変わっていなければ上書きは無いとみなす。
   変わっていたら、`config.toml` に `[remotes.production]`（`project_id = "<ref>"`）を足して本番の値を書く（秘密は `env(...)`）方式に切り替える
 
 ### 4.9 管理用アカウント
@@ -268,3 +280,8 @@ where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity;
 ## 9. 実装ログ
 
 （作業のあとに、日時・確かめた結果・つまずいた点を書く。秘密の値は書かない）
+
+### 2026-10-14（関数のリージョン）
+
+- Vercel の Settings → Functions は、以前に手で `hnd1` + `kix1` にしてあった。`vercel.json` の `regions` を入れると **Overridden** の札が出て、Dashboard の値は表示されたまま効かない（§4.6-1）
+- PR #36 のデプロイで、関数のリージョンが `hnd1` になっていることを確かめた
