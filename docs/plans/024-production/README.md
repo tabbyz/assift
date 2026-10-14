@@ -155,7 +155,8 @@ where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity;
 ### 4.5 Google OAuth（新しい Google Cloud のプロジェクト）
 
 1. Google Cloud Console → 新しいプロジェクト（例: `assift-v2`）
-2. Google Auth Platform（OAuth 同意画面）: User type **External**、アプリ名 `assift`、サポートのメール・デベロッパーの連絡先、
+2. Google Auth Platform（OAuth 同意画面）: User type **External**、アプリ名 `assift`、
+   ユーザーサポートメール **`oauth@assift.com`**（§4.5.1）、デベロッパーの連絡先 `admin@sundbox.app`、
    承認済みドメイン `assift.com`、ホームページ `https://assift.com`、プライバシーポリシー `https://assift.com/privacy`、利用規約 `https://assift.com/terms`。
    スコープは既定（`openid` / `email` / `profile`）だけ。**ロゴは載せない**（載せるとブランドの確認の審査が要る）
 3. 公開ステータスを **In production** にする（テスト中のままだとテストユーザーしかログインできない）
@@ -164,6 +165,18 @@ where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity;
    承認済みのリダイレクト URI **`https://<ref>.supabase.co/auth/v1/callback`**（Supabase のコールバック。アプリの `/auth/callback` ではない。当日も変えない）
 5. Supabase → Authentication → Sign In / Providers → Google: Enable、Client ID / Secret を入れる（**ブラウザの自動入力に注意**。2026-10-14 に Client IDs へメールアドレスが自動で入っていた）。
    **Skip nonce checks はオフ**（`config.toml` の `true` はローカルの Google ログインのためだけ。本番は `signInWithOAuth` のリダイレクト方式で、nonce の確認を飛ばす理由が無い）。Allow users without an email もオフ
+
+
+#### 4.5.1 ユーザーサポートメール（Google グループ）
+
+Workspace は `sundbox.app` の 1 つだけで、`assift.com` はその追加のドメイン、`support@assift.com` は `admin@sundbox.app` のエイリアス（2026-10-14 に確認）。
+ユーザーサポートメールの候補には、ログイン中のアカウントと、そのアカウントが管理する Google グループしか出ず、エイリアスは選べない。
+同意画面に `sundbox.app` を出さないため、Google グループ `oauth@assift.com` を作った。
+
+- 管理コンソール → グループ: 名前 `assift`、アドレス `oauth@assift.com`、ラベル メーリング
+- アクセス設定（カスタム）: 投稿は**外部まで全員**（無いと利用者のメールが送り返される）/ 会話の閲覧はオーナー・管理者・メンバー / メンバーの表示・管理はオーナー・管理者 / 参加は招待のみ / 外部メンバーは不可
+- メンバー: `admin@sundbox.app`（**オーナー**、配信は各メール）。作成画面のオーナー欄は自動入力の候補が出ていただけで確定しておらず、作った直後はメンバー 0 人だった。メンバーになる前に届いたメールは配られない
+- 外部の Gmail から送り、`admin@sundbox.app` に届くことを確かめた
 
 ### 4.6 Vercel
 
@@ -314,3 +327,7 @@ where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity;
 - URL Configuration: Site URL を `https://v2.assift.com`、Redirect URLs を `https://v2.assift.com/auth/callback` にし、`assift-sundbox` の 4 件を消した
 - Templates 3 種（件名と `supabase/templates/*.html`）、Email の設定（確認・メール変更の両方確認・パスワード 8 文字など）を入れた
 - Refresh Tokens は既に `config.toml` と同じ値（オン・10 秒）だった
+
+### 2026-10-14（Google の OAuth 同意画面）
+
+- 新しい Google Cloud のプロジェクトで OAuth の構成（External、アプリ名 `assift`）を作った。ユーザーサポートメールは Google グループ `oauth@assift.com`（§4.5.1）
