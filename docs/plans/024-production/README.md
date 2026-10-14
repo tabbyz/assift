@@ -355,4 +355,7 @@ Workspace は `sundbox.app` の 1 つだけで、`assift.com` はその追加の
 ### 2026-10-14（vanity subdomain）
 
 - `npx supabase vanity-subdomains activate --desired-subdomain assift` → `get` が `Status: active` / `assift.supabase.co`
-- 残り: Google のリダイレクト URI（§4.5-4）と Vercel の `NEXT_PUBLIC_SUPABASE_URL`（§4.7）を `assift.supabase.co` にする
+- Supabase の Google の画面の Callback URL は、有効にした後も `<ref>.supabase.co` のまま表示される（表示が追従しない）
+- Google のクライアント（`assift-production`）にリダイレクト URI を 2 つ（`assift.supabase.co` と `<ref>.supabase.co`）入れ、Supabase に Client ID / Secret を入れた。
+  ブラウザで `https://assift.supabase.co/auth/v1/authorize?provider=google` を開くと、Google に渡る `redirect_uri` は `https://assift.supabase.co/...` だった（vanity subdomain が使われている）
+- 残り: Vercel の `NEXT_PUBLIC_SUPABASE_URL`（§4.7）を `assift.supabase.co` にする
