@@ -363,3 +363,8 @@ Workspace は `sundbox.app` の 1 つだけで、`assift.com` はその追加の
 
 - §4.7 の値を入れて Redeploy した（`NEXT_PUBLIC_SUPABASE_URL` = `https://assift.supabase.co`、`SUPABASE_SECRET_KEY`、`AI_GATEWAY_API_KEY`、`ADMIN_HOST` = `admin-v2.assift.com`、`SITE_URL` = `https://v2.assift.com`）
 - Redeploy の後も `NEXT_PUBLIC_SUPABASE_URL` は ref の URL に戻っていない（Supabase の Vercel 連携は書き戻さなかった）
+
+### 2026-10-15（仮のドメインと migration）
+
+- Vercel の Domains に `v2.assift.com` / `admin-v2.assift.com` を足し、Gehirn DNS に CNAME を足した
+- `npx supabase db push` で migration 8 本を本番に入れた（§4.2）。確認 SQL の結果は下に追記する
