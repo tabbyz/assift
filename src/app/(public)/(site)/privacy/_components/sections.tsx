@@ -188,7 +188,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
           items={[
             `Supabase（米国）：データベースと認証。データは${PRIVACY.databaseRegion}のサーバーに保存します`,
             'Vercel（米国）：assiftを稼働させるサーバー、AIの提供元への中継、アクセス解析',
-            'OpenAI・Anthropic・Google（いずれも米国）：AIを使う機能。送信したデータがAIの学習に使われることはありません',
+            'AIの提供元（OpenAI・Anthropic・Google・Microsoft・Amazonなど。主に米国）：AIを使う機能。送信したデータがAIの学習に使われることはありません',
             'Stripe（米国）：有料プランの決済',
             'Resend（米国）：メールの送信',
             'Google（米国）：お問い合わせのメールの受信と保管（Google Workspace）',
