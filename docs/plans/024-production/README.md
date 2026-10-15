@@ -122,7 +122,7 @@ where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity;
 | 画面 | 値 |
 | --- | --- |
 | URL Configuration → Site URL | `https://v2.assift.com`（仮。当日に `https://assift.com`。§6） |
-| URL Configuration → Redirect URLs | `https://v2.assift.com/auth/callback`。プレビュー用の `https://*-sundbox.vercel.app/**` は `config.toml` と同じく残す（ブランチ DB は `config.toml` から作られるが、念のため） |
+| URL Configuration → Redirect URLs | `https://v2.assift.com/auth/callback`。**Supabase の Vercel 連携がデプロイのたびに `assift-sundbox.vercel.app`（`/` と `/**`）と `assift-*-sundbox.vercel.app`（同）の 4 件を足し直す**（2026-10-15 に確認）。消しても戻るので残す（§9 2026-10-15） |
 | Sign In / Providers → Email | Enable、**Confirm email オン**、**Secure email change オン**（`double_confirm_changes`）、Secure password change オフ、パスワードの最小 **8 文字**、要件なし |
 | Sign In / Providers → そのほか | Allow new users to sign up オン / Anonymous オフ / Manual linking オフ |
 | Sessions → Refresh Tokens | **Detect and revoke potentially compromised refresh tokens オン**（= `enable_refresh_token_rotation = true`。AGENTS.md の proxy の項の前提）、Refresh token reuse interval **10 秒**。2026-10-14 の時点で既にこの値だった |
@@ -298,7 +298,7 @@ Workspace は `sundbox.app` の 1 つだけで、`assift.com` はその追加の
 | Gehirn DNS | `v2` / `admin-v2` の CNAME | Web の A / CNAME だけを Vercel へ（016-terms §7。MX・SPF・DKIM・DMARC は触らない）。仮の 2 つを消す |
 | Vercel `SITE_URL` | `https://v2.assift.com` | `https://assift.com` |
 | Vercel `ADMIN_HOST` | `admin-v2.assift.com` | `admin.assift.com` |
-| Supabase Site URL | `https://v2.assift.com` | `https://assift.com` |
+| Supabase Site URL | `https://v2.assift.com` | `https://assift.com`。**変えたあと Production を Redeploy し、値が残っているか見る**（連携が Redirect URLs を書き換えるため。§9 2026-10-15） |
 | Supabase Redirect URLs | `https://v2.assift.com/auth/callback` | `https://assift.com/auth/callback` を足し、`v2` を消す |
 | Google の JavaScript 生成元 | `https://v2.assift.com` | `https://assift.com` を足し、`v2` を消す（リダイレクト URI は Supabase のものなので変えない） |
 
@@ -382,3 +382,10 @@ Workspace は `sundbox.app` の 1 つだけで、`assift.com` はその追加の
 
 - 1: `/`・`/terms`・`/privacy`・`/law` が開き、CSP の違反なし
 - 2: 確認メールのリンク先が `https://assift-sundbox.vercel.app/` だった。テンプレートは `{{ .SiteURL }}` で組むので、Site URL が以前の値のまま（2026-10-14 の「Auth の設定」の記録は誤り）。URL Configuration を見ると、Site URL は `https://assift-sundbox.vercel.app/` のまま、Redirect URLs は `https://v2.assift.com/auth/callback` が足されたうえで `assift-sundbox` の 4 件が残っていた。上書きではなく設定漏れ。Site URL を `https://v2.assift.com` にし、`assift-sundbox` の 4 件を消して、登録からやり直す
+
+### 2026-10-15（Redirect URLs を連携が足し直す）
+
+- Site URL を `https://v2.assift.com` にして保存し、`assift-sundbox` の 4 件を消した → 読み込み直しても残った
+- Production を Redeploy → **Site URL は残り、Redirect URLs に `assift-sundbox` の 4 件が戻った**。Supabase の Vercel 連携がデプロイのたびに Vercel の URL を足している。前回の「消したのに戻った」もこれ。Site URL が古い値だったのは保存漏れの可能性が高い（今回の Redeploy では上書きされなかった）
+- 4 件は**残す**（決定）: 消しても戻り、止めるには連携の同期ごと止めることになる。どれも自チーム（`-sundbox`）のデプロイしか指さず、アプリのリダイレクト先は `SITE_URL` と `safeNext()` で固定している。共同開発者が増えたら見直す
+- PR #36 は最初の 2 コミット（プランと `vercel.json`）でマージ済み。以降の記録は `claude/024-production` を main に載せ直して続ける
