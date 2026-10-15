@@ -107,6 +107,7 @@ src/
     auth/current.ts               getAuthUser / currentUser
     supabase/{server,client,proxy,env}.ts
 assets/fonts/                     PDF に埋め込む Noto Sans JP（public/ に置かない。下記）
+scripts/vercel/ignore-build.sh    Vercel の Ignored Build Step（vercel.json の ignoreCommand）。PR の無いブランチのプレビューを作らない
 scripts/stripe/                   setup（Product / Meter / Price / Coupon / Portal。冪等）/ migrate-v1-subscriptions（カットオーバーで 1 回）
 scripts/migrate-v1/               v1 データ移行（021）。import（読む → 変換 → 1 トランザクション → 突合 → COMMIT / ROLLBACK）/ verify（移行後の突合）/
                                   pg（型パーサ。date を文字列のまま）/ overrides.example.json / v1/v2_export.rake（v1 に写して流す）/
@@ -518,6 +519,9 @@ Prettier: `{ "semi": false, "singleQuote": true, "tabWidth": 2, "trailingComma":
 - PR の前に `npm run lint` / `npm run typecheck` / `npm test` / `npx supabase test db` を通す。
   スキーマを触ったら `npx supabase db reset` と `gen types` も行う
 - push したらすぐ PR を作る。Supabase のブランチ DB の環境変数は、PR を作ったときに Vercel へ同期される
+- **PR の無いブランチへの push ではプレビューをビルドしない**（`vercel.json` の `ignoreCommand` → `scripts/vercel/ignore-build.sh`。Vercel では「Canceled」になる）。
+  PR を作ると Supabase がブランチ DB の値を入れて、その PR の最新のデプロイを Redeploy するので、そこから先はビルドされる。
+  PR を作ったのにプレビューができないときは、Vercel でそのブランチの最新のデプロイを Redeploy するか、次の push を待つ
 - **プレビューの Supabase の環境変数は、ブランチ DB を作るときに Supabase が Vercel へ「そのブランチ専用」で入れる**（Preview 全体の値は無い。
   Supabase の Vercel 連携の「Preview に同期」はオフのまま）。この書き込みが抜けることがある（Supabase Preview のチェックは成功のまま）。
   そのときは `next.config.ts` の `assertSupabaseBuildEnv()` がビルドを失敗させる（`NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` が無い。023 §6）。
