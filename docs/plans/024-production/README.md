@@ -7,19 +7,19 @@
 - 予定: 10/14〜10/15（クリティカルパス）
 - **作業するのは人間**（Dashboard の操作と秘密の値）。リポジトリの変更は `vercel.json` の関数のリージョンだけ（§4.6）
 
-**状態: プラン（2026-10-14）。§3・§7 の決定は 2026-10-14 に確認。**
+**状態: 完了（2026-10-15）。§1 の完了条件をすべて満たした。当日に差し替える値は §6、別タスクへの申し送りは §10。**
 
 ## 1. 目的と完了条件
 
 カットオーバーの当日に DNS を切り替えれば本番として動く Supabase と Vercel を、**仮のホスト**（§3-3）で先に動かして確かめておく。
 当日にすることを「値の差し替え」（§6）だけにする。
 
-- [ ] Supabase: 本番のプロジェクト（東京。Branching の親）に migration 8 本が入り、003 §10.6 の確認が通る
-- [ ] Auth: Site URL・Redirect URLs・メールテンプレート 3 種・Custom SMTP（Resend）・Google OAuth（新しい Google Cloud のプロジェクト）・`config.toml` と同じ値が本番に入っている
-- [ ] Resend: `assift.com` が Verified（東京リージョン）。本番から送った確認メールが `assift <noreply@assift.com>` で届き、SPF / DKIM が pass
-- [ ] Vercel: 関数が東京（`hnd1`）で動く。Production の環境変数が揃い、仮のホストで開ける
-- [ ] 仮のホストで確かめる（§5）: 登録 → 確認メール → ログイン / Google ログイン / パスワード再設定 / 店舗の作成〜シフト表 / PDF・CSV / 共有ページ / 管理画面 / CSP の違反 0 件
-- [ ] 管理用アカウントだけが残っている（試しのアカウントと店舗を消した）。021 §9.3 の予行を流せる
+- [x] Supabase: 本番のプロジェクト（東京。Branching の親）に migration 8 本が入り、003 §10.6 の確認が通る
+- [x] Auth: Site URL・Redirect URLs・メールテンプレート 3 種・Custom SMTP（Resend）・Google OAuth（新しい Google Cloud のプロジェクト）・`config.toml` と同じ値が本番に入っている
+- [x] Resend: `assift.com` が Verified（東京リージョン）。本番から送った確認メールが `assift <noreply@assift.com>` で届き、SPF / DKIM / DMARC が pass
+- [x] Vercel: 関数が東京（`hnd1`）で動く。Production の環境変数が揃い、仮のホストで開ける
+- [x] 仮のホストで確かめる（§5）: 登録 → 確認メール → ログイン / Google ログイン / パスワード再設定 / 店舗の作成〜シフト表 / PDF・CSV / 共有ページ / 管理画面 / CSP の違反 0 件
+- [x] 管理用アカウントだけが残っている（試しのアカウントと店舗を消した）。021 §9.3 の予行を流せる
 
 ## 2. 範囲
 
@@ -405,3 +405,17 @@ Workspace は `sundbox.app` の 1 つだけで、`assift.com` はその追加の
 
 - 3〜11 すべて期待どおり（ログイン / パスワード再設定 / Google ログイン / 店舗〜シフト表 / AI で作成 / PDF・CSV / 共有 / 管理画面と `/-` の 404 / cron の 401）
 - PDF は Vercel の本番で 500 にならず日本語が出た（010 §617・§960 の申し送りを確かめた）
+
+### 2026-10-15（§5 の通し: 14 片付け）
+
+- 試しの店舗とアカウント（メール・Google）を消した。`tenants` 0 / `staffs` 0 / `shifts` 0 / `auth.users` は管理用だけ。021 §9.3 の `--rollback` を流せる状態
+
+## 10. 別タスクへの申し送り
+
+| 先 | 内容 |
+| --- | --- |
+| 021 §9.3（予行） | 接続は Supabase → Connect → Session pooler（IPv4）+ `sslmode=verify-full`。本番は管理用アカウント 1 件・店舗 0 件の状態 |
+| Stripe の live | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `CRON_SECRET` を Vercel の Production に入れる（§4.7。`CRON_SECRET` は Stripe と同時に）。Webhook の URL は DNS の切り替え前は `assift.com` が v1 を指すことに注意 |
+| カットオーバー | §6 の差し替え。Site URL を変えたら Redeploy して値が残っているか見る（Vercel 連携が Redirect URLs を書き換える）。Deploy to production をオンにするかを決める（§4.8 の確かめ方を使う） |
+| カットオーバーの後 | Google の同意画面のリンク先（`assift.com`）が v2 になったことを見る。仮のホスト `v2` / `admin-v2` を Vercel と Gehirn から外す。v1 の SendGrid の CNAME は v1 を止めてから消す |
+| リリース後 | PITR の検討（§3-6）。共同開発者が増えたら Redirect URLs の `assift-*-sundbox.vercel.app` を見直す |
