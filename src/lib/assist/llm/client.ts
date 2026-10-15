@@ -12,7 +12,7 @@ import OpenAI from 'openai'
 
 const GATEWAY_BASE_URL = 'https://ai-gateway.vercel.sh/v1'
 
-export const DEFAULT_INTERPRET_MODEL = 'openai/gpt-6-sol'
+export const DEFAULT_INTERPRET_MODEL = 'openai/gpt-6.1-sol'
 
 export type AssistLlm = {
   client: OpenAI

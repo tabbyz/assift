@@ -3,6 +3,7 @@
  * 表に無いモデルは費用を null にする（評価で他社モデルを指したときなど。黙って 0 にしない）。
  */
 const PRICES: Record<string, { input: number; cachedInput: number; output: number }> = {
+  'gpt-6.1-sol': { input: 2, cachedInput: 0.1, output: 10 },
   'gpt-6-sol': { input: 2, cachedInput: 0.2, output: 10 },
   // キャッシュ入力の単価は未公表。入力の 1 割で見積もる
   'gpt-6-luna': { input: 0.1, cachedInput: 0.01, output: 0.5 },
@@ -21,7 +22,7 @@ export type LlmUsage = {
   elapsedMs: number
 }
 
-/** `openai/gpt-6-sol` → `gpt-6-sol`（ゲートウェイの接頭辞を外して引く） */
+/** `openai/gpt-6.1-sol` → `gpt-6.1-sol`（ゲートウェイの接頭辞を外して引く） */
 function priceOf(model: string) {
   const bare = model.includes('/') ? model.slice(model.indexOf('/') + 1) : model
   return PRICES[bare] ?? null
