@@ -6,6 +6,9 @@ import type { Metadata, Viewport } from 'next'
 import { headers } from 'next/headers'
 import { ColorSchemeScript, mantineHtmlProps } from '@mantine/core'
 import { AppProviders } from '@/components/AppProviders'
+import { SiteAnalytics } from '@/components/SiteAnalytics'
+import { adminHostEnv } from '@/lib/admin/host'
+import { shouldLoadAnalytics } from '@/lib/analytics/load'
 import { NONCE_HEADER } from '@/lib/security/csp'
 
 export const metadata: Metadata = {
@@ -31,10 +34,14 @@ export const viewport: Viewport = { colorScheme: 'only light' }
  * nonce は `AppProviders` の props として Client に渡るので、RSC の flight データ（HTML のインラインスクリプトと Action の応答）に
  * 文字列として入る。ブラウザの nonce hiding（属性は DOM から読めない）はこの経路には効かない。Next のガイドの `<Script nonce>` と同じ
  * 受け入れたトレードオフ（022 §4.5）。マークアップの注入そのものを防ぐ側（React のエスケープ）が第一の守りであることは変わらない
+ *
+ * アクセス解析（025）は本番の本体のホストだけで描く（管理画面のホストは外す。`shouldLoadAnalytics()`）
  */
 export default async function RootLayout({ children }: LayoutProps<'/'>) {
-  const nonce = (await headers()).get(NONCE_HEADER) ?? undefined
+  const requestHeaders = await headers()
+  const nonce = requestHeaders.get(NONCE_HEADER) ?? undefined
   assertNonce(nonce)
+  const analytics = shouldLoadAnalytics(requestHeaders.get('host'), adminHostEnv())
   return (
     <html lang="ja" {...mantineHtmlProps}>
       <head>
@@ -42,6 +49,7 @@ export default async function RootLayout({ children }: LayoutProps<'/'>) {
       </head>
       <body>
         <AppProviders nonce={nonce}>{children}</AppProviders>
+        {analytics && <SiteAnalytics />}
       </body>
     </html>
   )

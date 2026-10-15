@@ -1,7 +1,8 @@
 'use client'
 
-import { type FormEvent, useState, useTransition } from 'react'
+import { type FormEvent, useEffect, useState, useTransition } from 'react'
 import Link from 'next/link'
+import { useQueryStates } from 'nuqs'
 import {
   Anchor,
   Button,
@@ -17,6 +18,7 @@ import { FormErrorAlert } from '@/components/FormErrorAlert'
 import { MailSentPanel } from '@/components/MailSentPanel'
 import { PASSWORD_MIN_LENGTH } from '@/lib/validation/auth'
 import { resendConfirmation, signup } from '../actions'
+import { signupParsers } from '../searchParams'
 
 type Props = { initialEmail: string }
 
@@ -28,6 +30,13 @@ export function SignupForm({ initialEmail }: Props) {
   const [sent, setSent] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [isResending, startResend] = useTransition()
+  const [query, setQuery] = useQueryStates(signupParsers)
+
+  // 入力欄に移した `?email=` を URL から消す（参照元・アクセス解析に残さない。025 §4.3）。
+  // shallow（既定）なのでサーバーへは取りに行かず、`history: 'replace'` なので履歴も増えない
+  useEffect(() => {
+    if (query.email !== null) void setQuery({ email: null })
+  }, [query.email, setQuery])
 
   const submit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()

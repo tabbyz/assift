@@ -49,7 +49,8 @@ src/
   app/
     error.tsx / global-error.tsx  描画の例外の画面（023。本文は components/ErrorPanel）。店舗（[tenantId]/error.tsx。枠を残す）と管理画面（-/error.tsx）にも置く。
                                   global-error は Mantine を使わない（nonce を受け取れない。色は hex を直書きし、対応する Mantine の値をコメントに書く）。やり直しは全体の読み込み
-    layout.tsx                    headers() で CSP の nonce を読み、ColorSchemeScript と AppProviders（Client。MantineProvider > ModalsProvider > NuqsAdapter > children + Notifications）に渡す（022）
+    layout.tsx                    headers() で CSP の nonce を読み、ColorSchemeScript と AppProviders（Client。MantineProvider > ModalsProvider > NuqsAdapter > children + Notifications）に渡す（022）。
+                                  本番の本体のホストだけ SiteAnalytics を描く（025）
     (public)/                     認証不要
       (site)/                     LP（/）と静的ページ（terms / privacy / law）。layout がヘッダー・フッター・LP の書体（016 / 018）
       share/[code]/               公開シフト表（未ログインで開く。読み取りは service_role）。(site) の枠を被せない
@@ -63,7 +64,7 @@ src/
           <feature>/
             page.tsx              Server。searchParams → queries → Client へ props
             actions.ts            書き込みがあるとき。'use server'
-            searchParams.ts       URL 状態があるときだけ（nuqs parser + createLoader）
+            searchParams.ts       URL 状態があるときだけ（nuqs parser + createLoader）。URL から値を消すときも（signup の ?email=。025）
             _components/          このルート専用 Client UI
             _lib/                 このルート専用ロジック（Vitest 対象）
     api/tenants/[tenantId]/shifts/{pdf,csv}/route.ts   エクスポート（Route Handler。下記）
@@ -71,6 +72,7 @@ src/
     api/cron/billing-usage/route.ts  毎日の同期と最大人数の送信（GET。CRON_SECRET で守る。vercel.json の crons）
   components/                     横断 UI（SortableList = 上下ボタンの並べ替え一覧 など）
     AppProviders.tsx              root layout の Provider 群（Client）。CSP の nonce を文字列で受け、Mantine の getStyleNonce に関数で渡す（022）
+    SiteAnalytics.tsx             Vercel Web Analytics（025）。beforeSend（関数）を持つので Client。読み込むかは root layout が lib/analytics の shouldLoadAnalytics で決める
     restrictions/                 制約の行（説明・種類・強さの札・編集）。制約ページとスタッフの編集画面で共有（013）
     setup/                        初期設定のウィザード（ステップ・ヘッダー・完成イメージ）。/tenants/new と /tenants/<id>/setup で共有（014）
     billing/                      上限のモーダル（openStaffLimitModal）・トライアル / 支払い失敗の帯・シフト表のロック・ポータルのボタン（019）
@@ -93,6 +95,7 @@ src/
     shares/                       expiry（公開期限。v1 の DATE_LIMIT = 6）/ code（8 文字のコード）
     security/                     CSP（022）。csp（nonce の生成・方針の文字列・ヘッダ名。純関数。proxy と root layout が使う。
                                   レスポンスの方針を付けない唯一の例外は PDF の応答で、その判定は lib/export/path の isPdfExportPath）
+    analytics/                    アクセス解析（025）。load（読み込むか。本番の本体のホストだけ）/ url（送る URL からクエリとハッシュを落とす）
     export/                       request（認証 → 店舗 → 期間 → 表。PDF / CSV 共通の入口）/ filename / path（URL を組む。リンクと旧 URL の書き換えが共有）
     csv/                          shiftCsv（純関数）/ encode（CP932 か BOM 付き UTF-8。iconv-lite）
     pdf/                          fonts（Font.register + 折り返し）/ styles / paginate / pdfCellStyle / ShiftPdfDocument
@@ -308,6 +311,7 @@ Stripe の API の版は SDK が固定する最新（`lib/billing/stripe.ts`）�
 - **外部のオリジン（スクリプト・画像・フォント・fetch・iframe）を足すときは `csp.ts` と `csp.test.ts`、022 §3 の表を直す。** 足し忘れの症状は「本番でだけ黙って動かない」（コンソールの `Refused to …`）
 - インラインの `<script>` / `<style>` を足すときは nonce を付ける（Mantine の `<style>` は `AppProviders` の `getStyleNonce` が付ける。`next/script` は `nonce` prop）。
   `style` 属性（Mantine の style props・`style={{…}}`）はそのままでよい（`style-src-attr 'unsafe-inline'`）
+- Vercel Web Analytics（025）はスクリプト（`/_vercel/insights/script.js`）・送信とも同一オリジン。スクリプトは SDK が `createElement` で足すので `'strict-dynamic'` で通り、方針に足したものは無い
 - `eval` / `new Function` はブラウザで使えない。Zod は `z.object()` を作った時点で `Function("")` を試すので `src/instrumentation-client.ts` が `jitless` にしている
 - nonce はリクエストごとに違うので**全ルートが動的描画**（root layout が `headers()` を読む）。静的化・ISR・PPR は nonce と両立しない
 - `AppProviders` は最初に受けた nonce だけを使う（Server Action の描き直しで root layout の nonce が変わるが、文書の CSP は最初の HTML のまま）
@@ -332,6 +336,7 @@ Stripe の API の版は SDK が固定する最新（`lib/billing/stripe.ts`）�
 3. 開いている `/tenants/<uuid>` を直近店舗の cookie に記録
 
 - `config.matcher` から外すのは静的アセット（`_next/static` / `_next/image` / `favicon.ico`）と Stripe の Webhook・cron（ログイン状態と無関係で、セッションの更新が要らない）だけ。
+  Vercel Web Analytics の `/_vercel/insights/...` は外さない（定石では外すが、走っても害は小さい。025 §3-7・§4.5）。
   **除外は実在するパスに完全一致（`$`）で書く。** 前方一致や拡張子で除外すると、存在しない URL が 404 の HTML になるのに proxy を通らず、CSP の付かない HTML ができる（`public/` は無い）
 - **`config.matcher` から prefetch を除外しない。** セッション cookie を書けるのは proxy だけで、除外するとトークン更新が Server Component の描画中に起き、新しい refresh token を保存できずに次の遷移でログアウトする（`enable_refresh_token_rotation = true`）
 - proxy のコード内では RSC / prefetch のヘッダが剥がされていて prefetch を判別できない。先読みで困る導線は、リンク側に `prefetch={false}` を付けて塞ぐ（他店舗を指す `TenantSwitcher`、006 で作るページへのリンク）
@@ -340,6 +345,7 @@ Stripe の API の版は SDK が固定する最新（`lib/billing/stripe.ts`）�
 ## nuqs
 
 一覧の検索・フィルタなど、URL に残す状態があるときだけ使う。そのページに `searchParams.ts` を置き、parser と `createLoader` を Server / Client で共有する。`URLSearchParams` 直操作や `router.replace` での手書き同期はしない。
+URL から値を消すときも nuqs（shallow）で消し、`history.replaceState` を手で書かない（`/signup` の `?email=`。025 §4.3）。
 
 - Server: `loadXxxSearchParams(searchParams)`
 - Client: `useQueryStates(parsers)`。**既定は shallow（クライアントだけ更新）**

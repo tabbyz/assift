@@ -284,7 +284,7 @@ grant execute on function public.admin_list_users(text, integer, integer) to ser
   - プラン: 今の上限とその理由（`entitlement()` の結果を文にする）・契約の写し（状態・期間・解約予定）・トライアルの最終日・個別契約の上限・上限人数（`staff_cap`。表示だけ）と操作のボタン
   - 店舗: 店舗ごとに名前・作成日・初期設定の状態・在籍 / 退職の人数・勤務パターン数・自動アサインの回数と最後の日時。スタッフの一覧は開閉する
 - 本体の画面から管理画面へのリンクは置かない
-- アクセス解析（Vercel Web Analytics）を root layout に入れるときは、管理画面を対象から外す（`?q=` にメールアドレスが載る）
+- アクセス解析（Vercel Web Analytics）を root layout に入れるときは、管理画面を対象から外す（`?q=` にメールアドレスが載る）→ 025 で管理画面のホストを外した（`shouldLoadAnalytics()`）
 
 ## 9. ファイル
 
