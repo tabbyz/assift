@@ -897,7 +897,7 @@ medium / large は 1 回 $1 以上・10 分以上かかる見込みで結論が�
 - **モデルの代替（§3.11）は入れない**（決定）。Gateway の代替は画面の設定ではなく、リクエストごとに `providerOptions.gateway.models` で渡すもので、
   入れるなら `structured.ts` の変更と、代わりのモデルで構造化出力が通るかの評価が要る。OpenAI の障害時に止まるのは指示つきの実行だけなので見送った
 - **プロバイダは Azure にもなる**: Gateway のログで、`openai/gpt-6-sol` の Provider が Azure（Azure OpenAI）だった。Gateway は同じモデルを複数のプロバイダから出し、
-  指定が無ければ自分で選ぶ（固定するなら `providerOptions.gateway.only: ['openai']`）。固定せず、規約・プライバシーポリシーに Microsoft を足した（決定。016 §7・017 §7 の 2026-10-15）。
+  指定が無ければ自分で選ぶ（固定するなら `providerOptions.gateway.only: ['openai']`）。固定しない（決定）。モデルの一覧では Bedrock（Amazon）も並ぶ。規約・プライバシーポリシーは社名を並べず、例 +「など」で書くことにした（016 §7・017 §7 の 2026-10-15）。
   Azure OpenAI も入力を学習に使わない
 
 ## 11. 結果画面の作り直し（2026-09-26。デザイン案 B2）

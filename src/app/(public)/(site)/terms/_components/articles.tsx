@@ -165,8 +165,7 @@ export const TERMS_ARTICLES: TermsArticle[] = [
           「AIで作成」などAIを使う機能を利用すると、その機能に必要なデータ（スタッフ名・勤務条件・シフト・あなたが入力した指示など）をAIの提供元に送信します。
         </P>
         <P>
-          AIの提供元は、OpenAI（Microsoft
-          Azureを経由する場合を含みます）・Anthropic（Claude）・Google（Gemini）のいずれかです。いずれの提供元でも、送信したデータがAIの学習に使われることはありません。
+          AIの提供元は、OpenAI・Anthropic・Google・Microsoft・Amazonなど、AIを開発または提供する事業者です。いずれの提供元でも、送信したデータがAIの学習に使われることはありません。
         </P>
         <P>
           AIの結果には、誤りが含まれていたり、条件を満たしていなかったりすることがあります。AIが作成したシフトは「下書き」として入るため、内容を確認してから確定してください。
