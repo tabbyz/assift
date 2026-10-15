@@ -9,7 +9,7 @@
 - 予定: プランは 10/15〜10/16（クリティカルパス）。コードの変更（§7・§8）は 10/27 までに main へ
 - **作業するのは人間**（Heroku / Stripe / Vercel / Supabase / Google / Gehirn の操作と秘密の値）。リポジトリの変更は §7・§8 の 2 つだけ
 
-**状態: 下書き（2026-10-15）。§3 の決定を入れ、レビューを 1 回反映した（§13）。未確定は §11。**
+**状態: 下書き（2026-10-15）。§3 の決定を入れ、レビューを 1 回反映した（§13）。DNS の今の値は §12。未確定は §11（実測で埋めるものと Stripe の鍵）。**
 
 ## 1. 目的と完了条件
 
@@ -61,6 +61,8 @@ v1（Rails / Heroku）を止め、データと Stripe の契約を v2 に移し�
 | 10 | v1 を止める時期 | 公開から **1 週間**（〜11/6 ごろ）は Heroku をメンテナンスモードのまま残してから止める。メンテナンス中は `@assift.com` の管理者アカウントで v1 にログインしない | 10/31 の期間の切り替えと 11/1 の請求の突き合わせ（019 §8.3-5）を見届ける。v1 の `maintenance_mode` は管理者を通す（v1 `ApplicationController`）ので、ログインすると書き込めてしまう |
 | 11 | Stripe の Webhook の URL | **`https://v2.assift.com/api/stripe/webhook` で登録し、当日の DNS の切り替えの後に `https://assift.com/api/stripe/webhook` へ変える**（Stripe の live のタスクへの依頼。§4） | `assift.com` で登録すると、DNS の切り替えまで（= 引き継ぎスクリプトの実行中）のイベントが v1 に当たって失敗し、再送待ちになる（024 §10）。`v2.assift.com` は v2 の本番なので、引き継ぎ中のイベントがその場で同期される。URL を変えても署名の secret は変わらない |
 | 12 | 当夜の Webhook の受け付け | **22:00 に Stripe の Webhook のエンドポイントを無効にし、判断点 B（§6.3）の直後、`--apply` の前に有効に戻す**。止めていたあいだのイベントは 23:25 の `stripe:sync-all` が拾う | インポートの COMMIT の後は、v1 の Customer のイベントで `syncCustomer()` が持ち主を引けるようになり、Stripe に書く（二重契約の解約・Customer のメールの更新。`lib/billing/sync.ts` の `applySubscriptions`）。判断点 A の「Stripe に何もしていないので戻せる」を守る。インポート中は `profiles` の書き込みがトリガを止めたロックで待たされる（021 §6.1）ことも避けられる |
+| 13 | 当夜に「移行しないのに店舗を持つ人」が 1 件以上出たとき | **止めずに COMMIT し、その人には翌日以降に個別に連絡する**。昼の予行で 1 件以上出ていたら `--overrides`（`forceMigrateUsers`）のファイルを用意して当夜に渡す | 1 回きりの COMMIT なので、後から `--overrides` で足せない。リハーサルでは 0 件（021 §15）で、出てもダンプ前の数時間の差分に限られる |
+| 14 | `www.assift.com` | **作らない**（v1 と同じ） | Gehirn に `www` のレコードが無い（§12 2026-10-15）。v1 は apex だけで動いていたので、`www` に v1 の Service Worker は残っておらず、§8 の注意は当たらない |
 
 ## 4. 前提のゲート
 
@@ -87,13 +89,13 @@ v1（Rails / Heroku）を止め、データと Stripe の契約を v2 に移し�
 | §4-1 のあと | 中止のときの片付けの SQL（COMMIT した後に v1 へ戻す場合。§6.4）を書き、ローカルで通す | 管理用アカウント以外の `auth.users` を消して `profiles` 以下を cascade で消す想定。`shifts` 1,150 万行の削除の所要も測る |
 | 10/27 まで | §7・§8 を main に入れ、`v2.assift.com` で確かめる | §4-3 |
 | 10/27 以降 | **main への merge を止める**（直しが要るものだけ。merge すると Production が自動でデプロイされる）。3 ページの文面の修正（§4-4）は例外 | 当日の本番のコードを固定する |
-| 10/29（前日） | Gehirn DNS の Web のレコード（§11）の TTL を下げる（例: 300 秒）。今の値を本プランの §12 に記録する | 切り替え後に問題が出たときの戻し・反映待ちを短くする。下げる前の TTL のぶん前日に済ませる |
+| 10/29（前日） | Gehirn DNS の今の値（§12 2026-10-15）から変わっていないか見る | apex の A は Heroku へのエイリアス（ALIAS）で、TTL の欄が無い（参照先の TTL に従う）ので、前もって下げる手順は要らない。当夜に作る A と CNAME は TTL 300 で作り、落ち着いたら 3600 に戻す（§6.6） |
 | 10/29 | `npx supabase migration list` で本番の migration が main と揃っている（Local と Remote が同じ本数） | Deploy to production はオフ（§3-8）なので、merge した migration は `db push` で手で入れる（024 §3-10） |
 | 10/29 | v1 の管理画面で、旧料金に移す契約の今月の売上の値を控える | 019 §8.2.3-1 の「392 件の請求見込みが v1 の売上と大きく違わない」の突き合わせ用。当夜は v1 に管理者でログインしない（§3-10） |
 | 10/29 | 当日の手元の準備: v1 の作業ディレクトリ（`a8bb5ad`）に最新の `v2_export.rake`（照合を絞った版。`ecfc533` 以降）を写す / Postgres 16（port 5433）/ v2 の作業ディレクトリを最新の `main` にして `npm ci` / 秘密の値（DB の接続文字列・`SUPABASE_SECRET_KEY`・Stripe の鍵）がパスワードマネージャから出せる | 秘密の値は `.env.local` に書かない。コマンドごとに環境変数で渡す（021 §11）。v1 の起動には `DATABASE_URL=postgres://$(whoami)@localhost:5433/<名前>` とダミーの `STRIPE_SECRET_KEY` が要る（021 §15「v1 をつなぐ」） |
 | 10/30 昼（T-0） | 昼の予行: リハーサルのエクスポート（`~/v1-export/` の 10/14 の出力）で `npm run migrate:v1 -- --input … --rollback` を本番に流す。`report.json` の「移行しないのに店舗を持つ人」が 0 件か見る | §3-3。ネットワーク・権限・所要の最終確認（021 §9.3「当日の朝にもう 1 回」）。1 件以上なら `--overrides` のファイルを用意する（§11-4） |
 | 10/30 昼 | Vercel の Settings → Cron Jobs を無効にする（§3-5） | 戻すのは 10/31 の昼（§6.6） |
-| 10/30 昼 | Vercel の Domains に `assift.com`・`admin.assift.com`（と `www.assift.com`。§11）を足しておく | DNS が Heroku を指しているあいだは Invalid Configuration のまま。当夜はレコードを変えるだけにする |
+| 10/30 昼 | Vercel の Domains に `assift.com`・`admin.assift.com` を足しておく（`www` は足さない。§3-14）。Vercel が示す値（apex の A の IP、`admin` の CNAME の参照先）を控える | DNS が Heroku を指しているあいだは Invalid Configuration のまま。当夜はレコードを変えるだけにする。`admin-v2` の参照先（`f319020a4f43f5f1.vercel-dns-016.com.`）と同じになる見込みだが、画面の値を使う |
 | 10/30 12:00 | §4 のゲートで Go / 延期を決める | |
 
 ## 6. 当日のタイムライン（10/30）
@@ -136,7 +138,11 @@ v1（Rails / Heroku）を止め、データと Stripe の契約を v2 に移し�
 
 DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の差し替え → Redeploy」。ドメインは §5 で足してある）:
 
-1. Gehirn DNS: `assift.com` の Web のレコード（§11 の apex と `www`）を Vercel の値へ、`admin` の CNAME を足す。**MX・SPF・DKIM・DMARC は触らない**（016-terms §7）
+1. Gehirn DNS（§12 2026-10-15 の値から）:
+   - A `assift.com.`: エイリアスを **OFF** にし、Vercel が示す IP を TTL 300 で入れる（今はエイリアス ON で `concave-catfish-pri96kqt2zj223u7sugybxwq.herokudns.com.` を参照）
+   - CNAME `admin.assift.com.` を足す（Vercel が示す参照先。TTL 300）
+   - **ほかは触らない**: MX・TXT（SPF・`google-site-verification`・DMARC・DKIM 3 つ）・Resend の CNAME（`send`・`rsend`）・SendGrid の CNAME（§6.6 で消す）・NS（016-terms §7）
+   - 戻すときは A のエイリアスを ON にして Heroku の参照先へ（判断点 B の前に限る。§6.4）
 2. Vercel の Domains で `assift.com`・`admin.assift.com` が Valid Configuration になり、証明書が出る（数分）
 3. Vercel の Production の環境変数: `SITE_URL=https://assift.com`、`ADMIN_HOST=admin.assift.com`
 4. Supabase → Authentication → URL Configuration: Site URL を `https://assift.com`、Redirect URLs に `https://assift.com/auth/callback` を足し、`v2` を消す
@@ -151,7 +157,7 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 | --- | --- |
 | インポートが失敗（判断点 A の前） | トランザクションごと戻っているので v2 には何も無い。直せるなら直して §6.2 からやり直す。判断点 A を過ぎたら、Heroku `MAINTENANCE_MODE=off`・Scheduler のジョブを戻し、日を改める（021 §10） |
 | COMMIT の後の検証で失敗（判断点 A の前） | 直せるなら直す。戻すなら §5 の片付けの SQL で管理用アカウントだけの状態に戻し、v1 のメンテナンスを解く |
-| 判断点 B の後 | v1 には戻さない。前に進めて直す（DNS は §5 の TTL の短さで早く反映される） |
+| 判断点 B の後 | v1 には戻さない。前に進めて直す（当夜に作るレコードは TTL 300 なので、直したレコードは早く反映される） |
 | 日を改めたとき | 3 ページの日付と告知をやり直す（§3-2a）。Vercel の Cron Jobs と Stripe の Webhook のエンドポイントを戻す。Stripe の解約メールの設定を戻すかを決める |
 
 ### 6.5 公開直後の確認（〜24:00）
@@ -178,7 +184,8 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 | 11/1 朝 | 10/31 23:20・23:50 の cron の実行履歴が成功 / 旧料金の利用者の請求書を Dashboard で突き合わせ、救った 47 件の支払い失敗の数を見る | 019 §8.3-5 |
 | 11/2〜11/6 | Deploy to production を 024 §4.8 の手順で確かめてからオンにする（§3-8） | 024 §4.8 |
 | 11/6 ごろ | Heroku を止める（§3-10）。止める前に、ダンプと `<out>` の保管（暗号化して 1 か所。ファイル名に消す日）が済んでいることを確かめる（021 §10-8）。Heroku に残る 2019〜2025 年の手動バックアップ 8 件はアドオンごと消す（021 §15 の申し送り。保管の決まりの外）| 001 §5.4-6・021 §15 |
-| Heroku を止めたあと | Gehirn の SPF から `a:www2298.sakura.ne.jp` を外す（`include:spf.mta.gis.gehirn.jp` は残す）/ v1 の SendGrid の CNAME（`em2978`・`s1` / `s2._domainkey` など）を消す | 016-terms §7・024 §9 2026-10-14 |
+| 11/1 以降 | 当夜に作った A（`assift.com.`）と CNAME（`admin`）の TTL を 3600 に戻す | §6.3 |
+| Heroku を止めたあと | Gehirn の SPF（`assift.com.` の TXT）から `a:www2298.sakura.ne.jp` を外す（`include:spf.mta.gis.gehirn.jp`・`include:_spf.google.com` は残す）/ v1 の SendGrid の CNAME 5 つ（`9287784`・`em2978`・`s1._domainkey`・`s2._domainkey`・`url2241`）を消す。`google-site-verification` の TXT は残す（Search Console。024 §9 2026-10-15 のブランドの確認で使った） | 016-terms §7・024 §9 2026-10-14 |
 | 2027-01-30 | pg_dump と JSONL を消す（カットオーバーから 3 か月） | 021 §10-8(a) |
 | 2027-10-30 | `manifest.json` / `report.json` / Stripe の結果 CSV / 旧料金の対象者の一覧 / `usage_records` の CSV を消す。`/serviceworker.js`（§8）を消してよい | 021 §10-8(b) |
 | リリース後 | PITR の検討 / 共同開発者が増えたら Redirect URLs の `assift-*-sundbox.vercel.app` を見直す | 024 §10 |
@@ -222,7 +229,7 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 - proxy の matcher は変えない（ふつうのパスとして通り、CSP のヘッダも付く。この JS は `eval` も外部の読み込みもしないので方針に触れない）。管理画面のホストでは proxy の 0 段目が `/-` へ redirect する（`lib/admin/host.ts` の `redirectToAdmin`。v1 に管理画面のホストは無かったので要らない）
 - 置いておく期間は 1 年（§6.6）。解除済みの人には何も起きないので、消し忘れても害はない
 - AGENTS.md のディレクトリに 1 行足す
-- 注意: `www.assift.com` を apex へ転送する（§11-1）と、`www` に残る v1 の登録は解除できない（Service Worker のスクリプトの取得は redirect を受けない）。v1 が `www` で使われていたなら、`www` も Vercel で v2 をそのまま返す
+- `www` は扱わない: v1 は apex だけで動いていた（Gehirn に `www` のレコードが無い。§3-14）。仮に `www` を apex へ転送すると、そこに残った登録は解除できない（Service Worker のスクリプトの取得は redirect を受けない）
 
 ### 8.3 確かめ方
 
@@ -267,14 +274,49 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 
 | # | 項目 | 状態 |
 | --- | --- | --- |
-| 1 | Gehirn DNS の Web のレコードの今の値（apex が A か ALIAS か・`www` の有無と値）と TTL。`www` を v2 で apex へ転送するか（v1 が `www` で使われていたなら §8.2 の注意） | 利用者に確かめる。§5（10/29）と §6.3 の DNS の切り替えの 1 で使う |
+| 1 | ~~Gehirn DNS の Web のレコードの今の値と TTL・`www`~~ | 決定（2026-10-15）: 値は §12、`www` は作らない（§3-14） |
 | 2 | §6 の各段の時刻・判断点 A の時刻 | §4-1（021 §9.3）の実測で埋める |
 | 3 | `stripe:sync-all` に使う Stripe の鍵 | Stripe の live のタスクで決める（§7.2） |
-| 4 | 当夜に「移行しないのに店舗を持つ人」が 1 件以上出たとき | 案: 昼の予行で 0 件なら当夜も同じとみなし、出ても止めずに COMMIT して、その人には翌日以降に個別に連絡する（1 回きりの COMMIT なので、後から `--overrides` で足せない）。昼の予行で 1 件以上なら `--overrides` を用意して当夜に渡す |
+| 4 | ~~当夜に「移行しないのに店舗を持つ人」が 1 件以上出たとき~~ | 決定（2026-10-15）: §3-13 |
 
 ## 12. 実装ログ
 
 （作業のあとに、日時・確かめた結果・つまずいた点を書く。秘密の値は書かない）
+
+### 2026-10-15（Gehirn DNS の今の値）
+
+利用者が Gehirn DNS の管理画面のスクリーンショットを貼った。`assift.com` のゾーンのレコードはこれで全部（SRV・SVCB・HTTPS・CAA・AAAA は 0 件）。
+DKIM の公開鍵の長い値は省いた（当夜に触らない）。
+
+| 種類 | 名前 | TTL | 値 | 当夜 |
+| --- | --- | --- | --- | --- |
+| NS | `assift.com.` | 86400 | `ns2.gehirndns.com.` / `.jp.` / `.net.` / `.org.` | 触らない |
+| A | `assift.com.` | （エイリアスなので欄が無い） | **エイリアス ON**: `concave-catfish-pri96kqt2zj223u7sugybxwq.herokudns.com.`（v1 の Heroku） | **Vercel の IP に替える**（エイリアス OFF、TTL 300） |
+| MX | `assift.com.` | 3600 | `1 smtp.google.com.` | 触らない |
+| CNAME | `9287784` | 3600 | `sendgrid.net.` | 触らない（Heroku を止めたあと消す） |
+| CNAME | `em2978` | 3600 | `u9287784.wl035.sendgrid.net.` | 同上 |
+| CNAME | `s1._domainkey` | 3600 | `s1.domainkey.u9287784.wl035.sendgrid.net.` | 同上 |
+| CNAME | `s2._domainkey` | 3600 | `s2.domainkey.u9287784.wl035.sendgrid.net.` | 同上 |
+| CNAME | `url2241` | 3600 | `sendgrid.net.` | 同上 |
+| CNAME | `rsend` | 3600 | `rsend-apne1.forge.rmta.net.`（Resend） | 触らない |
+| CNAME | `send` | 3600 | `send.forge.rmta.net.`（Resend） | 触らない |
+| CNAME | `admin-v2` | 3600 | `f319020a4f43f5f1.vercel-dns-016.com.`（仮のホスト） | 触らない（10/31 に消す） |
+| CNAME | `v2` | 3600 | `f319020a4f43f5f1.vercel-dns-016.com.`（仮のホスト） | 同上 |
+| CNAME | `admin` | — | （無い） | **足す**（Vercel が示す参照先、TTL 300） |
+| TXT | `1556601411.gehirn._domainkey` | 3600 | DKIM（Gehirn の SMTP） | 触らない |
+| TXT | `google._domainkey` | 3600 | DKIM（Workspace） | 触らない |
+| TXT | `resend._domainkey` | 3600 | DKIM（Resend） | 触らない |
+| TXT | `_dmarc` | 3600 | `v=DMARC1; p=none; rua=mailto:dmarc@assift.com` | 触らない |
+| TXT | `assift.com.` | 3600 | `google-site-verification=…`（値は Gehirn の画面のまま） | 触らない（Search Console） |
+| TXT | `assift.com.` | 3600 | `v=spf1 a:www2298.sakura.ne.jp include:spf.mta.gis.gehirn.jp include:_spf.google.com ~all` | 触らない（Heroku を止めたあと sakura を外す） |
+
+分かったこと:
+
+- **`www` のレコードは無い**。v1 は apex だけで動いていた → `www` は作らない（§3-14）。v1 の Service Worker も apex にしか登録されていない
+- apex の A は Gehirn のエイリアス（ALIAS）で Heroku の DNS 名を参照していて、TTL の欄が無い。前もって TTL を下げる手順は要らない（§5）。当夜はエイリアスを OFF にして Vercel の IP を入れる
+- CAA は無いので、Vercel の証明書（Let's Encrypt）の発行を妨げない
+- SendGrid の CNAME は 024 §9 の記録（`em2978`・`s1` / `s2._domainkey`）より 2 つ多い（`9287784`・`url2241`。ドメインの認証とリンクのブランディング）。Heroku を止めたあと 5 つとも消す（§6.6）
+- 016-terms §7 の 2026-10-13 の表（MX・SPF・DKIM・DMARC）と一致
 
 ## 13. プランのレビュー
 
@@ -296,6 +338,6 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 | 12 | 021 §10-5 の `max_staffs_count` の手当てが抜けている | §6.3（`admin-v2.assift.com` で） |
 | 13 | v1 の準備（最新の rake・`DATABASE_URL`・ダミーの鍵）と verify の接続 | §5・§6.1・§6.2 |
 | 14 | `usage_records` の CSV とリハーサルの JSONL の扱い | §6.1 |
-| 15 | 当夜に移行しないのに店舗を持つ人が出たとき | §5・§11-4 |
+| 15 | 当夜に移行しないのに店舗を持つ人が出たとき | §5・§3-13 |
 | 16 | 管理画面のホストの扱いの誤り・参照のずれ・朝 / 昼の不一致・管理画面の Action | §8.2・§6.5・§3-3・§4 |
 | 17 | Redeploy の後に Cron Jobs が無効のままか | §6.3 の 7 |
