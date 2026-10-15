@@ -377,3 +377,8 @@ Workspace は `sundbox.app` の 1 つだけで、`assift.com` はその追加の
 - Authentication → Add user（Auto Confirm）で管理専用のアカウントを作り（v1 の利用者と重ならないメール）、SQL で `is_admin = true` を立てた。`profiles` は 1 行
 - `https://admin-v2.assift.com/-/login` でログインでき、ユーザー一覧が出た
 - Google Auth Platform の公開ステータスは本番環境
+
+### 2026-10-15（§5 の通し: 1〜2）
+
+- 1: `/`・`/terms`・`/privacy`・`/law` が開き、CSP の違反なし
+- 2: 確認メールのリンク先が `https://assift-sundbox.vercel.app/` だった。テンプレートは `{{ .SiteURL }}` で組むので、Site URL が以前の値のまま（2026-10-14 の「Auth の設定」の記録では `v2.assift.com` にしたとしていたが、保存されていなかったか、何かに戻された）。URL Configuration を見直す
