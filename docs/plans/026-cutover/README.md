@@ -9,7 +9,7 @@
 - 予定: プランは 10/15〜10/16（クリティカルパス）。コードの変更（§7・§8）は 10/27 までに main へ
 - **作業するのは人間**（Heroku / Stripe / Vercel / Supabase / Google / Gehirn の操作と秘密の値）。リポジトリの変更は §7・§8 の 2 つだけ
 
-**状態: 下書き（2026-10-15）。§3 の決定を入れた。未確定は §11（DNS の今の値）。**
+**状態: 下書き（2026-10-15）。§3 の決定を入れ、レビューを 1 回反映した（§13）。未確定は §11。**
 
 ## 1. 目的と完了条件
 
@@ -17,7 +17,7 @@ v1（Rails / Heroku）を止め、データと Stripe の契約を v2 に移し�
 当日にすることを「手順をなぞるだけ」にする。そのために、手順・所要時間・止める基準・戻し方をすべて先に決めておく。
 
 - [ ] 前提のゲート（§4）がすべて満たされ、10/30 の昼に Go を決めた
-- [ ] v1 の全データが本番の Supabase に入り、§8.1 の突合（021）と `verify.ts` が通った
+- [ ] v1 の全データが本番の Supabase に入り、021 §8.1 の突合と `verify.ts` が通った
 - [ ] Stripe の引き継ぎ（019 §8.2.3）と全員の同期（§7）が済み、有料プランの人がロックされていない
 - [ ] `https://assift.com` と `https://admin.assift.com` が v2 を返し、§6.5 の確認が通った
 - [ ] 公開後の作業（§6.6）を期日つきで残した
@@ -51,7 +51,7 @@ v1（Rails / Heroku）を止め、データと Stripe の契約を v2 に移し�
 | 1 | 日時 | 10/30（金）22:00 開始、24:00 までに DNS を切り替える | 016-terms §7（制定日 10/30）・019 §8.3-3（月の下旬）。Heroku のメンテナンス枠（日曜 03:00〜07:00 JST）と自動バックアップ（02:00 JST）に重ならない（021 §15 の申し送り） |
 | 2 | 日付をまたいだとき | **3 ページ（`/terms`・`/privacy`・`/law`）の日付は 10/30 のまま**。016-terms §7 2026-10-13 の「10/31 に直してから出す」を上書きする | 告知（10/29 に「10/30 から適用」）が先に届くので民法 548 条の 4 の要件は満たす。24:00〜公開の数時間は v1 も v2 も利用者が使えず、料金が変わるのも各契約の期間の終わりから（10/31 23:59 ごろ）なので、日付が公開より数時間前でも不利になる人がいない。告知・添付の PDF・ページの日付がそろう。当夜の作業（日付の PR・merge・デプロイ待ち）が減る |
 | 2a | 当夜を中止して日を改めたとき | 3 ページの日付と告知をやり直す（§6.4） | #2 が通るのは、その夜のうちに公開できたときだけ |
-| 3 | 当夜の `--rollback` | **当日の朝の予行（§5 T-0）で代え、夜は本番に 1 回だけ流す**。021 §10-3 の「`--rollback`（最終確認）→ 本番」を上書きする | インポートはローカルで 17 分、本番は Session pooler 越しでさらに延びる。2 回流すと 2 時間に収まらない。朝の予行でネットワーク・権限・所要を確かめれば、夜に増える情報はダンプの差分だけ |
+| 3 | 当夜の `--rollback` | **当日の昼の予行（§5 T-0）で代え、夜は本番に 1 回だけ流す**。021 §10-3 の「`--rollback`（最終確認）→ 本番」を上書きする | インポートはローカルで 17 分、本番は Session pooler 越しでさらに延びる。2 回流すと 2 時間に収まらない。昼の予行でネットワーク・権限・所要を確かめれば、夜に増える情報はダンプの差分だけ |
 | 4 | 全員の同期（019 §8.3-4・021 §10-6）の流し方 | **同期だけを流すスクリプト `npm run stripe:sync-all` を足す**（§7） | 今は cron のルートからしか呼べず、当日は cron を止める（#5）。cron のルートを手で叩くと人数の送信（`reportAllUsage`）まで走る |
 | 5 | cron | **当日の昼に Vercel の Settings → Cron Jobs で無効にし、10/31 の昼に戻す**。021 §10-3 の「23 時台を避ける」はこれで不要になる | 23:20 / 23:50 の同期がインポート・引き継ぎの最中に `profiles` / `billing_subscriptions` に書くのを避ける。新料金の契約の 10 月の期間は 11/1 0:00 に終わるので、最終日の送信（10/31 23:20）より前に戻すのは必須（019 §4.2-3） |
 | 6 | Stripe の引き継ぎ・全員の同期と DNS の順 | **DNS の切り替えの前**（021 §10 のまま） | 同期の前は `billing_subscriptions` が空で、有料プランの人も上限超過でロックされる（021 §15「CSV と必要人数」） |
@@ -60,30 +60,38 @@ v1（Rails / Heroku）を止め、データと Stripe の契約を v2 に移し�
 | 9 | 前提タスク | Stripe の live・021 §9.3・告知・3 ページのレビューは、本プランでは**期限つきのゲート**として書くだけ（§4） | それぞれのタスクで中身を扱う |
 | 10 | v1 を止める時期 | 公開から **1 週間**（〜11/6 ごろ）は Heroku をメンテナンスモードのまま残してから止める。メンテナンス中は `@assift.com` の管理者アカウントで v1 にログインしない | 10/31 の期間の切り替えと 11/1 の請求の突き合わせ（019 §8.3-5）を見届ける。v1 の `maintenance_mode` は管理者を通す（v1 `ApplicationController`）ので、ログインすると書き込めてしまう |
 | 11 | Stripe の Webhook の URL | **`https://v2.assift.com/api/stripe/webhook` で登録し、当日の DNS の切り替えの後に `https://assift.com/api/stripe/webhook` へ変える**（Stripe の live のタスクへの依頼。§4） | `assift.com` で登録すると、DNS の切り替えまで（= 引き継ぎスクリプトの実行中）のイベントが v1 に当たって失敗し、再送待ちになる（024 §10）。`v2.assift.com` は v2 の本番なので、引き継ぎ中のイベントがその場で同期される。URL を変えても署名の secret は変わらない |
+| 12 | 当夜の Webhook の受け付け | **22:00 に Stripe の Webhook のエンドポイントを無効にし、判断点 B（§6.3）の直後、`--apply` の前に有効に戻す**。止めていたあいだのイベントは 23:25 の `stripe:sync-all` が拾う | インポートの COMMIT の後は、v1 の Customer のイベントで `syncCustomer()` が持ち主を引けるようになり、Stripe に書く（二重契約の解約・Customer のメールの更新。`lib/billing/sync.ts` の `applySubscriptions`）。判断点 A の「Stripe に何もしていないので戻せる」を守る。インポート中は `profiles` の書き込みがトリガを止めたロックで待たされる（021 §6.1）ことも避けられる |
 
 ## 4. 前提のゲート
 
-**10/30 の 12:00 に 1〜6 がすべて済んでいなければ、延期する**（告知の前なら日付を動かすだけ。告知の後なら告知のやり直しが要る）。
+判断は 2 回。
+
+- **10/29、告知を送る前**: 1〜4 が済んでいなければ告知を送らず、日を動かす（告知の後に落ちると、告知のやり直しが要る）
+- **10/30 の 12:00**: 5・6 も済んでいなければ延期する（告知のやり直しが要る。§6.4「日を改めたとき」）
 
 | # | ゲート | 期限 | 確かめ方 | 担当のタスク |
 | --- | --- | --- | --- | --- |
 | 1 | 021 §9.3 の本番に対する `--rollback` が通り、所要時間が分かっている。必要なら `COPY` に替えた（021 §13-8） | 10/22 | 021 §15 に所要・RSS・§13-4（`postgres` ロールの権限）の結果。§6 の時刻を実測で埋めた | 021 §9.3 |
-| 2 | Stripe の live: `stripe:setup`、Webhook の登録（§3-11 の URL）、Dashboard の設定（019 §4.1）、**解約メールのオフ**（019 §8.3-2）、Vercel の Production に `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `CRON_SECRET` | 10/27 | 019 の実装ログ。`curl -i https://v2.assift.com/api/cron/billing-usage` が 401（鍵なし） | Stripe の live |
+| 2 | Stripe の live: `stripe:setup`、Webhook の登録（§3-11 の URL）、Dashboard の設定（019 §4.1）、**解約メールのオフ**（019 §8.3-2）、Vercel の Production に `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `CRON_SECRET` | 10/27 | 019 の実装ログ。`CRON_SECRET` は鍵付きで `curl -i -H "Authorization: Bearer …" https://v2.assift.com/api/cron/billing-usage` が 200（鍵が無くても 401 になるので、鍵なしの 401 では確かめられない）。`STRIPE_WEBHOOK_SECRET` は Stripe のテストイベントの送信が 2xx | Stripe の live |
 | 3 | `stripe:sync-all`（§7）と `/serviceworker.js`（§8）が main に入り、`v2.assift.com` で確かめた | 10/27 | §7.3・§8.3 | 本プラン |
 | 4 | 3 ページの最終レビューが済み、文面が確定した | 10/28 | 016-terms §7 | 規約 |
-| 5 | 告知を送った（10/29。規約・ポリシーの全文の PDF を添付、「10/30 から適用」） | 10/29 | 送った日時・件数・添付の版の記録（016-terms §7 2026-10-13） | 告知 |
-| 6 | 当日の朝の予行（§5 T-0）が通った | 10/30 12:00 | 所要が §9.3 の実測から大きく外れていない | 本プラン |
+| 5 | 告知を送った（10/29。規約・ポリシーの全文の PDF を添付、「10/30 から適用」）。本文に入れる申し送り: メンテナンスの時間（10/30 22:00〜）と、切り替え後は再ログインが要ること（001 §5.4-2）/ パスワードを持たない人（Google だけで使っていた人・代理承認の人）は「パスワードを忘れた方」から作る（021 §8.2-8b）/ スタッフ 0 人でデータのある店舗 1,845 件は初期設定の画面から始まる（021 §15。触れるかは告知のタスクで決める）/ 料金（019 §8.4）/ 規約の周知（016-terms §7） | 10/29 | 送った日時・件数・添付の版の記録（016-terms §7 2026-10-13） | 告知 |
+| 6 | 当日の昼の予行（§5 T-0）が通った | 10/30 12:00 | 所要が 021 §9.3 の実測から大きく外れていない | 本プラン |
 
 ## 5. 事前の作業
 
 | いつ | すること | メモ |
 | --- | --- | --- |
 | §4-1 のあと | §6 の各段の時刻と、中止の判断の時刻（§6.4）を実測で埋める | ローカルの実測: capture 52 秒 / download 1〜2 分 / restore 1 分 17 秒 / エクスポート 13 分 37 秒 / インポート 17 分（021 §15） |
+| §4-2 のあと | `stripe:migrate-v1` の dry-run をリハーサルの `v1-subscriptions.csv` で live に流し、所要を測る（読むだけで書かない）。`--apply` の所要は区分ごとの呼び出しの回数から見積もり、§6.3 の時刻に入れる | 約 989 件を 1 件ずつ順に処理し、`unpaid` は下書きごとに確定と無効化を呼ぶ。判断点 B の後に時間が足りなくなると戻せない |
 | §4-1 のあと | 中止のときの片付けの SQL（COMMIT した後に v1 へ戻す場合。§6.4）を書き、ローカルで通す | 管理用アカウント以外の `auth.users` を消して `profiles` 以下を cascade で消す想定。`shifts` 1,150 万行の削除の所要も測る |
 | 10/27 まで | §7・§8 を main に入れ、`v2.assift.com` で確かめる | §4-3 |
+| 10/27 以降 | **main への merge を止める**（直しが要るものだけ。merge すると Production が自動でデプロイされる）。3 ページの文面の修正（§4-4）は例外 | 当日の本番のコードを固定する |
 | 10/29（前日） | Gehirn DNS の Web のレコード（§11）の TTL を下げる（例: 300 秒）。今の値を本プランの §12 に記録する | 切り替え後に問題が出たときの戻し・反映待ちを短くする。下げる前の TTL のぶん前日に済ませる |
-| 10/29 | 当日の手元の準備: v1 の作業ディレクトリ（`a8bb5ad`）、Postgres 16（port 5433）、v2 の作業ディレクトリを最新の `main` にして `npm ci`、秘密の値（DB の接続文字列・`SUPABASE_SECRET_KEY`・Stripe の鍵）がパスワードマネージャから出せる | 秘密の値は `.env.local` に書かない。コマンドごとに環境変数で渡す（021 §11） |
-| 10/30 昼（T-0） | 朝の予行: リハーサルのエクスポート（`~/v1-export/` の 10/14 の出力）で `npm run migrate:v1 -- --input … --rollback` を本番に流す | §3-3。ネットワーク・権限・所要の最終確認（021 §9.3「当日の朝にもう 1 回」） |
+| 10/29 | `npx supabase migration list` で本番の migration が main と揃っている（Local と Remote が同じ本数） | Deploy to production はオフ（§3-8）なので、merge した migration は `db push` で手で入れる（024 §3-10） |
+| 10/29 | v1 の管理画面で、旧料金に移す契約の今月の売上の値を控える | 019 §8.2.3-1 の「392 件の請求見込みが v1 の売上と大きく違わない」の突き合わせ用。当夜は v1 に管理者でログインしない（§3-10） |
+| 10/29 | 当日の手元の準備: v1 の作業ディレクトリ（`a8bb5ad`）に最新の `v2_export.rake`（照合を絞った版。`ecfc533` 以降）を写す / Postgres 16（port 5433）/ v2 の作業ディレクトリを最新の `main` にして `npm ci` / 秘密の値（DB の接続文字列・`SUPABASE_SECRET_KEY`・Stripe の鍵）がパスワードマネージャから出せる | 秘密の値は `.env.local` に書かない。コマンドごとに環境変数で渡す（021 §11）。v1 の起動には `DATABASE_URL=postgres://$(whoami)@localhost:5433/<名前>` とダミーの `STRIPE_SECRET_KEY` が要る（021 §15「v1 をつなぐ」） |
+| 10/30 昼（T-0） | 昼の予行: リハーサルのエクスポート（`~/v1-export/` の 10/14 の出力）で `npm run migrate:v1 -- --input … --rollback` を本番に流す。`report.json` の「移行しないのに店舗を持つ人」が 0 件か見る | §3-3。ネットワーク・権限・所要の最終確認（021 §9.3「当日の朝にもう 1 回」）。1 件以上なら `--overrides` のファイルを用意する（§11-4） |
 | 10/30 昼 | Vercel の Settings → Cron Jobs を無効にする（§3-5） | 戻すのは 10/31 の昼（§6.6） |
 | 10/30 昼 | Vercel の Domains に `assift.com`・`admin.assift.com`（と `www.assift.com`。§11）を足しておく | DNS が Heroku を指しているあいだは Invalid Configuration のまま。当夜はレコードを変えるだけにする |
 | 10/30 12:00 | §4 のゲートで Go / 延期を決める | |
@@ -97,18 +105,19 @@ v1（Rails / Heroku）を止め、データと Stripe の契約を v2 に移し�
 | 時刻 | 手順 | 確かめること | 出典 |
 | --- | --- | --- | --- |
 | 22:00 | Heroku `MAINTENANCE_MODE=on` | `https://assift.com` が 503（v1 の `public/503.html`）。管理者でログインしない（§3-10） | 001 §5.4-3・021 §10-1 |
+| 22:00 | Stripe の Webhook のエンドポイントを無効にする（§3-12） | Dashboard でエンドポイントが Disabled | §3-12 |
 | 22:01 | Heroku Scheduler の `stripe:create_usage_record` を止める（ジョブを消す） | Scheduler の一覧に無い | 019 §8.2.2・021 §10-1 |
 | 22:02 | `heroku pg:backups:capture` → `download` | capture 約 1 分・download 1〜2 分。バックアップの id と Created at を控える（`dumped_at`） | 021 §10-2 |
-| 22:06 | リハーサルの戻した DB を消し（`dropdb -p 5433 assift_v1_rehearsal`）、新しいダンプを restore（`createdb -p 5433 <名前>` → `pg_restore -p 5433 -d <名前> --no-owner --no-acl -j 4` → `vacuumdb --analyze-only`）。リハーサルのダンプ（`b2818`）も消す | 約 1〜2 分。件数を控える | 021 §15（リハーサルのダンプと DB はカットオーバーのダンプを取った時点で消す） |
-| 22:08 | `rails v2:export[<out>,<dumped_at>]` | 約 14 分。manifest の件数が restore した DB と一致 | 021 §10-2 |
+| 22:06 | リハーサルの戻した DB を消し（`dropdb -p 5433 assift_v1_rehearsal`）、新しいダンプを restore（`createdb -p 5433 <名前>` → `pg_restore -p 5433 -d <名前> --no-owner --no-acl -j 4` → `vacuumdb -p 5433 --analyze-only <名前>`）。リハーサルのダンプ（`b2818`）とリハーサルの JSONL（`~/v1-export/` の 10/13・10/14 の出力）も消す | 約 1〜2 分。件数を控える | 021 §15（リハーサルのダンプと DB はカットオーバーのダンプを取った時点で消す） |
+| 22:08 | `DATABASE_URL=postgres://$(whoami)@localhost:5433/<名前> STRIPE_SECRET_KEY=<ダミー> bundle exec rails v2:export[<out>,<dumped_at>]` | 約 14 分。manifest の件数が restore した DB と一致。`<out>` に保管用の `usage_records.csv` も出る（021 §5.1・§10-8(b)） | 021 §10-2 |
 
 ### 6.2 入れる（22:25〜23:00）
 
 | 時刻 | 手順 | 確かめること | 出典 |
 | --- | --- | --- | --- |
-| 22:25 | `NODE_OPTIONS=--max-old-space-size=16384 MIGRATION_DATABASE_URL=… npm run migrate:v1 -- --input <out>`（`--rollback` なし。§3-3） | §8.1 の突合がすべて OK で COMMIT。所要と RSS を控える。`report.json` の `over_limit` を控える | 021 §10-3 |
-| 22:50 | `npm run migrate:v1:verify -- --input <out>` | すべて一致 | 021 §10-4 |
-| 22:52 | §8.2 の 2〜4・7・9 を **`https://v2.assift.com`** で確かめる（DNS の前なので仮のホストで見られる） | 自分のアカウントでログイン / 旧 URL の 308 / 共有 URL / 準備中に送られない / 課金の列 | 021 §10-4 |
+| 22:25 | `NODE_OPTIONS=--max-old-space-size=16384 MIGRATION_DATABASE_URL=… npm run migrate:v1 -- --input <out>`（`--rollback` なし。§3-3） | 021 §8.1 の突合がすべて OK で COMMIT。所要と RSS を控える。`report.json` の `over_limit` と「移行しないのに店舗を持つ人」を控える。`<out>/v1-subscriptions-not-migrated.csv` の件数を見る（想定 0 件。1 件以上なら 23:00 の段で Dashboard から解約する。021 §6.1） | 021 §10-3 |
+| 22:50 | `MIGRATION_DATABASE_URL=… npm run migrate:v1:verify -- --input <out>` | すべて一致 | 021 §10-4 |
+| 22:52 | 021 §8.2 の 2〜4・7・8・9 を **`https://v2.assift.com`** で確かめる（DNS の前なので仮のホストで見られる。Google の生成元と Redirect URLs にも `v2` が残っている） | 自分のアカウントで **Google ログイン**（v1 で Google だった人の自動リンク。021 §8.2-8 の残り。利用者本人は Google の人でパスワードを失念している。021 §15）/ 旧 URL の 308 / 共有 URL / 準備中に送られない / 課金の列 | 021 §10-4 |
 
 **判断点 A（23:00 の目安。§6.4）**: ここまでに COMMIT と検証が済んでいなければ中止して v1 に戻す。ここまでは Stripe に何もしていないので、戻せる。
 
@@ -116,10 +125,11 @@ v1（Rails / Heroku）を止め、データと Stripe の契約を v2 に移し�
 
 | 時刻 | 手順 | 確かめること | 出典 |
 | --- | --- | --- | --- |
-| 23:00 | `npm run stripe:migrate-v1 -- --input <out>/v1-subscriptions.csv`（dry-run） | 件数が 019 §8.2.1 と合う。`skip`・`review`・取得できません・Customer が一致しません で `max_staffs_count >= 11` の人を `report.json` の `over_limit.freeOverLimit`（`hasSubscription: true`）と突き合わせる（021 §10-5） | 019 §8.2.3-1 |
+| 23:00 | `npm run stripe:migrate-v1 -- --input <out>/v1-subscriptions.csv --output <out>/v1-subscriptions-dryrun.csv`（dry-run） | 件数が 019 §8.2.1 と合う。旧料金に移す 392 件の請求見込みの合計が、10/29 に控えた v1 の売上と大きく違わない。`skip`・`review`・取得できません・Customer が一致しません で `max_staffs_count >= 11` の人を `report.json` の `over_limit.freeOverLimit`（`hasSubscription: true`）と突き合わせ、個別契約なら管理画面（DNS の前なので **`admin-v2.assift.com`**）で `max_staffs_count` を入れる（021 §10-5）。`v1-subscriptions-not-migrated.csv` に行があれば Dashboard で解約 | 019 §8.2.3-1・021 §6.1 |
 | 23:05 | **判断点 B（戻せなくなる点）**: ここで Go を決める | 以降は Stripe の契約を書き換えるので、v1 に戻すとそのぶんを手で戻すことになる。問題が出たら前に進めて直す | |
-| 23:05 | `--apply --limit 5` → Dashboard で目で確かめる | Customer の言語・schedule の中身・無効にした下書き・`active` に戻ったこと | 019 §8.2.3-2 |
-| 23:10 | `--apply`（残り全部） | 結果の CSV を `<out>` に保存 | 019 §8.2.3-3 |
+| 23:05 | Stripe の Webhook のエンドポイントを有効に戻す（§3-12） | Enabled | §3-12 |
+| 23:05 | `--apply --limit 5 --output <out>/v1-subscriptions-limit5.csv` → Dashboard で目で確かめる | Customer の言語・schedule の中身・無効にした下書き・`active` に戻ったこと | 019 §8.2.3-2 |
+| 23:10 | `--apply --output <out>/v1-subscriptions-apply.csv`（残り全部） | 結果の CSV は 3 つとも `<out>` に残す（`--output` を省くと作業ディレクトリの同じ名前に上書きされ、個人情報が repo の下に残る） | 019 §8.2.3-3・4 |
 | 23:25 | `npm run stripe:sync-all`（§7） | `failed: 0`。`billing_subscriptions` の件数。旧料金に移した人を 1 人、`v2.assift.com` でロックされていないこと | 019 §8.3-4・§3-4 |
 | 23:30 | Stripe の Dashboard: リトライが尽きたら「解約する」へ / 解約メールの設定を戻す | | 019 §8.3-4 |
 | 23:32 | DNS の切り替え（下の順。024 §6） | | |
@@ -132,7 +142,8 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 4. Supabase → Authentication → URL Configuration: Site URL を `https://assift.com`、Redirect URLs に `https://assift.com/auth/callback` を足し、`v2` を消す
 5. Google Auth Platform → Clients: JavaScript 生成元に `https://assift.com` を足し、`v2` を消す（リダイレクト URI は変えない）
 6. Stripe → Webhook の URL を `https://assift.com/api/stripe/webhook` に変える（§3-11）
-7. Vercel の Production を **Redeploy**。終わったら Supabase の URL Configuration を開き直し、**Site URL が `https://assift.com` のまま**か見る（連携が Redirect URLs を書き換える。024 §6・§9 2026-10-15）
+7. Vercel の Production を **Redeploy**。終わったら Supabase の URL Configuration を開き直し、**Site URL が `https://assift.com` のまま**か見る（連携が Redirect URLs を書き換える。024 §6・§9 2026-10-15）。
+   あわせて Vercel の Settings → Cron Jobs が無効のままか見る（23:50 の実行の前に）
 
 ### 6.4 中止と戻し方
 
@@ -141,18 +152,18 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 | インポートが失敗（判断点 A の前） | トランザクションごと戻っているので v2 には何も無い。直せるなら直して §6.2 からやり直す。判断点 A を過ぎたら、Heroku `MAINTENANCE_MODE=off`・Scheduler のジョブを戻し、日を改める（021 §10） |
 | COMMIT の後の検証で失敗（判断点 A の前） | 直せるなら直す。戻すなら §5 の片付けの SQL で管理用アカウントだけの状態に戻し、v1 のメンテナンスを解く |
 | 判断点 B の後 | v1 には戻さない。前に進めて直す（DNS は §5 の TTL の短さで早く反映される） |
-| 日を改めたとき | 3 ページの日付と告知をやり直す（§3-2a）。Vercel の Cron Jobs を戻す。Stripe の解約メールの設定を戻すかを決める |
+| 日を改めたとき | 3 ページの日付と告知をやり直す（§3-2a）。Vercel の Cron Jobs と Stripe の Webhook のエンドポイントを戻す。Stripe の解約メールの設定を戻すかを決める |
 
 ### 6.5 公開直後の確認（〜24:00）
 
 | # | 確かめること | 出典 |
 | --- | --- | --- |
-| 1 | `https://assift.com` の LP・`/terms`・`/privacy`・`/law`（「2026年10月30日制定」）。HTML の応答に `Content-Security-Policy` | 024 §5-1・§3-2 |
+| 1 | `https://assift.com` の LP・`/terms`・`/privacy`・`/law`（「2026年10月30日制定」）。HTML の応答に `Content-Security-Policy` | 024 §5-1・本プラン §3-2 |
 | 2 | 自分の v1 のアカウントでログイン → 店舗 → シフト表 → PDF / CSV | 021 §8.2-2 |
 | 3 | v1 の旧 URL（`/tenants/<22 文字>/shifts?...`）が 308 で着く / `/share/<code>` が開く | 021 §8.2-3・4 |
-| 4 | 実際の Google ログイン（v1 で Google だった人の自動リンク。021 §8.2-8 の残り）/ 同意画面のリンク先が `assift.com` | 021 §8.2-8・024 §10 |
+| 4 | `assift.com` で Google ログインが戻ってくる（JavaScript 生成元の差し替えの確認。自動リンクは 22:52 に確かめた）/ 同意画面のリンク先が `assift.com` | 024 §6・§10 |
 | 5 | パスワード再設定のメールのリンクが `https://assift.com/auth/callback?...` | 024 §6 |
-| 6 | `https://admin.assift.com/-/login` で入れる / `https://assift.com/-` と `*.vercel.app/-` が 404 | 020 §10 |
+| 6 | `https://admin.assift.com/-/login` で入れる / 管理画面の Action が動く（例: 一覧の検索）/ `https://assift.com/-` と `*.vercel.app/-` が 404 | 020 §10 |
 | 7 | Stripe の Webhook の配信が `assift.com` で成功している | §3-11 |
 | 8 | v1 の Service Worker が登録されたブラウザで開き、解除される（§8.3） | §3-7 |
 | 9 | Vercel Web Analytics のダッシュボードに `assift.com` の閲覧が 1 件届く | 025 §6.3 |
@@ -166,7 +177,7 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 | 10/31 | 仮のホスト `v2.assift.com` / `admin-v2.assift.com` を Vercel の Domains と Gehirn DNS から外す | 024 §6・§10 |
 | 11/1 朝 | 10/31 23:20・23:50 の cron の実行履歴が成功 / 旧料金の利用者の請求書を Dashboard で突き合わせ、救った 47 件の支払い失敗の数を見る | 019 §8.3-5 |
 | 11/2〜11/6 | Deploy to production を 024 §4.8 の手順で確かめてからオンにする（§3-8） | 024 §4.8 |
-| 11/6 ごろ | Heroku を止める（§3-10）。Heroku に残る 2019〜2025 年の手動バックアップ 8 件はアドオンごと消す（021 §15 の申し送り。保管の決まりの外）| 001 §5.4-6・021 §15 |
+| 11/6 ごろ | Heroku を止める（§3-10）。止める前に、ダンプと `<out>` の保管（暗号化して 1 か所。ファイル名に消す日）が済んでいることを確かめる（021 §10-8）。Heroku に残る 2019〜2025 年の手動バックアップ 8 件はアドオンごと消す（021 §15 の申し送り。保管の決まりの外）| 001 §5.4-6・021 §15 |
 | Heroku を止めたあと | Gehirn の SPF から `a:www2298.sakura.ne.jp` を外す（`include:spf.mta.gis.gehirn.jp` は残す）/ v1 の SendGrid の CNAME（`em2978`・`s1` / `s2._domainkey` など）を消す | 016-terms §7・024 §9 2026-10-14 |
 | 2027-01-30 | pg_dump と JSONL を消す（カットオーバーから 3 か月） | 021 §10-8(a) |
 | 2027-10-30 | `manifest.json` / `report.json` / Stripe の結果 CSV / 旧料金の対象者の一覧 / `usage_records` の CSV を消す。`/serviceworker.js`（§8）を消してよい | 021 §10-8(b) |
@@ -197,7 +208,7 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 
 ### 8.1 v1 の Service Worker（`tabbyz/assift-v1` の `app/assets/javascripts/serviceworker.js.erb`）
 
-- `/serviceworker.js` を scope `/` で登録（`serviceworker-companion.js`。`serviceworker-rails`）
+- `/serviceworker.js` を **scope `'./'`（登録したページからの相対）**で登録する（`serviceworker-companion.js`。`serviceworker-rails`）。そのため登録は `/`・`/share/`・`/tenants/<token>/` などページの場所ごとに分かれうる。どれもスクリプトは同じ `/serviceworker.js`
 - `fetch` はネットワーク優先で、失敗したらキャッシュ（`application.css`・`/offline.html`）を返す。キャッシュ名は `v1:sw-cache-`
 - ブラウザは画面の遷移ごとに `/serviceworker.js` を取り直す（HTTP キャッシュは最大 24 時間で迂回）。v2 では 404 になるが、**取り直しの失敗では登録は消えない**。そのため v1 を使っていた人は、v2 のすべてのリクエストが v1 の Service Worker を通る状態が続く
 
@@ -205,17 +216,20 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 
 - Route Handler `src/app/serviceworker.js/route.ts`（GET。ドット入りのフォルダでパスを作るのは Next の規約どおり: `node_modules/next/dist/docs/01-app/02-guides/backend-for-frontend.md` の `app/rss.xml/route.ts`）: 次の JS を返す。`Content-Type: text/javascript; charset=utf-8`・`Cache-Control: no-cache`
   - `install` で `self.skipWaiting()`
-  - `activate` で `caches.keys()` をすべて消し、`self.registration.unregister()`
+  - `activate` で `caches.keys()` をすべて消し、`self.registration.unregister()`（scope ごとの登録がそれぞれ取り直して、それぞれ自分を解除する）
   - `fetch` のハンドラは持たない（リクエストを中継しない）
   - 開いている画面は再読み込みしない（Server Action の途中で画面を飛ばさない）。次の遷移から素のネットワークになる
-- proxy の matcher は変えない（ふつうのパスとして通り、CSP のヘッダも付く。この JS は `eval` も外部の読み込みもしないので方針に触れない）。管理画面のホストでは proxy の 0 段目が 404 にする（v1 に管理画面のホストは無かったので要らない）
+- proxy の matcher は変えない（ふつうのパスとして通り、CSP のヘッダも付く。この JS は `eval` も外部の読み込みもしないので方針に触れない）。管理画面のホストでは proxy の 0 段目が `/-` へ redirect する（`lib/admin/host.ts` の `redirectToAdmin`。v1 に管理画面のホストは無かったので要らない）
 - 置いておく期間は 1 年（§6.6）。解除済みの人には何も起きないので、消し忘れても害はない
 - AGENTS.md のディレクトリに 1 行足す
+- 注意: `www.assift.com` を apex へ転送する（§11-1）と、`www` に残る v1 の登録は解除できない（Service Worker のスクリプトの取得は redirect を受けない）。v1 が `www` で使われていたなら、`www` も Vercel で v2 をそのまま返す
 
 ### 8.3 確かめ方
 
-1. `npm run build && npm run start` のうえで Playwright: v1 と同じ中身の Service Worker を `/serviceworker.js` として登録 → 返す中身をこのルートに替えて画面を開き直す →
-   `navigator.serviceWorker.getRegistrations()` が空、`caches.keys()` が空、`securitypolicyviolation` が 0 件
+1. 同じ origin と port で 2 段に分ける（v2 のページから `register()` を呼ぶと CSP に止められるため）。Playwright の永続プロファイルで:
+   1. CSP の無い小さなサーバーで、v1 と同じ中身の `/serviceworker.js` と、`register('/serviceworker.js', { scope: './' })` を呼ぶページを `/` と `/share/x/` に配り、登録を 2 つ作る
+   2. サーバーを止め、同じ port で `npm run build && npm run start` に入れ替え、`/` と `/share/x/` を開き直す（必要なら `registration.update()` を待つ）
+   3. `navigator.serviceWorker.getRegistrations()` が空、`caches.keys()` が空、v2 のページで `securitypolicyviolation` が 0 件
 2. `v2.assift.com` に出たあと `curl -sI https://v2.assift.com/serviceworker.js` で `Content-Type`・`Cache-Control`
 3. 当日: v1 を開いた（Service Worker が登録されている）ブラウザで `assift.com` を開き、DevTools の Application → Service Workers から消えること（§6.5-8）
 
@@ -223,11 +237,13 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 
 | 元 | 内容 | 本プラン |
 | --- | --- | --- |
-| 001 §5.4 | カットオーバー手順 1〜6 | §6・§6.6（Heroku の保持は §3-10） |
+| 001 §5.4 | カットオーバー手順 1〜6（2 の「メンテナンス時間・再ログインが必要な旨」の告知を含む） | §6・§6.6（Heroku の保持は §3-10）・§4-5 |
 | 016-terms §7 2026-10-13（連絡先） | Web のレコードだけ切り替える / v1 を止めたら SPF から sakura を外す / Resend はサブドメイン | §6.3・§6.6 |
-| 016-terms §7 2026-10-13（制定日） | 日付をまたいだら 10/31 に直す | §3-2 で上書き |
+| 016-terms §7 2026-10-13（制定日）・（周知）の表 | 日付をまたいだら 10/31 に直す / 10/31 から適用にする | §3-2 で上書き |
+| 021 §6.1 | 移行しない人の Subscription（`v1-subscriptions-not-migrated.csv`）を Dashboard で解約 | §6.2・§6.3 |
+| 021 §8.2-8・8b / §15 | 実際の Google ログイン / パスワードを持たない人の案内 / 準備中の店舗 1,845 件 | §6.2（22:52）・§4-5 |
 | 019 §8.2.3・§8.3 | スクリプトの流し方・順序・Dashboard の切り替え | §6.3 |
-| 021 §10 | 当日の手順 1〜8 | §6（§10-3 の `--rollback` と 23 時台は §3-3・§3-5 で上書き） |
+| 021 §10 | 当日の手順 1〜8 | §6（§10-3 の `--rollback` と 23 時台は §3-3・§3-5 で上書き。§10-5 の Webhook は §3-11・§3-12） |
 | 021 §15（022 への申し送り） | Heroku のメンテナンス枠・自動バックアップ・古い手動バックアップ・所要の見込み | §3-1・§6.1・§6.6 |
 | 024 §6 | 当日に差し替える値 | §6.3 の DNS の切り替えの順 |
 | 024 §10 | Site URL を変えたら Redeploy して残るか見る / Deploy to production / Webhook の URL / 解析 / 同意画面 / 仮のホスト / SendGrid / PITR | §3-8・§3-11・§6.3・§6.5・§6.6 |
@@ -243,18 +259,43 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 | `scripts/stripe/sync-all.ts` / `package.json` | §7 |
 | `src/app/serviceworker.js/route.ts` | §8 |
 | `AGENTS.md` | ディレクトリ（`scripts/stripe/` に sync-all、`app/serviceworker.js/`） |
-| `docs/plans/016-terms/README.md` | §7 2026-10-13（制定日）の「10/31 に直す」に「026 §3-2 で上書き」、（連絡先）の「カットオーバーのときにすること」に「026 へ移した」 |
-| `docs/plans/021-data-migration/README.md` | §10 の冒頭に「026 §6 が当日の手順。§10-3 は 026 §3-3・§3-5 で上書き」 |
+| `docs/plans/016-terms/README.md` | §7 2026-10-13（制定日）の「10/31 に直す」と（周知）の表の「10/31 にする」に「026 §3-2 で上書き」、（連絡先）の「カットオーバーのときにすること」に「026 へ移した」 |
+| `docs/plans/021-data-migration/README.md` | §10 の冒頭に「026 §6 が当日の手順。§10-3 は 026 §3-3・§3-5 で上書き」。§6.1 の「022 の手順に入れる」を 026 に読み替え |
 | `docs/plans/024-production/README.md` | §6・§10 の「カットオーバー」の行に「026 へ移した」 |
 
 ## 11. 未確定
 
 | # | 項目 | 状態 |
 | --- | --- | --- |
-| 1 | Gehirn DNS の Web のレコードの今の値（apex が A か ALIAS か・`www` の有無と値）と TTL。`www` を v2 で apex へ転送するか | 利用者に確かめる。§5（10/29）と §6.3 の DNS の切り替えの 1 で使う |
+| 1 | Gehirn DNS の Web のレコードの今の値（apex が A か ALIAS か・`www` の有無と値）と TTL。`www` を v2 で apex へ転送するか（v1 が `www` で使われていたなら §8.2 の注意） | 利用者に確かめる。§5（10/29）と §6.3 の DNS の切り替えの 1 で使う |
 | 2 | §6 の各段の時刻・判断点 A の時刻 | §4-1（021 §9.3）の実測で埋める |
 | 3 | `stripe:sync-all` に使う Stripe の鍵 | Stripe の live のタスクで決める（§7.2） |
+| 4 | 当夜に「移行しないのに店舗を持つ人」が 1 件以上出たとき | 案: 昼の予行で 0 件なら当夜も同じとみなし、出ても止めずに COMMIT して、その人には翌日以降に個別に連絡する（1 回きりの COMMIT なので、後から `--overrides` で足せない）。昼の予行で 1 件以上なら `--overrides` を用意して当夜に渡す |
 
 ## 12. 実装ログ
 
 （作業のあとに、日時・確かめた結果・つまずいた点を書く。秘密の値は書かない）
+
+## 13. プランのレビュー
+
+### 1 回目（2026-10-15。別の担当に実物（元のプラン・コード・v1 のコード）と突き合わせて読ませた。17 件、すべて反映）
+
+| # | 指摘 | 対応 |
+| --- | --- | --- |
+| 1 | COMMIT の後は v2 に向けた Webhook で `syncCustomer()` が Stripe に書きうるので、判断点 A の「戻せる」が崩れる | §3-12: 22:00〜判断点 B は Webhook のエンドポイントを無効にする |
+| 2 | ゲートの判定が告知（10/29）の後 | §4: 告知の前にも判定する |
+| 3 | Stripe の段の所要が実測されていない | §5: dry-run をリハーサルの CSV で測り、`--apply` は呼び出しの回数から見積もる |
+| 4 | `--output` の既定で結果の CSV が上書きされ、repo の下に残る | §6.3: 3 回とも `--output <out>/…` |
+| 5 | 021 §6.1 の `v1-subscriptions-not-migrated.csv` の解約が抜けている | §6.2・§6.3 |
+| 6 | Google ログインの確認が戻せなくなった後 | §6.2 の 22:52 へ移した |
+| 7 | Service Worker の確かめ方が CSP で動かない / v1 の scope は `'./'` / `www` の転送で解除できない | §8.1・§8.2・§8.3 |
+| 8 | 本番の migration が main と揃っているかの確認が無い | §5: 10/29 に `migration list`、10/27 以降は merge を止める |
+| 9 | 告知への申し送り（メンテナンス時間・再ログイン・パスワードの作り方・準備中の店舗） | §4-5・§9 |
+| 10 | 鍵なしの 401 では `CRON_SECRET` を確かめられない | §4-2 |
+| 11 | 392 件の請求見込みと v1 の売上の突き合わせが抜けている | §5（10/29 に控える）・§6.3 |
+| 12 | 021 §10-5 の `max_staffs_count` の手当てが抜けている | §6.3（`admin-v2.assift.com` で） |
+| 13 | v1 の準備（最新の rake・`DATABASE_URL`・ダミーの鍵）と verify の接続 | §5・§6.1・§6.2 |
+| 14 | `usage_records` の CSV とリハーサルの JSONL の扱い | §6.1 |
+| 15 | 当夜に移行しないのに店舗を持つ人が出たとき | §5・§11-4 |
+| 16 | 管理画面のホストの扱いの誤り・参照のずれ・朝 / 昼の不一致・管理画面の Action | §8.2・§6.5・§3-3・§4 |
+| 17 | Redeploy の後に Cron Jobs が無効のままか | §6.3 の 7 |
