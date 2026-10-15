@@ -381,4 +381,4 @@ Workspace は `sundbox.app` の 1 つだけで、`assift.com` はその追加の
 ### 2026-10-15（§5 の通し: 1〜2）
 
 - 1: `/`・`/terms`・`/privacy`・`/law` が開き、CSP の違反なし
-- 2: 確認メールのリンク先が `https://assift-sundbox.vercel.app/` だった。テンプレートは `{{ .SiteURL }}` で組むので、Site URL が以前の値のまま（2026-10-14 の「Auth の設定」の記録では `v2.assift.com` にしたとしていたが、保存されていなかったか、何かに戻された）。URL Configuration を見直す
+- 2: 確認メールのリンク先が `https://assift-sundbox.vercel.app/` だった。テンプレートは `{{ .SiteURL }}` で組むので、Site URL が以前の値のまま（2026-10-14 の「Auth の設定」の記録は誤り）。URL Configuration を見ると、Site URL は `https://assift-sundbox.vercel.app/` のまま、Redirect URLs は `https://v2.assift.com/auth/callback` が足されたうえで `assift-sundbox` の 4 件が残っていた。上書きではなく設定漏れ。Site URL を `https://v2.assift.com` にし、`assift-sundbox` の 4 件を消して、登録からやり直す
