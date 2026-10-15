@@ -134,6 +134,7 @@ export const config = {
     // prefetch を除外してはいけない: セッション cookie を書けるのはここだけで、
     // 除外するとトークン更新（refresh token rotation）が prefetch のレンダリング中に起きて
     // 新しい token を保存できず、次の遷移でログアウトしてしまう。
+    // Vercel Web Analytics の `/_vercel/insights/...` も外さない（定石では外すが、ここが走っても害は小さい。025 §3-7・§4.5）。
     '/((?!_next/static/|_next/image$|favicon\\.ico$|api/stripe/webhook$|api/cron/billing-usage$).*)',
   ],
 }

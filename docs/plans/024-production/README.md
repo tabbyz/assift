@@ -41,7 +41,7 @@
 - **Stripe の live**（019 §8.3-1・2: `stripe:setup`・Webhook の登録・Dashboard の設定）。`STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / **`CRON_SECRET`** もそちらで入れる（§4.7）
 - **021 §9.3 の `--rollback` の予行**。本プランは流せる状態（接続文字列・管理用アカウントだけ）まで
 - DNS の切り替え（`assift.com` / `admin.assift.com`）・告知・当日の移行（021 §10）。当日に差し替える値は §6 に置く
-- アクセス解析（`@vercel/analytics`。017: 10/30 までに入れる。コードの変更と CSP の確認が要る）
+- アクセス解析（`@vercel/analytics`。017: 10/30 までに入れる。コードの変更と CSP の確認が要る）→ 025
 - PITR（リリース後に検討。§3-6）
 - Supabase の独自ドメイン（Google の同意画面に `<ref>.supabase.co` が出る。リリース後に検討）
 
@@ -431,5 +431,5 @@ Workspace は `sundbox.app` の 1 つだけで、`assift.com` はその追加の
 | 021 §9.3（予行） | 接続は Supabase → Connect → Session pooler（IPv4）+ `sslmode=verify-full`。本番は管理用アカウント 1 件・店舗 0 件の状態 |
 | Stripe の live | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `CRON_SECRET` を Vercel の Production に入れる（§4.7。`CRON_SECRET` は Stripe と同時に）。Webhook の URL は DNS の切り替え前は `assift.com` が v1 を指すことに注意 |
 | カットオーバー | §6 の差し替え。Site URL を変えたら Redeploy して値が残っているか見る（Vercel 連携が Redirect URLs を書き換える）。Deploy to production をオンにするかを決める（§4.8 の確かめ方を使う） |
-| カットオーバーの後 | Google の同意画面のリンク先（`assift.com`）が v2 になったことを見る。仮のホスト `v2` / `admin-v2` を Vercel と Gehirn から外す。v1 の SendGrid の CNAME は v1 を止めてから消す |
+| カットオーバーの後 | `assift.com` で Vercel Web Analytics のダッシュボードに閲覧が 1 件届く（025 §6.3）。Google の同意画面のリンク先（`assift.com`）が v2 になったことを見る。仮のホスト `v2` / `admin-v2` を Vercel と Gehirn から外す。v1 の SendGrid の CNAME は v1 を止めてから消す |
 | リリース後 | PITR の検討（§3-6）。共同開発者が増えたら Redirect URLs の `assift-*-sundbox.vercel.app` を見直す |

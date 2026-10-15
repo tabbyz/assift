@@ -226,7 +226,7 @@ AGENTS.md / README.md / .env.example    認証メールの方式、Google の en
 | パス | 内容 |
 | --- | --- |
 | `src/lib/actions/result.ts` | `ActionResult<T = undefined>` → **`ActionResult<T = void>`**。戻り値の無い Action を `Promise<ActionResult>` と書くと `runAction(async () => {...})` が `ActionResult<void>` になり `void` → `undefined` で型エラーになった。AGENTS.md の例がこの形なので既定を `void` にした |
-| `src/utils/searchParams.ts` | `firstString()`。`?next=` `?error=` `?email=` `?notice=` を 1 度読むだけなので nuqs は使わない |
+| `src/utils/searchParams.ts` | `firstString()`。`?next=` `?error=` `?email=` `?notice=` を 1 度読むだけなので nuqs は使わない（`?email=` は 025 で nuqs に移した。読んだあと URL から消すため） |
 | `src/lib/auth/requestOrigin.ts` | `headers()` の `origin` / `x-forwarded-*` から自オリジンを組む（Google の `redirectTo`） |
 | `src/components/LinkAnchor.tsx` | `Anchor component={Link}` の Client ラッパー（`LinkButton` と同じ理由） |
 | `supabase/config.toml` | 上記のほか `[auth.external.google]` に `redirect_uri = ""` `url = ""` `email_optional = false` を明示（CLI の雛形に合わせた） |

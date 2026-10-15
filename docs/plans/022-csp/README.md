@@ -66,6 +66,7 @@ frame-ancestors 'none'
 | `object-src` / `base-uri` | `'none'` / `'self'` | 定石。`<base>` の注入で相対 URL の chunk をすり替えられない |
 
 本番で使う外部のオリジンは **0**（Supabase も Stripe も AI Gateway もサーバーから呼ぶ）。`default-src 'self'` から広げるのは上の表の分だけ。
+Vercel Web Analytics（025）もスクリプト（`/_vercel/insights/script.js`）・送信とも同一オリジンで、方針は変えていない（スクリプトは nonce 付きの chunk が `createElement` で足すので `'strict-dynamic'` で通る。025 §4.4）。
 
 ### 開発（`NODE_ENV === 'development'`）だけ緩める
 
