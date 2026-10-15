@@ -389,3 +389,8 @@ Workspace は `sundbox.app` の 1 つだけで、`assift.com` はその追加の
 - Production を Redeploy → **Site URL は残り、Redirect URLs に `assift-sundbox` の 4 件が戻った**。Supabase の Vercel 連携がデプロイのたびに Vercel の URL を足している。前回の「消したのに戻った」もこれ。Site URL が古い値だったのは保存漏れの可能性が高い（今回の Redeploy では上書きされなかった）
 - 4 件は**残す**（決定）: 消しても戻り、止めるには連携の同期ごと止めることになる。どれも自チーム（`-sundbox`）のデプロイしか指さず、アプリのリダイレクト先は `SITE_URL` と `safeNext()` で固定している。共同開発者が増えたら見直す
 - PR #36 は最初の 2 コミット（プランと `vercel.json`）でマージ済み。以降の記録は `claude/024-production` を main に載せ直して続ける
+
+### 2026-10-15（§5 の通し: 2 のやり直し）
+
+- 試しのアカウントを消して登録し直した。確認メールのリンクが `https://v2.assift.com/auth/callback?token_hash=…` で、開くとログイン状態になった
+- 差出人 `assift <noreply@assift.com>`、件名 `【assift】メールアドレスの確認`、SPF / DKIM / DMARC はすべて PASS
