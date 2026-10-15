@@ -311,6 +311,8 @@ Workspace は `sundbox.app` の 1 つだけで、`assift.com` はその追加の
 | ファイル | 変更 |
 | --- | --- |
 | `vercel.json` | `"regions": ["hnd1"]`（§3-4） |
+| `vercel.json` | `"ignoreCommand"`（§9「PR の無いブランチのプレビューを作らない」） |
+| `scripts/vercel/ignore-build.sh` | PR の無いブランチのプレビューを飛ばす（§9「PR の無いブランチのプレビューを作らない」） |
 | `docs/plans/024-production/README.md` | 本プラン |
 
 ## 9. 実装ログ
@@ -409,6 +411,18 @@ Workspace は `sundbox.app` の 1 つだけで、`assift.com` はその追加の
 ### 2026-10-15（§5 の通し: 14 片付け）
 
 - 試しの店舗とアカウント（メール・Google）を消した。`tenants` 0 / `staffs` 0 / `shifts` 0 / `auth.users` は管理用だけ。021 §9.3 の `--rollback` を流せる状態
+
+### 2026-10-15（PR の無いブランチのプレビューを作らない）
+
+- 症状: `claude/024-…` に push するたびに Vercel のプレビューが作られ、8 秒で Error になっていた。PR の前の push にはブランチ専用の Supabase の環境変数が無く、
+  `assertSupabaseBuildEnv()`（023 §6）が止めていた。止める仕組みとしては正しいが、Deployments が赤で埋まり、本物の失敗を見落とす
+- 対応: `vercel.json` の `ignoreCommand` で `scripts/vercel/ignore-build.sh` を走らせる（exit 0 = ビルドしない）。Production は常にビルドする。
+  プレビューは「`VERCEL_GIT_PULL_REQUEST_ID` が空」**かつ**「`NEXT_PUBLIC_SUPABASE_URL` が空」のときだけ飛ばす
+  - PR の id だけで見ない理由: Vercel は push でデプロイを作るので、PR より先の push には id が付かない（PR を作っても自動では作り直されない）。
+    PR を作ると Supabase がブランチ DB の値を入れてその PR の最新のデプロイを Redeploy するが、それは id の無い push の作り直しなので、id だけだと飛ばしてしまう
+  - 環境変数だけで見ない理由: PR があるのに値が入らなかったとき（PR #28）は、飛ばすより `assertSupabaseBuildEnv()` の失敗で知らせたい
+- 確かめたこと: 5 通りの環境変数でスクリプトの exit を見た（production → 1 / preview で両方空 → 0 / PR の id だけ → 1 / 環境変数だけ → 1 / 両方 → 1）。
+  Vercel の上での確認（PR の前の push が Canceled になる・PR を作ったあとの Redeploy がビルドされる）は、この変更を main に入れたあとの次の PR で見る
 
 ## 10. 別タスクへの申し送り
 
