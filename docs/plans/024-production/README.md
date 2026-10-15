@@ -371,3 +371,9 @@ Workspace は `sundbox.app` の 1 つだけで、`assift.com` はその追加の
 - 確認 SQL（003 §10.6 + α）: auth のトリガ 2 / `anon` の表の権限 0 / `anon` の関数の権限 0 / RLS が無効の表 0 / `schema_migrations` 8。すべて期待どおり
 - Data API: Exposed schemas は `public` と `graphql_public` だけ、Max rows 1000
 - `https://v2.assift.com` で LP、`https://admin-v2.assift.com` で `/-/login` へ移ることを確かめた
+
+### 2026-10-15（管理用アカウント）
+
+- Authentication → Add user（Auto Confirm）で管理専用のアカウントを作り（v1 の利用者と重ならないメール）、SQL で `is_admin = true` を立てた。`profiles` は 1 行
+- `https://admin-v2.assift.com/-/login` でログインでき、ユーザー一覧が出た
+- Google Auth Platform の公開ステータスは本番環境
