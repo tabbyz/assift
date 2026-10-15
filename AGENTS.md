@@ -311,7 +311,7 @@ Stripe の API の版は SDK が固定する最新（`lib/billing/stripe.ts`）�
 - **外部のオリジン（スクリプト・画像・フォント・fetch・iframe）を足すときは `csp.ts` と `csp.test.ts`、022 §3 の表を直す。** 足し忘れの症状は「本番でだけ黙って動かない」（コンソールの `Refused to …`）
 - インラインの `<script>` / `<style>` を足すときは nonce を付ける（Mantine の `<style>` は `AppProviders` の `getStyleNonce` が付ける。`next/script` は `nonce` prop）。
   `style` 属性（Mantine の style props・`style={{…}}`）はそのままでよい（`style-src-attr 'unsafe-inline'`）
-- Vercel Web Analytics（025）はスクリプト（`/_vercel/insights/script.js`）・送信とも同一オリジン。スクリプトは SDK が `createElement` で足すので `'strict-dynamic'` で通り、方針に足したものは無い
+- Vercel Web Analytics（025）はスクリプト・送信とも同一オリジン（本番は Vercel が決めるランダムな basePath（`/<basePath>/script.js`・`/<basePath>/view`。SDK の既定は `/_vercel/insights/`））。スクリプトは SDK が `createElement` で足すので `'strict-dynamic'` で通り、方針に足したものは無い
 - `eval` / `new Function` はブラウザで使えない。Zod は `z.object()` を作った時点で `Function("")` を試すので `src/instrumentation-client.ts` が `jitless` にしている
 - nonce はリクエストごとに違うので**全ルートが動的描画**（root layout が `headers()` を読む）。静的化・ISR・PPR は nonce と両立しない
 - `AppProviders` は最初に受けた nonce だけを使う（Server Action の描き直しで root layout の nonce が変わるが、文書の CSP は最初の HTML のまま）
@@ -336,7 +336,7 @@ Stripe の API の版は SDK が固定する最新（`lib/billing/stripe.ts`）�
 3. 開いている `/tenants/<uuid>` を直近店舗の cookie に記録
 
 - `config.matcher` から外すのは静的アセット（`_next/static` / `_next/image` / `favicon.ico`）と Stripe の Webhook・cron（ログイン状態と無関係で、セッションの更新が要らない）だけ。
-  Vercel Web Analytics の `/_vercel/insights/...` は外さない（定石では外すが、走っても害は小さい。025 §3-7・§4.5）。
+  Vercel Web Analytics のスクリプトと送信は Vercel が Next より手前で受け、proxy は走らない（025 §8 の本番の確認）。matcher で外す必要は無い（025 §3-7）。
   **除外は実在するパスに完全一致（`$`）で書く。** 前方一致や拡張子で除外すると、存在しない URL が 404 の HTML になるのに proxy を通らず、CSP の付かない HTML ができる（`public/` は無い）
 - **`config.matcher` から prefetch を除外しない。** セッション cookie を書けるのは proxy だけで、除外するとトークン更新が Server Component の描画中に起き、新しい refresh token を保存できずに次の遷移でログアウトする（`enable_refresh_token_rotation = true`）
 - proxy のコード内では RSC / prefetch のヘッダが剥がされていて prefetch を判別できない。先読みで困る導線は、リンク側に `prefetch={false}` を付けて塞ぐ（他店舗を指す `TenantSwitcher`、006 で作るページへのリンク）

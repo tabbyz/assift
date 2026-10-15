@@ -12,10 +12,10 @@
 
 - [x] 本番（`VERCEL_ENV === 'production'`）の本体のホストだけで読み込む。プレビュー・開発・管理画面のホストでは、描画後の DOM にスクリプトの要素が無く、`/insights/` へのリクエストも出ない（§4.1）
 - [x] 送る URL（`url`）にクエリとハッシュが入らない。参照元にメールアドレスが入らない（`/signup?email=…`。§3-2・§4.2・§4.3）
-- [ ] CSP（022）を変えずに動く: 仮のホストで `securitypolicyviolation` が 0 件、スクリプトと送信が同一オリジンで成功する（§6.2）
-- [ ] ダッシュボードに閲覧が届く（仮のホスト。§6.2）
+- [x] CSP（022）を変えずに動く: 仮のホストで `securitypolicyviolation` が 0 件、スクリプトと送信が同一オリジンで成功する（§6.2）
+- [x] ダッシュボードに閲覧が届く（仮のホスト。§6.2）
 - [x] ポリシーを実装に合わせる: 7. の「個人を特定できる形では記録されません」を削り、3. 利用目的に改善の項目を足す（§3-6・§3-9・§4.6）
-- [ ] 017 §1 の「実装と食い違わない」を §6.2 のあとで閉じ、004 / 017 / 020 / 022 / 024 / AGENTS.md の記述を導入済みにそろえる（§5）
+- [x] 017 §1 の「実装と食い違わない」を §6.2 のあとで閉じ、004 / 017 / 020 / 022 / 024 / AGENTS.md の記述を導入済みにそろえる（§5）
 - [x] `lint` / `typecheck` / `test` / `npx supabase test db` が通る
 
 ## 2. 範囲
@@ -253,12 +253,11 @@ merge が先になったら、Enable のあとで Production を Redeploy する
 
 ## 7. 未確定
 
-- `script.js` がページのタイトル（店舗名が入る）を送るか（§4.6。§6.2-2 で見る）。送っていたら、店舗配下のタイトルから店舗名を外すか、ポリシー 7. の文を直すかを決める
-- `script.js` が保存領域（Local Storage / Session Storage）を使うか（§6.2-4）。使っていたら、ポリシー 7. の目的の列挙に足すか、使わない設定を探すかを決める
-- タイトル・保存領域のどちらかで手当てが要ると分かったら、それが済むまで 017 §1 を閉じない（§5）
+- ~~`script.js` がページのタイトル（店舗名が入る）を送るか~~ → 送らない（§8 2026-10-15 本番の確認）
+- ~~`script.js` が保存領域を使うか~~ → 使わない（同）
 - 404 の path がダッシュボードの Routes に散ること（§4.1）。困ったら §6.2 のあとで `beforeSend` や `not-found` での扱いを考える
-- Vercel が同じホストの参照元をどう扱うか・スクリプトがクライアント遷移で前の URL を参照元に使うか（§4.3。§6.2-2・3 で記録）
-- proxy が `/_vercel/insights/...` に走るか・`CLIENT_CONFIG` を Vercel が入れるか（§4.4・§4.5。§6.2-7 で記録）
+- ダッシュボードの Referrers の出方（§4.3）。送信の `r` は `/signup`・店舗のページとも空だった
+- ~~proxy が走るか・`CLIENT_CONFIG` を Vercel が入れるか~~ → 走らない。パスはランダムな basePath（同）
 
 ## 8. 実装ログ
 
@@ -336,3 +335,22 @@ merge が先になったら、Enable のあとで Production を Redeploy する
 
 - 人間: Vercel の Web Analytics を merge の前に Enable（Included in your plan）
 - merge のあと仮のホストで §6.2 の 1〜7。結果をここに書き、017 §1 を閉じる。カットオーバーの後に §6.3
+
+### 2026-10-15 本番の確認（§6.2。`v2.assift.com`）
+
+ユーザーが Chrome の DevTools で確かめた（PR #40 を merge したあとの Production）。
+
+- **パス**: スクリプトは `https://v2.assift.com/0c9b77994ea40d88/script.js`、送信は `…/0c9b77994ea40d88/view`（POST）。`/_vercel/insights/` ではなく、Vercel が決めるランダムな basePath。
+  どちらも同一オリジンで 200（`application/javascript`・`text/plain`）。§4.4 の `CLIENT_CONFIG` / basePath の行が実際に当たった（同一オリジンなので CSP は変えずに済む）
+- **CSP**: コンソールの `Refused` は 0 件（`/`・`/terms`）
+- **proxy**: スクリプトと送信の応答に `content-security-policy`・`set-cookie` が無い。Vercel が Next より手前で受けていて、proxy は走らない。§4.5 の心配（送信ごとのセッション更新・タブを閉じるときの失効）は起きない
+- **`/signup?email=test@example.com`**: アドレスバーから `?email=` が消え、入力欄に残る。送信のペイロードは `o: "https://v2.assift.com/signup"`・`dp: "/signup"`・`r: ""`（ほかは `sdkn` / `sdkv` / `sv` / `ts`）。
+  `Referer` は `https://v2.assift.com/`、参照ポリシーは `strict-origin`
+- **店舗のシフト表（`?start=` 付き）**: `o` は `…/tenants/<uuid>`（クエリ無し）、`dp` は `/tenants/[tenantId]`。**タイトル（店舗名）は送らない**（項目に無い）
+- **保存領域**: 解析の Cookie / Local Storage / Session Storage は増えない
+- **管理画面のホスト**（`admin-v2.assift.com/-/login`）: スクリプトも送信も出ない
+- **ダッシュボード**: 閲覧が届き、Pages に `?email=` 付きの URL が無い
+- 送信の `Cookie` ヘッダに `_ga` / `_gid` / `_ga_PEWY7F46FH` / `_BEAMER_…` があった。v2 ではなく、v1（`assift.com`）の Google Analytics と Beamer が `.assift.com` に付けたもので、
+  サブドメインにも送られている。v2 は読まない（017 §7 2026-10-15（v1 の cookie））
+- AGENTS.md・022・`csp.ts`・`proxy.ts` の `/_vercel/insights/` の記述を、実際の形（ランダムな basePath・proxy は走らない）に直した
+- 017 §1 の「実装と食い違わない」を閉じた。残りは §6.3（カットオーバーの後に `assift.com` で 1 件届く。024 §10）

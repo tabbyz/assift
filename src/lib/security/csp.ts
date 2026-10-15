@@ -51,7 +51,7 @@ export function buildCsp(nonce: string, { dev }: CspOptions): string {
     // LP の書体（`next/font/google`）はビルド時に取り込まれ、自オリジンから配られる
     'font-src': ["'self'"],
     // ブラウザから Supabase や Stripe を呼んでいない（Action 経由）。開発は Turbopack の HMR。
-    // Vercel Web Analytics（025）もスクリプト・送信とも同一オリジン（`/_vercel/insights/`）。スクリプトは `'strict-dynamic'` で通る
+    // Vercel Web Analytics（025）もスクリプト・送信とも同一オリジン（本番は `/<ランダムな basePath>/script.js`・`view`）。スクリプトは `'strict-dynamic'` で通る
     'connect-src': ["'self'", ...(dev ? ['ws:', 'wss:'] : [])],
     'object-src': ["'none'"],
     'base-uri': ["'self'"],
