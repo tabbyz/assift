@@ -367,4 +367,7 @@ Workspace は `sundbox.app` の 1 つだけで、`assift.com` はその追加の
 ### 2026-10-15（仮のドメインと migration）
 
 - Vercel の Domains に `v2.assift.com` / `admin-v2.assift.com` を足し、Gehirn DNS に CNAME を足した
-- `npx supabase db push` で migration 8 本を本番に入れた（§4.2）。確認 SQL の結果は下に追記する
+- `npx supabase db push` で migration 8 本を本番に入れた（§4.2）。`migration list` は Local / Remote とも 8 本
+- 確認 SQL（003 §10.6 + α）: auth のトリガ 2 / `anon` の表の権限 0 / `anon` の関数の権限 0 / RLS が無効の表 0 / `schema_migrations` 8。すべて期待どおり
+- Data API: Exposed schemas は `public` と `graphql_public` だけ、Max rows 1000
+- `https://v2.assift.com` で LP、`https://admin-v2.assift.com` で `/-/login` へ移ることを確かめた
