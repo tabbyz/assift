@@ -35,7 +35,7 @@
 | --- | --- | --- |
 | スタッフの情報 | 店長が入れる（`staffs.name`、勤務条件、制約・AI 指示のメモ） | 店舗から預かって扱う（委託）。スタッフ本人の求めはまず店舗へ。私たちは店舗と相談して対応 |
 | 共有リンクの閲覧者 | ログイン不要。アクセスログのみ | 対象者に含め、アクセスの記録が残ることを書く |
-| AI | Vercel AI Gateway 経由で OpenAI（規約では Anthropic / Google も併記）。学習に使わない。提供元は不正利用の監視で一定期間保持（OpenAI は 30 日） | 預け先に列挙。保存期間の項で「提供元が定める期間」 |
+| AI | Vercel AI Gateway 経由で OpenAI（Gateway が Azure OpenAI に振り分けることがある。規約では Anthropic / Google も併記）。学習に使わない。提供元は不正利用の監視で一定期間保持（OpenAI は 30 日） | 預け先に列挙（Microsoft を含む）。保存期間の項で「提供元が定める期間」 |
 | Cookie | Supabase の認証 cookie、`assift-current-tenant`、パスワード再設定の短命 cookie。localStorage にコピー条件・初回の案内。アクセス解析（未実装） | 必要なものだけ。アクセス解析は Cookie を使わない Vercel Web Analytics。広告は使っていない |
 | 安全管理 | TLS、RLS によるテナント分離、パスワードのハッシュ、service_role の限定 | 8. に箇条書き |
 | 決済 | `profiles.stripe_*` | カード番号は Stripe が受け取り、保存しない |
@@ -181,4 +181,10 @@ v1 にあって v2 では未決定のもの:
 - 6. 委託先: 「Google（米国）：お問い合わせのメールの受信と保管（Google Workspace）」を足した。問い合わせの受信箱は Google Workspace（016 §7 2026-10-13（連絡先））で、
   お問い合わせの内容（2. 取得する情報）が米国の事業者のサービスに保存される。クラウドの例外（事業者がデータを取り扱わない）として書かない整理もありうるが、ほかの委託先（Supabase など）と同じ扱いにそろえた
 - v1 のポリシー（`https://assift.com/privacy`。最終更新 2019-02-01）からの切り替えは、016 §7 2026-10-13（v1 の利用者への周知）に書いた（利用目的の変更は公表または通知で足りる）
+
+### 2026-10-15（委託先に Microsoft）
+
+- 6. 委託先: 「OpenAI・Microsoft・Anthropic・Google（いずれも米国）：AIを使う機能」にした。
+  Vercel AI Gateway が `openai/gpt-6-sol` を Azure OpenAI（Microsoft）に振り分けていた（012 §10.8）。データを扱うのは Microsoft なので、委託先として並べた（規約第 6 条は 016 §7 2026-10-15）
+- Microsoft も米国の事業者で、基準適合体制にもとづく委託（28 条）。ほかの委託先と同じ扱い。Azure OpenAI も入力を学習に使わないので、「学習に使われることはありません」はそのまま
 
