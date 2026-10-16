@@ -85,7 +85,7 @@ export function TenantShell({ tenant, tenants, email, banner, children }: Props)
               size="sm"
               aria-label="メニュー"
             />
-            <UnstyledButton component={Link} href="/tenants" visibleFrom="sm">
+            <UnstyledButton component={Link} href="/tenants" visibleFrom="md">
               <AssiftSymbol height={20} />
             </UnstyledButton>
             <TenantSwitcher tenant={tenant} tenants={tenants} />
