@@ -81,10 +81,10 @@
   color: var(--mantine-color-text);
 }
 
-/* スマホ幅では小さくする（28px のままだと右の「ログイン」「無料ではじめる」が 375px に収まらない） */
+/* スマホ幅では小さくする（24px のままだと 375px で右の「ログイン」が 2 行に折り返す） */
 @media (max-width: 36em) {
   .logo svg {
-    height: 22px;
+    height: 20px;
     width: auto;
   }
 }
