@@ -9,7 +9,8 @@
 -- - <N> はインポートが入れた人数: jq '.after["auth.users"] - .before["auth.users"]' <dir>/report.json
 -- - 使えるのは判断点 B（Stripe の契約を書き換える）の前だけ（026 §14.1）。B の前かは人が確かめる。G2 が止めるのは写しが入った後だけ
 -- - 店舗配下は TRUNCATE で空にする（行数によらず速く、ディスクもすぐ空き、削除のトリガも走らない。026 §14.2-1）。
---   残りは管理用以外の auth.users の DELETE の cascade（auth.identities・auth.sessions など / profiles → billing_subscriptions・staff_count_history）
+--   残りは管理用以外の auth.users の DELETE の cascade（auth.identities・auth.sessions など / profiles → billing_subscriptions・staff_count_history）。
+--   外部キーの無い auth.refresh_tokens・auth.flow_state だけは先に明示して消す（残ると、id が v1 の ID から決まる再インポートの後に同じ利用者を指す）
 -- - 1 トランザクション。安全装置か確かめが外れたら例外で全体が戻り、psql は 0 以外で終わる
 
 \set ON_ERROR_STOP on
@@ -40,7 +41,7 @@ lock table public.billing_subscriptions in share mode;
 do $$
 declare
   v_expected integer := current_setting('undo.expected_users')::integer;
-  v_admins integer;
+  v_admins uuid[];
   v_admin uuid;
   v_users integer;
 begin
@@ -50,11 +51,11 @@ begin
   end if;
 
   -- G1: 管理者がちょうど 1 人
-  select count(*)::integer into v_admins from public.profiles where is_admin;
-  if v_admins <> 1 then
-    raise exception 'G1: is_admin の人が % 人です（1 人のはず）', v_admins;
+  select coalesce(array_agg(id), '{}') into v_admins from public.profiles where is_admin;
+  if cardinality(v_admins) <> 1 then
+    raise exception 'G1: is_admin の人が % 人です（1 人のはず）', cardinality(v_admins);
   end if;
-  select id into v_admin from public.profiles where is_admin;
+  v_admin := v_admins[1];
 
   -- G2: Stripe の写しが無い（公開の後・写しが入った後に流すのを止める）
   if exists (select 1 from public.billing_subscriptions) then
@@ -80,14 +81,24 @@ $$;
 -- 店舗配下（tenants を参照する 10 表も外部キーで連鎖して空になる）
 truncate table public.tenants cascade;
 
--- auth.refresh_tokens は user_id（文字列）に外部キーが無く、session_id（null 可）の cascade でしか消えない。
--- 残ると、id が v1 の ID から決まる再インポートの後に同じ利用者を指すので、先に消す
+-- user_id に外部キーが無い 2 表（refresh_tokens は session_id（null 可）の cascade でしか消えない。flow_state は OAuth のログインの途中の状態）。
+-- 管理用アカウントの行だけ残す（user_id が null の行も消す）
 delete from auth.refresh_tokens where user_id is distinct from current_setting('undo.admin_id');
--- auth.flow_state（OAuth のログインの途中の状態）も user_id に外部キーが無い
-delete from auth.flow_state where user_id is not null and user_id <> current_setting('undo.admin_id')::uuid;
+delete from auth.flow_state where user_id is distinct from current_setting('undo.admin_id')::uuid;
 
--- 管理用以外の利用者（auth.* と profiles 以下は cascade）
-delete from auth.users where id <> current_setting('undo.admin_id')::uuid;
+-- 管理用以外の利用者（auth.* と profiles 以下は cascade）。G4 で数えてから増えた人（v2 で登録した人）を巻き込まないよう、消した数も見る
+do $$
+declare
+  v_deleted integer;
+begin
+  delete from auth.users where id <> current_setting('undo.admin_id')::uuid;
+  get diagnostics v_deleted = row_count;
+  if v_deleted <> current_setting('undo.expected_users')::integer then
+    raise exception '消した人が % 人です（expected_users = %）。G4 の後に増えた人がいます', v_deleted, current_setting('undo.expected_users');
+  end if;
+  raise notice '消した人: % 人', v_deleted;
+end
+$$;
 
 -- 確かめ（外れたら全体が戻る）
 do $$
@@ -121,7 +132,7 @@ begin
     or exists (select 1 from auth.refresh_tokens where user_id is distinct from v_admin::text)
     or exists (select 1 from auth.mfa_factors where user_id <> v_admin)
     or exists (select 1 from auth.one_time_tokens where user_id <> v_admin)
-    or exists (select 1 from auth.flow_state where user_id <> v_admin) then
+    or exists (select 1 from auth.flow_state where user_id is distinct from v_admin) then
     raise exception '確かめ: 管理用以外の auth.identities / sessions / refresh_tokens / mfa_factors / one_time_tokens / flow_state が残っています';
   end if;
 end

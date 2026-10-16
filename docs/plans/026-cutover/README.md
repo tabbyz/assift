@@ -366,6 +366,10 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 | 2 | 低: 確かめの表は `tenants` を直接参照する表しか拾わない | コメントを「直接参照する表」に直した（再帰で辿るほどの表は今は無い） |
 | 2 | 低: G0（BYPASSRLS）は要らない | 退けた。`auth.users` は所有者が `supabase_auth_admin` で RLS が有効なので、`postgres` からの DELETE には BYPASSRLS が要る |
 | 2 | 低: `lock_timeout` 10 秒で止まりうる | 退けた。止まれば流し直す（§14.3-1） |
+| 3 | 中: G4 で数えてから DELETE まで（TRUNCATE のロック待ちを含めて最大十数秒）に v2 で登録した人も消え、最後の確かめも通る | DELETE を DO の中に入れ、`get diagnostics` で消した数が `expected_users` と違えば例外にした |
+| 3 | 低: §14.3 の flow_state の記述（型・条件）が実物と違う / 冒頭のコメントに明示の削除が無い / null の扱いが 2 表で違う / G1 が同じ問い合わせを 2 回 | 直した（2 表とも `is distinct from` で null の行も消す。G1 は `array_agg` の 1 回） |
+| 3 | 低: 件数だけの G4 は 1 人増えて 1 人減ると見逃す | 退けた。メンテナンス中に、v2 を知る移した人の退会と別の人の登録が重なる必要がある。上の中の指摘の対応で、G4 の後に増えた分は止まる |
+| 3 | 低: 写しのロックと、無効化の漏れた Webhook の `profiles` の更新とでデッドロックしうる | 退けた。起きても片付けが例外で戻るだけで、流し直せばよい（§14.4「通らなかったとき」）。Webhook が先に Stripe に書く分は G2 でも見えない（§14.1 のとおり、Webhook の無効化は人が確かめる） |
 
 ### 2026-10-16（§7 `npm run stripe:sync-all` の実装とサンドボックスでの確かめ）
 
@@ -674,8 +678,9 @@ psql '<DB>' -X -v ON_ERROR_STOP=1 -v expected_users=<N> -v commit=1 -f scripts/m
    - G4: 管理用以外の `auth.users` の件数が `expected_users` と同じ（インポートの前から居た人、COMMIT の後に `v2.assift.com` で登録した人を巻き込まない。
      外れたら `select id, email, created_at from auth.users order by created_at desc limit 5` で見る。移した人の `created_at` は v1 の値なので、新しく登録した人が上に出る）
 3. `truncate table public.tenants cascade`（外部キーで連鎖して、`tenants` を参照する 10 表も空になる: `staffs`・`patterns`・`staff_patterns`・`staff_default_patterns`・`shifts`・`required_nums`・`restrictions`・`date_notes`・`shares`・`assist_runs`。NOTICE に出る）
-4. `delete from auth.refresh_tokens where user_id is distinct from <管理用の id>` と `auth.flow_state` の同じ削除（`user_id` は文字列で外部キーが無く、`session_id`（null 可）の cascade でしか消えない。残ると、id が v1 の ID から決まる再インポートの後に同じ利用者を指す）→
-   `delete from auth.users where id <> <管理用の id>` → cascade で `auth.identities`・`auth.sessions` などと `profiles` → `billing_subscriptions`・`staff_count_history`（`tenants` は 3 で空）
+4. `user_id` に外部キーの無い 2 表を、管理用アカウントの行だけ残して消す（`user_id` が null の行も消す）: `delete from auth.refresh_tokens where user_id is distinct from <管理用の id>`（`user_id` は文字列。`session_id`（null 可）の cascade でしか消えない）と
+   `delete from auth.flow_state where user_id is distinct from <管理用の id>::uuid`（OAuth のログインの途中の状態）。残ると、id が v1 の ID から決まる再インポートの後に同じ利用者を指す →
+   `delete from auth.users where id <> <管理用の id>`（DO の中で消した数を数え、`expected_users` と違えば例外。G4 で数えてから v2 で登録した人を巻き込まない）→ cascade で `auth.identities`・`auth.sessions` などと `profiles` → `billing_subscriptions`・`staff_count_history`（`tenants` は 3 で空）
 5. **確かめ**（外れたら `raise exception`）: `auth.users` が 1 件で管理用の id / `profiles` が 1 件 / `tenants` とそれを参照する表（`pg_constraint` から引く。今後 `tenants` を直接参照する表を足しても拾う）と `billing_subscriptions` が 0 件 / 管理用以外の `staff_count_history`・`auth.identities`・`sessions`・`refresh_tokens`・`mfa_factors`・`one_time_tokens`・`flow_state` が 0 件
 6. `report.json` の `before` と同じ 14 表の件数を出す（人が `jq .before <dir>/report.json` と見比べる。管理用アカウントの分だけが残る）
 7. `commit` があれば COMMIT、無ければ ROLLBACK
