@@ -9,7 +9,7 @@
 - 予定: プランは 10/15〜10/16（クリティカルパス）。コードの変更（§7・§8）は 10/27 までに main へ
 - **作業するのは人間**（Heroku / Stripe / Vercel / Supabase / Google / Gehirn の操作と秘密の値）。リポジトリの変更は §7・§8 の 2 つだけ
 
-**状態: 下書き（2026-10-15）。§3 の決定を入れ、レビューを 2 回反映した（§13）。DNS の今の値は §12。未確定は §11（実測で埋めるものと Stripe の鍵）。**
+**状態: 下書き（2026-10-15）。§3 の決定を入れ、レビューを 3 回反映した（§13）。DNS の今の値は §12。未確定は §11（実測で埋めるものと Stripe の鍵）。**
 
 ## 1. 目的と完了条件
 
@@ -68,7 +68,7 @@ v1（Rails / Heroku）を止め、データと Stripe の契約を v2 に移し�
 
 判断は 2 回。
 
-- **10/29、告知を送る前**: 1〜4 が済んでいなければ告知を送らず、日を動かす（告知の後に落ちると、告知のやり直しが要る）
+- **10/29、告知を送る前**: 1〜4 が済んでいなければ告知を送らず、日を動かす（告知の後に落ちると、告知のやり直しが要る）。§11-5（Stripe の段が窓に収まらないとき）もここで決める（開始の時刻を変えると告知に書くメンテナンスの時間が変わる）
 - **10/30 の 12:00**: 5・6 も済んでいなければ延期する（告知のやり直しが要る。§6.4「日を改めたとき」）
 
 | # | ゲート | 期限 | 確かめ方 | 担当のタスク |
@@ -85,7 +85,7 @@ v1（Rails / Heroku）を止め、データと Stripe の契約を v2 に移し�
 | いつ | すること | メモ |
 | --- | --- | --- |
 | §4-1 のあと | §6 の各段の時刻と、中止の判断の時刻（§6.4）を実測で埋める | ローカルの実測: capture 52 秒 / download 1〜2 分 / restore 1 分 17 秒 / エクスポート 13 分 37 秒 / インポート 17 分（021 §15） |
-| §4-2 のあと | `stripe:migrate-v1` の dry-run をリハーサルの `v1-subscriptions.csv` で live に流し、所要を測る（読むだけで書かない）。`--apply` の所要は区分ごとの呼び出しの回数（`unpaid` は溜まった下書きの数 × 3 回など。dry-run の結果 CSV の `actions` から数える）から見積もり、§6.3 の時刻に入れる。**dry-run と `--apply` の合計が 25 分を超える見込みなら、§11-5 で開始の時刻か事前の処理を決め直す** | 約 989 件を 1 件ずつ順に処理し、区分を絞る引数は無い。`unpaid` の 134 件は毎月の下書きが溜まっている（019 §8.2.1）。判断点 B の後に時間が足りなくなると戻せない |
+| §4-2 のあと | `stripe:migrate-v1` の dry-run をリハーサルの `v1-subscriptions.csv` で live に流し、所要を測る（読むだけで書かない。`--output ~/v1-export/<リハーサルの dir>/v1-subscriptions-dryrun.csv` を付ける。既定ではリポジトリの直下にメール入りの CSV を書く）。`--apply` の所要は区分ごとの呼び出しの回数（`unpaid` は溜まった下書きの数 × 3 回など。dry-run の結果 CSV の `actions` から数える）から見積もり、§6.3 の時刻に入れる。**dry-run と `--apply` の合計が 25 分を超える見込みなら、§11-5 で開始の時刻か事前の処理を決め直す** | 約 989 件を 1 件ずつ順に処理し、区分を絞る引数は無い。`unpaid` の 134 件は毎月の下書きが溜まっている（019 §8.2.1）。判断点 B の後に時間が足りなくなると戻せない |
 | §4-1 のあと | 中止のときの片付けの SQL（COMMIT した後に v1 へ戻す場合。§6.4）を書き、ローカルで通す | 管理用アカウント以外の `auth.users` を消して `profiles` 以下を cascade で消す想定。`shifts` 1,150 万行の削除の所要も測る |
 | 10/27 まで | §7・§8 を main に入れ、`v2.assift.com` で確かめる | §4-3 |
 | 10/27 以降 | **main への merge を止める**（直しが要るものだけ。merge すると Production が自動でデプロイされる）。3 ページの文面の修正（§4-4）は例外 | 当日の本番のコードを固定する |
@@ -93,7 +93,7 @@ v1（Rails / Heroku）を止め、データと Stripe の契約を v2 に移し�
 | 10/29 | `npx supabase migration list` で本番の migration が main と揃っている（Local と Remote が同じ本数） | Deploy to production はオフ（§3-8）なので、merge した migration は `db push` で手で入れる（024 §3-10） |
 | 10/29 | v1 の管理画面で、旧料金に移す契約の今月の売上の値を控える | 019 §8.2.3-1 の「392 件の請求見込みが v1 の売上と大きく違わない」の突き合わせ用。当夜は v1 に管理者でログインしない（§3-10） |
 | 10/29 | 当日の手元の準備: v1 の作業ディレクトリ（`a8bb5ad`）に最新の `v2_export.rake`（照合を絞った版。`ecfc533` 以降）を写す / Postgres 16（port 5433）/ v2 の作業ディレクトリを最新の `main` にして `npm ci` / 秘密の値（DB の接続文字列・`SUPABASE_SECRET_KEY`・Stripe の鍵）がパスワードマネージャから出せる | 秘密の値は `.env.local` に書かない。コマンドごとに環境変数で渡す（021 §11）。v1 の起動には `DATABASE_URL=postgres://$(whoami)@localhost:5433/<名前>` とダミーの `STRIPE_SECRET_KEY` が要る（021 §15「v1 をつなぐ」） |
-| 10/30 昼（T-0） | 昼の予行（約 45 分。v1 は止めない）: `heroku pg:backups:capture` → `download` → 手元に restore（`assift_v1_noon`）→ `rails v2:export` → `npm run migrate:v1 -- --input <昼の dir> --rollback` を本番に流す。`report.json` の「移行しないのに店舗を持つ人」が 0 件か、変換で止まらないかを見る | §3-3。ネットワーク・権限・所要・データの最終確認（021 §9.3「当日の朝にもう 1 回」）。1 件以上なら `--overrides` のファイルを用意する（§3-13）。昼のダンプ・DB・出力も夜の 22:06 にまとめて消す（個人情報を含む） |
+| 10/30 昼（T-0）**11:00 までに開始** | 昼の予行（約 50 分。v1 は止めない）: `heroku pg:backups:capture` → `download -o ~/v1-export/dumps/<backup id>.dump` → 手元に restore（`assift_v1_noon`）→ `rails v2:export` → `npm run migrate:v1 -- --input <昼の dir> --rollback` を本番に流す → 続けて `stripe:migrate-v1` の dry-run（`--output <昼の dir>/v1-subscriptions-dryrun.csv`。読むだけ）。`report.json` の「移行しないのに店舗を持つ人」が 0 件か、変換で止まらないか、dry-run の突合（§6.3 23:00 の確認）が通るかを見る。前後で本番の Supabase の Disk の使用量を見る | §3-3。ネットワーク・権限・所要・データの最終確認（021 §9.3「当日の朝にもう 1 回」）。dry-run の突合を昼に済ませておき、夜は昼との差分だけを見る。1 件以上なら `--overrides` のファイルを `~/v1-export/overrides-20261030.json`（22:06 の削除の対象の外）に用意する（§3-13）。昼のダンプ・DB・出力のフォルダは夜の 22:06 にまとめて消す（個人情報を含む）。`--rollback` は全行を入れてから戻すので、不要な行と WAL がディスクに残る（Supabase のディスクの自動拡張は 6 時間に 1 回まで） |
 | 10/30 昼 | Vercel の Settings → Cron Jobs を無効にする（§3-5） | 戻すのは 10/31 の昼（§6.6） |
 | 10/30 昼 | Vercel の Domains に `assift.com`・`admin.assift.com` を足しておく（`www` は足さない。§3-14）。Vercel が示す値（apex の A の IP、`admin` の CNAME の参照先）を控える | DNS が Heroku を指しているあいだは Invalid Configuration のまま。当夜はレコードを変えるだけにする。`admin-v2` の参照先（`f319020a4f43f5f1.vercel-dns-016.com.`）と同じになる見込みだが、画面の値を使う |
 | 10/30 12:00 | §4 のゲートで Go / 延期を決める | |
@@ -112,15 +112,15 @@ v1（Rails / Heroku）を止め、データと Stripe の契約を v2 に移し�
 | 22:00 | Heroku `MAINTENANCE_MODE=on` | `https://assift.com` が 503（v1 の `public/503.html`）。管理者でログインしない（§3-10） | 001 §5.4-3・021 §10-1 |
 | 22:00 | Stripe の Webhook のエンドポイントを無効にする（§3-12） | Dashboard でエンドポイントが Disabled | §3-12 |
 | 22:01 | Heroku Scheduler の `stripe:create_usage_record` を止める（ジョブを消す）。**消す前にコマンド・頻度・時刻をメモに控える**（中止して戻すとき用。§6.4） | Scheduler の一覧に無い | 019 §8.2.2・021 §10-1 |
-| 22:02 | `heroku pg:backups:capture` → `download` | capture 約 1 分・download 1〜2 分。バックアップの id と Created at を控える（`dumped_at`） | 021 §10-2 |
-| 22:06 | リハーサルと昼の予行の DB を消し（つないでいる `rails s` を止めてから。`dropdb -p 5433 --force assift_v1_rehearsal` と `assift_v1_noon`）、新しいダンプを restore（`createdb -p 5433 assift_v1_cutover` → `pg_restore -p 5433 -d assift_v1_cutover --no-owner --no-acl -j 4 <dump>` → `vacuumdb -p 5433 --analyze-only assift_v1_cutover`）。リハーサルのダンプ（`b2818`）と昼のダンプ、リハーサルと昼の出力のフォルダ（`~/v1-export/` の 10/13・10/14・昼）も消す | 約 1〜2 分。件数を控える | 021 §15（リハーサルのダンプと DB はカットオーバーのダンプを取った時点で消す） |
+| 22:02 | `heroku pg:backups:capture -a assift` → `heroku pg:backups:download <backup id> -a assift -o ~/v1-export/dumps/<backup id>.dump` | capture 約 1 分・download 1〜2 分。バックアップの id と Created at を控える（`dumped_at`）。**ファイル名に id を入れる**（指定しないと作業ディレクトリの `latest.dump` になり、昼のダンプと取り違えうる。昼のダンプを restore すると、昼からの書き込みが黙って失われ、件数の突合でも気付けない） | 021 §10-2 |
+| 22:06 | リハーサルと昼の予行の DB を消し（つないでいる `rails s` を止めてから。`dropdb -p 5433 --force assift_v1_rehearsal` と `assift_v1_noon`）、新しいダンプを restore（`createdb -p 5433 assift_v1_cutover` → `pg_restore -p 5433 -d assift_v1_cutover --no-owner --no-acl -j 4 ~/v1-export/dumps/<22:02 の backup id>.dump` → `vacuumdb -p 5433 --analyze-only assift_v1_cutover`）。リハーサルのダンプ（`b2818`）と昼のダンプ、リハーサルと昼の出力のフォルダ（`~/v1-export/` の 10/13・10/14・昼）も消す。**`overrides-20261030.json` は消さない**。restore するファイルの id が 22:02 で控えた id と同じことを確かめる | 約 1〜2 分。件数を控える | 021 §15（リハーサルのダンプと DB はカットオーバーのダンプを取った時点で消す） |
 | 22:08 | `DATABASE_URL=postgres://$(whoami)@localhost:5433/assift_v1_cutover STRIPE_SECRET_KEY=<ダミー> bundle exec rails "v2:export[$HOME/v1-export,<dumped_at>]"` | 約 14 分。最後の `exported to …` が `<dir>`。manifest の件数が restore した DB と一致。`<dir>` に保管用の `usage_records.csv` も出る（021 §5.1・§10-8(b)） | 021 §10-2 |
 
 ### 6.2 入れる（22:25〜23:00）
 
 | 時刻 | 手順 | 確かめること | 出典 |
 | --- | --- | --- | --- |
-| 22:25 | `NODE_OPTIONS=--max-old-space-size=16384 MIGRATION_DATABASE_URL=… npm run migrate:v1 -- --input <dir> [--overrides <file>]`（`--rollback` なし。§3-3。`--overrides` は昼の予行で要ると分かったときだけ。§3-13） | 021 §8.1 の突合がすべて OK で COMMIT。所要と RSS を控える。`report.json` の `over_limit` と「移行しないのに店舗を持つ人」を控える。`<dir>/v1-subscriptions-not-migrated.csv` の件数を見る（想定 0 件。1 件以上なら 23:00 の段で Dashboard から解約する。021 §6.1） | 021 §10-3 |
+| 22:25（直前に本番の Disk の使用量を見る） | `NODE_OPTIONS=--max-old-space-size=16384 MIGRATION_DATABASE_URL=… npm run migrate:v1 -- --input <dir> [--overrides ~/v1-export/overrides-20261030.json]`（`--rollback` なし。§3-3。`--overrides` は昼の予行で要ると分かったときだけ。§3-13） | 021 §8.1 の突合がすべて OK で COMMIT。所要と RSS を控える。`report.json` の `over_limit` と「移行しないのに店舗を持つ人」を控える。`<dir>/v1-subscriptions-not-migrated.csv` の件数を見る（想定 0 件。1 件以上なら判断点 B の後に Dashboard から解約する。021 §6.1） | 021 §10-3 |
 | 22:50 | `MIGRATION_DATABASE_URL=… npm run migrate:v1:verify -- --input <dir>` | すべて一致 | 021 §10-4 |
 | 22:52 | 021 §8.2 の 2〜4・7・8・9 を **`https://v2.assift.com`** で確かめる（DNS の前なので仮のホストで見られる。Google の生成元と Redirect URLs にも `v2` が残っている） | 自分のアカウントで **Google ログイン**（v1 で Google だった人の自動リンク。021 §8.2-8 の残り。利用者本人は Google の人でパスワードを失念している。021 §15）/ 旧 URL の 308 / 共有 URL / 準備中に送られない / 課金の列 | 021 §10-4 |
 
@@ -130,11 +130,11 @@ v1（Rails / Heroku）を止め、データと Stripe の契約を v2 に移し�
 
 | 時刻 | 手順 | 確かめること | 出典 |
 | --- | --- | --- | --- |
-| 23:00 | `npm run stripe:migrate-v1 -- --input <dir>/v1-subscriptions.csv --output <dir>/v1-subscriptions-dryrun.csv`（dry-run。989 件を 1 件ずつ取るので数分。§5 の実測で時刻を直す） | 件数が 019 §8.2.1 と合う。旧料金に移す 392 件の請求見込みの合計が、10/29 に控えた v1 の売上と大きく違わない。`skip`・`review`・取得できません・Customer が一致しません で `max_staffs_count >= 11` の人を `report.json` の `over_limit.freeOverLimit`（`hasSubscription: true`）と突き合わせ、個別契約なら管理画面（DNS の前なので **`admin-v2.assift.com`**）で `max_staffs_count` を入れる（021 §10-5）。`v1-subscriptions-not-migrated.csv` に行があれば Dashboard で解約 | 019 §8.2.3-1・021 §6.1 |
+| 23:00 | `STRIPE_SECRET_KEY='<移行用の鍵>' npm run stripe:migrate-v1 -- --input <dir>/v1-subscriptions.csv --output <dir>/v1-subscriptions-dryrun.csv`（dry-run。989 件を 1 件ずつ取るので数分。§5 の実測で時刻を直す） | **昼の dry-run の結果との差分を見る**（突合そのものは昼に済ませる）。件数が 019 §8.2.1 と合う。旧料金に移す 392 件の請求見込み（結果 CSV の `legacy` と `rescue` の行で Σ(`max_staffs_count` − 10) × 50 円。スクリプトは金額を出さない）が、10/29 に控えた v1 の売上と大きく違わない（v1 の管理画面の予想売上は `max_staffs_count >= 11` の全員の Σ(max − 10) × 50 で、救わない `unpaid` や個別契約の人も含むので、そのぶん v1 のほうが大きい。v1 `admin/graph_controller.rb`）。`skip`・`review`・取得できません・Customer が一致しません で `max_staffs_count >= 11` の人を `report.json` の `over_limit.freeOverLimit`（`hasSubscription: true`）と突き合わせ、個別契約なら管理画面（DNS の前なので **`admin-v2.assift.com`**）で `max_staffs_count` を入れる（021 §10-5） | 019 §8.2.3-1 |
 | 23:05 | **判断点 B（戻せなくなる点）**: ここで Go を決める | 以降は Stripe の契約を書き換えるので、v1 に戻すとそのぶんを手で戻すことになる。問題が出たら前に進めて直す | |
-| 23:05 | Stripe の Webhook のエンドポイントを有効に戻す（§3-12） | Enabled | §3-12 |
-| 23:05 | `--apply --limit 5 --output <dir>/v1-subscriptions-limit5.csv` → Dashboard で目で確かめる | Customer の言語・schedule の中身・無効にした下書き・`active` に戻ったこと | 019 §8.2.3-2 |
-| 23:10 | `--apply --output <dir>/v1-subscriptions-apply.csv`（残り全部。所要は §5 の見積もり） | 結果の CSV は 3 つとも `<dir>` に残す（`--output` を省くと作業ディレクトリの同じ名前に上書きされ、個人情報が repo の下に残る） | 019 §8.2.3-3・4 |
+| 23:05 | Stripe の Webhook のエンドポイントを有効に戻す（§3-12）。`v1-subscriptions-not-migrated.csv` に行があれば Dashboard で解約する | Enabled | §3-12・021 §6.1 |
+| 23:05 | `STRIPE_SECRET_KEY='<移行用の鍵>' npm run stripe:migrate-v1 -- --input <dir>/v1-subscriptions.csv --apply --limit 5 --output <dir>/v1-subscriptions-limit5.csv` → Dashboard で目で確かめる | Customer の言語・schedule の中身・無効にした下書き・`active` に戻ったこと | 019 §8.2.3-2 |
+| 23:10 | `STRIPE_SECRET_KEY='<移行用の鍵>' npm run stripe:migrate-v1 -- --input <dir>/v1-subscriptions.csv --apply --output <dir>/v1-subscriptions-apply.csv`（残り全部。所要は §5 の見積もり） | 結果の CSV は 3 つとも `<dir>` に残す（`--output` を省くと作業ディレクトリの同じ名前に上書きされ、個人情報が repo の下に残る） | 019 §8.2.3-3・4 |
 | 23:25 | `npm run stripe:sync-all`（§7） | `failed: 0`。`billing_subscriptions` の件数。旧料金に移した人を 1 人、`v2.assift.com` でロックされていないこと | 019 §8.3-4・§3-4 |
 | 23:30 | Stripe の Dashboard: リトライが尽きたら「解約する」へ / **解約したあとの請求書の扱い**を見て決める / 解約メールの設定を戻す | 請求書の扱い: リトライが尽きて解約になっても、設定によっては請求書が `open` のまま残る（019 §12 2026-10-08）。残ると、同じ Customer で申し込み直したときに未払いを払えてしまう（019 §11-13 と同じ懸念）。「回収不能にする」を推奨。値は §12 に記録 | 019 §8.3-4・§12 |
 | 23:32 | DNS の切り替え（下の順。024 §6） | | |
@@ -159,7 +159,7 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 | どこで | 戻し方 |
 | --- | --- |
 | インポートが失敗（判断点 A の前） | トランザクションごと戻っているので v2 には何も無い。直せるなら直して §6.2 からやり直す。判断点 A を過ぎたら、Heroku `MAINTENANCE_MODE=off`・Scheduler のジョブを戻し、日を改める（021 §10） |
-| COMMIT の後の検証で失敗（判断点 A の前） | 直せるなら直す。戻すなら §5 の片付けの SQL で管理用アカウントだけの状態に戻し、Heroku `MAINTENANCE_MODE=off`・Scheduler のジョブを控えた値で戻す（以下「日を改めたとき」も） |
+| COMMIT の後の検証で失敗（判断点 A の前） | 直せるなら直す。戻すなら §5 の片付けの SQL で管理用アカウントだけの状態に戻し、Heroku `MAINTENANCE_MODE=off`・Scheduler のジョブを控えた値で戻す（以下「日を改めたとき」も）。**Webhook のエンドポイントと Cron Jobs は、片付けが終わり `profiles` が管理用アカウントの 1 行だけになったのを確かめてから戻す**（残っているうちに戻すと、v1 の Customer のイベントや同期で `syncCustomer()` が持ち主を引き、Stripe に書く。`lib/billing/sync.ts` の `applySubscriptions`） |
 | 判断点 B の後 | v1 には戻さない。前に進めて直す（当夜に作るレコードは TTL 300 なので、直したレコードは早く反映される） |
 | 日を改めたとき | v1 を戻す（`MAINTENANCE_MODE=off`・Scheduler のジョブ）。3 ページの日付と告知をやり直す（§3-2a）。Vercel の Cron Jobs と Stripe の Webhook のエンドポイントを戻す。Stripe の解約メールの設定を戻すかを決める |
 
@@ -213,7 +213,8 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 
 - `lint` / `typecheck` / `test`
 - ローカルの Supabase と Stripe のサンドボックス（`sk_test_`。019 §9 の確認と同じ鍵）で流し、`billing_subscriptions` が埋まる。
-  前提: ローカルの `profiles.stripe_customer_id` がサンドボックスの Customer を指している（先にローカルで Checkout から申し込む）。指していないと何も写らず `synced: 0` で終わり、確かめたことにならない
+  前提: ローカルの `profiles.stripe_customer_id` がサンドボックスの Customer を指している（先にローカルで Checkout から申し込む）。指していないと何も写らず `synced: 0` で終わり、確かめたことにならない。
+  申し込みから戻った時点で `syncCustomer()` が写しているので、**その `billing_subscriptions` の行を消してから** sync-all を流し、行ができ直すことを見る
 
 ## 8. v1 の Service Worker を解除する `/serviceworker.js`（§3-7）
 
@@ -283,9 +284,9 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 | --- | --- | --- |
 | 1 | ~~Gehirn DNS の Web のレコードの今の値と TTL・`www`~~ | 決定（2026-10-15）: 値は §12、`www` は作らない（§3-14） |
 | 2 | §6 の各段の時刻・判断点 A の時刻 | §4-1（021 §9.3）の実測で埋める |
-| 3 | `stripe:sync-all` に使う Stripe の鍵 | Stripe の live のタスクで決める（§7.2） |
+| 3 | `stripe:sync-all` と `stripe:migrate-v1` に使う Stripe の鍵 | Stripe の live のタスクで決める（§7.2）。019 §4.1 のとおり、移行スクリプトは Vercel の制限付きキーとは別の鍵で流す（schedule・請求書の確定と無効化の権限が要る） |
 | 4 | ~~当夜に「移行しないのに店舗を持つ人」が 1 件以上出たとき~~ | 決定（2026-10-15）: §3-13 |
-| 5 | Stripe の段（dry-run + `--apply`）が 25 分に収まらないとき | §5 の実測で決める。案: (a) 開始を早める（例: 21:30）/ (b) 10/29 までに、即時解約する `unpaid`（87 件）の古い下書きの無効化だけ先に流す（v1 の利用者には請求されていない下書き。019 §8.2.2）/ (c) 公開を 24:00 より後にずらす（§3-2 で日付は 10/30 のまま出せる） |
+| 5 | Stripe の段（dry-run + `--apply`）が 25 分に収まらないとき | §5 の実測で決め、**10/29 の告知の前の判断（§4）までに決める**。案: (a) 開始を早める（例: 21:30）/ (b) 10/29 までに、即時解約する `unpaid`（87 件）の古い下書きの無効化だけ先に流す（v1 の利用者には請求されていない下書き。019 §8.2.2。区分を絞る引数が無いのでスクリプトの変更が要り、10/27 までに入れる）/ (c) 公開を 24:00 より後にずらす（§3-2 で日付は 10/30 のまま出せる） |
 
 ## 12. 実装ログ
 
@@ -363,3 +364,19 @@ DKIM の公開鍵の長い値は省いた（当夜に触らない）。
 | 7 | zsh で rake の角括弧が通らない / `rails s` がつながったままだと `dropdb` が失敗する | §6 の冒頭・§6.1 22:06・22:08 |
 | 8 | §9 の注記の対象と §10 のファイルが合わない | §10 に 001・019・025 |
 | 9 | sync-all のサンドボックスでの確認の前提が書かれていない | §7.3 |
+
+### 3 回目（2026-10-16。別の担当に、2 回目の反映を中心に実物と突き合わせて読ませた。11 件、すべて反映）
+
+| # | 指摘 | 対応 |
+| --- | --- | --- |
+| 1 | 中止で片付けの SQL より先に Webhook・Cron を戻すと、v1 の Customer に `syncCustomer()` が書きうる | §6.4: `profiles` が管理用だけになってから戻す |
+| 2 | 昼に用意した `--overrides` のファイルが 22:06 の削除で消えうる | `~/v1-export/overrides-20261030.json` に置き、22:06 で消さない |
+| 3 | `pg:backups:download` の既定の名前（`latest.dump`）で昼と夜のダンプを取り違えうる | `-o ~/v1-export/dumps/<backup id>.dump`。22:06 で id を確かめる |
+| 4 | 「392 件の請求見込み」はスクリプトが出さず、v1 の予想売上とは母集団が違う | §6.3 23:00 に計算式と違いを書いた。dry-run の突合は昼に済ませ、夜は差分だけ |
+| 5 | 移行しない人の解約が判断点 B の前にある | 23:05（B の後）へ移した |
+| 6 | §11-5 を決める期限が無い | §4 の 10/29 の判断で決める。案 (b) はスクリプトの変更が要る |
+| 7 | §5 の事前の dry-run に `--output` が無い | 付けた |
+| 8 | 23:05・23:10 がコマンドの断片 / 移行の鍵 | 全文にした。§11-3 に移行用の鍵 |
+| 9 | sync-all の確かめ方が Checkout の同期と区別できない | §7.3: 行を消してから流す |
+| 10 | 昼の予行の開始時刻が無い | 11:00 までに開始 |
+| 11 | `--rollback` の 2 回分で本番のディスクが埋まりうる | 昼の予行の前後と 22:25 の前に Disk の使用量を見る |
