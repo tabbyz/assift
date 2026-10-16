@@ -77,6 +77,10 @@ $$;
 -- 店舗配下（tenants を参照する 10 表も外部キーで連鎖して空になる）
 truncate table public.tenants cascade;
 
+-- auth.refresh_tokens は user_id（文字列）に外部キーが無く、session_id（null 可）の cascade でしか消えない。
+-- 残ると、id が v1 の ID から決まる再インポートの後に同じ利用者を指すので、先に消す
+delete from auth.refresh_tokens where user_id is distinct from current_setting('undo.admin_id');
+
 -- 管理用以外の利用者（auth.* と profiles 以下は cascade）
 delete from auth.users where id <> current_setting('undo.admin_id')::uuid;
 
@@ -84,7 +88,7 @@ delete from auth.users where id <> current_setting('undo.admin_id')::uuid;
 do $$
 declare
   v_admin uuid := current_setting('undo.admin_id')::uuid;
-  v_table text;
+  v_table regclass;
   v_found boolean;
 begin
   if (select count(*) from auth.users) <> 1 or not exists (select 1 from auth.users where id = v_admin) then
@@ -93,11 +97,12 @@ begin
   if (select count(*) from public.profiles) <> 1 then
     raise exception '確かめ: profiles が 1 行ではありません';
   end if;
-  foreach v_table in array array[
-    'public.tenants', 'public.staffs', 'public.patterns', 'public.staff_patterns', 'public.staff_default_patterns',
-    'public.shifts', 'public.required_nums', 'public.restrictions', 'public.date_notes', 'public.shares',
-    'public.assist_runs', 'public.billing_subscriptions'
-  ] loop
+  -- tenants と、それを参照する表（今後足した表も外部キーから拾う）と、課金の写し
+  for v_table in
+    select 'public.tenants'::regclass
+    union select conrelid::regclass from pg_constraint where contype = 'f' and confrelid = 'public.tenants'::regclass
+    union select 'public.billing_subscriptions'::regclass
+  loop
     execute format('select exists (select 1 from %s)', v_table) into v_found;
     if v_found then
       raise exception '確かめ: % が空ではありません', v_table;
@@ -106,13 +111,17 @@ begin
   if exists (select 1 from public.staff_count_history where user_id <> v_admin) then
     raise exception '確かめ: 管理用以外の staff_count_history が残っています';
   end if;
-  if exists (select 1 from auth.identities where user_id <> v_admin) then
-    raise exception '確かめ: 管理用以外の auth.identities が残っています';
+  if exists (select 1 from auth.identities where user_id <> v_admin)
+    or exists (select 1 from auth.sessions where user_id <> v_admin)
+    or exists (select 1 from auth.refresh_tokens where user_id is distinct from v_admin::text)
+    or exists (select 1 from auth.mfa_factors where user_id <> v_admin)
+    or exists (select 1 from auth.one_time_tokens where user_id <> v_admin) then
+    raise exception '確かめ: 管理用以外の auth.identities / sessions / refresh_tokens / mfa_factors / one_time_tokens が残っています';
   end if;
 end
 $$;
 
--- report.json の before と同じ 14 表（管理用アカウントの分だけが残る）
+-- report.json の before と同じ 14 表・同じ並び（import.ts の TARGET_TABLES。管理用アカウントの分だけが残る）
 select "table", count from (
   select 1 as n, 'auth.users' as "table", count(*) as count from auth.users
   union all select 2, 'auth.identities', count(*) from auth.identities
