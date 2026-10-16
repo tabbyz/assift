@@ -361,6 +361,11 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 | 1 | 確かめの表の一覧が手書きで、`tenants` を参照する表を足すと確かめから漏れる | `pg_constraint` から `tenants` を参照する表を引く形にした（今は 10 表 + `tenants` + `billing_subscriptions`）。件数の出力は `import.ts` の `TARGET_TABLES` と同じ 14 表のまま（`report.json` の `before` と見比べるため）とコメントに書いた |
 | 1 | G2 は 23:05〜最初の写しのあいだを止められない（`-v before_point_b=yes` のような明示を求めては） | 見送った。プランのレビュー（§13「§14 の 1 回目」#3）で決めたとおり、手順書のコマンドに書けば毎回同じ文字を打つだけになり、確かめにならない。B の前かは §14.4-1 で人が確かめる（23:05 の Webhook の有効化と `--limit 5` の前）。§14.1 に止められない区間を書いてある |
 | 2 | **高: 1 回目の反映のコミット（`b184e29`）が、追記のスクリプトの誤りで 026 の §12 の途中から後ろ（§12 の以前のログ・§13・§14）を消していた** | `909febc` の版から戻して追記をやり直した（行数 721 → 反映後も前後の節がそろうことを `git diff 909febc` で確かめた）|
+| 2 | 中: G2 は最初に 1 回見るだけで、無効化の漏れた Webhook がその後に写しを書くと、cascade で黙って消えて最後の確かめも通る | G2 の前に `lock table public.billing_subscriptions in share mode`。ローカルで、ロックのあいだ別の接続の INSERT が待たされる（`lock_timeout` で止まる）ことを確かめた |
+| 2 | 低: `auth.flow_state`（`user_id` に外部キーが無い）が残る | 4 で消し、確かめにも足した。§14.3 の「残る」の記述を直した |
+| 2 | 低: 確かめの表は `tenants` を直接参照する表しか拾わない | コメントを「直接参照する表」に直した（再帰で辿るほどの表は今は無い） |
+| 2 | 低: G0（BYPASSRLS）は要らない | 退けた。`auth.users` は所有者が `supabase_auth_admin` で RLS が有効なので、`postgres` からの DELETE には BYPASSRLS が要る |
+| 2 | 低: `lock_timeout` 10 秒で止まりうる | 退けた。止まれば流し直す（§14.3-1） |
 
 ### 2026-10-16（§7 `npm run stripe:sync-all` の実装とサンドボックスでの確かめ）
 
@@ -660,7 +665,8 @@ psql '<DB>' -X -v ON_ERROR_STOP=1 -v expected_users=<N> -v commit=1 -f scripts/m
 1 つのトランザクションで、次の順に行う。どこかで例外になれば全体が戻る（`ON_ERROR_STOP` で psql が抜け、接続が切れて ROLLBACK）。
 
 1. `begin read write`（Supabase はディスクが 95% を超えると `default_transaction_read_only` を on にして読み取り専用にする。明示すればそのときも流せる見込み。§14.5-6 で確かめる）/ `set local statement_timeout = 0`（Supabase の既定で切られない）/ `set local lock_timeout = '10s'`（開いている画面の読み取りなどを待ち続けない。切れたら流し直す）。`\timing on`
-2. **安全装置**（1 つでも外れたら `raise exception`。何も消さない）:
+2. `lock table public.billing_subscriptions in share mode`（G2 を見てから COMMIT まで、無効化の漏れた Webhook や同期が写しを書けないようにする。書かれた行を cascade で黙って消さない）→
+   **安全装置**（1 つでも外れたら `raise exception`。何も消さない）:
    - G0: 今のロールが RLS を通らない（`pg_roles.rolbypassrls`。`auth.users` と `public` の表は RLS が有効で、通らないロールでは DELETE が例外にならず 0 行になる）
    - G1: `profiles.is_admin = true` がちょうど 1 人（その id を残す）
    - G2: `billing_subscriptions` が 0 件（22:00 に Webhook を止めてから 23:05 に戻すまで、写しは 1 行も無い。公開の後や、写しが入った後に誤って流すのを止める。23:05〜最初の写しのあいだは止められない。§14.1）
@@ -668,9 +674,9 @@ psql '<DB>' -X -v ON_ERROR_STOP=1 -v expected_users=<N> -v commit=1 -f scripts/m
    - G4: 管理用以外の `auth.users` の件数が `expected_users` と同じ（インポートの前から居た人、COMMIT の後に `v2.assift.com` で登録した人を巻き込まない。
      外れたら `select id, email, created_at from auth.users order by created_at desc limit 5` で見る。移した人の `created_at` は v1 の値なので、新しく登録した人が上に出る）
 3. `truncate table public.tenants cascade`（外部キーで連鎖して、`tenants` を参照する 10 表も空になる: `staffs`・`patterns`・`staff_patterns`・`staff_default_patterns`・`shifts`・`required_nums`・`restrictions`・`date_notes`・`shares`・`assist_runs`。NOTICE に出る）
-4. `delete from auth.refresh_tokens where user_id is distinct from <管理用の id>`（`user_id` は文字列で外部キーが無く、`session_id`（null 可）の cascade でしか消えない。残ると、id が v1 の ID から決まる再インポートの後に同じ利用者を指す）→
+4. `delete from auth.refresh_tokens where user_id is distinct from <管理用の id>` と `auth.flow_state` の同じ削除（`user_id` は文字列で外部キーが無く、`session_id`（null 可）の cascade でしか消えない。残ると、id が v1 の ID から決まる再インポートの後に同じ利用者を指す）→
    `delete from auth.users where id <> <管理用の id>` → cascade で `auth.identities`・`auth.sessions` などと `profiles` → `billing_subscriptions`・`staff_count_history`（`tenants` は 3 で空）
-5. **確かめ**（外れたら `raise exception`）: `auth.users` が 1 件で管理用の id / `profiles` が 1 件 / `tenants` とそれを参照する表（`pg_constraint` から引く。今後 `tenants` を直接参照する表を足しても拾う）と `billing_subscriptions` が 0 件 / 管理用以外の `staff_count_history`・`auth.identities`・`sessions`・`refresh_tokens`・`mfa_factors`・`one_time_tokens` が 0 件
+5. **確かめ**（外れたら `raise exception`）: `auth.users` が 1 件で管理用の id / `profiles` が 1 件 / `tenants` とそれを参照する表（`pg_constraint` から引く。今後 `tenants` を直接参照する表を足しても拾う）と `billing_subscriptions` が 0 件 / 管理用以外の `staff_count_history`・`auth.identities`・`sessions`・`refresh_tokens`・`mfa_factors`・`one_time_tokens`・`flow_state` が 0 件
 6. `report.json` の `before` と同じ 14 表の件数を出す（人が `jq .before <dir>/report.json` と見比べる。管理用アカウントの分だけが残る）
 7. `commit` があれば COMMIT、無ければ ROLLBACK
 
@@ -680,7 +686,7 @@ psql '<DB>' -X -v ON_ERROR_STOP=1 -v expected_users=<N> -v commit=1 -f scripts/m
   0 行の空振りでは cascade の先は動かないが、外部キーの処理は参照する側の表の所有者の権限で走るので、`auth.*` の他の表への権限は要らない
 - TRUNCATE は `ACCESS EXCLUSIVE` のロックを取る。当夜は v1 がメンテナンス中で、`v2.assift.com` を開いているのは作業する人だけなので、待つ相手はほぼ無い（インポートの後の autovacuum は、ロックを待たせると自分から譲る）
 - `staff_count_history` の id（identity）は戻さない（`restart identity` を付けない）。次のインポートは `max(id)` を BEGIN 直後に読み直すので困らない
-- 22:52 の確認で付いたもの（自分のアカウントの Google の identity・セッション）は、4 の cascade で消える。外部キーの無い `auth.flow_state`・`auth.audit_log_entries` には作業した人の分が残る（作業した人だけで、再インポートの邪魔にならない）。22:52 の確認は Stripe を呼ばない（写しが無いあいだは `account/billing` の `syncIfStale` が同期しない）
+- 22:52 の確認で付いたもの（自分のアカウントの Google の identity・セッション）は、4 の cascade で消える。外部キーの無い `auth.flow_state` は 4 で消す。`auth.audit_log_entries` には作業した人の分が残る（利用者を指す列が無く、再インポートの邪魔にならない）。22:52 の確認は Stripe を呼ばない（写しが無いあいだは `account/billing` の `syncIfStale` が同期しない）
 - `TRUNCATE ... CASCADE` は、今後 `tenants` を参照する表を足すとそれも空にする。店舗配下の表なので意図どおり
 
 ### 14.4 当夜の手順（§6.4「COMMIT の後の検証で失敗」を具体化）
