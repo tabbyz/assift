@@ -54,7 +54,7 @@ export function SimpleShell({ showBackToTenants = true, children }: Props) {
         <Group h="100%" px={8} gap={6} wrap="nowrap">
           <Burger opened={opened} onClick={toggle} size="sm" aria-label="メニュー" />
           <UnstyledButton component={Link} href="/">
-            <AssiftSymbol height={24} />
+            <AssiftSymbol height={20} />
           </UnstyledButton>
         </Group>
       </AppShellHeader>

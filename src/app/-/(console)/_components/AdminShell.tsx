@@ -42,7 +42,7 @@ export function AdminShell({ email, children }: Props) {
           <Group gap="lg" wrap="nowrap">
             <UnstyledButton component={Link} href={ADMIN_USERS_PATH}>
               <Group gap={6} wrap="nowrap">
-                <AssiftSymbol height={24} />
+                <AssiftSymbol height={20} />
                 <Text fw={700} size="sm">
                   管理
                 </Text>

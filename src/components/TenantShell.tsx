@@ -86,7 +86,7 @@ export function TenantShell({ tenant, tenants, email, banner, children }: Props)
               aria-label="メニュー"
             />
             <UnstyledButton component={Link} href="/tenants" visibleFrom="sm">
-              <AssiftSymbol height={24} />
+              <AssiftSymbol height={20} />
             </UnstyledButton>
             <TenantSwitcher tenant={tenant} tenants={tenants} />
           </Group>

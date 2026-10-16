@@ -51,7 +51,7 @@ export function SetupHeader({ step, tenant, tenants, email, onLeave, leaveDisabl
       <Group justify="space-between" wrap="nowrap" mih={40}>
         <Group gap="xs" wrap="nowrap" miw={0}>
           <UnstyledButton component={Link} href="/tenants">
-            <AssiftSymbol height={24} />
+            <AssiftSymbol height={20} />
           </UnstyledButton>
           {tenant && tenants.length > 1 ? (
             <TenantSwitcher tenant={tenant} tenants={tenants} />
