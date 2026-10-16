@@ -290,7 +290,7 @@ Workspace は `sundbox.app` の 1 つだけで、`assift.com` はその追加の
 
 ## 6. 当日（DNS の切り替え）に差し替える値
 
-カットオーバーのプランへ渡す。順番は「Vercel にドメイン → DNS → 値の差し替え → Redeploy」。
+カットオーバーのプラン（→ 026 §6.3）へ渡す。順番は「Vercel にドメイン → DNS → 値の差し替え → Redeploy」。
 
 | 場所 | 仮（本プラン） | 当日 |
 | --- | --- | --- |
@@ -430,6 +430,6 @@ Workspace は `sundbox.app` の 1 つだけで、`assift.com` はその追加の
 | --- | --- |
 | 021 §9.3（予行） | 接続は Supabase → Connect → Session pooler（IPv4）+ `sslmode=verify-full`。本番は管理用アカウント 1 件・店舗 0 件の状態 |
 | Stripe の live | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `CRON_SECRET` を Vercel の Production に入れる（§4.7。`CRON_SECRET` は Stripe と同時に）。Webhook の URL は DNS の切り替え前は `assift.com` が v1 を指すことに注意 |
-| カットオーバー | §6 の差し替え。Site URL を変えたら Redeploy して値が残っているか見る（Vercel 連携が Redirect URLs を書き換える）。Deploy to production をオンにするかを決める（§4.8 の確かめ方を使う） |
-| カットオーバーの後 | `assift.com` で Vercel Web Analytics のダッシュボードに閲覧が 1 件届く（025 §6.3）。Google の同意画面のリンク先（`assift.com`）が v2 になったことを見る。仮のホスト `v2` / `admin-v2` を Vercel と Gehirn から外す。v1 の SendGrid の CNAME は v1 を止めてから消す |
+| カットオーバー（→ 026 §3-8・§6.3） | §6 の差し替え。Site URL を変えたら Redeploy して値が残っているか見る（Vercel 連携が Redirect URLs を書き換える）。Deploy to production をオンにするかを決める（§4.8 の確かめ方を使う） |
+| カットオーバーの後（→ 026 §6.5・§6.6） | `assift.com` で Vercel Web Analytics のダッシュボードに閲覧が 1 件届く（025 §6.3）。Google の同意画面のリンク先（`assift.com`）が v2 になったことを見る。仮のホスト `v2` / `admin-v2` を Vercel と Gehirn から外す。v1 の SendGrid の CNAME は v1 を止めてから消す |
 | リリース後 | PITR の検討（§3-6）。共同開発者が増えたら Redirect URLs の `assift-*-sundbox.vercel.app` を見直す |

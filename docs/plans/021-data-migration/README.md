@@ -161,7 +161,7 @@ MIGRATION_DATABASE_URL=postgresql://... \
 | 既存データ | 起動時に `auth.users` と `public.tenants` の件数を表示し、`tenants` が 0 件でなければ `--allow-existing` が無い限り止まる（本番は管理用アカウント 1 件だけの状態で流す。ローカルは seed が入っているので `--allow-existing`） |
 | 上書き | `--overrides <json>`: 規則の外で手で決めたことをスクリプトに渡す口。`customerOwner`（`stripe_customer_id` を複数人が持つ組の持ち主。§7.1）と `forceMigrateUsers`（移行しない判定だが店舗を持つ人を確認済みで入れる。§7.1）。適用した上書きは `report.json` に残す。想定は空のファイルで、空でも手順は同じ（決めた結果を次の実行で再現できる） |
 | レポート | `report.json`（`--input` と同じ場所）: テーブルごとの `BEGIN 直後の count(*) / 読んだ / 入れた / 捨てた（理由別）/ 直した（理由別）`、捨てた行の id と理由、切り詰めた行の id と前後の文字数（**値そのものは書かない**。名前・メモは 3 か月で消える JSONL から id で引ける。§10-8）、移行しないのに店舗を持つ人、適用した上書き。同じ場所に `v1-subscriptions.csv` と `v1-subscriptions-not-migrated.csv`（§5.1）。`--rollback` でも書く。メールと id を含むのでエクスポートと同じ場所に置き、暗号化して 1 年で消す（§10-8） |
-| Stripe 用の CSV | 019 §8.2 の引き継ぎスクリプトの入力 `v1-subscriptions.csv`（`v1_user_id, email, stripe_customer_id, stripe_subscription_id, max_staffs_count, last_edited_at`）を **`import.ts` が書く**（rake ではない。「移行する人」の判定 §7.1 を Ruby と TS の 2 か所に持たないため）。`last_edited_at` は `shifts.jsonl` の `updated_at` の最大を **pattern → tenant → user** でたどり、**§7.6 で捨てる前の全行**（`staff_id IS NULL` の自動アサインの一時行や、消えたスタッフの行を含む）から出す。019 §8.2.1 の集計（`Shift.joins(pattern: :tenant)`）と同じ母集合にしないと、rescue / cancel_unpaid の 90 日の境目が動く。移行しない人の Subscription は `v1-subscriptions-not-migrated.csv` に分け、引き継ぎスクリプトには渡さず Dashboard で解約する（想定 0 件。022 の手順に入れる） |
+| Stripe 用の CSV | 019 §8.2 の引き継ぎスクリプトの入力 `v1-subscriptions.csv`（`v1_user_id, email, stripe_customer_id, stripe_subscription_id, max_staffs_count, last_edited_at`）を **`import.ts` が書く**（rake ではない。「移行する人」の判定 §7.1 を Ruby と TS の 2 か所に持たないため）。`last_edited_at` は `shifts.jsonl` の `updated_at` の最大を **pattern → tenant → user** でたどり、**§7.6 で捨てる前の全行**（`staff_id IS NULL` の自動アサインの一時行や、消えたスタッフの行を含む）から出す。019 §8.2.1 の集計（`Shift.joins(pattern: :tenant)`）と同じ母集合にしないと、rescue / cancel_unpaid の 90 日の境目が動く。移行しない人の Subscription は `v1-subscriptions-not-migrated.csv` に分け、引き継ぎスクリプトには渡さず Dashboard で解約する（想定 0 件。026 §6.3 23:05） |
 | 実行環境 | `tsx --conditions=react-server`（`stripe:*` と同じ。`server-only` の `lib/calendar/holidays.ts` を読むため） |
 
 ### 6.2 変換は純関数（`src/lib/migration/`）
@@ -377,6 +377,8 @@ SQL で数え直さない（2 つの数え方を持たない）。§8.1 で DB �
 - 何も残らないので、何度でも流せる。**当日の前に最低 1 回**、できれば当日の朝にもう 1 回（ネットワークと権限の最終確認）
 
 ## 10. カットオーバーでの位置（022 に渡す）
+
+> 当日の手順は 026 §6（022 ではなく 026 になった）。§10-3 の「`--rollback`（最終確認）→ 本番」と「23 時台を避ける」は 026 §3-3（昼の予行で代える）・§3-5（当日は cron を止める）で上書き。§10-5 の Webhook は 026 §3-11・§3-12。
 
 001 §5.4 と 019 §8.3 を本プランの手順で具体化したもの。時間は 9.1 / 9.3 で埋める。
 
