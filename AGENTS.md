@@ -112,7 +112,8 @@ src/
     supabase/{server,client,proxy,env}.ts
 assets/fonts/                     PDF に埋め込む Noto Sans JP（public/ に置かない。下記）
 scripts/vercel/ignore-build.sh    Vercel の Ignored Build Step（vercel.json の ignoreCommand）。PR の無いブランチのプレビューを作らない
-scripts/stripe/                   setup（Product / Meter / Price / Coupon / Portal。冪等）/ migrate-v1-subscriptions（カットオーバーで 1 回）
+scripts/stripe/                   setup（Product / Meter / Price / Coupon / Portal。冪等）/ migrate-v1-subscriptions（カットオーバーで 1 回）/
+                                  sync-all（全員の同期だけ。人数は送らない。カットオーバーで引き継ぎのあとに 1 回。026 §7）
 scripts/migrate-v1/               v1 データ移行（021）。import（読む → 変換 → 1 トランザクション → 突合 → COMMIT / ROLLBACK）/ verify（移行後の突合）/
                                   pg（型パーサ。date を文字列のまま）/ overrides.example.json / v1/v2_export.rake（v1 に写して流す）/
                                   fixtures（架空の JSONL。Vitest の通しとローカルの通しに使う）
