@@ -41,9 +41,8 @@
   position: sticky;
   top: env(safe-area-inset-top, 0px);
   z-index: 10;
-  background-color: color-mix(in srgb, var(--mantine-color-body) 88%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  /* 白で塗りつぶす（半透明 + ぼかしだと、スクロールした本文が透けて読みづらい。027） */
+  background-color: var(--mantine-color-body);
 }
 
 .headerInner {
