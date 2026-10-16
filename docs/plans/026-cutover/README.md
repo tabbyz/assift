@@ -299,6 +299,25 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 
 （作業のあとに、日時・確かめた結果・つまずいた点を書く。秘密の値は書かない）
 
+### 2026-10-16（§8 `/serviceworker.js` の実装と手元の確かめ）
+
+`src/app/serviceworker.js/route.ts` を足した（§8.2）。`npm run build` で `ƒ /serviceworker.js`（動的）。
+`curl -sI` で `200`・`Content-Type: text/javascript; charset=utf-8`・`Cache-Control: no-cache`・`Content-Security-Policy` あり。
+
+§8.3-1 の 2 段の確かめ（Playwright 1.56 の Chromium headless・永続プロファイル。ローカルの Supabase + `next build && next start`）:
+
+- 1 段目: v1 役のサーバー（CSP なし。v1 `a8bb5ad` の `serviceworker.js.erb` の ERB を値にしたもの。`<%#= … %>` は v1 でも空文字なので `''`）で `/`・`/share/x`・`/tenants/FixtureTenant00000001A/shifts` を開き、
+  scope `/`・`/share/`・`/tenants/FixtureTenant00000001A/` の登録 3 つ、キャッシュ `v1:sw-cache-`、3 画面とも v1 の Service Worker の制御下、を作った
+- 2 段目: 同じ port を v2 に入れ替えて同じ 3 つを開く（`/tenants/…` は 308 → `/login`）→ 5 秒後に `getRegistrations()` が空・`caches.keys()` が空 →
+  `/` を開き直すと `navigator.serviceWorker.controller` が null（素のネットワーク）。`securitypolicyviolation`・コンソールの `Refused to` は 0 件
+- **最初の書き方（`install` で `skipWaiting()`、`activate` の `waitUntil` でキャッシュを消して `unregister()`）は 6 回中 3 回失敗した。**
+  scope `/` の新しい Service Worker が `installed` のまま有効にならず、古い v1 の Service Worker が残り、その間の `/` への移動が 15 秒以上止まった（`getRegistrations()` も返らない）。
+  ブラウザを起動し直すと消えていた。Chrome は、古い Service Worker が中継中のリクエスト（v2 の LP が出す 370 件ほどのフォントの先読み・RSC のプリフェッチ）を抱えているあいだ有効化を待たせるため。
+  `unregister()` を `waitUntil` の外に出した書き方も 2 回目で同じように止まったので、有効化の経路そのものが原因と判断した
+- そこで **`install` の中で `unregister()`（待たない）とキャッシュの削除**にし、有効化を経ないようにした。同じ確かめを、`/serviceworker.js` だけ差し替える中継越しに 6 回、build した本物で 6 回流し、**12 回とも通った**（scope `/` の登録とキャッシュは 2 段目の 4 秒ほどで消える）
+- 確かめのスクリプトは scratchpad に置き、リポジトリには入れていない（§8.3）
+- 残り: §8.3-2（merge の後に `v2.assift.com` で `curl -sI`）と §8.3-3（当日。§6.5-8）
+
 ### 2026-10-16（§8 の確かめ方の見直し）
 
 実装の前に、§8 を main（`2c595ce`）と v1（`tabbyz/assift-v1` `a8bb5ad`）の実物に突き合わせた。
