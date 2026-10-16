@@ -25,6 +25,7 @@ import {
 } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { IconCreditCard, IconUserCircle } from '@tabler/icons-react'
+import { AssiftSymbol } from '@/components/brand/AssiftLogo'
 import { LogoutMenuItem, LogoutNavLink } from '@/components/LogoutMenuItem'
 import { TenantSwitcher } from '@/components/TenantSwitcher'
 import type { TenantListItem, TenantSummary } from '@/lib/queries/tenants'
@@ -76,7 +77,7 @@ export function TenantShell({ tenant, tenants, email, banner, children }: Props)
     >
       <AppShellHeader>
         <Group h="100%" px={8} justify="space-between" wrap="nowrap" gap="sm">
-          <Group gap={6} wrap="nowrap" miw={0}>
+          <Group gap={0} wrap="nowrap" miw={0}>
             <Burger
               opened={opened}
               onClick={toggle}
@@ -84,10 +85,17 @@ export function TenantShell({ tenant, tenants, email, banner, children }: Props)
               size="sm"
               aria-label="メニュー"
             />
-            <UnstyledButton component={Link} href="/tenants" visibleFrom="sm">
-              <Text fw={700} size="sm">
-                assift
-              </Text>
+            {/* ハンバーガー（size="sm" の箱は 28px）と同じ幅にして、md で入れ替わっても店舗名がずれないようにする */}
+            <UnstyledButton
+              component={Link}
+              href="/tenants"
+              visibleFrom="md"
+              w={28}
+              h={28}
+              display="flex"
+              style={{ alignItems: 'center', justifyContent: 'center' }}
+            >
+              <AssiftSymbol height={20} />
             </UnstyledButton>
             <TenantSwitcher tenant={tenant} tenants={tenants} />
           </Group>

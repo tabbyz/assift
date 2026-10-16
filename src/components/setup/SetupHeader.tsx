@@ -15,6 +15,7 @@ import {
   VisuallyHidden,
 } from '@mantine/core'
 import { IconUserCircle } from '@tabler/icons-react'
+import { AssiftSymbol } from '@/components/brand/AssiftLogo'
 import { LogoutMenuItem } from '@/components/LogoutMenuItem'
 import { TenantSwitcher } from '@/components/TenantSwitcher'
 import type { TenantListItem, TenantSummary } from '@/lib/queries/tenants'
@@ -50,9 +51,7 @@ export function SetupHeader({ step, tenant, tenants, email, onLeave, leaveDisabl
       <Group justify="space-between" wrap="nowrap" mih={40}>
         <Group gap="xs" wrap="nowrap" miw={0}>
           <UnstyledButton component={Link} href="/tenants">
-            <Text fw={700} size="sm">
-              assift
-            </Text>
+            <AssiftSymbol height={20} />
           </UnstyledButton>
           {tenant && tenants.length > 1 ? (
             <TenantSwitcher tenant={tenant} tenants={tenants} />

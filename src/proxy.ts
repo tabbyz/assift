@@ -127,7 +127,7 @@ function rememberCurrentTenant(request: NextRequest, response: NextResponse) {
 export const config = {
   matcher: [
     // 対象外は Next 自身が配るディレクトリ（`_next/static/`。配下は任意なので前方一致）と、
-    // 実在する単一のパス（`_next/image`（クエリで指定。pathname は 1 つ）/ favicon / Stripe の Webhook / cron。
+    // 実在する単一のパス（`_next/image`（クエリで指定。pathname は 1 つ）/ アイコン（favicon・icon.svg・apple-icon.png。027）/ Stripe の Webhook / cron。
     // 後の 2 つはログイン状態と無関係で、署名 / CRON_SECRET でルート自身が守る。019 §5.9）だけ。
     // **単一のパスの除外は完全一致で書く**（`$`）。前方一致や拡張子で除外すると、存在しない URL（`/favicon.ico/x`・`/foo.png`）が
     // 404 の HTML（root の not-found）になるのに proxy を通らず、CSP の付かない HTML ができる（022 のレビューで見つけた。`public/` は無い）。
@@ -135,6 +135,6 @@ export const config = {
     // 除外するとトークン更新（refresh token rotation）が prefetch のレンダリング中に起きて
     // 新しい token を保存できず、次の遷移でログアウトしてしまう。
     // Vercel Web Analytics のスクリプトと送信は Vercel が Next より手前で受けるので、ここは走らない（外す必要も無い。025 §3-7・§8）。
-    '/((?!_next/static/|_next/image$|favicon\\.ico$|api/stripe/webhook$|api/cron/billing-usage$).*)',
+    '/((?!_next/static/|_next/image$|favicon\\.ico$|icon\\.svg$|apple-icon\\.png$|api/stripe/webhook$|api/cron/billing-usage$).*)',
   ],
 }

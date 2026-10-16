@@ -14,8 +14,6 @@ import {
   NavLink,
   ScrollArea,
   Stack,
-  Text,
-  UnstyledButton,
 } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { IconArrowLeft, IconCreditCard, IconUserCircle } from '@tabler/icons-react'
@@ -53,11 +51,6 @@ export function SimpleShell({ showBackToTenants = true, children }: Props) {
       <AppShellHeader>
         <Group h="100%" px={8} gap={6} wrap="nowrap">
           <Burger opened={opened} onClick={toggle} size="sm" aria-label="メニュー" />
-          <UnstyledButton component={Link} href="/">
-            <Text fw={700} size="sm">
-              assift
-            </Text>
-          </UnstyledButton>
         </Group>
       </AppShellHeader>
 

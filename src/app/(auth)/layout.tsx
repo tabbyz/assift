@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Container, Stack, Title } from '@mantine/core'
+import { AssiftLogo } from '@/components/brand/AssiftLogo'
 import { LinkAnchor } from '@/components/LinkAnchor'
 
 /**
@@ -12,8 +13,8 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
     <Container size="md" py="xl" mih="100dvh" display="flex" style={{ flexDirection: 'column' }}>
       <Stack gap="lg" flex={1}>
         <Title order={1} ta="center">
-          <LinkAnchor href="/" c="inherit" underline="never">
-            assift
+          <LinkAnchor href="/" c="inherit" underline="never" display="inline-block">
+            <AssiftLogo height={36} />
           </LinkAnchor>
         </Title>
         {children}

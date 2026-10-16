@@ -72,6 +72,7 @@ src/
     api/stripe/webhook/route.ts   Stripe の Webhook（POST。署名で守る。019）
     api/cron/billing-usage/route.ts  毎日の同期と最大人数の送信（GET。CRON_SECRET で守る。vercel.json の crons）
   components/                     横断 UI（SortableList = 上下ボタンの並べ替え一覧 など）
+    brand/                        ロゴ（AssiftLogo。ログイン前の画面）とシンボル（AssiftSymbol。ログイン後のヘッダー）。素の SVG なので Server / Client どちらでも使える。027）。favicon・icon.svg・apple-icon.png は app/ 直下（Next の規約）
     AppProviders.tsx              root layout の Provider 群（Client）。CSP の nonce を文字列で受け、Mantine の getStyleNonce に関数で渡す（022）
     SiteAnalytics.tsx             Vercel Web Analytics（025）。beforeSend（関数）を持つので Client。読み込むかは root layout が lib/analytics の shouldLoadAnalytics で決める
     restrictions/                 制約の行（説明・種類・強さの札・編集）。制約ページとスタッフの編集画面で共有（013）
@@ -337,7 +338,7 @@ Stripe の API の版は SDK が固定する最新（`lib/billing/stripe.ts`）�
 2. `updateSession()`: Supabase の cookie 更新 + 保護ルートの未ログイン redirect
 3. 開いている `/tenants/<uuid>` を直近店舗の cookie に記録
 
-- `config.matcher` から外すのは静的アセット（`_next/static` / `_next/image` / `favicon.ico`）と Stripe の Webhook・cron（ログイン状態と無関係で、セッションの更新が要らない）だけ。
+- `config.matcher` から外すのは静的アセット（`_next/static` / `_next/image` / アイコン（`favicon.ico` / `icon.svg` / `apple-icon.png`。027））と Stripe の Webhook・cron（ログイン状態と無関係で、セッションの更新が要らない）だけ。
   Vercel Web Analytics のスクリプトと送信は Vercel が Next より手前で受け、proxy は走らない（025 §8 の本番の確認）。matcher で外す必要は無い（025 §3-7）。
   **除外は実在するパスに完全一致（`$`）で書く。** 前方一致や拡張子で除外すると、存在しない URL が 404 の HTML になるのに proxy を通らず、CSP の付かない HTML ができる（`public/` は無い）
 - **`config.matcher` から prefetch を除外しない。** セッション cookie を書けるのは proxy だけで、除外するとトークン更新が Server Component の描画中に起き、新しい refresh token を保存できずに次の遷移でログアウトする（`enable_refresh_token_rotation = true`）

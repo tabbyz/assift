@@ -41,9 +41,8 @@
   position: sticky;
   top: env(safe-area-inset-top, 0px);
   z-index: 10;
-  background-color: color-mix(in srgb, var(--mantine-color-body) 88%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  /* 白で塗りつぶす（半透明 + ぼかしだと、スクロールした本文が透けて読みづらい。027） */
+  background-color: var(--mantine-color-body);
 }
 
 .headerInner {
@@ -78,25 +77,15 @@
 
 .logo {
   display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  font-size: 22px;
-  font-weight: 900;
-  letter-spacing: 0.01em;
   color: var(--mantine-color-text);
-  text-decoration: none;
 }
 
-.mark {
-  display: grid;
-  grid-template-columns: repeat(2, 9px);
-  gap: 2px;
-}
-
-.mark span {
-  width: 9px;
-  height: 9px;
-  border-radius: 2px;
+/* スマホ幅では小さくする（24px のままだと 375px で右の「ログイン」が 2 行に折り返す） */
+@media (max-width: 36em) {
+  .logo svg {
+    height: 20px;
+    width: auto;
+  }
 }
 
 /* ---- ヒーロー ---- */
