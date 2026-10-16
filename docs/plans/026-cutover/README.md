@@ -240,9 +240,14 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 ### 8.3 確かめ方
 
 1. 同じ origin と port で 2 段に分ける（v2 のページから `register()` を呼ぶと CSP に止められるため）。Playwright の永続プロファイルで:
-   1. CSP の無い小さなサーバーで、v1 と同じ中身の `/serviceworker.js` と、`register('/serviceworker.js', { scope: './' })` を呼ぶページを `/` と `/share/x/` に配り、登録を 2 つ作る
-   2. サーバーを止め、同じ port で `npm run build && npm run start` に入れ替え、`/` と `/share/x/` を開き直す（必要なら `registration.update()` を待つ）
+   1. CSP の無い小さなサーバーで、v1 と同じ中身の `/serviceworker.js`（`tabbyz/assift-v1` `a8bb5ad` の `serviceworker.js.erb`。ERB の `asset_path` は `/application.css` に置き換え、それと `/offline.html` も配る。`cache.addAll` が 1 つでも 404 だと install に失敗する）と、
+      `register('/serviceworker.js', { scope: './' })` を呼ぶページを **`/`・`/share/x`・`/tenants/<22 文字>/shifts`** に配り、scope `/`・`/share/`・`/tenants/<22 文字>/` の登録 3 つとキャッシュ `v1:sw-cache-` を作る。
+      ページが v1 の Service Worker に制御されている（`navigator.serviceWorker.controller` がある）ことも見る（前提が作れていないと確かめにならない）。
+      URL は v1 の実際の形（`share/:code`・`/tenants/<token>/shifts`。v1 `config/routes.rb`）に合わせる。`scope: './'` は最後の `/` までなので、末尾に `/` のある `/share/x/` にすると scope が `/share/x/` になり、v2 は `/share/x` へ 308 して着いた先が scope の外になる
+   2. サーバーを止め、同じ port で `npm run build && npm run start` に入れ替え、同じ 3 つの URL を開き直す（`/tenants/<22 文字>/shifts` は v2 の 308 で移るが、最初のリクエストは scope の中なので取り直しが走る。必要なら `registration.update()` を待つ）
    3. `navigator.serviceWorker.getRegistrations()` が空、`caches.keys()` が空、v2 のページで `securitypolicyviolation` が 0 件
+   - 但し書き: v2 で開かれない scope（例: 開かなくなった `/tenants/<token>/`）の登録は、その URL を開くまで残る。v2 のページはどれもその scope の外なので、何も中継せず害は無い
+   - 確かめのスクリプトはリポジトリに入れない（scratchpad だけ。1 回きりの確認。005 と同じ）。手順と結果を §12 に書く
 2. `v2.assift.com` に出たあと `curl -sI https://v2.assift.com/serviceworker.js` で `Content-Type`・`Cache-Control`
 3. 当日: v1 を開いた（Service Worker が登録されている）ブラウザで `assift.com` を開き、DevTools の Application → Service Workers から消えること（§6.5-8）
 
@@ -292,6 +297,15 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 ## 12. 実装ログ
 
 （作業のあとに、日時・確かめた結果・つまずいた点を書く。秘密の値は書かない）
+
+### 2026-10-16（§8 の確かめ方の見直し）
+
+実装の前に、§8 を main（`2c595ce`）と v1（`tabbyz/assift-v1` `a8bb5ad`）の実物に突き合わせた。
+
+- v1 の中身は §8.1 のとおり（`serviceworker.js.erb` はネットワーク優先 + キャッシュ・`offline.html`、`serviceworker-companion.js` は `application.coffee` から読まれ全ページで `scope: './'` で登録）
+- proxy の 4 段も `next.config.ts` の redirects も `/serviceworker.js` に当たらない（Service Worker のスクリプトの取得は redirect を受けないので必須）。CSP は付くが、この JS は方針に触れない
+- §8.3 の確かめのページを `/share/x/` から v1 の実際の URL（`/share/x`・`/tenants/<22 文字>/shifts`）に直した（末尾の `/` で scope が外れる）。開かれない scope の但し書きを足した
+- 確かめのスクリプトは scratchpad だけに置く（§8.3）
 
 ### 2026-10-16（元のプランへの注記）
 
