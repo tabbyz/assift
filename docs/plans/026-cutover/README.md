@@ -228,10 +228,11 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 ### 8.2 作るもの
 
 - Route Handler `src/app/serviceworker.js/route.ts`（GET。ドット入りのフォルダでパスを作るのは Next の規約どおり: `node_modules/next/dist/docs/01-app/02-guides/backend-for-frontend.md` の `app/rss.xml/route.ts`）: 次の JS を返す。`Content-Type: text/javascript; charset=utf-8`・`Cache-Control: no-cache`
-  - `install` で `self.skipWaiting()`
-  - `activate` で `caches.keys()` をすべて消し、`self.registration.unregister()`（scope ごとの登録がそれぞれ取り直して、それぞれ自分を解除する）
+  - **`install` の中で** `self.registration.unregister()` を呼び（`waitUntil` で待たない）、`caches.keys()` をすべて消す（こちらは `waitUntil`）。scope ごとの登録がそれぞれ取り直して、それぞれ自分を解除する
+  - 有効化（`skipWaiting()` → `activate`）を経ない。当初の案（`install` で `skipWaiting()`、`activate` で消して解除）は、Chrome が古い Service Worker の中継中のリクエストを待って有効化を止め、その間の画面の移動が止まった（§12 2026-10-16。6 回中 3 回）。
+    `unregister()` を `waitUntil` で待たないのは、解除の処理が install の処理の終わりを順番待ちするため（待つと互いに待ち合う）
   - `fetch` のハンドラは持たない（リクエストを中継しない）
-  - 開いている画面は再読み込みしない（Server Action の途中で画面を飛ばさない）。次の遷移から素のネットワークになる
+  - 開いている画面は再読み込みしない（Server Action の途中で画面を飛ばさない）。その画面は閉じるまで古い Service Worker が中継し、次の遷移から素のネットワークになる
 - proxy の matcher は変えない（ふつうのパスとして通り、CSP のヘッダも付く。この JS は `eval` も外部の読み込みもしないので方針に触れない）。管理画面のホストでは proxy の 0 段目が `/-` へ redirect する（`lib/admin/host.ts` の `redirectToAdmin`。v1 に管理画面のホストは無かったので要らない）
 - 置いておく期間は 1 年（§6.6）。解除済みの人には何も起きないので、消し忘れても害はない
 - AGENTS.md のディレクトリに 1 行足す
