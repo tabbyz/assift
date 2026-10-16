@@ -349,6 +349,10 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 **確認:** lint（既存の警告 1 件のみ）/ typecheck（このコンテナの `node_modules` が古く `@vercel/analytics` が無かったので `npm ci` してから）/ test（924 件）/ `npx supabase test db`（241 件）。最後に `db reset` で seed の状態に戻した。
 残り: 本番での空振り（§14.5。021 §9.3 の予行の日。人の作業）
 
+**実装のレビュー**（別の担当にローカルで流し直させた。**1 回目で高・中 0 件**）: 通し・安全装置（G0 は `PGOPTIONS='-c role=authenticated'`）・再インポートを再現。
+引数の誤り（`-v expected_users=`・`=6.0` は終了コード 3、`-v commit=`・値なし・`off`・`no`・`-v COMMIT=1` はどれも ROLLBACK）で COMMIT に進む組み合わせは無かった。
+低 1 件: 22:52 の Google ログインが自動リンクされず自分のメールの新しいユーザーができると、いちばん起こりそうな中止の場面で G4 で止まる → §14.4「通らなかったとき」に、それを確かめたら `expected_users=<N+1>` で流してよいと足した（SQL は変えない）。手順書の判断点 A にも足した
+
 ### 2026-10-16（§7 `npm run stripe:sync-all` の実装とサンドボックスでの確かめ）
 
 `scripts/stripe/sync-all.ts` と `package.json` の `stripe:sync-all`、AGENTS.md のディレクトリを足した（§7.1）。人数の送信は呼ばない。
@@ -642,7 +646,7 @@ psql '<DB>' -X -v ON_ERROR_STOP=1 -v expected_users=<N> -v commit=1 -f scripts/m
 - ファイルの先頭に `\set ON_ERROR_STOP on`（引数の付け忘れでも止まる）
 - psql の変数は `$$ … $$` の中では置き換わらないので、`select set_config('undo.expected_users', :'expected_users', true)` で設定に入れ、DO ブロックの中で `current_setting('undo.expected_users')::int` で読む。
   管理用の id も 2 で `set_config('undo.admin_id', …, true)` に入れ、4・5 で読む。第 3 引数 `true` の値はトランザクションの中だけなので、`set_config` は `begin read write` の後（2 の先頭）で呼ぶ
-- `expected_users` が無いときは `\echo` で名指ししたあと、わざと失敗する文で止める（`\quit` だと終了コードが 0 になる）
+- `expected_users` が無いときは、名指しの文言で例外を投げる DO で止める（`\quit` だと終了コードが 0 になる）
 
 1 つのトランザクションで、次の順に行う。どこかで例外になれば全体が戻る（`ON_ERROR_STOP` で psql が抜け、接続が切れて ROLLBACK）。
 
@@ -681,7 +685,7 @@ psql '<DB>' -X -v ON_ERROR_STOP=1 -v expected_users=<N> -v commit=1 -f scripts/m
 6. 手元: 戻した v1 の DB を消す（`dropdb -p 5433 --force assift_v1_cutover`。日を改めた夜の 22:06 の `createdb` がぶつからないように）。`<dir>`・ダンプ・`noon-20261030/`・`overrides-20261030.json` は、**日を改めた日の昼の予行より前に**消す（昼の予行が同じ名前のフォルダに書くため。日を改めた日は名前の日付を読み替える）。それまでは 021 §10-8 と同じく手元から出さない
 
 **通らなかったとき**（安全装置で止まった・例外になった）: 片付けはその夜に急がない。Webhook と Cron は無効のまま、v1 だけ戻し（5）、原因を調べてから翌日に片付ける。
-上書きの変数は作らない（G2 で止まったなら 22:00 の無効化が漏れて Stripe に書いた恐れがあり、Dashboard でそのあいだのイベントの配信を見てから決める。G4 なら余分な人が誰かを見てから `expected_users` を決め直す）
+上書きの変数は作らない（G2 で止まったなら 22:00 の無効化が漏れて Stripe に書いた恐れがあり、Dashboard でそのあいだのイベントの配信を見てから決める。G4 なら余分な人が誰かを見てから `expected_users` を決め直す。例外は 22:52 の Google ログインが自動リンクされず、自分のメールの新しいユーザーができていたとき（G4 の案内の `created_at desc` で一番上に出る）: それを確かめたら `expected_users=<N+1>` でその夜に流してよい）
 
 ### 14.5 確かめ方
 
