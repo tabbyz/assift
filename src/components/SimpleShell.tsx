@@ -14,11 +14,11 @@ import {
   NavLink,
   ScrollArea,
   Stack,
-  Text,
   UnstyledButton,
 } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { IconArrowLeft, IconCreditCard, IconUserCircle } from '@tabler/icons-react'
+import { AssiftLogo } from '@/components/brand/AssiftLogo'
 import { LogoutNavLink } from '@/components/LogoutMenuItem'
 import classes from './TenantShell.module.css'
 
@@ -54,9 +54,7 @@ export function SimpleShell({ showBackToTenants = true, children }: Props) {
         <Group h="100%" px={8} gap={6} wrap="nowrap">
           <Burger opened={opened} onClick={toggle} size="sm" aria-label="メニュー" />
           <UnstyledButton component={Link} href="/">
-            <Text fw={700} size="sm">
-              assift
-            </Text>
+            <AssiftLogo height={20} />
           </UnstyledButton>
         </Group>
       </AppShellHeader>

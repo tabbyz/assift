@@ -78,25 +78,15 @@
 
 .logo {
   display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  font-size: 22px;
-  font-weight: 900;
-  letter-spacing: 0.01em;
   color: var(--mantine-color-text);
-  text-decoration: none;
 }
 
-.mark {
-  display: grid;
-  grid-template-columns: repeat(2, 9px);
-  gap: 2px;
-}
-
-.mark span {
-  width: 9px;
-  height: 9px;
-  border-radius: 2px;
+/* スマホ幅では小さくする（28px のままだと右の「ログイン」「無料ではじめる」が 375px に収まらない） */
+@media (max-width: 36em) {
+  .logo svg {
+    height: 22px;
+    width: auto;
+  }
 }
 
 /* ---- ヒーロー ---- */

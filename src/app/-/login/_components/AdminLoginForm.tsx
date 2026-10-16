@@ -2,7 +2,8 @@
 
 import { type FormEvent, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button, PasswordInput, Stack, TextInput, Title } from '@mantine/core'
+import { Button, Group, PasswordInput, Stack, TextInput, Title } from '@mantine/core'
+import { AssiftLogo } from '@/components/brand/AssiftLogo'
 import { FormErrorAlert } from '@/components/FormErrorAlert'
 import { adminLogin } from '../actions'
 
@@ -28,8 +29,11 @@ export function AdminLoginForm() {
 
   return (
     <Stack gap="md">
-      <Title order={2} ta="center">
-        assift 管理
+      <Title order={2}>
+        <Group justify="center" gap="xs" wrap="nowrap">
+          <AssiftLogo height={32} />
+          管理
+        </Group>
       </Title>
 
       <FormErrorAlert message={error} />
