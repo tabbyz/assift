@@ -432,6 +432,8 @@ staffs（在籍・position 順）、patterns（position 順）、staff_patterns�
 
 ### 5.4 カットオーバー手順
 
+> 当日の手順は 026（`docs/plans/026-cutover/README.md`）に移した。以下は当初の骨子。
+
 1. Supabase / Vercel 本番環境を用意し、テスト移行で 5.3 を通す
 2. ユーザーへ事前告知（メンテナンス時間、再ログインが必要な旨）
 3. Heroku `MAINTENANCE_MODE=on`（v1 が 503 を返す）
