@@ -136,7 +136,7 @@ v1（Rails / Heroku）を止め、データと Stripe の契約を v2 に移し�
 | 23:05 | Stripe の Webhook のエンドポイントを有効に戻す（§3-12）。`v1-subscriptions-not-migrated.csv` に行があれば Dashboard で解約する | Enabled | §3-12・021 §6.1 |
 | 23:05 | `STRIPE_SECRET_KEY='<移行用の鍵>' npm run stripe:migrate-v1 -- --input <dir>/v1-subscriptions.csv --apply --limit 5 --output <dir>/v1-subscriptions-limit5.csv` → Dashboard で目で確かめる | Customer の言語・schedule の中身・無効にした下書き・`active` に戻ったこと | 019 §8.2.3-2 |
 | 23:10 | `STRIPE_SECRET_KEY='<移行用の鍵>' npm run stripe:migrate-v1 -- --input <dir>/v1-subscriptions.csv --apply --output <dir>/v1-subscriptions-apply.csv`（残り全部。所要は §5 の見積もり） | 結果の CSV は 3 つとも `<dir>` に残す（`--output` を省くと作業ディレクトリの同じ名前に上書きされ、個人情報が repo の下に残る）。済んだら `~/v1-export/noon-20261030/` を消す | 019 §8.2.3-3・4 |
-| 23:25 | `STRIPE_SECRET_KEY='<鍵>' NEXT_PUBLIC_SUPABASE_URL=https://assift.supabase.co SUPABASE_SECRET_KEY='<本番の secret key>' npm run stripe:sync-all`（§7。tsx は `.env*` を読まない。シェルにローカルの値が残っているとローカルを同期して `failed: 0` で通ってしまうので、3 つとも必ずこの行で渡す） | 最初の行が `接続先: Supabase assift.supabase.co / Stripe live`（違えば Ctrl-C で止めて、3 つの値を渡し直す）。`failed: 0`。`billing_subscriptions` の件数。旧料金に移した人を 1 人、`v2.assift.com` でロックされていないこと | 019 §8.3-4・§3-4 |
+| 23:25 | `STRIPE_SECRET_KEY='<鍵>' NEXT_PUBLIC_SUPABASE_URL=https://assift.supabase.co SUPABASE_SECRET_KEY='<本番の secret key>' npm run stripe:sync-all`（§7。tsx は `.env*` を読まない。シェルにローカルの値が残っているとローカルを同期して `failed: 0` で通ってしまうので、3 つとも必ずこの行で渡す） | npm の表示（`> …` の 2 行）の次の行が `接続先: Supabase assift.supabase.co / Stripe live`（違えば Ctrl-C で止めて、3 つの値を渡し直す）。所要は数分の見込み（実測なし。途中の出力は無い）。`failed: 0`（1 以上なら同じ行を流し直す。冪等。同じ Customer が残れば `[billing] 同期に失敗しました (customer: …)` を控えて Dashboard で見る）。`[billing] 二重の契約を解約します` が出たら、その user と subscription を控える。**件数**: `psql '<Session pooler の接続文字列>' -c "select count(*) filter (where status in ('active','trialing','past_due')) as entitled, count(*) filter (where status in ('active','trialing','past_due') and price_lookup_key = 'freemium-monthly' and not has_schedule) as legacy_without_schedule from billing_subscriptions"` で、`entitled` が 23:10 の「区分ごとの件数」の `legacy` + `rescue`（23:10 の失敗が 0 件のとき）と一致し、`legacy_without_schedule` が 0（019 §5.7 の見張りの代わり。0 でなければ `stripe:migrate-v1 --apply` を流し直してから sync-all をもう一度）。総件数は見ない（23:05 から Webhook が即時解約の `canceled` の行を書くため）。`synced` は `entitled` に近い数（`review` の行の分だけ多くてよい）で、0 や極端に少なければ旧 price の一覧が取れていない。旧料金に移した人を 1 人、`v2.assift.com` でロックされていないこと | 019 §8.3-4・§3-4 |
 | 23:30 | Stripe の Dashboard: リトライが尽きたら「解約する」へ / **解約したあとの請求書の扱い**を見て決める / 解約メールの設定を戻す | 請求書の扱い: リトライが尽きて解約になっても、設定によっては請求書が `open` のまま残る（019 §12 2026-10-08）。残ると、同じ Customer で申し込み直したときに未払いを払えてしまう（019 §11-13 と同じ懸念）。「回収不能にする」を推奨。値は §12 に記録 | 019 §8.3-4・§12 |
 | 23:32 | DNS の切り替え（下の順。024 §6） | | |
 
@@ -325,13 +325,27 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 
 作った Customer 3 件は確認のあとに消した。
 
+**実装のレビュー**（別の担当に実物と突き合わせて読ませた）:
+
+| 回 | 指摘 | 対応 |
+| --- | --- | --- |
+| 1 | 中: 23:25 の「`billing_subscriptions` の件数」に基準が無い（23:05 から Webhook が即時解約の `canceled` を書く。旧 price の一覧が取れないと `failed: 0` のまま `synced` だけが減る） | §6.3 23:25: 有効な行の件数を 23:10 の `legacy` + `rescue` と比べ、旧 price のまま schedule の無い有効な行が 0 件かを SQL で見る。`synced` も見る |
+| 1 | 低: §12 の `synced` の定義に取り直しの数が無い | 直した |
+| 1 | 低: 「最初の行」は npm の表示の後 | 「npm の表示の次の行」にした |
+| 1 | 低: 23:25 に所要と失敗したときの次の手が無い / 二重の契約の解約が v1 の契約に通るか未確認 | 所要（数分・実測なし）・流し直し・控えるものを書いた。解約はサンドボックスで確かめた |
+| 1 | 低: 019 §5.7 の「見張り」が未実装 | 23:25 の SQL で代え、019 §5.7 に注記した（当夜より後は 10/31 に全員が新 price に移るので、見張りの出番は当夜だけ） |
+| 1 | 低（任意）: `keyMode` のテスト | 見送った（スクリプトの中の 3 行。live / test / 偽の live を手で確かめた） |
+
 **気付いたこと:**
 
 - サンドボックスには 019 のローカルの Checkout の契約が 3 件残っていて、metadata（`assift_user_id`）が seed の利用者（dev に 2 件・admin に 1 件。uuid はどの環境でも同じ）を指している。
   そのため空のローカル DB に流しても `synced: 3` になり、seed の 2 人に行ができる（`findOwner()` の metadata の経路。想定どおり）。dev のように 1 人に Customer が 2 つあると、後から写したほうが残る。
   ローカルの DB を作り直すと `stripe_customer_id` が消えるのに、サンドボックスの契約は残るために起きる。本番では利用者の uuid が v1 の ID から導かれ（`v1Uuid()`）、live の契約の metadata とは重ならない。
   サンドボックスの 3 件は消していない（019 の確認の続きで使いうるので）。今後ローカルで sync-all や cron を流すときは、この 3 件を差し引いて見る
-- `synced` は「写した人」と「一覧より後に Webhook が写していたので飛ばした人」の数で、持ち主の見つからない Customer（移行しない人）は数えない。23:25 は `synced` ではなく `billing_subscriptions` の件数で見る（§6.3 のまま）
+- `synced` は「一覧から写した人」「一覧より後に Webhook が写していたので飛ばした人」「有効なのに一覧に出ない行を 1 件ずつ取り直した数」の合計で、持ち主の見つからない Customer（移行しない人）は数えない。
+  旧 price の一覧が `resource_missing` で取れなくても例外にせず `failed: 0` で終わる（`syncAllSubscriptions()` の決まり）ので、それに気付けるのは `synced` だけ。
+  23:25 は `synced` と、有効な行の件数・旧 price のまま schedule の無い有効な行の件数の両方を見る（§6.3。レビュー 1 回目の指摘 1）
+- 二重の契約の解約（`applySubscriptions()` の `subscriptions.cancel`。endive の版）は、v1 の旧 metered の契約にも通ることをサンドボックスで確かめた（クロックなしの v1 相当の契約を作って即時解約 → `canceled`。Customer は消した）
 - テストクロック付きの契約は price の一覧に出ないことを実物で確かめた（クロック付きの Customer に Checkout と同じ中身の契約を作り、`subscriptions.list({ price })` に出ない。クロックは消した）。§7.3 の理由
 
 ### 2026-10-16（§8 `/serviceworker.js` の実装と手元の確かめ）
