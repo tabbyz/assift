@@ -352,7 +352,8 @@ URL は**利用者単位**（全店舗の合計で数えるので店舗の外）
 - 1 人ずつ try/catch してログに出し、全体は止めない
 - **見張り**: 旧 `freemium-monthly` の price のまま schedule が付いていない有効な契約を見つけたらログに出す（起きないはずの状態。利用量が送られず無料になってしまう）
   （**未実装**。カットオーバーの夜は 026 §6.3 23:25 の SQL で同じことを見る。旧 price の phase は大半が 10/31 に終わり、v1 のトライアル中の契約はトライアルの終わりまで続く。
-  当夜より後にこの状態を作る経路は今のコードに無い（旧 price の phase の解約 `endScheduleAtCurrentPhase()` は schedule を残す）ので、見張りは足さない）
+  当夜より後にこの状態を作る経路は今のコードに無い（旧 price の phase の解約 `endScheduleAtCurrentPhase()` は schedule を残す。引き継ぎの schedule が作りかけで残っても、
+  `stripe:migrate-v1 --apply` の流し直しが続きから組む（026 §12））ので、見張りは足さない）
 
 ### 5.8 退会
 
