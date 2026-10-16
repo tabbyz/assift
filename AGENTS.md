@@ -116,7 +116,8 @@ scripts/stripe/                   setup（Product / Meter / Price / Coupon / Por
                                   sync-all（全員の同期だけ。人数は送らない。カットオーバーで引き継ぎのあとに 1 回。026 §7）
 scripts/migrate-v1/               v1 データ移行（021）。import（読む → 変換 → 1 トランザクション → 突合 → COMMIT / ROLLBACK）/ verify（移行後の突合）/
                                   pg（型パーサ。date を文字列のまま）/ overrides.example.json / v1/v2_export.rake（v1 に写して流す）/
-                                  fixtures（架空の JSONL。Vitest の通しとローカルの通しに使う）
+                                  fixtures（架空の JSONL。Vitest の通しとローカルの通しに使う）/
+                                  undo.sql（中止のときの片付け。psql で流す。COMMIT したインポートを管理用アカウントだけに戻す。026 §14）
 supabase/
   config.toml
   schemas/                        宣言的スキーマ（正）。RPC は schemas/public/functions.sql
