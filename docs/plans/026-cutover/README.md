@@ -228,10 +228,11 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 ### 8.2 作るもの
 
 - Route Handler `src/app/serviceworker.js/route.ts`（GET。ドット入りのフォルダでパスを作るのは Next の規約どおり: `node_modules/next/dist/docs/01-app/02-guides/backend-for-frontend.md` の `app/rss.xml/route.ts`）: 次の JS を返す。`Content-Type: text/javascript; charset=utf-8`・`Cache-Control: no-cache`
-  - `install` で `self.skipWaiting()`
-  - `activate` で `caches.keys()` をすべて消し、`self.registration.unregister()`（scope ごとの登録がそれぞれ取り直して、それぞれ自分を解除する）
+  - **`install` の中で** `self.registration.unregister()` を呼び（`waitUntil` で待たない）、`caches.keys()` をすべて消す（こちらは `waitUntil`）。scope ごとの登録がそれぞれ取り直して、それぞれ自分を解除する
+  - 有効化（`skipWaiting()` → `activate`）を経ない。当初の案（`install` で `skipWaiting()`、`activate` で消して解除）は、Chrome が古い Service Worker の中継中のリクエストを待って有効化を止め、その間の画面の移動が止まった（§12 2026-10-16。6 回中 3 回）。
+    `unregister()` を `waitUntil` で待たないのは、解除の処理が install の処理の終わりを順番待ちするため（待つと互いに待ち合う）
   - `fetch` のハンドラは持たない（リクエストを中継しない）
-  - 開いている画面は再読み込みしない（Server Action の途中で画面を飛ばさない）。次の遷移から素のネットワークになる
+  - 開いている画面は再読み込みしない（Server Action の途中で画面を飛ばさない）。その画面は閉じるまで古い Service Worker が中継し、次の遷移から素のネットワークになる
 - proxy の matcher は変えない（ふつうのパスとして通り、CSP のヘッダも付く。この JS は `eval` も外部の読み込みもしないので方針に触れない）。管理画面のホストでは proxy の 0 段目が `/-` へ redirect する（`lib/admin/host.ts` の `redirectToAdmin`。v1 に管理画面のホストは無かったので要らない）
 - 置いておく期間は 1 年（§6.6）。解除済みの人には何も起きないので、消し忘れても害はない
 - AGENTS.md のディレクトリに 1 行足す
@@ -240,11 +241,17 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 ### 8.3 確かめ方
 
 1. 同じ origin と port で 2 段に分ける（v2 のページから `register()` を呼ぶと CSP に止められるため）。Playwright の永続プロファイルで:
-   1. CSP の無い小さなサーバーで、v1 と同じ中身の `/serviceworker.js` と、`register('/serviceworker.js', { scope: './' })` を呼ぶページを `/` と `/share/x/` に配り、登録を 2 つ作る
-   2. サーバーを止め、同じ port で `npm run build && npm run start` に入れ替え、`/` と `/share/x/` を開き直す（必要なら `registration.update()` を待つ）
+   1. CSP の無い小さなサーバーで、v1 と同じ中身の `/serviceworker.js`（`tabbyz/assift-v1` `a8bb5ad` の `serviceworker.js.erb`。ERB の `asset_path` は `/application.css` に置き換え、それと `/offline.html` も配る。`cache.addAll` が 1 つでも 404 だと install に失敗する）と、
+      `register('/serviceworker.js', { scope: './' })` を呼ぶページを **`/`・`/share/x`・`/tenants/<22 文字>/shifts`** に配り、scope `/`・`/share/`・`/tenants/<22 文字>/` の登録 3 つとキャッシュ `v1:sw-cache-` を作る。
+      ページが v1 の Service Worker に制御されている（`navigator.serviceWorker.controller` がある）ことも見る（前提が作れていないと確かめにならない）。
+      URL は v1 の実際の形（`share/:code`・`/tenants/<token>/shifts`。v1 `config/routes.rb`）に合わせる。`scope: './'` は最後の `/` までなので、末尾に `/` のある `/share/x/` にすると scope が `/share/x/` になり、v2 は `/share/x` へ 308 して着いた先が scope の外になる
+   2. サーバーを止め、同じ port で `npm run build && npm run start` に入れ替え、同じ 3 つの URL を開き直す（`/tenants/<22 文字>/shifts` は v2 の 308 で移るが、最初のリクエストは scope の中なので取り直しが走る。必要なら `registration.update()` を待つ）
    3. `navigator.serviceWorker.getRegistrations()` が空、`caches.keys()` が空、v2 のページで `securitypolicyviolation` が 0 件
+   - 但し書き: v2 で開かれない scope（例: 開かなくなった `/tenants/<token>/`）の登録は、その URL を開くまで残る。v2 のページはどれもその scope の外なので、何も中継せず害は無い
+   - 確かめのスクリプトはリポジトリに入れない（scratchpad だけ。1 回きりの確認。005 と同じ）。手順と結果を §12 に書く
 2. `v2.assift.com` に出たあと `curl -sI https://v2.assift.com/serviceworker.js` で `Content-Type`・`Cache-Control`
-3. 当日: v1 を開いた（Service Worker が登録されている）ブラウザで `assift.com` を開き、DevTools の Application → Service Workers から消えること（§6.5-8）
+3. 当日: v1 を開いた（Service Worker が登録されている）ブラウザで `assift.com` を開き、DevTools の Application → Service Workers から消えること（§6.5-8）。
+   最初に開いたタブは閉じるまで古い Service Worker が中継する（§8.2）ので、数秒待ってから**タブを閉じて開き直し**て見る
 
 ## 9. 申し送りの取り込み
 
@@ -292,6 +299,34 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 ## 12. 実装ログ
 
 （作業のあとに、日時・確かめた結果・つまずいた点を書く。秘密の値は書かない）
+
+### 2026-10-16（§8 `/serviceworker.js` の実装と手元の確かめ）
+
+`src/app/serviceworker.js/route.ts` を足した（§8.2）。`npm run build` で `ƒ /serviceworker.js`（動的）。
+`curl -sI` で `200`・`Content-Type: text/javascript; charset=utf-8`・`Cache-Control: no-cache`・`Content-Security-Policy` あり。
+
+§8.3-1 の 2 段の確かめ（Playwright 1.56 の Chromium headless・永続プロファイル。ローカルの Supabase + `next build && next start`）:
+
+- 1 段目: v1 役のサーバー（CSP なし。v1 `a8bb5ad` の `serviceworker.js.erb` の ERB を値にしたもの。`<%#= … %>` は v1 でも空文字なので `''`）で `/`・`/share/x`・`/tenants/FixtureTenant00000001A/shifts` を開き、
+  scope `/`・`/share/`・`/tenants/FixtureTenant00000001A/` の登録 3 つ、キャッシュ `v1:sw-cache-`、3 画面とも v1 の Service Worker の制御下、を作った
+- 2 段目: 同じ port を v2 に入れ替えて同じ 3 つを開く（`/tenants/…` は 308 → `/login`）→ 5 秒後に `getRegistrations()` が空・`caches.keys()` が空 →
+  `/` を開き直すと `navigator.serviceWorker.controller` が null（素のネットワーク）。`securitypolicyviolation`・コンソールの `Refused to` は 0 件
+- **最初の書き方（`install` で `skipWaiting()`、`activate` の `waitUntil` でキャッシュを消して `unregister()`）は 6 回中 3 回失敗した。**
+  scope `/` の新しい Service Worker が `installed` のまま有効にならず、古い v1 の Service Worker が残り、その間の `/` への移動が 15 秒以上止まった（`getRegistrations()` も返らない）。
+  ブラウザを起動し直すと消えていた。Chrome は、古い Service Worker が中継中のリクエスト（v2 の LP が出す 370 件ほどのフォントの先読み・RSC のプリフェッチ）を抱えているあいだ有効化を待たせるため。
+  `unregister()` を `waitUntil` の外に出した書き方も 2 回目で同じように止まったので、有効化の経路そのものが原因と判断した
+- そこで **`install` の中で `unregister()`（待たない）とキャッシュの削除**にし、有効化を経ないようにした。同じ確かめを、`/serviceworker.js` だけ差し替える中継越しに 6 回、build した本物で 6 回流し、**12 回とも通った**（scope `/` の登録とキャッシュは 2 段目の 4 秒ほどで消える）
+- 確かめのスクリプトは scratchpad に置き、リポジトリには入れていない（§8.3）
+- 残り: §8.3-2（merge の後に `v2.assift.com` で `curl -sI`）と §8.3-3（当日。§6.5-8）
+
+### 2026-10-16（§8 の確かめ方の見直し）
+
+実装の前に、§8 を main（`2c595ce`）と v1（`tabbyz/assift-v1` `a8bb5ad`）の実物に突き合わせた。
+
+- v1 の中身は §8.1 のとおり（`serviceworker.js.erb` はネットワーク優先 + キャッシュ・`offline.html`、`serviceworker-companion.js` は `application.coffee` から読まれ全ページで `scope: './'` で登録）
+- proxy の 4 段も `next.config.ts` の redirects も `/serviceworker.js` に当たらない（Service Worker のスクリプトの取得は redirect を受けないので必須）。CSP は付くが、この JS は方針に触れない
+- §8.3 の確かめのページを `/share/x/` から v1 の実際の URL（`/share/x`・`/tenants/<22 文字>/shifts`）に直した（末尾の `/` で scope が外れる）。開かれない scope の但し書きを足した
+- 確かめのスクリプトは scratchpad だけに置く（§8.3）
 
 ### 2026-10-16（元のプランへの注記）
 
