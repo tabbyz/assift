@@ -25,7 +25,7 @@ import {
 } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { IconCreditCard, IconUserCircle } from '@tabler/icons-react'
-import { AssiftLogo } from '@/components/brand/AssiftLogo'
+import { AssiftSymbol } from '@/components/brand/AssiftLogo'
 import { LogoutMenuItem, LogoutNavLink } from '@/components/LogoutMenuItem'
 import { TenantSwitcher } from '@/components/TenantSwitcher'
 import type { TenantListItem, TenantSummary } from '@/lib/queries/tenants'
@@ -86,7 +86,7 @@ export function TenantShell({ tenant, tenants, email, banner, children }: Props)
               aria-label="メニュー"
             />
             <UnstyledButton component={Link} href="/tenants" visibleFrom="sm">
-              <AssiftLogo height={20} />
+              <AssiftSymbol height={24} />
             </UnstyledButton>
             <TenantSwitcher tenant={tenant} tenants={tenants} />
           </Group>

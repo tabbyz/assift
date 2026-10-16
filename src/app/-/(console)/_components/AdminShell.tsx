@@ -14,7 +14,7 @@ import {
   UnstyledButton,
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { AssiftLogo } from '@/components/brand/AssiftLogo'
+import { AssiftSymbol } from '@/components/brand/AssiftLogo'
 import { ADMIN_USERS_PATH } from '@/lib/admin/paths'
 import { adminLogout } from '../actions'
 
@@ -42,7 +42,7 @@ export function AdminShell({ email, children }: Props) {
           <Group gap="lg" wrap="nowrap">
             <UnstyledButton component={Link} href={ADMIN_USERS_PATH}>
               <Group gap={6} wrap="nowrap">
-                <AssiftLogo height={20} />
+                <AssiftSymbol height={24} />
                 <Text fw={700} size="sm">
                   管理
                 </Text>

@@ -72,7 +72,7 @@ src/
     api/stripe/webhook/route.ts   Stripe の Webhook（POST。署名で守る。019）
     api/cron/billing-usage/route.ts  毎日の同期と最大人数の送信（GET。CRON_SECRET で守る。vercel.json の crons）
   components/                     横断 UI（SortableList = 上下ボタンの並べ替え一覧 など）
-    brand/                        ロゴ（AssiftLogo。素の SVG なので Server / Client どちらでも使える。027）。favicon・icon.svg・apple-icon.png は app/ 直下（Next の規約）
+    brand/                        ロゴ（AssiftLogo。ログイン前の画面）とシンボル（AssiftSymbol。ログイン後のヘッダー）。素の SVG なので Server / Client どちらでも使える。027）。favicon・icon.svg・apple-icon.png は app/ 直下（Next の規約）
     AppProviders.tsx              root layout の Provider 群（Client）。CSP の nonce を文字列で受け、Mantine の getStyleNonce に関数で渡す（022）
     SiteAnalytics.tsx             Vercel Web Analytics（025）。beforeSend（関数）を持つので Client。読み込むかは root layout が lib/analytics の shouldLoadAnalytics で決める
     restrictions/                 制約の行（説明・種類・強さの札・編集）。制約ページとスタッフの編集画面で共有（013）

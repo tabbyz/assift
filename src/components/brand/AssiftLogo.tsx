@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react'
 
 /**
- * assift のロゴ（シンボル + 文字。027）。原本はデザイナーの書き出し（2000×500。文字は Inter Bold をアウトライン化したもの）。
+ * assift のロゴ（シンボル + 文字）とシンボル（027）。ログイン後のアプリのヘッダーはシンボルだけ、LP・ログイン系はロゴ。原本はデザイナーの書き出し（2000×500。文字は Inter Bold をアウトライン化したもの）。
  * 原本の余白（四方 40）を落とし、シンボルの左上を原点にしてある（ロゴの高さ = シンボルの高さ）。
  * 色はブランドの色なので theme ではなくここに置く。文字は `currentColor`（親の文字色。既定は Mantine の本文色 = 黒）。
  * Mantine にも何にも依らない素の SVG なので、Server / Client のどちらからも使える
@@ -69,6 +69,23 @@ export function AssiftLogo({ height, className, style }: Props) {
     >
       <Squares />
       <path d={WORDMARK_PATHS.join('')} fill="currentColor" />
+    </svg>
+  )
+}
+
+/** シンボルだけ（4 マス）。読み上げは「assift」 */
+export function AssiftSymbol({ height, className, style }: Props) {
+  return (
+    <svg
+      viewBox={`0 0 ${SYMBOL_SIZE} ${SYMBOL_SIZE}`}
+      height={height}
+      width={height}
+      role="img"
+      aria-label="assift"
+      className={className}
+      style={{ display: 'block', flexShrink: 0, ...style }}
+    >
+      <Squares />
     </svg>
   )
 }
