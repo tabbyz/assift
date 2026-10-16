@@ -34,10 +34,11 @@ async function main() {
   const { synced, failed } = await syncAllSubscriptions()
   const seconds = Math.round((Date.now() - started) / 1000)
   console.log(`synced: ${synced}, failed: ${failed}（${seconds} 秒）`)
-  if (failed > 0) process.exit(1)
+  // process.exit() はパイプ（`| tee`）に出した最後の行を落としうるので、終了コードだけ付けて自然に終わらせる
+  if (failed > 0) process.exitCode = 1
 }
 
 main().catch((error) => {
   console.error(error)
-  process.exit(1)
+  process.exitCode = 1
 })
