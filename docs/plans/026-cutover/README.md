@@ -9,7 +9,7 @@
 - 予定: プランは 10/15〜10/16（クリティカルパス）。コードの変更（§7・§8・§14）は 10/27 までに main へ（§14 は本番での空振り（§4-1、10/22 まで）より前に）
 - **作業するのは人間**（Heroku / Stripe / Vercel / Supabase / Google / Gehirn の操作と秘密の値）。リポジトリの変更は §7・§8・§14 の 3 つだけ
 
-**状態: プラン確定（2026-10-16）。§3 の決定を入れ、レビューを 6 回行って収束した（§13。6 回目は高・中 0 件）。DNS の今の値は §12。未確定は §11（実測で埋めるものと Stripe の鍵）。§14（中止のときの片付け）は 2026-10-16 に足した節で、プラン確定・実装前。**
+**状態: プラン確定（2026-10-16）。§3 の決定を入れ、レビューを 6 回行って収束した（§13。6 回目は高・中 0 件）。DNS の今の値は §12。未確定は §11（実測で埋めるものと Stripe の鍵）。§14（中止のときの片付け）は 2026-10-16 に足した節で、実装済み・本番での空振りが残り。**
 
 ## 1. 目的と完了条件
 
@@ -308,6 +308,47 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 
 （作業のあとに、日時・確かめた結果・つまずいた点を書く。秘密の値は書かない）
 
+### 2026-10-16（§14 `scripts/migrate-v1/undo.sql` の実装とローカルでの確かめ）
+
+`scripts/migrate-v1/undo.sql` と AGENTS.md のディレクトリを足した（§14.3・§14.6）。クラウドのセッションのローカルの Supabase（Postgres 17.6。`postgres` は `rolsuper=f`・`rolbypassrls=t`）で確かめた。
+
+**通し（§14.5-1〜5）:** `db reset` → seed の管理用以外（dev）を消す → fixtures を scratchpad に写して `migrate:v1`（COMMIT。入れた 6 人）→ 移した 1 人に `google` の identity・セッション・refresh token を足す（22:52 相当）。
+
+| 項目 | 結果 |
+| --- | --- |
+| 確認だけ | 安全装置を通り、TRUNCATE が 10 表に連鎖（NOTICE）、`DELETE 6`、14 表の件数が出て ROLLBACK。DB は変わらない。終了コード 0 |
+| COMMIT | 14 表の件数が `report.json` の `before` と一致。`auth.sessions`・`refresh_tokens`・`mfa_amr_claims`・`one_time_tokens` も 0 |
+| 再インポート | `--allow-existing` なしで `既存: auth.users 1 件 / tenants 0 件` → COMMIT、`migrate:v1:verify` が「すべて一致」。もう一度片付けて同じ結果 |
+| 本番での空振りの形 | 管理用アカウントだけの状態で `expected_users=0` → 安全装置を通り（消す人 0 人）、ROLLBACK |
+
+**安全装置（§14.5-6）:** どれも何も消さずに止まり、終了コードは 3（`ON_ERROR_STOP`）。
+
+| 外したもの | 結果 |
+| --- | --- |
+| `expected_users` なし | `expected_users がありません。…` |
+| G4（`expected_users` を 1 ずらす） | `G4: 管理用以外の auth.users が 6 人です（expected_users = 5）` |
+| G1（管理者 2 人 / 0 人） | `G1: is_admin の人が 2 人です` / `0 人です` |
+| G2（`billing_subscriptions` に 1 行） | `G2: billing_subscriptions に行があります。…` |
+| G3（管理用アカウントに店舗） | `G3: 管理用アカウントが店舗を持っています` |
+| G0（BYPASSRLS の無いロールに `set role`） | `G0: undo_nobypass は RLS を迂回できません（BYPASSRLS が要る）` |
+| `-v commit=0` / `-v commit=abc` | どちらも ROLLBACK（`abc` は psql が真偽値として読めず、偽として扱う）。終了コード 0 |
+| 読み取り専用（`alter database postgres set default_transaction_read_only = on`） | 素の DELETE は `cannot execute DELETE in a read-only transaction`、`undo.sql` は `begin read write` で COMMIT まで通った。設定は戻した |
+
+**規模の計測（§14.5-7）:** 合成データ（`users` 29,010・`tenants` 27,609・`staffs` 160,272・`patterns` 167,253・`shifts` 11,496,340・`required_nums` 358,507・`restrictions` 10,144・`date_notes` 157,025・`shares` 57,978・`staff_patterns` 480,816・`staff_default_patterns` 160,272・`staff_count_history` 29,010。DB 3,856 MB）。
+計算機は 4 コア・メモリ 15 GB のコンテナ。作る SQL は scratchpad だけ（`shifts` の INSERT は 8 分 54 秒）。
+
+| | 所要 | WAL | DB の大きさ | ディスク |
+| --- | ---: | ---: | --- | --- |
+| (a) 比較: `delete from auth.users`（cascade）だけ。ROLLBACK | **56 秒** | **2,686 MB** | 3,856 MB のまま（COMMIT しても VACUUM まで空かない） | — |
+| (b) 本命: `undo.sql`（COMMIT） | **5.4 秒**（安全装置 0.03 秒・TRUNCATE 0.01 秒・DELETE 29,010 人 2.1 秒・COMMIT 3.1 秒） | **29 MB** | 3,856 MB → **49 MB** | すぐに約 4 GB 空いた |
+
+- 本番は計算機と Session pooler 越しの往復で違うが、(b) の大半は行数によらない（TRUNCATE とファイルの削除）。行数に比例するのは 2.9 万人の DELETE だけなので、当夜も分の単位には届かない見込み。(a) との差は時間より WAL とディスクで、ディスクを理由に中止した夜に (a) は使えない（§14.2-1 の判断どおり）
+- 14 表の件数の並びが `union all` の順にならなかったので、`order by` を付けた（`report.json` の `before` と同じ並び）
+- 管理用アカウントの `staff_count_history` が 1 行残った回があった。G3 の確かめで管理用アカウントに店舗を作って消したときに、店舗の削除のトリガ（`record_tenant_delete`）が書いたもの。本番では起きず、確かめは管理用以外の行だけを見るので影響しない
+
+**確認:** lint（既存の警告 1 件のみ）/ typecheck（このコンテナの `node_modules` が古く `@vercel/analytics` が無かったので `npm ci` してから）/ test（924 件）/ `npx supabase test db`（241 件）。最後に `db reset` で seed の状態に戻した。
+残り: 本番での空振り（§14.5。021 §9.3 の予行の日。人の作業）
+
 ### 2026-10-16（§7 `npm run stripe:sync-all` の実装とサンドボックスでの確かめ）
 
 `scripts/stripe/sync-all.ts` と `package.json` の `stripe:sync-all`、AGENTS.md のディレクトリを足した（§7.1）。人数の送信は呼ばない。
@@ -564,7 +605,7 @@ DKIM の公開鍵の長い値は省いた（当夜に触らない）。
 
 §5 の「中止のときの片付けの SQL」の中身。§7・§8 と同じく、本プランで作るリポジトリの変更。
 
-**状態: プラン確定（2026-10-16。レビュー 2 回で収束。§13）。実装前。**
+**状態: 実装済み・ローカルで確かめ済み（2026-10-16。§12）。残りは本番での空振り（§4-1 の日。人の作業）。**
 
 ### 14.1 使う場面と目的
 

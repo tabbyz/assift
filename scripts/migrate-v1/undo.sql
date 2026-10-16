@@ -113,20 +113,22 @@ end
 $$;
 
 -- report.json の before と同じ 14 表（管理用アカウントの分だけが残る）
-select 'auth.users' as "table", count(*) from auth.users
-union all select 'auth.identities', count(*) from auth.identities
-union all select 'public.profiles', count(*) from public.profiles
-union all select 'public.tenants', count(*) from public.tenants
-union all select 'public.patterns', count(*) from public.patterns
-union all select 'public.staffs', count(*) from public.staffs
-union all select 'public.staff_patterns', count(*) from public.staff_patterns
-union all select 'public.staff_default_patterns', count(*) from public.staff_default_patterns
-union all select 'public.shifts', count(*) from public.shifts
-union all select 'public.required_nums', count(*) from public.required_nums
-union all select 'public.restrictions', count(*) from public.restrictions
-union all select 'public.date_notes', count(*) from public.date_notes
-union all select 'public.shares', count(*) from public.shares
-union all select 'public.staff_count_history', count(*) from public.staff_count_history;
+select "table", count from (
+  select 1 as n, 'auth.users' as "table", count(*) as count from auth.users
+  union all select 2, 'auth.identities', count(*) from auth.identities
+  union all select 3, 'public.profiles', count(*) from public.profiles
+  union all select 4, 'public.tenants', count(*) from public.tenants
+  union all select 5, 'public.patterns', count(*) from public.patterns
+  union all select 6, 'public.staffs', count(*) from public.staffs
+  union all select 7, 'public.staff_patterns', count(*) from public.staff_patterns
+  union all select 8, 'public.staff_default_patterns', count(*) from public.staff_default_patterns
+  union all select 9, 'public.shifts', count(*) from public.shifts
+  union all select 10, 'public.required_nums', count(*) from public.required_nums
+  union all select 11, 'public.restrictions', count(*) from public.restrictions
+  union all select 12, 'public.date_notes', count(*) from public.date_notes
+  union all select 13, 'public.shares', count(*) from public.shares
+  union all select 14, 'public.staff_count_history', count(*) from public.staff_count_history
+) c order by n;
 
 \if :commit
   commit;
