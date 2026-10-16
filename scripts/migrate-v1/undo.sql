@@ -33,6 +33,9 @@ set local lock_timeout = '10s';
 -- psql の変数は $$ の中で置き換わらないので、トランザクションの中だけの設定に入れて DO から読む
 select set_config('undo.expected_users', :'expected_users', true) as expected_users;
 
+-- G2 を見てから COMMIT まで、Webhook や同期が写しを書けないようにする（無効化の漏れで書かれた行を、cascade で黙って消さない）
+lock table public.billing_subscriptions in share mode;
+
 -- 安全装置（1 つでも外れたら何も消さない）
 do $$
 declare
@@ -80,6 +83,8 @@ truncate table public.tenants cascade;
 -- auth.refresh_tokens は user_id（文字列）に外部キーが無く、session_id（null 可）の cascade でしか消えない。
 -- 残ると、id が v1 の ID から決まる再インポートの後に同じ利用者を指すので、先に消す
 delete from auth.refresh_tokens where user_id is distinct from current_setting('undo.admin_id');
+-- auth.flow_state（OAuth のログインの途中の状態）も user_id に外部キーが無い
+delete from auth.flow_state where user_id is not null and user_id <> current_setting('undo.admin_id')::uuid;
 
 -- 管理用以外の利用者（auth.* と profiles 以下は cascade）
 delete from auth.users where id <> current_setting('undo.admin_id')::uuid;
@@ -97,7 +102,7 @@ begin
   if (select count(*) from public.profiles) <> 1 then
     raise exception '確かめ: profiles が 1 行ではありません';
   end if;
-  -- tenants と、それを参照する表（今後足した表も外部キーから拾う）と、課金の写し
+  -- tenants と、それを直接参照する表（外部キーから引く。tenants を直接参照しない表は拾わない）と、課金の写し
   for v_table in
     select 'public.tenants'::regclass
     union select conrelid::regclass from pg_constraint where contype = 'f' and confrelid = 'public.tenants'::regclass
@@ -115,8 +120,9 @@ begin
     or exists (select 1 from auth.sessions where user_id <> v_admin)
     or exists (select 1 from auth.refresh_tokens where user_id is distinct from v_admin::text)
     or exists (select 1 from auth.mfa_factors where user_id <> v_admin)
-    or exists (select 1 from auth.one_time_tokens where user_id <> v_admin) then
-    raise exception '確かめ: 管理用以外の auth.identities / sessions / refresh_tokens / mfa_factors / one_time_tokens が残っています';
+    or exists (select 1 from auth.one_time_tokens where user_id <> v_admin)
+    or exists (select 1 from auth.flow_state where user_id <> v_admin) then
+    raise exception '確かめ: 管理用以外の auth.identities / sessions / refresh_tokens / mfa_factors / one_time_tokens / flow_state が残っています';
   end if;
 end
 $$;

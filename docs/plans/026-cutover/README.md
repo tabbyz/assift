@@ -353,10 +353,379 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 引数の誤り（`-v expected_users=`・`=6.0` は終了コード 3、`-v commit=`・値なし・`off`・`no`・`-v COMMIT=1` はどれも ROLLBACK）で COMMIT に進む組み合わせは無かった。
 低 1 件: 22:52 の Google ログインが自動リンクされず自分のメールの新しいユーザーができると、いちばん起こりそうな中止の場面で G4 で止まる → §14.4「通らなかったとき」に、それを確かめたら `expected_users=<N+1>` で流してよいと足した（SQL は変えない）。手順書の判断点 A にも足した
 
-**コードレビュー**（利用者の依頼。`/code-review` で `main...HEAD` を見た。手元の `main` が古く、すでに main に入った別の変更（rake・`ignore-build.sh`・解析・proxy）への指摘 4 件も混ざったので、本タスクの範囲の 3 件だけを扱った）:
+**コードレビュー**（利用者の依頼。`/code-review`。1 回目は手元の `main` が古く、すでに main に入った別の変更（rake・`ignore-build.sh`・解析・proxy）への指摘 4 件も混ざったので、本タスクの範囲の 3 件だけを扱った。2 回目から `origin/main...HEAD`）:
 
 | 回 | 指摘 | 対応 |
 | --- | --- | --- |
 | 1 | `auth.refresh_tokens` は `user_id`（文字列）に外部キーが無く、`session_id` が null の行は cascade で残る。確かめも `auth.identities` しか見ていない | 先に `delete from auth.refresh_tokens where user_id is distinct from <管理用>` を足し、確かめに `sessions`・`refresh_tokens`・`mfa_factors`・`one_time_tokens` を足した。ローカルで `session_id` が null の token（消える）・セッション付きの token（cascade で消える）・管理用アカウントの token（残る）を作って確かめ、再インポートと verify も通った |
 | 1 | 確かめの表の一覧が手書きで、`tenants` を参照する表を足すと確かめから漏れる | `pg_constraint` から `tenants` を参照する表を引く形にした（今は 10 表 + `tenants` + `billing_subscriptions`）。件数の出力は `import.ts` の `TARGET_TABLES` と同じ 14 表のまま（`report.json` の `before` と見比べるため）とコメントに書いた |
 | 1 | G2 は 23:05〜最初の写しのあいだを止められない（`-v before_point_b=yes` のような明示を求めては） | 見送った。プランのレビュー（§13「§14 の 1 回目」#3）で決めたとおり、手順書のコマンドに書けば毎回同じ文字を打つだけになり、確かめにならない。B の前かは §14.4-1 で人が確かめる（23:05 の Webhook の有効化と `--limit 5` の前）。§14.1 に止められない区間を書いてある |
+| 2 | **高: 1 回目の反映のコミット（`b184e29`）が、追記のスクリプトの誤りで 026 の §12 の途中から後ろ（§12 の以前のログ・§13・§14）を消していた** | `909febc` の版から戻して追記をやり直した（行数 721 → 反映後も前後の節がそろうことを `git diff 909febc` で確かめた）|
+
+### 2026-10-16（§7 `npm run stripe:sync-all` の実装とサンドボックスでの確かめ）
+
+`scripts/stripe/sync-all.ts` と `package.json` の `stripe:sync-all`、AGENTS.md のディレクトリを足した（§7.1）。人数の送信は呼ばない。
+決めたこと: 接続先は表示だけで、食い違いでは止めない / 確認は旧 price を含める / 確認の手順は一時スクリプトで流してコミットしない（§7.3）/
+本番に向けた事前の空振りはしない。
+
+**確認:** lint（既存の警告 1 件のみ）/ typecheck / test（924 件）。ローカルの Supabase（`db reset` の直後）とサンドボックスで、§7.3 の 3 人:
+
+| 項目 | 結果 |
+| --- | --- |
+| 旧料金（migrate-v1 のあと、行なし） | `stripe:migrate-v1 -- --apply` は `legacy`・schedule 作成。sync-all で行ができた: `active`・`freemium-monthly`・割引 50%・schedule あり・期間の終わり 10/31 14:59:59 UTC。endive の版で旧 metered の price を指定した一覧が通った |
+| 新料金（行を消した） | 行ができ直した（`active`・`assift_monthly`） |
+| 解約の Webhook を落とした人 | 有効のままの写しが `canceled` に直った（一覧に出ない契約の取り直し） |
+| 2 回目 | 全行の差分なし（冪等）。旧料金の人に `syncCustomer()`（Webhook の経路）を流しても差分なし |
+| 出力 | `接続先: Supabase 127.0.0.1:54321 / Stripe test`、`synced: 6, failed: 0（2 秒）`、終了コード 0 |
+| 失敗 | 鍵が無い → 何もせず終了コード 1 / Supabase の鍵が違う → 1 人ずつ `同期に失敗しました`、終了コード 1 / 偽の live の鍵 → `接続先: … / Stripe live` を出してから認証エラー、終了コード 1 |
+
+作った Customer 3 件は確認のあとに消した。
+
+**実装のレビュー**（別の担当に実物と突き合わせて読ませた）:
+
+| 回 | 指摘 | 対応 |
+| --- | --- | --- |
+| 1 | 中: 23:25 の「`billing_subscriptions` の件数」に基準が無い（23:05 から Webhook が即時解約の `canceled` を書く。旧 price の一覧が取れないと `failed: 0` のまま `synced` だけが減る） | §6.3 23:25: 有効な行の件数を 23:10 の `legacy` + `rescue` と比べ、旧 price のまま schedule の無い有効な行が 0 件かを SQL で見る。`synced` も見る |
+| 1 | 低: §12 の `synced` の定義に取り直しの数が無い | 直した |
+| 1 | 低: 「最初の行」は npm の表示の後 | 「npm の表示の次の行」にした |
+| 1 | 低: 23:25 に所要と失敗したときの次の手が無い / 二重の契約の解約が v1 の契約に通るか未確認 | 所要（数分・実測なし）・流し直し・控えるものを書いた。解約はサンドボックスで確かめた |
+| 1 | 低: 019 §5.7 の「見張り」が未実装 | 23:25 の SQL で代え、019 §5.7 に注記した（当夜より後は 10/31 に全員が新 price に移るので、見張りの出番は当夜だけ） |
+| 1 | 低（任意）: `keyMode` のテスト | 見送った（スクリプトの中の 3 行。live / test / 偽の live を手で確かめた） |
+| 2 | 中: 23:10 の失敗が 1 件以上のときの基準が無い / 件数がずれたとき誰の契約か分からない / CSV に無い契約は流し直しで直らない | 23:10: 失敗があれば別の `--output` で流し直し、失敗 0 件の回の `legacy` + `rescue` を基準にする。23:25: ずれたときの 2 本目の SQL と、結果 CSV との突き合わせ・Dashboard |
+| 2 | 中: 23:25 の「`stripe:migrate-v1 --apply` を流し直す」がコマンドの全文でない（鍵・`--input`・`--output`） | 流し直しは 23:10 の行に寄せ、`--output` を書いた（鍵と `--input` は 23:10 の行のまま） |
+| 2 | 中: 「10/31 に全員が新 price に移るので見張りの出番は当夜だけ」は言い過ぎ（`legacy` の `trialing` 26 件はトライアルの終わりまで旧 price の phase） | 019 §5.7 の注記を直した: 大半は 10/31、トライアル中の契約はトライアルの終わりまで旧 price。それでも当夜より後に「旧 price のまま schedule が無い」を作る経路は今のコードに無い（旧 price の phase の解約 `endScheduleAtCurrentPhase()` は schedule を残して `end_behavior: 'cancel'` にする。release するのは新 price の phase のときだけ）ので、見張りは足さない |
+| 2 | 低: Webhook が先に写すので `synced` で旧 price の一覧の失敗に気付けるとは言えない / `synced` が多くなるのは `review` だけでない | `synced` は参考（`entitled` 以上）に下げ、§12 の記述を直した |
+| 2 | 低（任意）: `process.exit(1)` だとパイプに出したとき最後の行が欠けうる | `process.exitCode = 1` にした |
+| 2 | 低: 23:25 の `psql` の接続文字列がほかの行の値と同じだと分からない | 「22:25 の `MIGRATION_DATABASE_URL` と同じ値」と書いた |
+| 3 | 中: 「ずれたら」の SQL は多すぎる行しか出さず、足りない行（`past_due` が `unpaid` に移った・持ち主が引けない）を特定できない | 23:25: 基準の回の CSV と有効な行を `comm` で両方向に突き合わせ、左右それぞれの次の手を書いた |
+| 3 | 中: `stripe:migrate-v1` の schedule の作成（create と update が別の呼び出し）が途中で止まると、流し直しは `想定外の schedule があります` で失敗し続け、期間の終わりに release されて旧 price のまま schedule の無い契約になる | `scheduleLegacy()` を直した: どの phase も旧 price だけの有効な schedule は作りかけとみなし、続きから組む（`schedule 組み直し`）。サンドボックスで、create だけした状態から `--apply` → `schedule 組み直し`（phase 0 が旧 price〜10/31 14:59:59 UTC、phase 1 が新 price + クーポン 1 日）→ 2 回目 `schedule 既存`、schedule の無い契約は従来どおり `schedule 作成`。`from_subscription` が作る phase は 1 本とは限らない（このサンドボックスの契約では 2 本）。019 §5.7 の注記を直した |
+| 3 | 中（推測を含む）: `sslmode=verify-full` の値を `psql`（libpq）に渡すと CA のファイルが無くてつながらない恐れ | 昼の予行で同じ値の `psql` がつながるかを見て、だめなら `&sslrootcert=system` を足した値を控える（§5 T-0） |
+| 3 | 低: CSV にあるかどうかだけでは 23:10 の失敗か判定できない | `category` と `result` を見る形にした |
+| 3 | 低: `price_lookup_key <> …` が null を落とす | その SQL を `comm` の突き合わせに置き換えた |
+| 3 | 低: 23:10 の「済んだ行は読むだけ」が実物と違う（`rescue` が 2 回目に `legacy` に数えられる理由が読めない） | 直した |
+| 3 | 低: 23:25 のセルの句点の後の空白 | 消した |
+| 4 | 中: 「作りかけ」の判定が広すぎ、解約の予約（`endScheduleAtCurrentPhase()` は旧 price の phase 1 本 + `end_behavior: 'cancel'` にする）まで組み直して解約を取り消す | 判定に `end_behavior === 'release'`（`from_subscription` の既定）を足した。サンドボックスで、作りかけは `release` で `schedule 組み直し`、移行のあと `endScheduleAtCurrentPhase()` で解約を予約した契約は流し直しで `想定外の schedule があります`（予約は `cancel` のまま残る）。23:10 にその見分け方を書いた。019 §5.7 の注記を当夜の 23:10 の流し直しに限った |
+| 4 | 中: 当夜に使う手順書（Artifact）に 1〜3 回目の手順が入っていない / `n12` の CSV のパスが `<dir>` と合わない | 手順書の `p13`・`n12`・`n13`・`n14` を直した（エスケープした縦棒は素の縦棒に戻して載せた） |
+| 4 | 低（推測を含む）: 組み直しは `phases[0]` を今の phase とみなすので、phase が進んだあとに流すと過去に新 price の phase を置く | 判定に「今の phase が `phases[0]`」を足した（そうでなければ従来どおり `想定外の schedule があります`） |
+| 4 | 低: 突き合わせの細部（メールのカンマで列がずれうる・`~/.psqlrc` が混ざる・失敗 0 件の基準では届かない分岐・失敗が残ったときの基準） | `ids-csv.txt` の行数の確認、`psql -X`、届かない分岐を消し、失敗が残ったときの基準を 23:10 に書いた |
+| 5 | 中: 4 回目に書いた「失敗が残ったときは失敗の行を引いた数を基準にする」は誤り（`legacy` の失敗は `active` のまま数に入る・`取得できません` は区分が空・awk は失敗の行も数える） | 基準は最後の回の `legacy` + `rescue` のままにし、失敗の行の現れ方を書き添えた（プランと手順書の `n13`） |
+| 5 | 低: 23:25 の `<DB>` に「昼に控えた値」が無い・`-X` がそろっていない | そろえた |
+| 5 | 低: 流し直しの `--output` が `apply2` で固定・止まった回は CSV が無い | 回ごとに名前を変える・止まった回も次の名前で流し直す、と書いた（プランと手順書の `n13`） |
+| 6 | 低: 流し直しをやめる基準が無い（毎回同じ結果になる失敗は 0 にならず、23:25 までの時間を使い切りうる） | 「前の回と同じ行が同じ理由で失敗しただけなら流し直さない」と書いた（プランと手順書の `n13`）。6 回目は高・中 0 件 |
+| 7 | 低: 流し直しをやめたあとに作りかけの schedule が残る場合を誰も拾わない（`has_schedule` が true なので `legacy_without_schedule` に出ない） | 23:10 の失敗の行の見分け方に作りかけを足し、10/31 の期間の終わりまでに Dashboard で直すと書いた（プランと手順書の `n13`）。019 §5.7 の注記にも添えた |
+| 7 | 低: この表の 4 回目の行に素の縦棒があり、セルが切れる | 言い換えた。7 回目は高・中 0 件 |
+
+**気付いたこと:**
+
+- サンドボックスには 019 のローカルの Checkout の契約が 3 件残っていて、metadata（`assift_user_id`）が seed の利用者（dev に 2 件・admin に 1 件。uuid はどの環境でも同じ）を指している。
+  そのため空のローカル DB に流しても `synced: 3` になり、seed の 2 人に行ができる（`findOwner()` の metadata の経路。想定どおり）。dev のように 1 人に Customer が 2 つあると、後から写したほうが残る。
+  ローカルの DB を作り直すと `stripe_customer_id` が消えるのに、サンドボックスの契約は残るために起きる。本番では利用者の uuid が v1 の ID から導かれ（`v1Uuid()`）、live の契約の metadata とは重ならない。
+  サンドボックスの 3 件は消していない（019 の確認の続きで使いうるので）。今後ローカルで sync-all や cron を流すときは、この 3 件を差し引いて見る
+- `synced` は「一覧から写した人」「一覧より後に Webhook が写していたので飛ばした人」「有効なのに一覧に出ない行を 1 件ずつ取り直した数」の合計で、持ち主の見つからない Customer（移行しない人）は数えない。
+  旧 price の一覧が `resource_missing` で取れなくても例外にせず `failed: 0` で終わる（`syncAllSubscriptions()` の決まり）。ただし当夜は 23:05 から Webhook が写しているので、
+  その行は取り直しのループで写り直り、`synced` もほぼ減らない。`synced` は参考にとどめ、23:25 は有効な行の件数と、旧 price のまま schedule の無い有効な行の件数で見る（§6.3。レビュー 1・2 回目）
+- 二重の契約の解約（`applySubscriptions()` の `subscriptions.cancel`。endive の版）は、v1 の旧 metered の契約にも通ることをサンドボックスで確かめた（クロックなしの v1 相当の契約を作って即時解約 → `canceled`。Customer は消した）
+- テストクロック付きの契約は price の一覧に出ないことを実物で確かめた（クロック付きの Customer に Checkout と同じ中身の契約を作り、`subscriptions.list({ price })` に出ない。クロックは消した）。§7.3 の理由
+
+### 2026-10-16（§8 `/serviceworker.js` の実装と手元の確かめ）
+
+`src/app/serviceworker.js/route.ts` を足した（§8.2）。`npm run build` で `ƒ /serviceworker.js`（動的）。
+`curl -sI` で `200`・`Content-Type: text/javascript; charset=utf-8`・`Cache-Control: no-cache`・`Content-Security-Policy` あり。
+
+§8.3-1 の 2 段の確かめ（Playwright 1.56 の Chromium headless・永続プロファイル。ローカルの Supabase + `next build && next start`）:
+
+- 1 段目: v1 役のサーバー（CSP なし。v1 `a8bb5ad` の `serviceworker.js.erb` の ERB を値にしたもの。`<%#= … %>` は v1 でも空文字なので `''`）で `/`・`/share/x`・`/tenants/FixtureTenant00000001A/shifts` を開き、
+  scope `/`・`/share/`・`/tenants/FixtureTenant00000001A/` の登録 3 つ、キャッシュ `v1:sw-cache-`、3 画面とも v1 の Service Worker の制御下、を作った
+- 2 段目: 同じ port を v2 に入れ替えて同じ 3 つを開く（`/tenants/…` は 308 → `/login`）→ 5 秒後に `getRegistrations()` が空・`caches.keys()` が空 →
+  `/` を開き直すと `navigator.serviceWorker.controller` が null（素のネットワーク）。`securitypolicyviolation`・コンソールの `Refused to` は 0 件
+- **最初の書き方（`install` で `skipWaiting()`、`activate` の `waitUntil` でキャッシュを消して `unregister()`）は 6 回中 3 回失敗した。**
+  scope `/` の新しい Service Worker が `installed` のまま有効にならず、古い v1 の Service Worker が残り、その間の `/` への移動が 15 秒以上止まった（`getRegistrations()` も返らない）。
+  ブラウザを起動し直すと消えていた。Chrome は、古い Service Worker が中継中のリクエスト（v2 の LP が出す 370 件ほどのフォントの先読み・RSC のプリフェッチ）を抱えているあいだ有効化を待たせるため。
+  `unregister()` を `waitUntil` の外に出した書き方も 2 回目で同じように止まったので、有効化の経路そのものが原因と判断した
+- そこで **`install` の中で `unregister()`（待たない）とキャッシュの削除**にし、有効化を経ないようにした。同じ確かめを、`/serviceworker.js` だけ差し替える中継越しに 6 回、build した本物で 6 回流し、**12 回とも通った**（scope `/` の登録とキャッシュは 2 段目の 4 秒ほどで消える）
+- 確かめのスクリプトは scratchpad に置き、リポジトリには入れていない（§8.3）
+- 残り: §8.3-2（merge の後に `v2.assift.com` で `curl -sI`）と §8.3-3（当日。§6.5-8）
+
+### 2026-10-16（§8.3-2 本番の確認）
+
+PR tabbyz/assift#43 を merge し、Production のデプロイの後に `curl -sI https://v2.assift.com/serviceworker.js` が
+`HTTP/2 200`・`content-type: text/javascript; charset=utf-8`・`cache-control: no-cache`・`content-security-policy` あり・`x-matched-path: /serviceworker.js`。
+`curl -s` の本文も `install` の中で `unregister()` する版。merge の前は `404`（`x-matched-path: /_not-found`、v2 の 404 の HTML）だった。
+§4-3 のゲートのうち §8 の分はこれで済んだ。残りは §8.3-3（当日。§6.5-8）
+
+### 2026-10-16（§8 の確かめ方の見直し）
+
+実装の前に、§8 を main（`2c595ce`）と v1（`tabbyz/assift-v1` `a8bb5ad`）の実物に突き合わせた。
+
+- v1 の中身は §8.1 のとおり（`serviceworker.js.erb` はネットワーク優先 + キャッシュ・`offline.html`、`serviceworker-companion.js` は `application.coffee` から読まれ全ページで `scope: './'` で登録）
+- proxy の 4 段も `next.config.ts` の redirects も `/serviceworker.js` に当たらない（Service Worker のスクリプトの取得は redirect を受けないので必須）。CSP は付くが、この JS は方針に触れない
+- §8.3 の確かめのページを `/share/x/` から v1 の実際の URL（`/share/x`・`/tenants/<22 文字>/shifts`）に直した（末尾の `/` で scope が外れる）。開かれない scope の但し書きを足した
+- 確かめのスクリプトは scratchpad だけに置く（§8.3）
+
+### 2026-10-16（元のプランへの注記）
+
+§10 のとおり、001 §5.4・016-terms §7（制定日・連絡先・周知の表）・019 §8.3・§12・021 §6.1・§10・024 §6・§10・025 §6.3 に「026 へ移した / 026 で上書き」を足した。
+当日の進行は Artifact「assift カットオーバー手順書」、日単位の準備と後始末は「assift リリース計画」で管理する。
+
+### 2026-10-15（Gehirn DNS の今の値）
+
+利用者が Gehirn DNS の管理画面のスクリーンショットを貼った。`assift.com` のゾーンのレコードはこれで全部（SRV・SVCB・HTTPS・CAA・AAAA は 0 件）。
+DKIM の公開鍵の長い値は省いた（当夜に触らない）。
+
+| 種類 | 名前 | TTL | 値 | 当夜 |
+| --- | --- | --- | --- | --- |
+| NS | `assift.com.` | 86400 | `ns2.gehirndns.com.` / `.jp.` / `.net.` / `.org.` | 触らない |
+| A | `assift.com.` | （エイリアスなので欄が無い） | **エイリアス ON**: `concave-catfish-pri96kqt2zj223u7sugybxwq.herokudns.com.`（v1 の Heroku） | **Vercel の IP に替える**（エイリアス OFF、TTL 300） |
+| MX | `assift.com.` | 3600 | `1 smtp.google.com.` | 触らない |
+| CNAME | `9287784` | 3600 | `sendgrid.net.` | 触らない（Heroku を止めたあと消す） |
+| CNAME | `em2978` | 3600 | `u9287784.wl035.sendgrid.net.` | 同上 |
+| CNAME | `s1._domainkey` | 3600 | `s1.domainkey.u9287784.wl035.sendgrid.net.` | 同上 |
+| CNAME | `s2._domainkey` | 3600 | `s2.domainkey.u9287784.wl035.sendgrid.net.` | 同上 |
+| CNAME | `url2241` | 3600 | `sendgrid.net.` | 同上 |
+| CNAME | `rsend` | 3600 | `rsend-apne1.forge.rmta.net.`（Resend） | 触らない |
+| CNAME | `send` | 3600 | `send.forge.rmta.net.`（Resend） | 触らない |
+| CNAME | `admin-v2` | 3600 | `f319020a4f43f5f1.vercel-dns-016.com.`（仮のホスト） | 触らない（10/31 に消す） |
+| CNAME | `v2` | 3600 | `f319020a4f43f5f1.vercel-dns-016.com.`（仮のホスト） | 同上 |
+| CNAME | `admin` | — | （無い） | **足す**（Vercel が示す参照先、TTL 300） |
+| TXT | `1556601411.gehirn._domainkey` | 3600 | DKIM（Gehirn の SMTP） | 触らない |
+| TXT | `google._domainkey` | 3600 | DKIM（Workspace） | 触らない |
+| TXT | `resend._domainkey` | 3600 | DKIM（Resend） | 触らない |
+| TXT | `_dmarc` | 3600 | `v=DMARC1; p=none; rua=mailto:dmarc@assift.com` | 触らない |
+| TXT | `assift.com.` | 3600 | `google-site-verification=…`（値は Gehirn の画面のまま） | 触らない（Search Console） |
+| TXT | `assift.com.` | 3600 | `v=spf1 a:www2298.sakura.ne.jp include:spf.mta.gis.gehirn.jp include:_spf.google.com ~all` | 触らない（Heroku を止めたあと sakura を外す） |
+
+分かったこと:
+
+- **`www` のレコードは無い**。v1 は apex だけで動いていた → `www` は作らない（§3-14）。v1 の Service Worker も apex にしか登録されていない
+- apex の A は Gehirn のエイリアス（ALIAS）で Heroku の DNS 名を参照していて、TTL の欄が無い。前もって TTL を下げる手順は要らない（§5）。当夜はエイリアスを OFF にして Vercel の IP を入れる
+- CAA は無いので、Vercel の証明書（Let's Encrypt）の発行を妨げない
+- SendGrid の CNAME は 024 §9 の記録（`em2978`・`s1` / `s2._domainkey`）より 2 つ多い（`9287784`・`url2241`。ドメインの認証とリンクのブランディング）。Heroku を止めたあと 5 つとも消す（§6.6）
+- 016-terms §7 の 2026-10-13 の表（MX・SPF・DKIM・DMARC）と一致
+
+## 13. プランのレビュー
+
+### 1 回目（2026-10-15。別の担当に実物（元のプラン・コード・v1 のコード）と突き合わせて読ませた。17 件、すべて反映）
+
+| # | 指摘 | 対応 |
+| --- | --- | --- |
+| 1 | COMMIT の後は v2 に向けた Webhook で `syncCustomer()` が Stripe に書きうるので、判断点 A の「戻せる」が崩れる | §3-12: 22:00〜判断点 B は Webhook のエンドポイントを無効にする |
+| 2 | ゲートの判定が告知（10/29）の後 | §4: 告知の前にも判定する |
+| 3 | Stripe の段の所要が実測されていない | §5: dry-run をリハーサルの CSV で測り、`--apply` は呼び出しの回数から見積もる |
+| 4 | `--output` の既定で結果の CSV が上書きされ、repo の下に残る | §6.3: 3 回とも `--output <out>/…` |
+| 5 | 021 §6.1 の `v1-subscriptions-not-migrated.csv` の解約が抜けている | §6.2・§6.3 |
+| 6 | Google ログインの確認が戻せなくなった後 | §6.2 の 22:52 へ移した |
+| 7 | Service Worker の確かめ方が CSP で動かない / v1 の scope は `'./'` / `www` の転送で解除できない | §8.1・§8.2・§8.3 |
+| 8 | 本番の migration が main と揃っているかの確認が無い | §5: 10/29 に `migration list`、10/27 以降は merge を止める |
+| 9 | 告知への申し送り（メンテナンス時間・再ログイン・パスワードの作り方・準備中の店舗） | §4-5・§9 |
+| 10 | 鍵なしの 401 では `CRON_SECRET` を確かめられない | §4-2 |
+| 11 | 392 件の請求見込みと v1 の売上の突き合わせが抜けている | §5（10/29 に控える）・§6.3 |
+| 12 | 021 §10-5 の `max_staffs_count` の手当てが抜けている | §6.3（`admin-v2.assift.com` で） |
+| 13 | v1 の準備（最新の rake・`DATABASE_URL`・ダミーの鍵）と verify の接続 | §5・§6.1・§6.2 |
+| 14 | `usage_records` の CSV とリハーサルの JSONL の扱い | §6.1 |
+| 15 | 当夜に移行しないのに店舗を持つ人が出たとき | §5・§3-13 |
+| 16 | 管理画面のホストの扱いの誤り・参照のずれ・朝 / 昼の不一致・管理画面の Action | §8.2・§6.5・§3-3・§4 |
+| 17 | Redeploy の後に Cron Jobs が無効のままか | §6.3 の 7 |
+
+### 2 回目（2026-10-16。別の担当に、1 回目の反映を含めて実物と突き合わせて読ませた。9 件、すべて反映）
+
+| # | 指摘 | 対応 |
+| --- | --- | --- |
+| 1 | rake は `<out>` の下に日時のフォルダを作るので、`--input <out>` では manifest が見つからない | §6 の冒頭で `<dir>`（`exported to …`）を定義し、以降のパスを `<dir>` にした |
+| 2 | Stripe の段が時間の窓に収まらないときの決めごとが無い（`unpaid` の下書きで呼び出しが数千回になりうる） | §5: 実測から見積もり、25 分を超えるなら §11-5 で決め直す。dry-run の所要も実測で直す |
+| 3 | 昼の予行が 10/14 のデータなので、新しい異常も「移行しないのに店舗を持つ人」も昼に見つからない | §3-3・§3-13・§5: 昼にその場で新しいダンプを取って流す。§6.2 に `--overrides` |
+| 4 | 019 §12 の「解約したあとの請求書の扱い」を見る項目が抜けている | §6.3 23:30 |
+| 5 | Webhook の確かめ方「2xx」が実装と合わない / API の版の指定 | §4-2: 400 にならないこと・`2026-09-30.endive` で登録 |
+| 6 | Scheduler のジョブを戻せるように控えていない / 中止の行に v1 を戻す手順が無い | §6.1 22:01・§6.4 |
+| 7 | zsh で rake の角括弧が通らない / `rails s` がつながったままだと `dropdb` が失敗する | §6 の冒頭・§6.1 22:06・22:08 |
+| 8 | §9 の注記の対象と §10 のファイルが合わない | §10 に 001・019・025 |
+| 9 | sync-all のサンドボックスでの確認の前提が書かれていない | §7.3 |
+
+### 3 回目（2026-10-16。別の担当に、2 回目の反映を中心に実物と突き合わせて読ませた。11 件、すべて反映）
+
+| # | 指摘 | 対応 |
+| --- | --- | --- |
+| 1 | 中止で片付けの SQL より先に Webhook・Cron を戻すと、v1 の Customer に `syncCustomer()` が書きうる | §6.4: `profiles` が管理用だけになってから戻す |
+| 2 | 昼に用意した `--overrides` のファイルが 22:06 の削除で消えうる | `~/v1-export/overrides-20261030.json` に置き、22:06 で消さない |
+| 3 | `pg:backups:download` の既定の名前（`latest.dump`）で昼と夜のダンプを取り違えうる | `-o ~/v1-export/dumps/<backup id>.dump`。22:06 で id を確かめる |
+| 4 | 「392 件の請求見込み」はスクリプトが出さず、v1 の予想売上とは母集団が違う | §6.3 23:00 に計算式と違いを書いた。dry-run の突合は昼に済ませ、夜は差分だけ |
+| 5 | 移行しない人の解約が判断点 B の前にある | 23:05（B の後）へ移した |
+| 6 | §11-5 を決める期限が無い | §4 の 10/29 の判断で決める。案 (b) はスクリプトの変更が要る |
+| 7 | §5 の事前の dry-run に `--output` が無い | 付けた |
+| 8 | 23:05・23:10 がコマンドの断片 / 移行の鍵 | 全文にした。§11-3 に移行用の鍵 |
+| 9 | sync-all の確かめ方が Checkout の同期と区別できない | §7.3: 行を消してから流す |
+| 10 | 昼の予行の開始時刻が無い | 11:00 までに開始 |
+| 11 | `--rollback` の 2 回分で本番のディスクが埋まりうる | 昼の予行の前後と 22:25 の前に Disk の使用量を見る |
+
+### 4 回目（2026-10-16。3 回目の反映を中心に実物と突き合わせて読ませた。5 件、すべて反映）
+
+| # | 指摘 | 対応 |
+| --- | --- | --- |
+| 1 | 22:06 で昼の出力を消すので、23:00 に比べる昼の dry-run と `report.json` が無い | 昼の予行の直後に `~/v1-export/noon-20261030/` へ写し、22:06 で消さず 23:10 の後に消す |
+| 2 | Disk を見るだけで基準と打つ手が無い（95% で読み取り専用・拡張は 6 時間に 1 回） | §5: 昼に 85% を超える見込みなら 16:00 までに手動で広げる。22:25 は基準を超えていたら中止 |
+| 3 | 23:25 の sync-all・昼の予行の migrate:v1 がコマンドの全文でない | 全文にした（環境変数・`NODE_OPTIONS`） |
+| 4 | `~/v1-export/dumps/` を作る手順が無い | §5 10/29 に `mkdir -p` |
+| 5 | §11-5 (b) は期限の上で成り立たないことがある | Stripe の dry-run の計測を 10/23 までに。(b) のスクリプトの変更は merge の停止の例外 |
+
+### 5 回目（2026-10-16。収束の判定。当夜に実行する人の目線で頭から通して読ませた。高 0・中 1・低 2、すべて反映）
+
+| # | 指摘 | 対応 |
+| --- | --- | --- |
+| 1 | 10/23 の dry-run の計測は live の `stripe:setup` と移行用の鍵が前提だが、§4-2 の期限は 10/27 | §4-2 でその 2 つを 10/22 まで、§5 の 10/23 の行に前提を書いた |
+| 2 | 昼の予行の rake だけコマンドが全文でない（`DATABASE_URL` が無いと古いデータを書き出しうる） | 全文にした |
+| 3 | `dumped_at` に控える値の名前が rake と違う | `heroku pg:backups:info` の Started にそろえた |
+
+### 6 回目（2026-10-16。収束の判定。日程と期限の並び・コマンドの仮置きの値の定義も見せた。**高・中 0 件で収束**。低 3 件を反映）
+
+| # | 指摘 | 対応 |
+| --- | --- | --- |
+| 1 | `pg:backups:info` の Started は UTC の表示 | §6.1 22:02: `+09:00` の ISO 8601 に直して渡す |
+| 2 | 昼の予行の `<昼の dir>`・`<dumped_at>` の定義と restore の全文が無い | §5 T-0 |
+| 3 | §4-3 の確かめる場所が §7 と合わない | §7 はローカル、§8 は手元と `v2.assift.com` |
+
+収束の経過: 1 回目 17 件 → 2 回目 9 件 → 3 回目 11 件 → 4 回目 5 件 → 5 回目 3 件（中 1）→ 6 回目 3 件（低のみ）。
+
+### §14 の 1 回目（2026-10-16。別の担当にスキーマ・import・seed とローカルの DB の外部キーと突き合わせて読ませた。高 0・中 5・低 9。中はすべて、低は 12 以外を反映）
+
+連鎖する表（TRUNCATE で 10 表、`auth.users` の DELETE で `auth.*` と `profiles` 以下）、外部キーの処理を誰の権限で行うか、`report.json` の形、再インポートで重複しないこと、22:52 の確認で Stripe を呼ばないこと、の記述は実物と合っていた。
+
+| # | 重さ | 指摘 | 対応 |
+| --- | --- | --- | --- |
+| 1 | 中 | `undo.sql` を main に入れる期限とゲートが無い（10/27 以降は merge を止め、10/22 の空振りはどのファイルで流すか不明） | 冒頭の予定・§4-3・§5 の 10/27 の行に §14 を足し、空振りより前に main へ、空振りは main のファイルで |
+| 2 | 中 | 判断点 A〜B（23:00 の dry-run）で中止したときの扱いが無い | dry-run は Stripe を読むだけなので B の前まで使えるとし、§14.1・§14.4-1・§6.4 の行をそろえた |
+| 3 | 中 | G2 が B の後の誤用を止めるは言い過ぎ（`stripe:migrate-v1` は DB に書かず、最初の写しまで 0 件） | §14.1 と G2 の説明を直し、B の前かは人が確かめる（23:05 の Webhook の有効化と `--limit 5` の前）とした |
+| 4 | 中（推測を含む） | ディスクが 95% で読み取り専用になると、素の `begin` の TRUNCATE が失敗する | `begin read write` にし、§14.5-6 で `default_transaction_read_only = on` のときに通ることを確かめる |
+| 5 | 中 | 戻した v1 の DB（`assift_v1_cutover`）が残り、日を改めた夜の 22:06 の `createdb` がぶつかる / 日付入りの名前に昼の予行が書く | §14.4-6 に `dropdb` と、昼の予行より前に消す・名前を読み替えることを足し、§6.4「日を改めたとき」にも書いた |
+| 6 | 低 | psql の変数が DO ブロックに渡らない / `expected_users` が無いときの止まり方が偶然 | `set_config` / `current_setting` で受け渡し、`\if :{?expected_users}` で名指しして止める |
+| 7 | 低 | `ON_ERROR_STOP` が引数だけ / `-v commit=0` が真になる | ファイルの先頭で `\set ON_ERROR_STOP on`、`\if :commit`（真偽値。無ければ off） |
+| 8 | 低 | 0 行の空振りでは RLS で黙って 0 行になる失敗を見分けられない | 安全装置 G0（BYPASSRLS）を足した |
+| 9・10・11 | 低 | G4・G2 で止まったときの出口 / 片付けが通らなかったときの代わり | §14.4 に「通らなかったとき」: Webhook と Cron は無効のまま v1 だけ戻し、翌日に片付ける。上書きの変数は作らない |
+| 12 | 低 | 外部キーの無い `auth.flow_state`・`audit_log_entries` が残る | §14.3 に書いた（作業した人の分だけ）。本物のログインでの再現は見送った |
+| 13 | 低 | 合成データでは履歴のトリガと上限の門番を止める / 先に `df` | §14.5-7 に書いた |
+| 14 | 低 | 冒頭の状態の行・§14.6 のファイルの表 | 直した |
+
+### §14 の 2 回目（2026-10-16。同じ担当に、1 回目の反映を実物と突き合わせて読ませた。**高・中 0 件で収束**。低 1 件を反映）
+
+`begin read write`（`default_transaction_read_only` をそのトランザクションだけ上書き）、`\if :commit` と「無ければ off」、G0（ローカルの `postgres` は `rolsuper=f`・`rolbypassrls=t`、`auth.users` は RLS が有効で所有者は `supabase_auth_admin`）、
+判断点 A〜B の扱い、§14.4-6 と 22:06・昼の予行の整合は、実物と合っていた。
+
+| # | 重さ | 指摘 | 対応 |
+| --- | --- | --- | --- |
+| 1 | 低 | `set_config(…, true)` を `begin` より前に置くと値が消える / `expected_users` が無いとき `\quit` だと終了コードが 0 | §14.3 に、`begin read write` の後で呼ぶこと、わざと失敗する文で止めることを書いた |
+
+収束の経過（§14）: 1 回目 14 件（中 5）→ 2 回目 1 件（低のみ）。
+
+## 14. 中止のときの片付け（`scripts/migrate-v1/undo.sql`。§6.4）
+
+§5 の「中止のときの片付けの SQL」の中身。§7・§8 と同じく、本プランで作るリポジトリの変更。
+
+**状態: 実装済み・ローカルで確かめ済み（2026-10-16。§12）。残りは本番での空振り（§4-1 の日。人の作業）。**
+
+### 14.1 使う場面と目的
+
+- §6.4「COMMIT の後の検証、または 23:00 の dry-run で失敗（判断点 B の前）」で、直さずに v1 へ戻すと決めたときだけ使う。23:00 の dry-run は Stripe を読むだけなので、判断点 B（23:05）の前なら戻せる。
+  **判断点 B の後には使わない**（Stripe の契約を書き換えた後）。B の前かどうかは人が確かめる（§14.4-1）。安全装置 G2 が止めるのは写しが入った後だけで、23:05〜最初の写しのあいだは止められない（`stripe:migrate-v1` は DB に書かず、写しは Webhook と 23:25 の `sync-all` が作る）
+- 本番の Supabase を**インポートの前の状態**（管理用アカウント 1 人・店舗 0 件。024 §5-14・021 §9.3）に戻す。日を改めた夜に、同じ `migrate:v1` をそのまま流せるようにするため:
+  インポートは `tenants` が 1 件でもあると止まり（`import.ts`）、id は v1 の ID から決まる（`v1Uuid()`）ので、行が 1 つでも残ると主キーの重複で全体が戻る
+- Stripe・Heroku・Vercel・DNS には触らない（それらは §6.4 の表のとおり人が戻す）
+
+### 14.2 決定（2026-10-16）
+
+| # | 項目 | 決定 | 理由 |
+| --- | --- | --- | --- |
+| 1 | 消し方 | **`truncate public.tenants cascade` で店舗配下を空にしてから、管理用以外の `auth.users` を DELETE する**（§5 の「`auth.users` を消して cascade」を上書き） | cascade の DELETE は、親の 1 行ごとに外部キーの処理が子を消しに行き、削除のトリガも行ごとに走る（`tenants_record_tenant_delete` が約 2.8 万回、`staffs_record_staff_count` が約 16 万回。import は履歴のトリガを止めるが、削除では止めない）。`shifts` 1,150 万行で WAL が GB 単位で出て、消した領域は VACUUM まで空かない。ディスク（§5 の Disk の判断。95% で読み取り専用）が理由で中止した夜には、片付けそのものが失敗しうる。TRUNCATE は表のファイルを差し替えるので、行数によらず速く、ディスクもすぐ空き、トリガも走らない。所要は §14.5 で両方を測って記録する |
+| 2 | 形 | **psql で流す SQL ファイル 1 本** | 中身が短く、当夜に目で読める。psql は 23:25 でも使い、つながることは昼の予行で確かめる（§5 T-0） |
+| 3 | 残す管理用アカウントの見分け方 | **`profiles.is_admin = true` がちょうど 1 人**であることを確かめ、その人を残す | メールをリポジトリにもコマンドにも書かない。本番の管理用アカウントは 1 人（020 §5.1・024 §4.9） |
+| 4 | 所要の計測 | クラウドのセッションのローカルの Supabase に、リハーサルと同じ規模の合成データを作って測る | 本物のデータは利用者の Mac にしかない。TRUNCATE の所要は行数によらず、行数に比例するのは約 2.9 万人の `auth.users` の DELETE だけなので、合成で足りる |
+| 5 | 本番での空振り | §4-1 の予行（021 §9.3）の日に、**確認だけのモード**（最後に ROLLBACK）で本番に流す | 本番はそのとき管理用アカウントだけなので、消えるものは無い。`postgres` ロールで TRUNCATE と `auth.users` の DELETE ができること、psql でつながることを当夜より前に確かめる |
+| 6 | 置き場所 | 026 の節（新しいプランは立てない） | §5・§6.4 がこのタスクを指している。SQL 1 本と手順の 1 行 |
+
+### 14.3 SQL の中身
+
+```sh
+# 確認だけ（最後に ROLLBACK）
+psql '<DB>' -X -v ON_ERROR_STOP=1 -v expected_users=<N> -f scripts/migrate-v1/undo.sql
+# 本番に反映（COMMIT）
+psql '<DB>' -X -v ON_ERROR_STOP=1 -v expected_users=<N> -v commit=1 -f scripts/migrate-v1/undo.sql
+```
+
+- `<DB>`: 22:25 の `MIGRATION_DATABASE_URL` と同じ値（昼に `sslrootcert` つきの値を控えたならそれ。§5 T-0）
+- `<N>`: インポートが入れた人数。`jq '.after["auth.users"] - .before["auth.users"]' <dir>/report.json`。
+  `report.json` が読めなければ、22:25 の出力の `users: 読んだ … / 入れる <N>` の値
+- `commit` を付けなければ最後に ROLLBACK する。ファイルの先頭で、無ければ `off` を入れてから `\if :commit`（真偽値。`-v commit=0` も ROLLBACK）。`expected_users` が無ければ `\if :{?expected_users}` で名指しして止まる
+- ファイルの先頭に `\set ON_ERROR_STOP on`（引数の付け忘れでも止まる）
+- psql の変数は `$$ … $$` の中では置き換わらないので、`select set_config('undo.expected_users', :'expected_users', true)` で設定に入れ、DO ブロックの中で `current_setting('undo.expected_users')::int` で読む。
+  管理用の id も 2 で `set_config('undo.admin_id', …, true)` に入れ、4・5 で読む。第 3 引数 `true` の値はトランザクションの中だけなので、`set_config` は `begin read write` の後（2 の先頭）で呼ぶ
+- `expected_users` が無いときは、名指しの文言で例外を投げる DO で止める（`\quit` だと終了コードが 0 になる）
+
+1 つのトランザクションで、次の順に行う。どこかで例外になれば全体が戻る（`ON_ERROR_STOP` で psql が抜け、接続が切れて ROLLBACK）。
+
+1. `begin read write`（Supabase はディスクが 95% を超えると `default_transaction_read_only` を on にして読み取り専用にする。明示すればそのときも流せる見込み。§14.5-6 で確かめる）/ `set local statement_timeout = 0`（Supabase の既定で切られない）/ `set local lock_timeout = '10s'`（開いている画面の読み取りなどを待ち続けない。切れたら流し直す）。`\timing on`
+2. **安全装置**（1 つでも外れたら `raise exception`。何も消さない）:
+   - G0: 今のロールが RLS を通らない（`pg_roles.rolbypassrls`。`auth.users` と `public` の表は RLS が有効で、通らないロールでは DELETE が例外にならず 0 行になる）
+   - G1: `profiles.is_admin = true` がちょうど 1 人（その id を残す）
+   - G2: `billing_subscriptions` が 0 件（22:00 に Webhook を止めてから 23:05 に戻すまで、写しは 1 行も無い。公開の後や、写しが入った後に誤って流すのを止める。23:05〜最初の写しのあいだは止められない。§14.1）
+   - G3: 管理用アカウントの店舗が 0 件
+   - G4: 管理用以外の `auth.users` の件数が `expected_users` と同じ（インポートの前から居た人、COMMIT の後に `v2.assift.com` で登録した人を巻き込まない。
+     外れたら `select id, email, created_at from auth.users order by created_at desc limit 5` で見る。移した人の `created_at` は v1 の値なので、新しく登録した人が上に出る）
+3. `truncate table public.tenants cascade`（外部キーで連鎖して、`tenants` を参照する 10 表も空になる: `staffs`・`patterns`・`staff_patterns`・`staff_default_patterns`・`shifts`・`required_nums`・`restrictions`・`date_notes`・`shares`・`assist_runs`。NOTICE に出る）
+4. `delete from auth.refresh_tokens where user_id is distinct from <管理用の id>`（`user_id` は文字列で外部キーが無く、`session_id`（null 可）の cascade でしか消えない。残ると、id が v1 の ID から決まる再インポートの後に同じ利用者を指す）→
+   `delete from auth.users where id <> <管理用の id>` → cascade で `auth.identities`・`auth.sessions` などと `profiles` → `billing_subscriptions`・`staff_count_history`（`tenants` は 3 で空）
+5. **確かめ**（外れたら `raise exception`）: `auth.users` が 1 件で管理用の id / `profiles` が 1 件 / `tenants` とそれを参照する表（`pg_constraint` から引く。今後 `tenants` を直接参照する表を足しても拾う）と `billing_subscriptions` が 0 件 / 管理用以外の `staff_count_history`・`auth.identities`・`sessions`・`refresh_tokens`・`mfa_factors`・`one_time_tokens` が 0 件
+6. `report.json` の `before` と同じ 14 表の件数を出す（人が `jq .before <dir>/report.json` と見比べる。管理用アカウントの分だけが残る）
+7. `commit` があれば COMMIT、無ければ ROLLBACK
+
+気を付けること:
+
+- 権限: 本番の `postgres` は superuser ではない。`public` の表は migration を流した `postgres` が所有者なので TRUNCATE できる。`auth.users` の DELETE は INSERT と同じく §4-1 の予行で確かめる（§14.2-5）。
+  0 行の空振りでは cascade の先は動かないが、外部キーの処理は参照する側の表の所有者の権限で走るので、`auth.*` の他の表への権限は要らない
+- TRUNCATE は `ACCESS EXCLUSIVE` のロックを取る。当夜は v1 がメンテナンス中で、`v2.assift.com` を開いているのは作業する人だけなので、待つ相手はほぼ無い（インポートの後の autovacuum は、ロックを待たせると自分から譲る）
+- `staff_count_history` の id（identity）は戻さない（`restart identity` を付けない）。次のインポートは `max(id)` を BEGIN 直後に読み直すので困らない
+- 22:52 の確認で付いたもの（自分のアカウントの Google の identity・セッション）は、4 の cascade で消える。外部キーの無い `auth.flow_state`・`auth.audit_log_entries` には作業した人の分が残る（作業した人だけで、再インポートの邪魔にならない）。22:52 の確認は Stripe を呼ばない（写しが無いあいだは `account/billing` の `syncIfStale` が同期しない）
+- `TRUNCATE ... CASCADE` は、今後 `tenants` を参照する表を足すとそれも空にする。店舗配下の表なので意図どおり
+
+### 14.4 当夜の手順（§6.4「COMMIT の後の検証で失敗」を具体化）
+
+所要は §14.5 の実測で埋める（数十秒の見込み）。
+
+1. 戻すと決める（**判断点 B の前に限る**: 23:05 の Webhook の有効化も `--limit 5` もまだ流していない）。Stripe の Webhook のエンドポイントと Vercel の Cron Jobs が**無効のまま**か見る（§6.1 22:00・§5）
+2. 確認だけ（上の 1 行目）→ 件数を見て、ROLLBACK で終わったことを確かめる
+3. COMMIT（上の 2 行目）→ 最後の件数が管理用アカウントの分だけ
+4. 別の接続で `psql '<DB>' -X -c 'select count(*) from public.profiles'` が 1 → ここで初めて Webhook のエンドポイントと Cron Jobs を戻す（§6.4）
+5. v1 を戻す（`MAINTENANCE_MODE=off`・Scheduler のジョブを 22:01 に控えた値で）。v1 を戻すのは 1〜4 と並行してよい（v1 は v2 の DB を見ない）
+6. 手元: 戻した v1 の DB を消す（`dropdb -p 5433 --force assift_v1_cutover`。日を改めた夜の 22:06 の `createdb` がぶつからないように）。`<dir>`・ダンプ・`noon-20261030/`・`overrides-20261030.json` は、**日を改めた日の昼の予行より前に**消す（昼の予行が同じ名前のフォルダに書くため。日を改めた日は名前の日付を読み替える）。それまでは 021 §10-8 と同じく手元から出さない
+
+**通らなかったとき**（安全装置で止まった・例外になった）: 片付けはその夜に急がない。Webhook と Cron は無効のまま、v1 だけ戻し（5）、原因を調べてから翌日に片付ける。
+上書きの変数は作らない（G2 で止まったなら 22:00 の無効化が漏れて Stripe に書いた恐れがあり、Dashboard でそのあいだのイベントの配信を見てから決める。G4 なら余分な人が誰かを見てから `expected_users` を決め直す。例外は 22:52 の Google ログインが自動リンクされず、自分のメールの新しいユーザーができていたとき（G4 の案内の `created_at desc` で一番上に出る）: それを確かめたら `expected_users=<N+1>` でその夜に流してよい）
+
+### 14.5 確かめ方
+
+**ローカル（クラウドのセッション）**:
+
+1. 本番の形を作る: `npx supabase db reset` → seed の管理用以外を消す（`delete from auth.users where email <> 'admin@example.com'`）→ 管理用アカウント 1 人・店舗 0 件
+2. fixtures（`scripts/migrate-v1/fixtures` を scratchpad に写したもの。`report.json` を repo の下に書かせない）で `npm run migrate:v1`（COMMIT）→ 移した 1 人に、22:52 の Google ログインに当たる `auth.identities`（`google`）と `auth.sessions` の行を足す
+3. 確認だけのモード → 件数が出て ROLLBACK、DB は変わらない
+4. COMMIT → 14 表の件数が `report.json` の `before` と一致、消した人の `auth.*` の行が 0
+5. 同じ fixtures で `npm run migrate:v1` がもう一度通り（`--allow-existing` なし）、`migrate:v1:verify` が通る → もう一度片付ける
+6. 安全装置: G1（管理者を 2 人にする・0 人にする）/ G2（`billing_subscriptions` に 1 行）/ G3（管理用アカウントに店舗）/ G4（`expected_users` を 1 ずらす）/ `expected_users` なし / `-v commit=0`（ROLLBACK になる）。どれも何も消さずに止まる。
+   G0 は BYPASSRLS の無いロール（`set role authenticated` 相当の別ロール）で流して止まることを見る。
+   読み取り専用: `alter database postgres set default_transaction_read_only = on` の後の新しい接続で COMMIT まで通ることを見て、設定を戻す
+7. **規模の計測**（先に `df` で空きを見る。2026-10-16 は 25 GB）: リハーサルの件数（021 §15 のインポート 3 回目）で合成データを SQL で作る（`users` 29,010・`tenants` 27,609・`staffs` 160,272・`patterns` 167,253・`shifts` 11,496,340・`required_nums` 358,507・`restrictions` 10,144・`date_notes` 157,025・`shares` 57,978・`staff_count_history` 29,010・`staff_patterns` / `staff_default_patterns` はスタッフ 1 人に数行。作る SQL は scratchpad だけ。import と同じく `staffs_record_staff_count` を止め、上限の門番 `staffs_guard_staff_limit` も止めて入れる）。
+   (a) 比較: `delete from auth.users where id <> <管理用>` だけ（cascade の DELETE）を BEGIN〜ROLLBACK で流し、所要と WAL（`pg_current_wal_lsn()` の差）を測る
+   (b) 本命: `undo.sql` を COMMIT で流し、所要と `pg_database_size()` の前後を測る
+   ローカルは本番と計算機が違う。(b) は行数によらない部分が大半なので、本番でも同じ桁の見込み（§12 に書く）
+8. `lint` / `typecheck` / `test`（SQL は対象外だが、変更の無いことを確かめる）
+
+**本番（人の作業。§4-1 の予行の日。main の `undo.sql` で）**: 本番が管理用アカウントだけの状態で
+`psql '<Session pooler>' -X -v ON_ERROR_STOP=1 -v expected_users=0 -f scripts/migrate-v1/undo.sql`（確認だけ）が、G0〜G4 を通り、TRUNCATE と DELETE が権限のエラーなしに通り、ROLLBACK で終わる（0 行の空振りでは RLS で黙って 0 行になる失敗を見分けられないので、G0 で BYPASSRLS を見る）。
+つながらなければ §5 T-0 と同じく `&sslrootcert=system` を足す
+
+### 14.6 ファイル
+
+| ファイル | 変更 |
+| --- | --- |
+| `scripts/migrate-v1/undo.sql` | 新規（§14.3） |
+| `AGENTS.md` | ディレクトリの `scripts/migrate-v1/` に `undo` を足す |
+| `docs/plans/026-cutover/README.md` | 冒頭の予定・状態・「リポジトリの変更は §7・§8 の 2 つだけ」/ §2 の表 / §4-3 / §5 の 10/27 の行 / §6.4 の「日を改めたとき」/ §4-1 の確かめ方（本番での空振り）/ §5 の行（§14 を指し、消し方を TRUNCATE に）/ §6.4 の行（§14.4）/ §10 / §12 |
+| `docs/plans/021-data-migration/README.md` | §9.3 の確かめることに「026 §14 の確認だけのモード」 |
+
+当夜の手順書（Artifact）の中止の行と、リリース計画のこのタスクも合わせて直す。
