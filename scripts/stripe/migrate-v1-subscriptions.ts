@@ -142,11 +142,16 @@ async function scheduleLegacy(subscription: LegacySubscription, priceId: string)
     if (existing.status === 'active' && last?.items.some((item) => idOf(item.price) === priceId)) {
       return `schedule 既存 (${scheduleId})`
     }
-    // 前の実行が create のあと update の前に止まった（どの phase も旧 price だけ。from_subscription は 1〜2 本作る）なら、
-    // その schedule を組み直す。放っておくと release され、旧 price のまま schedule の無い契約になる（026 §12 のレビュー 3 回目）
-    const unfinished = existing.phases.every((phase) =>
-      phase.items.every((item) => idOf(item.price) === LEGACY_PRICE_ID)
-    )
+    // 前の実行が create のあと update の前に止まった schedule（from_subscription の既定の `release` のまま、どの phase も旧 price だけ。
+    // from_subscription は 1〜2 本作る）なら、続きから組む。放っておくと release され、旧 price のまま schedule の無い契約になる。
+    // 解約の予約（endScheduleAtCurrentPhase。`end_behavior: 'cancel'`）は組み直さない。phase が進んで phases[0] が今の phase で
+    // なければ組み直せない（026 §12 のレビュー 3・4 回目）
+    const unfinished =
+      existing.end_behavior === 'release' &&
+      existing.current_phase?.start_date === existing.phases[0]?.start_date &&
+      existing.phases.every((phase) =>
+        phase.items.every((item) => idOf(item.price) === LEGACY_PRICE_ID)
+      )
     if (existing.status === 'active' && !unfinished)
       throw new Error(`想定外の schedule があります (${scheduleId})`)
     if (existing.status === 'active') schedule = existing
