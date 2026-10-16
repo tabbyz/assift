@@ -67,6 +67,7 @@ src/
             searchParams.ts       URL 状態があるときだけ（nuqs parser + createLoader）。URL から値を消すときも（signup の ?email=。025）
             _components/          このルート専用 Client UI
             _lib/                 このルート専用ロジック（Vitest 対象）
+    serviceworker.js/route.ts     v1 の Service Worker を解除する JS（026 §8）。2027-10-30 以降に消してよい
     api/tenants/[tenantId]/shifts/{pdf,csv}/route.ts   エクスポート（Route Handler。下記）
     api/stripe/webhook/route.ts   Stripe の Webhook（POST。署名で守る。019）
     api/cron/billing-usage/route.ts  毎日の同期と最大人数の送信（GET。CRON_SECRET で守る。vercel.json の crons）
