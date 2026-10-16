@@ -77,7 +77,7 @@ export function TenantShell({ tenant, tenants, email, banner, children }: Props)
     >
       <AppShellHeader>
         <Group h="100%" px={8} justify="space-between" wrap="nowrap" gap="sm">
-          <Group gap={6} wrap="nowrap" miw={0}>
+          <Group gap={0} wrap="nowrap" miw={0}>
             <Burger
               opened={opened}
               onClick={toggle}
