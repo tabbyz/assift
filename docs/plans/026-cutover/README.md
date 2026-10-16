@@ -370,6 +370,10 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 | 3 | 低: §14.3 の flow_state の記述（型・条件）が実物と違う / 冒頭のコメントに明示の削除が無い / null の扱いが 2 表で違う / G1 が同じ問い合わせを 2 回 | 直した（2 表とも `is distinct from` で null の行も消す。G1 は `array_agg` の 1 回） |
 | 3 | 低: 件数だけの G4 は 1 人増えて 1 人減ると見逃す | 退けた。メンテナンス中に、v2 を知る移した人の退会と別の人の登録が重なる必要がある。上の中の指摘の対応で、G4 の後に増えた分は止まる |
 | 3 | 低: 写しのロックと、無効化の漏れた Webhook の `profiles` の更新とでデッドロックしうる | 退けた。起きても片付けが例外で戻るだけで、流し直せばよい（§14.4「通らなかったとき」）。Webhook が先に Stripe に書く分は G2 でも見えない（§14.1 のとおり、Webhook の無効化は人が確かめる） |
+| 4 | **高・中 0 件で収束**。低: `auth` 側の確かめが手書きの表だけ / 件数の出力と `TARGET_TABLES` を互いに指すコメントが片側だけ / プランの G0 の条件が実物（`rolsuper` も通す）と違う | 直した（`auth` の `user_id` を持つ表（今は 10 表）を `information_schema` から引いて確かめる。管理用アカウントだけの状態で `auth.flow_state` に別の人の行を置くと `確かめ: auth.flow_state に管理用以外の行が残っています` で止まり、無ければ通ることを確かめた。`import.ts` の `TARGET_TABLES` にコメント）。lint / typecheck / test（924 件）も通した |
+| 4 | 低: `auth.audit_log_entries` に移した人のログインの記録が残る / G4 と消した数の確かめが二重 | 退けた。前者は §14.3 で受け入れたとおり（作業した人の分）。G4 は TRUNCATE の前に分かりやすい文言で止めるために残す |
+
+収束の経過（コードレビュー）: 1 回目 3 件（範囲の外 4 件を除く）→ 2 回目 高 1（026 の後半を消していた）・中 1 → 3 回目 中 1 → 4 回目 高・中 0 件。
 
 ### 2026-10-16（§7 `npm run stripe:sync-all` の実装とサンドボックスでの確かめ）
 
@@ -671,7 +675,7 @@ psql '<DB>' -X -v ON_ERROR_STOP=1 -v expected_users=<N> -v commit=1 -f scripts/m
 1. `begin read write`（Supabase はディスクが 95% を超えると `default_transaction_read_only` を on にして読み取り専用にする。明示すればそのときも流せる見込み。§14.5-6 で確かめる）/ `set local statement_timeout = 0`（Supabase の既定で切られない）/ `set local lock_timeout = '10s'`（開いている画面の読み取りなどを待ち続けない。切れたら流し直す）。`\timing on`
 2. `lock table public.billing_subscriptions in share mode`（G2 を見てから COMMIT まで、無効化の漏れた Webhook や同期が写しを書けないようにする。書かれた行を cascade で黙って消さない）→
    **安全装置**（1 つでも外れたら `raise exception`。何も消さない）:
-   - G0: 今のロールが RLS を通らない（`pg_roles.rolbypassrls`。`auth.users` と `public` の表は RLS が有効で、通らないロールでは DELETE が例外にならず 0 行になる）
+   - G0: 今のロールが RLS を通らない（`pg_roles.rolbypassrls` か `rolsuper`。`auth.users` と `public` の表は RLS が有効で、通らないロールでは DELETE が例外にならず 0 行になる）
    - G1: `profiles.is_admin = true` がちょうど 1 人（その id を残す）
    - G2: `billing_subscriptions` が 0 件（22:00 に Webhook を止めてから 23:05 に戻すまで、写しは 1 行も無い。公開の後や、写しが入った後に誤って流すのを止める。23:05〜最初の写しのあいだは止められない。§14.1）
    - G3: 管理用アカウントの店舗が 0 件
@@ -681,7 +685,7 @@ psql '<DB>' -X -v ON_ERROR_STOP=1 -v expected_users=<N> -v commit=1 -f scripts/m
 4. `user_id` に外部キーの無い 2 表を、管理用アカウントの行だけ残して消す（`user_id` が null の行も消す）: `delete from auth.refresh_tokens where user_id is distinct from <管理用の id>`（`user_id` は文字列。`session_id`（null 可）の cascade でしか消えない）と
    `delete from auth.flow_state where user_id is distinct from <管理用の id>::uuid`（OAuth のログインの途中の状態）。残ると、id が v1 の ID から決まる再インポートの後に同じ利用者を指す →
    `delete from auth.users where id <> <管理用の id>`（DO の中で消した数を数え、`expected_users` と違えば例外。G4 で数えてから v2 で登録した人を巻き込まない）→ cascade で `auth.identities`・`auth.sessions` などと `profiles` → `billing_subscriptions`・`staff_count_history`（`tenants` は 3 で空）
-5. **確かめ**（外れたら `raise exception`）: `auth.users` が 1 件で管理用の id / `profiles` が 1 件 / `tenants` とそれを参照する表（`pg_constraint` から引く。今後 `tenants` を直接参照する表を足しても拾う）と `billing_subscriptions` が 0 件 / 管理用以外の `staff_count_history`・`auth.identities`・`sessions`・`refresh_tokens`・`mfa_factors`・`one_time_tokens`・`flow_state` が 0 件
+5. **確かめ**（外れたら `raise exception`）: `auth.users` が 1 件で管理用の id / `profiles` が 1 件 / `tenants` とそれを参照する表（`pg_constraint` から引く。今後 `tenants` を直接参照する表を足しても拾う）と `billing_subscriptions` が 0 件 / 管理用以外の `staff_count_history`・`auth.identities`・`sessions`・`refresh_tokens`・`mfa_factors`・`one_time_tokens`・`flow_state` など、`auth` の `user_id` を持つ表すべて（`information_schema` から引く）に管理用以外の行が無い
 6. `report.json` の `before` と同じ 14 表の件数を出す（人が `jq .before <dir>/report.json` と見比べる。管理用アカウントの分だけが残る）
 7. `commit` があれば COMMIT、無ければ ROLLBACK
 

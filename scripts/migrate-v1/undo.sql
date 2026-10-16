@@ -127,18 +127,22 @@ begin
   if exists (select 1 from public.staff_count_history where user_id <> v_admin) then
     raise exception '確かめ: 管理用以外の staff_count_history が残っています';
   end if;
-  if exists (select 1 from auth.identities where user_id <> v_admin)
-    or exists (select 1 from auth.sessions where user_id <> v_admin)
-    or exists (select 1 from auth.refresh_tokens where user_id is distinct from v_admin::text)
-    or exists (select 1 from auth.mfa_factors where user_id <> v_admin)
-    or exists (select 1 from auth.one_time_tokens where user_id <> v_admin)
-    or exists (select 1 from auth.flow_state where user_id is distinct from v_admin) then
-    raise exception '確かめ: 管理用以外の auth.identities / sessions / refresh_tokens / mfa_factors / one_time_tokens / flow_state が残っています';
-  end if;
+  -- auth の user_id を持つ表すべて（外部キーの有無によらない。GoTrue が表を足しても拾う）
+  for v_table in
+    select format('%I.%I', c.table_schema, c.table_name)::regclass
+      from information_schema.columns c
+      join information_schema.tables t on t.table_schema = c.table_schema and t.table_name = c.table_name
+     where c.table_schema = 'auth' and c.column_name = 'user_id' and t.table_type = 'BASE TABLE'
+  loop
+    execute format('select exists (select 1 from %s where user_id::text <> $1)', v_table) into v_found using v_admin::text;
+    if v_found then
+      raise exception '確かめ: % に管理用以外の行が残っています', v_table;
+    end if;
+  end loop;
 end
 $$;
 
--- report.json の before と同じ 14 表・同じ並び（import.ts の TARGET_TABLES。管理用アカウントの分だけが残る）
+-- report.json の before と同じ 14 表・同じ並び（import.ts の TARGET_TABLES と同じに保つ。管理用アカウントの分だけが残る）
 select "table", count from (
   select 1 as n, 'auth.users' as "table", count(*) as count from auth.users
   union all select 2, 'auth.identities', count(*) from auth.identities

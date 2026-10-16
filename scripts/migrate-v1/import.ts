@@ -55,7 +55,7 @@ const DISABLED_TRIGGERS = [
   ['public.profiles', 'profiles_set_updated_at'],
 ] as const
 
-/** BEGIN 直後と終わりに count(*) を取るテーブル（v2 側） */
+/** BEGIN 直後と終わりに count(*) を取るテーブル（v2 側）。中止のときの片付け（undo.sql）の最後の件数の出力と同じ並びに保つ（026 §14.3） */
 const TARGET_TABLES = [
   'auth.users',
   'auth.identities',
