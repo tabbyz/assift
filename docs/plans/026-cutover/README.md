@@ -319,6 +319,13 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 - 確かめのスクリプトは scratchpad に置き、リポジトリには入れていない（§8.3）
 - 残り: §8.3-2（merge の後に `v2.assift.com` で `curl -sI`）と §8.3-3（当日。§6.5-8）
 
+### 2026-10-16（§8.3-2 本番の確認）
+
+PR tabbyz/assift#43 を merge し、Production のデプロイの後に `curl -sI https://v2.assift.com/serviceworker.js` が
+`HTTP/2 200`・`content-type: text/javascript; charset=utf-8`・`cache-control: no-cache`・`content-security-policy` あり・`x-matched-path: /serviceworker.js`。
+`curl -s` の本文も `install` の中で `unregister()` する版。merge の前は `404`（`x-matched-path: /_not-found`、v2 の 404 の HTML）だった。
+§4-3 のゲートのうち §8 の分はこれで済んだ。残りは §8.3-3（当日。§6.5-8）
+
 ### 2026-10-16（§8 の確かめ方の見直し）
 
 実装の前に、§8 を main（`2c595ce`）と v1（`tabbyz/assift-v1` `a8bb5ad`）の実物に突き合わせた。
