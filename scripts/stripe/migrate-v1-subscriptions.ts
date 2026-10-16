@@ -18,7 +18,12 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { parseArgs } from 'node:util'
 import Stripe from 'stripe'
 import { idOf, phaseParams } from '@/lib/billing/cancel'
-import { LEGACY_API_VERSION, LEGACY_COUPON_ID, PRICE_LOOKUP_KEY } from '@/lib/billing/constants'
+import {
+  LEGACY_API_VERSION,
+  LEGACY_COUPON_ID,
+  LEGACY_PRICE_ID,
+  PRICE_LOOKUP_KEY,
+} from '@/lib/billing/constants'
 import {
   type MigrationCategory,
   migrationCategory,
@@ -129,21 +134,31 @@ async function markOpenUncollectible(subscriptionId: string): Promise<number> {
  * 1 か月にすると、その間ずっとポータルで解約できない（schedule 付きの契約はポータルで解約できない）
  */
 async function scheduleLegacy(subscription: LegacySubscription, priceId: string): Promise<string> {
-  let scheduleId = subscription.schedule ? idOf(subscription.schedule) : null
+  const scheduleId = subscription.schedule ? idOf(subscription.schedule) : null
+  let schedule: Stripe.SubscriptionSchedule | null = null
   if (scheduleId) {
     const existing = await stripe.subscriptionSchedules.retrieve(scheduleId, {}, LEGACY)
     const last = existing.phases.at(-1)
     if (existing.status === 'active' && last?.items.some((item) => idOf(item.price) === priceId)) {
       return `schedule 既存 (${scheduleId})`
     }
-    if (existing.status === 'active')
+    // 前の実行が create のあと update の前に止まった schedule（from_subscription の既定の `release` のまま、どの phase も旧 price だけ。
+    // from_subscription は 1〜2 本作る）なら、続きから組む。放っておくと release され、旧 price のまま schedule の無い契約になる。
+    // 解約の予約（endScheduleAtCurrentPhase。`end_behavior: 'cancel'`）は組み直さない。phase が進んで phases[0] が今の phase で
+    // なければ組み直せない（026 §12 のレビュー 3・4 回目）
+    const unfinished =
+      existing.end_behavior === 'release' &&
+      existing.current_phase?.start_date === existing.phases[0]?.start_date &&
+      existing.phases.every((phase) =>
+        phase.items.every((item) => idOf(item.price) === LEGACY_PRICE_ID)
+      )
+    if (existing.status === 'active' && !unfinished)
       throw new Error(`想定外の schedule があります (${scheduleId})`)
-    scheduleId = null
+    if (existing.status === 'active') schedule = existing
   }
-  const created = await stripe.subscriptionSchedules.create(
-    { from_subscription: subscription.id },
-    LEGACY
-  )
+  const created =
+    schedule ??
+    (await stripe.subscriptionSchedules.create({ from_subscription: subscription.id }, LEGACY))
   const current = created.phases[0]
   if (!current) throw new Error(`schedule の phase がありません (${created.id})`)
   await stripe.subscriptionSchedules.update(
@@ -163,7 +178,7 @@ async function scheduleLegacy(subscription: LegacySubscription, priceId: string)
     },
     LEGACY
   )
-  return `schedule 作成 (${created.id})`
+  return schedule ? `schedule 組み直し (${created.id})` : `schedule 作成 (${created.id})`
 }
 
 async function handle(

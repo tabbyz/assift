@@ -15,6 +15,7 @@
     "assist:eval": "tsx --conditions=react-server scripts/assist-eval/run.ts",
     "stripe:setup": "tsx --conditions=react-server scripts/stripe/setup.ts",
     "stripe:migrate-v1": "tsx --conditions=react-server scripts/stripe/migrate-v1-subscriptions.ts",
+    "stripe:sync-all": "tsx --conditions=react-server scripts/stripe/sync-all.ts",
     "migrate:v1": "tsx --conditions=react-server scripts/migrate-v1/import.ts",
     "migrate:v1:verify": "tsx --conditions=react-server scripts/migrate-v1/verify.ts"
   },
