@@ -85,7 +85,16 @@ export function TenantShell({ tenant, tenants, email, banner, children }: Props)
               size="sm"
               aria-label="メニュー"
             />
-            <UnstyledButton component={Link} href="/tenants" visibleFrom="md">
+            {/* ハンバーガー（size="sm" の箱は 28px）と同じ幅にして、md で入れ替わっても店舗名がずれないようにする */}
+            <UnstyledButton
+              component={Link}
+              href="/tenants"
+              visibleFrom="md"
+              w={28}
+              h={28}
+              display="flex"
+              style={{ alignItems: 'center', justifyContent: 'center' }}
+            >
               <AssiftSymbol height={20} />
             </UnstyledButton>
             <TenantSwitcher tenant={tenant} tenants={tenants} />
