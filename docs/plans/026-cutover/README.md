@@ -250,7 +250,8 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
    - 但し書き: v2 で開かれない scope（例: 開かなくなった `/tenants/<token>/`）の登録は、その URL を開くまで残る。v2 のページはどれもその scope の外なので、何も中継せず害は無い
    - 確かめのスクリプトはリポジトリに入れない（scratchpad だけ。1 回きりの確認。005 と同じ）。手順と結果を §12 に書く
 2. `v2.assift.com` に出たあと `curl -sI https://v2.assift.com/serviceworker.js` で `Content-Type`・`Cache-Control`
-3. 当日: v1 を開いた（Service Worker が登録されている）ブラウザで `assift.com` を開き、DevTools の Application → Service Workers から消えること（§6.5-8）
+3. 当日: v1 を開いた（Service Worker が登録されている）ブラウザで `assift.com` を開き、DevTools の Application → Service Workers から消えること（§6.5-8）。
+   最初に開いたタブは閉じるまで古い Service Worker が中継する（§8.2）ので、数秒待ってから**タブを閉じて開き直し**て見る
 
 ## 9. 申し送りの取り込み
 
