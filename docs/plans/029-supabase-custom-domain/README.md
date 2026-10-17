@@ -87,7 +87,7 @@ Dashboard なら Project Settings → Add-ons（Custom Domain を有効にする
 1. Storage → New bucket: 名前 `legal`、Public bucket をオン、Restrict file upload size `10 MB`、Allowed MIME types `application/pdf`
 2. 試しの PDF（中身は何でもよい。名前は `test-20261017.pdf`）を Dashboard から上げる
 3. `curl -sS -o /dev/null -w '%{http_code} %{content_type}\n' https://assift.supabase.co/storage/v1/object/public/legal/test-20261017.pdf` が `200 application/pdf`。
-   これで §2-8 の代わりがいつでも使える
+   これで §2-8 の代わりがいつでも使える。§2-8 で見送ったときは、ここで試しの PDF を消す（見送らなければ §4-9 で消す）
 
 ### 3.3 切り替え
 
@@ -131,11 +131,12 @@ vanity subdomain を先に外す。証明書を待つあいだ本番が止まら
 
 1. v2 の `/terms`・`/privacy` を印刷して PDF にする（016-terms §7）。名前は `terms-20261030.pdf`・`privacy-20261030.pdf`
 2. 手元に写しを残し、`shasum -a 256 terms-20261030.pdf privacy-20261030.pdf` を控える
-3. Dashboard からバケット `legal` に上げ、上げた日時を控える
+3. Dashboard からバケット `legal` に上げ、上げた日時を控える。**上げた直後に**
+   `curl -fsS https://api.assift.com/storage/v1/object/public/legal/terms-20261030.pdf | shasum -a 256` が 2 の値と一致することを確かめる（privacy も）。
+   一致しなければ送らない（上書きしない決まりなので、送った後に気付くとリンクを直せない。§2-5）。`-f` は 404 のときにエラーの本文をハッシュしないため
 4. Resend から自分宛てに、告知と同じ HTML（リンクの文字の裏に URL）で 1 通送り、iPhone の Gmail アプリと PC のブラウザでリンクが開く（ダウンロードではなく表示される）こと、
    リンクの URL が `https://api.assift.com/...` のまま（Resend のホストに書き換わっていない）ことを見る
-5. 告知を送ったあと、`curl -sS https://api.assift.com/storage/v1/object/public/legal/terms-20261030.pdf | shasum -a 256` が 2 の値と一致する（privacy も）。
-   告知の記録（016-terms §7）に URL・SHA-256・上げた日時を書く
+5. 告知を送ったあと、3 と同じ照合をもう一度して、告知の記録（016-terms §7）に URL・SHA-256・上げた日時・照合した日時を書く
 
 ## 4. 確かめること（`v2.assift.com` / `admin-v2.assift.com`）
 
@@ -161,13 +162,14 @@ Google のリダイレクト URI の `https://assift.supabase.co/auth/v1/callbac
 
 ## 5. 直すドキュメント
 
-本プランの作業が終わったら（§2-8 で見送ったときは、その旨で）直す。
+本プランの作業が終わったら（§2-8 で見送ったときは、その旨で）直す。**026 §5 の「10/27 以降は main への merge を止める」より前に merge する**
+（merge すると Production がビルドされる）。間に合わなければ、文書だけの変更として 026 §5 の例外に「029 の文書の修正」を足してから merge する。
 
 | ファイル | 変更 |
 | --- | --- |
 | `docs/plans/029-supabase-custom-domain/README.md` | 本プラン・実装ログ |
 | `docs/plans/024-production/README.md` | §2「しない」の「Supabase の独自ドメイン（リリース後に検討）」→ 029 へ。§4.4.1 に「029 で外した」と「vanity subdomain は無料だった（029 §2-2）」を足す。§4.5-4 のリダイレクト URI（「当日も変えない」はそのまま `api.assift.com` について）・§4.7 の `NEXT_PUBLIC_SUPABASE_URL` を `https://api.assift.com` に。§6 の Google の行の「リダイレクト URI は変えない」はそのまま |
-| `docs/plans/026-cutover/README.md` | §3-2 の理由の「告知・添付の PDF・ページの日付がそろう」→「PDF」。§4 に「PDF のリンクのホストが決まっている（`api.assift.com`、または §2-8 の `assift.supabase.co`）。10/27」を足す（本プランの完了はゲートにしない）。§4-5 の「PDF を添付」と確かめ方の「添付の版の記録」→ リンク・SHA-256（029 §3.4）。§5 の 10/29 に「Production の `NEXT_PUBLIC_SUPABASE_URL` が `https://api.assift.com` のまま」を足す。§6 の 23:25 の行: `NEXT_PUBLIC_SUPABASE_URL=https://api.assift.com`・`接続先: Supabase api.assift.com`。§6.3 の Redeploy の後にも `NEXT_PUBLIC_SUPABASE_URL` を見る。§12 2026-10-15 の DNS の表に `api`（CNAME）と `_acme-challenge.api`（TXT）を「触らない」で足す（§5 の 10/29 の「変わっていないか見る」で差分に見えないように） |
+| `docs/plans/026-cutover/README.md` | §3-2 の理由の「告知・添付の PDF・ページの日付がそろう」→「PDF」。§4 に「PDF のリンクのホストが決まっている（`api.assift.com`、または §2-8 の `assift.supabase.co`）。10/27」を足し、**告知の前の判定**に入れる（026 §4 の冒頭の「1〜4」を書き換える。本プランの完了はゲートにしない）。§6.6（公開後の作業）に「Google のリダイレクト URI から `https://assift.supabase.co/auth/v1/callback` を消す（029 §4）」を足す。§4-5 の「PDF を添付」と確かめ方の「添付の版の記録」→ リンク・SHA-256（029 §3.4）。§5 の 10/29 に「Production の `NEXT_PUBLIC_SUPABASE_URL` が `https://api.assift.com` のまま」を足す。§6 の 23:25 の行: `NEXT_PUBLIC_SUPABASE_URL=https://api.assift.com`・`接続先: Supabase api.assift.com`。§6.3 の Redeploy の後にも `NEXT_PUBLIC_SUPABASE_URL` を見る。§12 2026-10-15 の DNS の表に `api`（CNAME）と `_acme-challenge.api`（TXT）を「触らない」で足す（§5 の 10/29 の「変わっていないか見る」で差分に見えないように） |
 | `docs/plans/016-terms/README.md` | §7 2026-10-13 の「全文を PDF で添付」（264 行）・「添付の PDF に全文」（272 行）・「添付の PDF は」（296 行）・「添付の版」（297 行）・「告知に添付する PDF」（307 行）。元の文は書き換えずに、日付つきの追記で「→ 029 で上書き: リンク。証拠は写しと SHA-256」とする（026 §3-2 の書き方に合わせる） |
 | `AGENTS.md` | 変えない（ホストを書いていない） |
 
@@ -177,9 +179,10 @@ Google のリダイレクト URI の `https://assift.supabase.co/auth/v1/callbac
 
 `api.assift.com` で問題が出て、その日のうちに直せないとき:
 
-1. `npx supabase vanity-subdomains check-availability --project-ref <ref> --desired-subdomain assift --experimental` で `assift` が空いていること（外したあとに他のプロジェクトに取られうる）
+1. `npx supabase vanity-subdomains check-availability --project-ref <ref> --desired-subdomain assift --experimental` で `assift` が空いていること（外したあとに他のプロジェクトに取られうる）。
+   **空いていなければ** vanity subdomain には戻さず、ref のホストで運用する（§3.3-6 の失敗の分岐と同じ状態）。告知のリンクも `https://<ref>.supabase.co/storage/v1/object/public/legal/…` にする
 2. Google のリダイレクト URI に `https://assift.supabase.co/auth/v1/callback` があること（消していたら**先に**足し直す。vanity subdomain を有効にした直後から Auth がそれを使う）
-3. `npx supabase domains delete --project-ref <ref>`
+3. `npx supabase domains delete --project-ref <ref>`（§3.3-4 の打ち切りで消していれば飛ばす）
 4. `npx supabase vanity-subdomains activate --project-ref <ref> --desired-subdomain assift --experimental` → `get` で `Status: active`
 5. Vercel の `NEXT_PUBLIC_SUPABASE_URL` を `https://assift.supabase.co` に戻して Redeploy
 6. Project Settings → Add-ons → Custom Domain を外す（外した時点から課金が止まる）。Gehirn DNS の `api` の CNAME と `_acme-challenge.api` の TXT を消す
