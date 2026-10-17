@@ -219,3 +219,5 @@ Google のリダイレクト URI の `https://assift.supabase.co/auth/v1/callbac
   `_acme-challenge.api` の TXT を Gehirn に足したあとの `domains reverify` は `status 400: {"message":"Verification has been completed, please proceed to activation."}`。
   CLI は 400 をエラーとして表示するが、中身は完了の知らせ
 - §3.3-6: `domains activate` → `Custom hostname setup completed. Project is now accessible at api.assift.com.`
+- §3.3-7: `NEXT_PUBLIC_SUPABASE_URL` を `https://api.assift.com` にして Redeploy。health は `api.assift.com` が 200、**ref のホストも 200**（§2-3 の食い違いはドキュメントの側の手がかり。
+  health が応えただけで、ref のホストでログインまで動くかは確かめていない）。`https://api.assift.com/storage/v1/object/public/legal/test-20261017.pdf` が `200 application/pdf`
