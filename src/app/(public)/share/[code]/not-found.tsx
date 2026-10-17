@@ -1,11 +1,10 @@
 import type { Metadata } from 'next'
 import { Container, Stack, Text, Title } from '@mantine/core'
 import { LinkAnchor } from '@/components/LinkAnchor'
-import { SHARE_DESCRIPTION } from '@/lib/site/metadata'
 
 export const metadata: Metadata = {
   title: 'ページが見つかりません',
-  description: SHARE_DESCRIPTION,
+  description: null,
   robots: { index: false, follow: false },
 }
 

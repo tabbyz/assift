@@ -22,7 +22,7 @@ LINE・X・Facebook・Slack などに assift の URL を貼ったとき、ロゴ
       `og:image`（絶対 URL・1200×630）・`og:image:alt`（ちょうど `assift`）・`og:title`・`og:description`・`og:site_name`・`og:locale`・`og:type` と、
       `twitter:card`（`summary_large_image`）・`twitter:image` が出る（ボットの一覧に当たる UA でも、当たらない UA でも。§2.2-5）
 - [ ] 本番（Vercel の Production）では `og:image` の URL のホストが `SITE_URL` のホストになる（今 `v2.assift.com`、当日から `assift.com`）。ローカルの `next start` で確認済み、本番はマージ後に見る（§8）
-- [x] 公開シフト表（`/share/<code>`）にも同じ画像が出て、説明は公開シフト表の文（§2.3-3）。店舗名はどのタグにも出ない（009 §3）
+- [x] 公開シフト表（`/share/<code>`）にも同じ画像が出て、説明のタグ（`description`・`og:description`・`twitter:description`）は出さない（§2.3-3）。店舗名はどのタグにも出ない（009 §3）
 - [x] `<link rel="manifest" href="/manifest.webmanifest">` が出て、manifest を Chrome が誤り無しで読む（本体のホストと管理画面のホストの両方）
 - [x] `/opengraph-image.png`・`/manifest.webmanifest` が 200 で CSP のヘッダが付かず（matcher の外）、`/opengraph-image.png/x` は 404 の HTML + CSP（完全一致の除外）
 - [x] CSP の違反が 0 件
@@ -96,9 +96,11 @@ root の description を LP にそろえる / プランは 028。
 1. **root の `description` を LP の文にそろえる**（ユーザーの決定）。今の root は v1 の文（「スマホだけでシフト表の作成・共有ができる…」）のまま、LP 以外のすべてのページの `description` と、§2.2-2 で `og:description` にもなる
 2. 文は 1 か所に置く: `src/lib/site/metadata.ts` に `SITE_NAME`（`'assift'`）と `SITE_DESCRIPTION` を置き、root layout と manifest（§2.4）が読む。LP の `page.tsx` は自分の `description` を消して root から引き継ぐ
    （`title` の `absolute` は残す）。文の「スタッフ10人まで無料」の人数は手で書かず、LP の料金の欄と同じ `FREE_STAFF_LIMIT`（`lib/billing/pricing.ts`）をテンプレート文字列で埋める
-3. **公開シフト表（`share/[code]/page.tsx`・`not-found.tsx`）は自分の `description` を書く: 「assift で作ったシフト表です。」**。
-   店長が LINE のグループに共有 URL を貼ると、スタッフには LP の宣伝文（「…スタッフ10人まで無料。」）が出てしまうため。トップレベルの `description` なので `openGraph` を書かず、§2.2-3 に触れない。
-   店舗名は入れない（009 §3）。not-found も同じ文にする（期限切れの URL を貼っても宣伝文を出さない）
+3. **公開シフト表（`share/[code]/page.tsx`・`not-found.tsx`）は説明を出さない: `description: null`**。
+   書かないと root の LP の宣伝文（「…スタッフ10人まで無料。」）を引き継ぎ、店長が LINE のグループに共有 URL を貼るとスタッフに宣伝文が出る。
+   Next は子のキーが `null` でも親の値を上書きする（`resolve-metadata.js` の `description: metadata[key] ?? null`）ので、`null` で打ち消せる。
+   `og:description` / `twitter:description` も引き継ぐ元が空になって出ない。トップレベルの `description` なので `openGraph` を書かず、§2.2-3 に触れない。not-found も同じ（期限切れの URL を貼っても宣伝文を出さない）
+   - 当初は「assift で作ったシフト表です。」を書いていたが、LINE のプレビューで中身の無い 1 行にしかならない（タイトルの「シフト表 | assift」と同じことしか言っていない）ので、ユーザーの指示で外した（2026-10-17。§8）
 
 ### 2.4 manifest
 
@@ -145,7 +147,7 @@ CSP は変えない: manifest は `manifest-src` が無いので `default-src 's
 - `src/lib/site/metadata.ts`（新規。`SITE_NAME` / `SITE_DESCRIPTION`）
 - `src/app/layout.tsx`（`metadataBase`・`openGraph`・`description`）
 - `src/app/(public)/(site)/page.tsx`（`description` を消す）
-- `src/app/(public)/share/[code]/page.tsx`・`not-found.tsx`（`description`。§2.3-3）
+- `src/app/(public)/share/[code]/page.tsx`・`not-found.tsx`（`description: null`。§2.3-3）
 - `src/proxy.ts`（matcher とコメント）
 - `AGENTS.md`（ディレクトリの `app/` 直下の説明と `lib/site/`・matcher の段落・「子の segment で `openGraph` を書かない」と「未ログインのページの Suspense とメタデータ」の注意）
 - `docs/plans/016-landing-page/README.md` §5（「OGP 画像・favicon の差し替え」に 027・028 で対応したと添える）
@@ -187,7 +189,7 @@ env -u SITE_URL npm run start                         # #6
 | --- | --- | --- |
 | 1 | `/`・`/login`・`/terms`・`/nonexistent`（root の 404）の HTML | §1 のタグが `<head>` に出る。`og:image` は `https://v2.assift.com/opengraph-image.png?opengraph-image.<hash>.png`（クエリ付き）。`og:image:alt` と `twitter:image:alt` はちょうど `assift`（改行なし）。`og:title` は各ページの `<title>` と同じ（`/` は `assift｜シフト表づくりに、…`、`/login` は `ログイン \| assift`）。`og:description` は `SITE_DESCRIPTION`。`twitter:card` は `summary_large_image` |
 | 2 | #1 を UA を替えて取る: curl の既定・`-A 'facebookexternalhit/1.1'`・`-A 'Mozilla/5.0 (compatible; Line-Crawler)'`（一覧に無い UA） | どれも `<head>` に出る（§2.2-5） |
-| 3 | `/share/<code>`（seed の共有）と形式違いの `/share/0`（DB を引かずに not-found） | 同じ画像。`og:title` は `シフト表 \| assift` / `ページが見つかりません \| assift`。`og:description` は「assift で作ったシフト表です。」。店舗名がどのタグにも無い |
+| 3 | `/share/<code>`（seed の共有）と形式違いの `/share/0`（DB を引かずに not-found） | 同じ画像。`og:title` は `シフト表 \| assift` / `ページが見つかりません \| assift`。`description`・`og:description`・`twitter:description` が無い。店舗名がどのタグにも無い |
 | 4 | `curl -I /opengraph-image.png`・`/manifest.webmanifest` | 200・`image/png`・`application/manifest+json`。`content-security-policy` が無い |
 | 5 | `curl -I /opengraph-image.png/x`・`/xmanifest.webmanifest` | 404 の HTML に `content-security-policy` が付く |
 | 6 | `SITE_URL` を外して起動した `/` | `og:image` が `http://localhost:3000/…`（Next の既定に落ちる）。`next start` のログに `metadataBase property … is not set` の警告が出る |
@@ -231,7 +233,7 @@ seed の共有（#3 の前半）と #9 は Supabase のローカルが要る。�
 
 ### 2026-10-17 実装
 
-- §2・§3 のとおり。`src/lib/site/metadata.ts` に `SITE_NAME` / `SITE_DESCRIPTION` / `SHARE_DESCRIPTION` を置いた（公開シフト表の page と not-found が同じ文を使うので、これも定数にした）
+- §2・§3 のとおり。`src/lib/site/metadata.ts` に `SITE_NAME` / `SITE_DESCRIPTION` / `SHARE_DESCRIPTION` を置いた（公開シフト表の page と not-found が同じ文を使うので、これも定数にした。のちに消した）
 - OGP 画像は §4 の手順で作った（1200×630・8-bit のパレット・7,004 バイト）。ロゴは `x="320" y="253.17"`。全体・中央の 630×630・中央の 1200×600 の切り抜きを目で見た
 - `opengraph-image.alt.txt` は `printf` で書き、`od -c` で 6 バイト（`assift`）を確かめた
 - セッションの途中で `node_modules` が `package-lock.json` より古く（`@vercel/analytics` が無く typecheck が落ちた）、`npm ci` で揃えた。dockerd は古い pid ファイルで起動に失敗していたので、消して起こし直した（どちらもリポジトリの変更ではない）
@@ -244,7 +246,7 @@ seed の共有（#3 の前半）と #9 は Supabase のローカルが要る。�
 | `format:check` | 変更したファイルは通る。main に前からある 3 件（`.agents/skills/interface-design/` の 2 件・`ShareModal.tsx`）で落ちる。今回は触らない |
 | §5 #1 | `SITE_URL=https://v2.assift.com` の `next start` で `/`・`/login`・`/terms`・`/nonexistent` に §1 のタグがすべて `<head>`。`og:image` は `https://v2.assift.com/opengraph-image.png?opengraph-image.3eyipk4g0po5j.png`、alt はちょうど `assift`、`twitter:card` は `summary_large_image`、`og:title` は各ページの `<title>` と同じ |
 | §5 #2 | curl の既定・`facebookexternalhit/1.1`・`Mozilla/5.0 (compatible; Line-Crawler)` のどれでも、`/`・`/login`・`/share/SEEDSHR1`・`/share/0` のタグが `<head>` |
-| §5 #3 | `/share/SEEDSHR1`（seed。本文に「小石川ストア」が出る）と `/share/0` で同じ画像、`og:description` は「assift で作ったシフト表です。」。店舗名はどの `<meta>` にも無い |
+| §5 #3 | `/share/SEEDSHR1`（seed。本文に「小石川ストア」が出る）と `/share/0` で同じ画像、`og:description` は「assift で作ったシフト表です。」（のちに外した。下の「公開シフト表の説明を外す」）。店舗名はどの `<meta>` にも無い |
 | §5 #4・#5 | `/opengraph-image.png` 200 `image/png`・`/manifest.webmanifest` 200 `application/manifest+json`、どちらも CSP のヘッダ無し。`/opengraph-image.png/x`・`/xmanifest.webmanifest` は 404 の HTML + CSP |
 | §5 #6 | `env -u SITE_URL` の `next start` で `og:image` が `http://localhost:3000/…`、ログに `metadataBase property … is not set` |
 | §5 #7 | Playwright（Chromium）で `/`・`/login` の `Page.getAppManifest` の errors が空、`securitypolicyviolation` 0 件 |
@@ -258,3 +260,10 @@ seed の共有（#3 の前半）と #9 は Supabase のローカルが要る。�
 | 回 | 高 / 中 / 低 | 指摘 | 反映 |
 | --- | --- | --- | --- |
 | 1 | 0 / 0 / 4 | `.env.example` の `SITE_URL` の説明に `metadataBase` が無い / `lib/site/metadata.ts` の説明の位置と読む側 / AGENTS.md の `brand/` の行の重複 / 009 の metadata の記述 | すべて反映（024 の環境変数の表の出典にも 028 を足した）。直したあとビルドし直し、`/share/SEEDSHR1` と `/` のタグが変わらないことを見た |
+
+### 2026-10-17 公開シフト表の説明を外す
+
+- PR #49 のプレビューを LINE に貼ったところ、説明の「assift で作ったシフト表です。」が中身の無い 1 行だったので、ユーザーの指示で外した（§2.3-3）。
+  公開シフト表の page と not-found を `description: null` にし、`SHARE_DESCRIPTION` を消した（AGENTS.md・009 の記述も直した）
+- 確かめ（`SITE_URL=https://v2.assift.com` の `next start`・ローカルの Supabase）: `/share/SEEDSHR1`（200。本文に「小石川ストア」）と `/share/0` で `description`・`og:description`・`twitter:description` が無く、
+  `og:title`・`og:image`・`twitter:card`（`summary_large_image`）は残る。メタタグに店舗名は無い。curl の既定と `facebookexternalhit/1.1` で同じ。`/` の説明は変わらない

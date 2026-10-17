@@ -100,7 +100,7 @@ Client（発行ボタンの可否）も自分で `new Date()` を見ず、**Serv
 公開ページに操作は無い（v1 も静的 HTML）。`ShareTable` は `<td>` を直接描く Server Component にして、保護ルートの `CalendarTable`（Popover / Menu / onClick）とは別物にする。
 
 `export const dynamic = 'force-dynamic'` を置く。**v1 の「URL 共有後に変更したシフトもリアルタイムに反映されます」という約束をキャッシュ設定に依存させない**（`[code]` は動的セグメントなので既定でも毎回描かれるが、約束事はコードに書く）。
-`metadata` は**静的**に `title: 'シフト表'` + `robots: { index: false, follow: false }` とする（§8.5 F1。028 で `description` に `SHARE_DESCRIPTION` を足した）。店舗名はページの見出しには出すが、**タイトルには入れない**:
+`metadata` は**静的**に `title: 'シフト表'` + `robots: { index: false, follow: false }` とする（§8.5 F1。028 で `description: null` を足した（root の LP の説明を打ち消す））。店舗名はページの見出しには出すが、**タイトルには入れない**:
 v1 の公開ページも `current_tenant` が無いので店舗名は出ていないうえ、LINE などに URL を貼ったときのリンクプレビューに店舗名が出てしまう。
 静的なので `generateMetadata` は要らず、`getSharedShiftTable` を `cache()` で包む必要も無い（読み取りは 1 回だけ）。
 

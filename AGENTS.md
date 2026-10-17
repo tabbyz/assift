@@ -99,7 +99,7 @@ src/
     shares/                       expiry（公開期限。v1 の DATE_LIMIT = 6）/ code（8 文字のコード）
     security/                     CSP（022）。csp（nonce の生成・方針の文字列・ヘッダ名。純関数。proxy と root layout が使う。
                                   レスポンスの方針を付けない唯一の例外は PDF の応答で、その判定は lib/export/path の isPdfExportPath）
-    site/                         サイト共通のメタデータの文言（028）。metadata（SITE_NAME / SITE_DESCRIPTION / SHARE_DESCRIPTION）
+    site/                         サイト共通のメタデータの文言（028）。metadata（SITE_NAME / SITE_DESCRIPTION）
     analytics/                    アクセス解析（025）。load（読み込むか。本番の本体のホストだけ）/ url（送る URL からクエリとハッシュを落とす）
     export/                       request（認証 → 店舗 → 期間 → 表。PDF / CSV 共通の入口）/ filename / path（URL を組む。リンクと旧 URL の書き換えが共有）
     csv/                          shiftCsv（純関数）/ encode（CP932 か BOM 付き UTF-8。iconv-lite）
@@ -178,7 +178,7 @@ AI シフト作成の両方から呼ぶ。`[tenantId]/actions.ts` はシフト�
 
 - `metadataBase` は root layout が `SITE_URL` から入れる。file-based の OGP 画像の URL は、開発は localhost・プレビューはブランチの URL に固定（Next の仕様）。`SITE_URL` が効くのは本番と `next start` だけ
 - `og:title` / `og:description` は各ページの `title` / `description` を Next が写す。**子の segment で `openGraph` を書かない**（浅いマージで、root の値も OGP 画像も丸ごと消え、`twitter:card` が `summary` に落ちる）。
-  ページごとに説明を変えるならトップレベルの `description` を書く（公開シフト表がそうしている）
+  ページごとに説明を変えるならトップレベルの `description` を書き、無しにするなら `description: null` で root の文を打ち消す（公開シフト表。`og:description` も出なくなる）
 - 未ログインのページで `generateMetadata` に待ち（DB・fetch）を入れる、または Suspense / `loading.tsx` を足すと、ボットの一覧に無いクローラーにはタグが `<body>` に出る
   （Next 16 のストリーミングのメタデータ）。直すなら `next.config.ts` の `htmlLimitedBots`（既定の一覧を置き換えるので、既定の正規表現に足す形で）
 
