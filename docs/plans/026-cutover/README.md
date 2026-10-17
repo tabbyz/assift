@@ -6,10 +6,10 @@
 - 番号: 021 の「022（カットオーバー）」・024 の「カットオーバーのプラン」が本プラン。025 はアクセス解析に使ったので **026**
 - 日時: **2026-10-30（金）22:00 開始、24:00 までに公開**（= DNS の切り替えを終える）。作業は利用者の手元の Mac（Postgres 16 と v1 の環境がある。021 §15）、
   クラウドのセッションが手順と記録を伴走する
-- 予定: プランは 10/15〜10/16（クリティカルパス）。コードの変更（§7・§8）は 10/27 までに main へ
-- **作業するのは人間**（Heroku / Stripe / Vercel / Supabase / Google / Gehirn の操作と秘密の値）。リポジトリの変更は §7・§8 の 2 つだけ
+- 予定: プランは 10/15〜10/16（クリティカルパス）。コードの変更（§7・§8・§14）は 10/27 までに main へ（§14 は本番での空振り（§4-1、10/22 まで）より前に）
+- **作業するのは人間**（Heroku / Stripe / Vercel / Supabase / Google / Gehirn の操作と秘密の値）。リポジトリの変更は §7・§8・§14 の 3 つだけ
 
-**状態: プラン確定（2026-10-16）。§3 の決定を入れ、レビューを 6 回行って収束した（§13。6 回目は高・中 0 件）。DNS の今の値は §12。未確定は §11（実測で埋めるものと Stripe の鍵）。**
+**状態: プラン確定（2026-10-16）。§3 の決定を入れ、レビューを 6 回行って収束した（§13。6 回目は高・中 0 件）。DNS の今の値は §12。未確定は §11（実測で埋めるものと Stripe の鍵）。§14（中止のときの片付け）は 2026-10-16 に足した節で、実装済み・本番での空振りが残り。**
 
 ## 1. 目的と完了条件
 
@@ -35,6 +35,7 @@ v1（Rails / Heroku）を止め、データと Stripe の契約を v2 に移し�
 | 5 | 全員の同期を流すスクリプト `npm run stripe:sync-all`（§3-4） | §7 |
 | 6 | v1 の Service Worker を解除する `/serviceworker.js`（§3-7） | §8 |
 | 7 | 各プランの申し送りの取り込みと、元のプランへの注記 | §9 |
+| 8 | 中止のときの片付けの SQL `scripts/migrate-v1/undo.sql`（§6.4） | §14 |
 
 ### しない（別のタスク。§4 でゲートとして扱う）
 
@@ -73,9 +74,9 @@ v1（Rails / Heroku）を止め、データと Stripe の契約を v2 に移し�
 
 | # | ゲート | 期限 | 確かめ方 | 担当のタスク |
 | --- | --- | --- | --- | --- |
-| 1 | 021 §9.3 の本番に対する `--rollback` が通り、所要時間が分かっている。必要なら `COPY` に替えた（021 §13-8） | 10/22 | 021 §15 に所要・RSS・§13-4（`postgres` ロールの権限）の結果。§6 の時刻を実測で埋めた | 021 §9.3 |
+| 1 | 021 §9.3 の本番に対する `--rollback` が通り、所要時間が分かっている。必要なら `COPY` に替えた（021 §13-8） | 10/22 | 021 §15 に所要・RSS・§13-4（`postgres` ロールの権限）の結果。§6 の時刻を実測で埋めた。同じ日に §14 の片付けの SQL を確認だけのモードで本番に流し、権限のエラーなしに ROLLBACK で終わる（§14.5） | 021 §9.3 |
 | 2 | Stripe の live: `stripe:setup` と移行用の鍵（§11-3）は **10/22 まで**（§5 の 10/23 の計測の前提）、Webhook の登録（§3-11 の URL）、Dashboard の設定（019 §4.1）、**解約メールのオフ**（019 §8.3-2）、Vercel の Production に `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `CRON_SECRET` | 10/27 | 019 の実装ログ。`CRON_SECRET` は鍵付きで `curl -i -H "Authorization: Bearer …" https://v2.assift.com/api/cron/billing-usage` が 200（鍵が無くても 401 になるので、鍵なしの 401 では確かめられない）。Webhook のエンドポイントは API の版を `2026-09-30.endive` で登録する（019 §12 2026-10-08。アカウントの既定は古い版）。`STRIPE_WEBHOOK_SECRET` は Stripe のテストイベントの送信が **400 にならない**こと（400 は署名が合わない。処理しない種類は 204、架空の Customer の処理する種類は 500 になりうるので、2xx を基準にしない。`api/stripe/webhook/route.ts`） | Stripe の live |
-| 3 | `stripe:sync-all`（§7）と `/serviceworker.js`（§8）が main に入った | 10/27 | §7 はローカルの Supabase とサンドボックスで（§7.3）、§8 は手元と `v2.assift.com` で（§8.3） | 本プラン |
+| 3 | `stripe:sync-all`（§7）と `/serviceworker.js`（§8）と `undo.sql`（§14）が main に入った | 10/27（§14 は §4-1 の空振りより前） | §7 はローカルの Supabase とサンドボックスで（§7.3）、§8 は手元と `v2.assift.com` で（§8.3）、§14 はローカルの Supabase と本番での空振りで（§14.5） | 本プラン |
 | 4 | 3 ページの最終レビューが済み、文面が確定した | 10/28 | 016-terms §7 | 規約 |
 | 5 | 告知を送った（10/29。規約・ポリシーの全文の PDF を添付、「10/30 から適用」）。本文に入れる申し送り: メンテナンスの時間（10/30 22:00〜）と、切り替え後は再ログインが要ること（001 §5.4-2）/ パスワードを持たない人（Google だけで使っていた人・代理承認の人）は「パスワードを忘れた方」から作る（021 §8.2-8b）/ スタッフ 0 人でデータのある店舗 1,845 件は初期設定の画面から始まる（021 §15。触れるかは告知のタスクで決める）/ 料金（019 §8.4）/ 規約の周知（016-terms §7） | 10/29 | 送った日時・件数・添付の版の記録（016-terms §7 2026-10-13） | 告知 |
 | 6 | 当日の昼の予行（§5 T-0）が通った | 10/30 12:00 | 所要が 021 §9.3 の実測から大きく外れていない | 本プラン |
@@ -86,8 +87,8 @@ v1（Rails / Heroku）を止め、データと Stripe の契約を v2 に移し�
 | --- | --- | --- |
 | §4-1 のあと | §6 の各段の時刻と、中止の判断の時刻（§6.4）を実測で埋める | ローカルの実測: capture 52 秒 / download 1〜2 分 / restore 1 分 17 秒 / エクスポート 13 分 37 秒 / インポート 17 分（021 §15） |
 | 10/23 まで | **前提: live で `stripe:setup` が済み（price `assift_monthly` とクーポン `assift_v1_legacy` が無いとスクリプトは最初に止まる）、移行用の鍵（§11-3）ができていること**。`stripe:migrate-v1` の dry-run をリハーサルの `v1-subscriptions.csv` で live に流し、所要を測る（読むだけで書かない。`--output ~/v1-export/<リハーサルの dir>/v1-subscriptions-dryrun.csv` を付ける。既定ではリポジトリの直下にメール入りの CSV を書く）。`--apply` の所要は区分ごとの呼び出しの回数（`unpaid` は溜まった下書きの数 × 3 回など。dry-run の結果 CSV の `actions` から数える）から見積もり、§6.3 の時刻に入れる。**dry-run と `--apply` の合計が 25 分を超える見込みなら、§11-5 で開始の時刻か事前の処理を決め直す** | 約 989 件を 1 件ずつ順に処理し、区分を絞る引数は無い。`unpaid` の 134 件は毎月の下書きが溜まっている（019 §8.2.1）。判断点 B の後に時間が足りなくなると戻せない |
-| §4-1 のあと | 中止のときの片付けの SQL（COMMIT した後に v1 へ戻す場合。§6.4）を書き、ローカルで通す | 管理用アカウント以外の `auth.users` を消して `profiles` 以下を cascade で消す想定。`shifts` 1,150 万行の削除の所要も測る |
-| 10/27 まで | §7・§8 を main に入れ、`v2.assift.com` で確かめる | §4-3 |
+| 10/16〜（本番での空振りは §4-1 の日） | 中止のときの片付けの SQL（COMMIT した後に v1 へ戻す場合。§6.4）を書き、ローカルで通す（§14） | `truncate public.tenants cascade` の後に管理用以外の `auth.users` を消す（§14.2-1。当初の「`auth.users` の cascade だけ」を上書き）。`shifts` 1,150 万行の削除の所要も測る（§14.5） |
+| 10/27 まで | §7・§8・§14 を main に入れ、§8 は `v2.assift.com` で確かめる（§14 は §4-1 の空振りより前に main へ。空振りは main のファイルで流す） | §4-3 |
 | 10/27 以降 | **main への merge を止める**（直しが要るものだけ。merge すると Production が自動でデプロイされる）。3 ページの文面の修正（§4-4）は例外 | 当日の本番のコードを固定する |
 | 10/29（前日） | Gehirn DNS の今の値（§12 2026-10-15）から変わっていないか見る | apex の A は Heroku へのエイリアス（ALIAS）で、TTL の欄が無い（参照先の TTL に従う）ので、前もって下げる手順は要らない。当夜に作る A と CNAME は TTL 300 で作り、落ち着いたら 3600 に戻す（§6.6） |
 | 10/29 | `npx supabase migration list` で本番の migration が main と揃っている（Local と Remote が同じ本数） | Deploy to production はオフ（§3-8）なので、merge した migration は `db push` で手で入れる（024 §3-10） |
@@ -160,9 +161,9 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 | どこで | 戻し方 |
 | --- | --- |
 | インポートが失敗（判断点 A の前） | トランザクションごと戻っているので v2 には何も無い。直せるなら直して §6.2 からやり直す。判断点 A を過ぎたら、Heroku `MAINTENANCE_MODE=off`・Scheduler のジョブを戻し、日を改める（021 §10） |
-| COMMIT の後の検証で失敗（判断点 A の前） | 直せるなら直す。戻すなら §5 の片付けの SQL で管理用アカウントだけの状態に戻し、Heroku `MAINTENANCE_MODE=off`・Scheduler のジョブを控えた値で戻す（以下「日を改めたとき」も）。**Webhook のエンドポイントと Cron Jobs は、片付けが終わり `profiles` が管理用アカウントの 1 行だけになったのを確かめてから戻す**（残っているうちに戻すと、v1 の Customer のイベントや同期で `syncCustomer()` が持ち主を引き、Stripe に書く。`lib/billing/sync.ts` の `applySubscriptions`） |
+| COMMIT の後の検証、または 23:00 の dry-run で失敗（判断点 B の前） | 直せるなら直す。戻すなら §14 の片付けの SQL（手順は §14.4）で管理用アカウントだけの状態に戻し、Heroku `MAINTENANCE_MODE=off`・Scheduler のジョブを控えた値で戻す（以下「日を改めたとき」も）。**Webhook のエンドポイントと Cron Jobs は、片付けが終わり `profiles` が管理用アカウントの 1 行だけになったのを確かめてから戻す**（残っているうちに戻すと、v1 の Customer のイベントや同期で `syncCustomer()` が持ち主を引き、Stripe に書く。`lib/billing/sync.ts` の `applySubscriptions`） |
 | 判断点 B の後 | v1 には戻さない。前に進めて直す（当夜に作るレコードは TTL 300 なので、直したレコードは早く反映される） |
-| 日を改めたとき | v1 を戻す（`MAINTENANCE_MODE=off`・Scheduler のジョブ）。3 ページの日付と告知をやり直す（§3-2a）。Vercel の Cron Jobs と Stripe の Webhook のエンドポイントを戻す。Stripe の解約メールの設定を戻すかを決める |
+| 日を改めたとき | v1 を戻す（`MAINTENANCE_MODE=off`・Scheduler のジョブ）。3 ページの日付と告知をやり直す（§3-2a）。手順の中の日付入りの名前（`noon-20261030/`・`overrides-20261030.json`・`assift_v1_cutover` の扱い）は新しい日に読み替える（§14.4-6）。Vercel の Cron Jobs と Stripe の Webhook のエンドポイントを戻す。Stripe の解約メールの設定を戻すかを決める |
 
 ### 6.5 公開直後の確認（〜24:00）
 
@@ -284,7 +285,8 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 | `docs/plans/026-cutover/README.md` | 本プラン |
 | `scripts/stripe/sync-all.ts` / `package.json` | §7 |
 | `src/app/serviceworker.js/route.ts` | §8 |
-| `AGENTS.md` | ディレクトリ（`scripts/stripe/` に sync-all、`app/serviceworker.js/`） |
+| `scripts/migrate-v1/undo.sql` | §14 |
+| `AGENTS.md` | ディレクトリ（`scripts/stripe/` に sync-all、`app/serviceworker.js/`、`scripts/migrate-v1/` に undo） |
 | `docs/plans/016-terms/README.md` | §7 2026-10-13（制定日）の「10/31 に直す」と（周知）の表の「10/31 にする」に「026 §3-2 で上書き」、（連絡先）の「カットオーバーのときにすること」に「026 へ移した」 |
 | `docs/plans/021-data-migration/README.md` | §10 の冒頭に「026 §6 が当日の手順。§10-3 は 026 §3-3・§3-5 で上書き」。§6.1 の「022 の手順に入れる」を 026 に読み替え |
 | `docs/plans/024-production/README.md` | §6・§10 の「カットオーバー」の行に「026 へ移した」 |
@@ -305,6 +307,73 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 ## 12. 実装ログ
 
 （作業のあとに、日時・確かめた結果・つまずいた点を書く。秘密の値は書かない）
+
+### 2026-10-16（§14 `scripts/migrate-v1/undo.sql` の実装とローカルでの確かめ）
+
+`scripts/migrate-v1/undo.sql` と AGENTS.md のディレクトリを足した（§14.3・§14.6）。クラウドのセッションのローカルの Supabase（Postgres 17.6。`postgres` は `rolsuper=f`・`rolbypassrls=t`）で確かめた。
+
+**通し（§14.5-1〜5）:** `db reset` → seed の管理用以外（dev）を消す → fixtures を scratchpad に写して `migrate:v1`（COMMIT。入れた 6 人）→ 移した 1 人に `google` の identity・セッション・refresh token を足す（22:52 相当）。
+
+| 項目 | 結果 |
+| --- | --- |
+| 確認だけ | 安全装置を通り、TRUNCATE が 10 表に連鎖（NOTICE）、`DELETE 6`、14 表の件数が出て ROLLBACK。DB は変わらない。終了コード 0 |
+| COMMIT | 14 表の件数が `report.json` の `before` と一致。`auth.sessions`・`refresh_tokens`・`mfa_amr_claims`・`one_time_tokens` も 0 |
+| 再インポート | `--allow-existing` なしで `既存: auth.users 1 件 / tenants 0 件` → COMMIT、`migrate:v1:verify` が「すべて一致」。もう一度片付けて同じ結果 |
+| 本番での空振りの形 | 管理用アカウントだけの状態で `expected_users=0` → 安全装置を通り（消す人 0 人）、ROLLBACK |
+
+**安全装置（§14.5-6）:** どれも何も消さずに止まり、終了コードは 3（`ON_ERROR_STOP`）。
+
+| 外したもの | 結果 |
+| --- | --- |
+| `expected_users` なし | `expected_users がありません。…` |
+| G4（`expected_users` を 1 ずらす） | `G4: 管理用以外の auth.users が 6 人です（expected_users = 5）` |
+| G1（管理者 2 人 / 0 人） | `G1: is_admin の人が 2 人です` / `0 人です` |
+| G2（`billing_subscriptions` に 1 行） | `G2: billing_subscriptions に行があります。…` |
+| G3（管理用アカウントに店舗） | `G3: 管理用アカウントが店舗を持っています` |
+| G0（BYPASSRLS の無いロールに `set role`） | `G0: undo_nobypass は RLS を迂回できません（BYPASSRLS が要る）` |
+| `-v commit=0` / `-v commit=abc` | どちらも ROLLBACK（`abc` は psql が真偽値として読めず、偽として扱う）。終了コード 0 |
+| 読み取り専用（`alter database postgres set default_transaction_read_only = on`） | 素の DELETE は `cannot execute DELETE in a read-only transaction`、`undo.sql` は `begin read write` で COMMIT まで通った。設定は戻した |
+
+**規模の計測（§14.5-7）:** 合成データ（`users` 29,010・`tenants` 27,609・`staffs` 160,272・`patterns` 167,253・`shifts` 11,496,340・`required_nums` 358,507・`restrictions` 10,144・`date_notes` 157,025・`shares` 57,978・`staff_patterns` 480,816・`staff_default_patterns` 160,272・`staff_count_history` 29,010。DB 3,856 MB）。
+計算機は 4 コア・メモリ 15 GB のコンテナ。作る SQL は scratchpad だけ（`shifts` の INSERT は 8 分 54 秒）。
+
+| | 所要 | WAL | DB の大きさ | ディスク |
+| --- | ---: | ---: | --- | --- |
+| (a) 比較: `delete from auth.users`（cascade）だけ。ROLLBACK | **56 秒** | **2,686 MB** | 3,856 MB のまま（COMMIT しても VACUUM まで空かない） | — |
+| (b) 本命: `undo.sql`（COMMIT） | **5.4 秒**（安全装置 0.03 秒・TRUNCATE 0.01 秒・DELETE 29,010 人 2.1 秒・COMMIT 3.1 秒） | **29 MB** | 3,856 MB → **49 MB** | すぐに約 4 GB 空いた |
+
+- 本番は計算機と Session pooler 越しの往復で違うが、(b) の大半は行数によらない（TRUNCATE とファイルの削除）。行数に比例するのは 2.9 万人の DELETE だけなので、当夜も分の単位には届かない見込み。(a) との差は時間より WAL とディスクで、ディスクを理由に中止した夜に (a) は使えない（§14.2-1 の判断どおり）
+- 14 表の件数の並びが `union all` の順にならなかったので、`order by` を付けた（`report.json` の `before` と同じ並び）
+- 管理用アカウントの `staff_count_history` が 1 行残った回があった。G3 の確かめで管理用アカウントに店舗を作って消したときに、店舗の削除のトリガ（`record_tenant_delete`）が書いたもの。本番では起きず、確かめは管理用以外の行だけを見るので影響しない
+
+**確認:** lint（既存の警告 1 件のみ）/ typecheck（このコンテナの `node_modules` が古く `@vercel/analytics` が無かったので `npm ci` してから）/ test（924 件）/ `npx supabase test db`（241 件）。最後に `db reset` で seed の状態に戻した。
+残り: 本番での空振り（§14.5。021 §9.3 の予行の日。人の作業）
+
+**実装のレビュー**（別の担当にローカルで流し直させた。**1 回目で高・中 0 件**）: 通し・安全装置（G0 は `PGOPTIONS='-c role=authenticated'`）・再インポートを再現。
+引数の誤り（`-v expected_users=`・`=6.0` は終了コード 3、`-v commit=`・値なし・`off`・`no`・`-v COMMIT=1` はどれも ROLLBACK）で COMMIT に進む組み合わせは無かった。
+低 1 件: 22:52 の Google ログインが自動リンクされず自分のメールの新しいユーザーができると、いちばん起こりそうな中止の場面で G4 で止まる → §14.4「通らなかったとき」に、それを確かめたら `expected_users=<N+1>` で流してよいと足した（SQL は変えない）。手順書の判断点 A にも足した
+
+**コードレビュー**（利用者の依頼。`/code-review`。1 回目は手元の `main` が古く、すでに main に入った別の変更（rake・`ignore-build.sh`・解析・proxy）への指摘 4 件も混ざったので、本タスクの範囲の 3 件だけを扱った。2 回目から `origin/main...HEAD`）:
+
+| 回 | 指摘 | 対応 |
+| --- | --- | --- |
+| 1 | `auth.refresh_tokens` は `user_id`（文字列）に外部キーが無く、`session_id` が null の行は cascade で残る。確かめも `auth.identities` しか見ていない | 先に `delete from auth.refresh_tokens where user_id is distinct from <管理用>` を足し、確かめに `sessions`・`refresh_tokens`・`mfa_factors`・`one_time_tokens` を足した。ローカルで `session_id` が null の token（消える）・セッション付きの token（cascade で消える）・管理用アカウントの token（残る）を作って確かめ、再インポートと verify も通った |
+| 1 | 確かめの表の一覧が手書きで、`tenants` を参照する表を足すと確かめから漏れる | `pg_constraint` から `tenants` を参照する表を引く形にした（今は 10 表 + `tenants` + `billing_subscriptions`）。件数の出力は `import.ts` の `TARGET_TABLES` と同じ 14 表のまま（`report.json` の `before` と見比べるため）とコメントに書いた |
+| 1 | G2 は 23:05〜最初の写しのあいだを止められない（`-v before_point_b=yes` のような明示を求めては） | 見送った。プランのレビュー（§13「§14 の 1 回目」#3）で決めたとおり、手順書のコマンドに書けば毎回同じ文字を打つだけになり、確かめにならない。B の前かは §14.4-1 で人が確かめる（23:05 の Webhook の有効化と `--limit 5` の前）。§14.1 に止められない区間を書いてある |
+| 2 | **高: 1 回目の反映のコミット（`b184e29`）が、追記のスクリプトの誤りで 026 の §12 の途中から後ろ（§12 の以前のログ・§13・§14）を消していた** | `909febc` の版から戻して追記をやり直した（行数 721 → 反映後も前後の節がそろうことを `git diff 909febc` で確かめた）|
+| 2 | 中: G2 は最初に 1 回見るだけで、無効化の漏れた Webhook がその後に写しを書くと、cascade で黙って消えて最後の確かめも通る | G2 の前に `lock table public.billing_subscriptions in share mode`。ローカルで、ロックのあいだ別の接続の INSERT が待たされる（`lock_timeout` で止まる）ことを確かめた |
+| 2 | 低: `auth.flow_state`（`user_id` に外部キーが無い）が残る | 4 で消し、確かめにも足した。§14.3 の「残る」の記述を直した |
+| 2 | 低: 確かめの表は `tenants` を直接参照する表しか拾わない | コメントを「直接参照する表」に直した（再帰で辿るほどの表は今は無い） |
+| 2 | 低: G0（BYPASSRLS）は要らない | 退けた。`auth.users` は所有者が `supabase_auth_admin` で RLS が有効なので、`postgres` からの DELETE には BYPASSRLS が要る |
+| 2 | 低: `lock_timeout` 10 秒で止まりうる | 退けた。止まれば流し直す（§14.3-1） |
+| 3 | 中: G4 で数えてから DELETE まで（TRUNCATE のロック待ちを含めて最大十数秒）に v2 で登録した人も消え、最後の確かめも通る | DELETE を DO の中に入れ、`get diagnostics` で消した数が `expected_users` と違えば例外にした |
+| 3 | 低: §14.3 の flow_state の記述（型・条件）が実物と違う / 冒頭のコメントに明示の削除が無い / null の扱いが 2 表で違う / G1 が同じ問い合わせを 2 回 | 直した（2 表とも `is distinct from` で null の行も消す。G1 は `array_agg` の 1 回） |
+| 3 | 低: 件数だけの G4 は 1 人増えて 1 人減ると見逃す | 退けた。メンテナンス中に、v2 を知る移した人の退会と別の人の登録が重なる必要がある。上の中の指摘の対応で、G4 の後に増えた分は止まる |
+| 3 | 低: 写しのロックと、無効化の漏れた Webhook の `profiles` の更新とでデッドロックしうる | 退けた。起きても片付けが例外で戻るだけで、流し直せばよい（§14.4「通らなかったとき」）。Webhook が先に Stripe に書く分は G2 でも見えない（§14.1 のとおり、Webhook の無効化は人が確かめる） |
+| 4 | **高・中 0 件で収束**。低: `auth` 側の確かめが手書きの表だけ / 件数の出力と `TARGET_TABLES` を互いに指すコメントが片側だけ / プランの G0 の条件が実物（`rolsuper` も通す）と違う | 直した（`auth` の `user_id` を持つ表（今は 10 表）を `information_schema` から引いて確かめる。管理用アカウントだけの状態で `auth.flow_state` に別の人の行を置くと `確かめ: auth.flow_state に管理用以外の行が残っています` で止まり、無ければ通ることを確かめた。`import.ts` の `TARGET_TABLES` にコメント）。lint / typecheck / test（924 件）も通した |
+| 4 | 低: `auth.audit_log_entries` に移した人のログインの記録が残る / G4 と消した数の確かめが二重 | 退けた。前者は §14.3 で受け入れたとおり（作業した人の分）。G4 は TRUNCATE の前に分かりやすい文言で止めるために残す |
+
+収束の経過（コードレビュー）: 1 回目 3 件（範囲の外 4 件を除く）→ 2 回目 高 1（026 の後半を消していた）・中 1 → 3 回目 中 1 → 4 回目 高・中 0 件。
 
 ### 2026-10-16（§7 `npm run stripe:sync-all` の実装とサンドボックスでの確かめ）
 
@@ -527,3 +596,151 @@ DKIM の公開鍵の長い値は省いた（当夜に触らない）。
 | 3 | §4-3 の確かめる場所が §7 と合わない | §7 はローカル、§8 は手元と `v2.assift.com` |
 
 収束の経過: 1 回目 17 件 → 2 回目 9 件 → 3 回目 11 件 → 4 回目 5 件 → 5 回目 3 件（中 1）→ 6 回目 3 件（低のみ）。
+
+### §14 の 1 回目（2026-10-16。別の担当にスキーマ・import・seed とローカルの DB の外部キーと突き合わせて読ませた。高 0・中 5・低 9。中はすべて、低は 12 以外を反映）
+
+連鎖する表（TRUNCATE で 10 表、`auth.users` の DELETE で `auth.*` と `profiles` 以下）、外部キーの処理を誰の権限で行うか、`report.json` の形、再インポートで重複しないこと、22:52 の確認で Stripe を呼ばないこと、の記述は実物と合っていた。
+
+| # | 重さ | 指摘 | 対応 |
+| --- | --- | --- | --- |
+| 1 | 中 | `undo.sql` を main に入れる期限とゲートが無い（10/27 以降は merge を止め、10/22 の空振りはどのファイルで流すか不明） | 冒頭の予定・§4-3・§5 の 10/27 の行に §14 を足し、空振りより前に main へ、空振りは main のファイルで |
+| 2 | 中 | 判断点 A〜B（23:00 の dry-run）で中止したときの扱いが無い | dry-run は Stripe を読むだけなので B の前まで使えるとし、§14.1・§14.4-1・§6.4 の行をそろえた |
+| 3 | 中 | G2 が B の後の誤用を止めるは言い過ぎ（`stripe:migrate-v1` は DB に書かず、最初の写しまで 0 件） | §14.1 と G2 の説明を直し、B の前かは人が確かめる（23:05 の Webhook の有効化と `--limit 5` の前）とした |
+| 4 | 中（推測を含む） | ディスクが 95% で読み取り専用になると、素の `begin` の TRUNCATE が失敗する | `begin read write` にし、§14.5-6 で `default_transaction_read_only = on` のときに通ることを確かめる |
+| 5 | 中 | 戻した v1 の DB（`assift_v1_cutover`）が残り、日を改めた夜の 22:06 の `createdb` がぶつかる / 日付入りの名前に昼の予行が書く | §14.4-6 に `dropdb` と、昼の予行より前に消す・名前を読み替えることを足し、§6.4「日を改めたとき」にも書いた |
+| 6 | 低 | psql の変数が DO ブロックに渡らない / `expected_users` が無いときの止まり方が偶然 | `set_config` / `current_setting` で受け渡し、`\if :{?expected_users}` で名指しして止める |
+| 7 | 低 | `ON_ERROR_STOP` が引数だけ / `-v commit=0` が真になる | ファイルの先頭で `\set ON_ERROR_STOP on`、`\if :commit`（真偽値。無ければ off） |
+| 8 | 低 | 0 行の空振りでは RLS で黙って 0 行になる失敗を見分けられない | 安全装置 G0（BYPASSRLS）を足した |
+| 9・10・11 | 低 | G4・G2 で止まったときの出口 / 片付けが通らなかったときの代わり | §14.4 に「通らなかったとき」: Webhook と Cron は無効のまま v1 だけ戻し、翌日に片付ける。上書きの変数は作らない |
+| 12 | 低 | 外部キーの無い `auth.flow_state`・`audit_log_entries` が残る | §14.3 に書いた（作業した人の分だけ）。本物のログインでの再現は見送った |
+| 13 | 低 | 合成データでは履歴のトリガと上限の門番を止める / 先に `df` | §14.5-7 に書いた |
+| 14 | 低 | 冒頭の状態の行・§14.6 のファイルの表 | 直した |
+
+### §14 の 2 回目（2026-10-16。同じ担当に、1 回目の反映を実物と突き合わせて読ませた。**高・中 0 件で収束**。低 1 件を反映）
+
+`begin read write`（`default_transaction_read_only` をそのトランザクションだけ上書き）、`\if :commit` と「無ければ off」、G0（ローカルの `postgres` は `rolsuper=f`・`rolbypassrls=t`、`auth.users` は RLS が有効で所有者は `supabase_auth_admin`）、
+判断点 A〜B の扱い、§14.4-6 と 22:06・昼の予行の整合は、実物と合っていた。
+
+| # | 重さ | 指摘 | 対応 |
+| --- | --- | --- | --- |
+| 1 | 低 | `set_config(…, true)` を `begin` より前に置くと値が消える / `expected_users` が無いとき `\quit` だと終了コードが 0 | §14.3 に、`begin read write` の後で呼ぶこと、わざと失敗する文で止めることを書いた |
+
+収束の経過（§14）: 1 回目 14 件（中 5）→ 2 回目 1 件（低のみ）。
+
+## 14. 中止のときの片付け（`scripts/migrate-v1/undo.sql`。§6.4）
+
+§5 の「中止のときの片付けの SQL」の中身。§7・§8 と同じく、本プランで作るリポジトリの変更。
+
+**状態: 実装済み・ローカルで確かめ済み（2026-10-16。§12）。残りは本番での空振り（§4-1 の日。人の作業）。**
+
+### 14.1 使う場面と目的
+
+- §6.4「COMMIT の後の検証、または 23:00 の dry-run で失敗（判断点 B の前）」で、直さずに v1 へ戻すと決めたときだけ使う。23:00 の dry-run は Stripe を読むだけなので、判断点 B（23:05）の前なら戻せる。
+  **判断点 B の後には使わない**（Stripe の契約を書き換えた後）。B の前かどうかは人が確かめる（§14.4-1）。安全装置 G2 が止めるのは写しが入った後だけで、23:05〜最初の写しのあいだは止められない（`stripe:migrate-v1` は DB に書かず、写しは Webhook と 23:25 の `sync-all` が作る）
+- 本番の Supabase を**インポートの前の状態**（管理用アカウント 1 人・店舗 0 件。024 §5-14・021 §9.3）に戻す。日を改めた夜に、同じ `migrate:v1` をそのまま流せるようにするため:
+  インポートは `tenants` が 1 件でもあると止まり（`import.ts`）、id は v1 の ID から決まる（`v1Uuid()`）ので、行が 1 つでも残ると主キーの重複で全体が戻る
+- Stripe・Heroku・Vercel・DNS には触らない（それらは §6.4 の表のとおり人が戻す）
+
+### 14.2 決定（2026-10-16）
+
+| # | 項目 | 決定 | 理由 |
+| --- | --- | --- | --- |
+| 1 | 消し方 | **`truncate public.tenants cascade` で店舗配下を空にしてから、管理用以外の `auth.users` を DELETE する**（§5 の「`auth.users` を消して cascade」を上書き） | cascade の DELETE は、親の 1 行ごとに外部キーの処理が子を消しに行き、削除のトリガも行ごとに走る（`tenants_record_tenant_delete` が約 2.8 万回、`staffs_record_staff_count` が約 16 万回。import は履歴のトリガを止めるが、削除では止めない）。`shifts` 1,150 万行で WAL が GB 単位で出て、消した領域は VACUUM まで空かない。ディスク（§5 の Disk の判断。95% で読み取り専用）が理由で中止した夜には、片付けそのものが失敗しうる。TRUNCATE は表のファイルを差し替えるので、行数によらず速く、ディスクもすぐ空き、トリガも走らない。所要は §14.5 で両方を測って記録する |
+| 2 | 形 | **psql で流す SQL ファイル 1 本** | 中身が短く、当夜に目で読める。psql は 23:25 でも使い、つながることは昼の予行で確かめる（§5 T-0） |
+| 3 | 残す管理用アカウントの見分け方 | **`profiles.is_admin = true` がちょうど 1 人**であることを確かめ、その人を残す | メールをリポジトリにもコマンドにも書かない。本番の管理用アカウントは 1 人（020 §5.1・024 §4.9） |
+| 4 | 所要の計測 | クラウドのセッションのローカルの Supabase に、リハーサルと同じ規模の合成データを作って測る | 本物のデータは利用者の Mac にしかない。TRUNCATE の所要は行数によらず、行数に比例するのは約 2.9 万人の `auth.users` の DELETE だけなので、合成で足りる |
+| 5 | 本番での空振り | §4-1 の予行（021 §9.3）の日に、**確認だけのモード**（最後に ROLLBACK）で本番に流す | 本番はそのとき管理用アカウントだけなので、消えるものは無い。`postgres` ロールで TRUNCATE と `auth.users` の DELETE ができること、psql でつながることを当夜より前に確かめる |
+| 6 | 置き場所 | 026 の節（新しいプランは立てない） | §5・§6.4 がこのタスクを指している。SQL 1 本と手順の 1 行 |
+
+### 14.3 SQL の中身
+
+```sh
+# 確認だけ（最後に ROLLBACK）
+psql '<DB>' -X -v ON_ERROR_STOP=1 -v expected_users=<N> -f scripts/migrate-v1/undo.sql
+# 本番に反映（COMMIT）
+psql '<DB>' -X -v ON_ERROR_STOP=1 -v expected_users=<N> -v commit=1 -f scripts/migrate-v1/undo.sql
+```
+
+- `<DB>`: 22:25 の `MIGRATION_DATABASE_URL` と同じ値（昼に `sslrootcert` つきの値を控えたならそれ。§5 T-0）
+- `<N>`: インポートが入れた人数。`jq '.after["auth.users"] - .before["auth.users"]' <dir>/report.json`。
+  `report.json` が読めなければ、22:25 の出力の `users: 読んだ … / 入れる <N>` の値
+- `commit` を付けなければ最後に ROLLBACK する。ファイルの先頭で、無ければ `off` を入れてから `\if :commit`（真偽値。`-v commit=0` も ROLLBACK）。`expected_users` が無ければ `\if :{?expected_users}` で名指しして止まる
+- ファイルの先頭に `\set ON_ERROR_STOP on`（引数の付け忘れでも止まる）
+- psql の変数は `$$ … $$` の中では置き換わらないので、`select set_config('undo.expected_users', :'expected_users', true)` で設定に入れ、DO ブロックの中で `current_setting('undo.expected_users')::int` で読む。
+  管理用の id も 2 で `set_config('undo.admin_id', …, true)` に入れ、4・5 で読む。第 3 引数 `true` の値はトランザクションの中だけなので、`set_config` は `begin read write` の後（2 の先頭）で呼ぶ
+- `expected_users` が無いときは、名指しの文言で例外を投げる DO で止める（`\quit` だと終了コードが 0 になる）
+
+1 つのトランザクションで、次の順に行う。どこかで例外になれば全体が戻る（`ON_ERROR_STOP` で psql が抜け、接続が切れて ROLLBACK）。
+
+1. `begin read write`（Supabase はディスクが 95% を超えると `default_transaction_read_only` を on にして読み取り専用にする。明示すればそのときも流せる見込み。§14.5-6 で確かめる）/ `set local statement_timeout = 0`（Supabase の既定で切られない）/ `set local lock_timeout = '10s'`（開いている画面の読み取りなどを待ち続けない。切れたら流し直す）。`\timing on`
+2. `lock table public.billing_subscriptions in share mode`（G2 を見てから COMMIT まで、無効化の漏れた Webhook や同期が写しを書けないようにする。書かれた行を cascade で黙って消さない）→
+   **安全装置**（1 つでも外れたら `raise exception`。何も消さない）:
+   - G0: 今のロールが RLS を通らない（`pg_roles.rolbypassrls` か `rolsuper`。`auth.users` と `public` の表は RLS が有効で、通らないロールでは DELETE が例外にならず 0 行になる）
+   - G1: `profiles.is_admin = true` がちょうど 1 人（その id を残す）
+   - G2: `billing_subscriptions` が 0 件（22:00 に Webhook を止めてから 23:05 に戻すまで、写しは 1 行も無い。公開の後や、写しが入った後に誤って流すのを止める。23:05〜最初の写しのあいだは止められない。§14.1）
+   - G3: 管理用アカウントの店舗が 0 件
+   - G4: 管理用以外の `auth.users` の件数が `expected_users` と同じ（インポートの前から居た人、COMMIT の後に `v2.assift.com` で登録した人を巻き込まない。
+     外れたら `select id, email, created_at from auth.users order by created_at desc limit 5` で見る。移した人の `created_at` は v1 の値なので、新しく登録した人が上に出る）
+3. `truncate table public.tenants cascade`（外部キーで連鎖して、`tenants` を参照する 10 表も空になる: `staffs`・`patterns`・`staff_patterns`・`staff_default_patterns`・`shifts`・`required_nums`・`restrictions`・`date_notes`・`shares`・`assist_runs`。NOTICE に出る）
+4. `user_id` に外部キーの無い 2 表を、管理用アカウントの行だけ残して消す（`user_id` が null の行も消す）: `delete from auth.refresh_tokens where user_id is distinct from <管理用の id>`（`user_id` は文字列。`session_id`（null 可）の cascade でしか消えない）と
+   `delete from auth.flow_state where user_id is distinct from <管理用の id>::uuid`（OAuth のログインの途中の状態）。残ると、id が v1 の ID から決まる再インポートの後に同じ利用者を指す →
+   `delete from auth.users where id <> <管理用の id>`（DO の中で消した数を数え、`expected_users` と違えば例外。G4 で数えてから v2 で登録した人を巻き込まない）→ cascade で `auth.identities`・`auth.sessions` などと `profiles` → `billing_subscriptions`・`staff_count_history`（`tenants` は 3 で空）
+5. **確かめ**（外れたら `raise exception`）: `auth.users` が 1 件で管理用の id / `profiles` が 1 件 / `tenants` とそれを参照する表（`pg_constraint` から引く。今後 `tenants` を直接参照する表を足しても拾う）と `billing_subscriptions` が 0 件 / 管理用以外の `staff_count_history`・`auth.identities`・`sessions`・`refresh_tokens`・`mfa_factors`・`one_time_tokens`・`flow_state` など、`auth` の `user_id` を持つ表すべて（`information_schema` から引く）に管理用以外の行が無い
+6. `report.json` の `before` と同じ 14 表の件数を出す（人が `jq .before <dir>/report.json` と見比べる。管理用アカウントの分だけが残る）
+7. `commit` があれば COMMIT、無ければ ROLLBACK
+
+気を付けること:
+
+- 権限: 本番の `postgres` は superuser ではない。`public` の表は migration を流した `postgres` が所有者なので TRUNCATE できる。`auth.users` の DELETE は INSERT と同じく §4-1 の予行で確かめる（§14.2-5）。
+  0 行の空振りでは cascade の先は動かないが、外部キーの処理は参照する側の表の所有者の権限で走るので、`auth.*` の他の表への権限は要らない
+- TRUNCATE は `ACCESS EXCLUSIVE` のロックを取る。当夜は v1 がメンテナンス中で、`v2.assift.com` を開いているのは作業する人だけなので、待つ相手はほぼ無い（インポートの後の autovacuum は、ロックを待たせると自分から譲る）
+- `staff_count_history` の id（identity）は戻さない（`restart identity` を付けない）。次のインポートは `max(id)` を BEGIN 直後に読み直すので困らない
+- 22:52 の確認で付いたもの（自分のアカウントの Google の identity・セッション）は、4 の cascade で消える。外部キーの無い `auth.flow_state` は 4 で消す。`auth.audit_log_entries` には作業した人の分が残る（利用者を指す列が無く、再インポートの邪魔にならない）。22:52 の確認は Stripe を呼ばない（写しが無いあいだは `account/billing` の `syncIfStale` が同期しない）
+- `TRUNCATE ... CASCADE` は、今後 `tenants` を参照する表を足すとそれも空にする。店舗配下の表なので意図どおり
+
+### 14.4 当夜の手順（§6.4「COMMIT の後の検証で失敗」を具体化）
+
+所要は §14.5 の実測で埋める（数十秒の見込み）。
+
+1. 戻すと決める（**判断点 B の前に限る**: 23:05 の Webhook の有効化も `--limit 5` もまだ流していない）。Stripe の Webhook のエンドポイントと Vercel の Cron Jobs が**無効のまま**か見る（§6.1 22:00・§5）
+2. 確認だけ（上の 1 行目）→ 件数を見て、ROLLBACK で終わったことを確かめる
+3. COMMIT（上の 2 行目）→ 最後の件数が管理用アカウントの分だけ
+4. 別の接続で `psql '<DB>' -X -c 'select count(*) from public.profiles'` が 1 → ここで初めて Webhook のエンドポイントと Cron Jobs を戻す（§6.4）
+5. v1 を戻す（`MAINTENANCE_MODE=off`・Scheduler のジョブを 22:01 に控えた値で）。v1 を戻すのは 1〜4 と並行してよい（v1 は v2 の DB を見ない）
+6. 手元: 戻した v1 の DB を消す（`dropdb -p 5433 --force assift_v1_cutover`。日を改めた夜の 22:06 の `createdb` がぶつからないように）。`<dir>`・ダンプ・`noon-20261030/`・`overrides-20261030.json` は、**日を改めた日の昼の予行より前に**消す（昼の予行が同じ名前のフォルダに書くため。日を改めた日は名前の日付を読み替える）。それまでは 021 §10-8 と同じく手元から出さない
+
+**通らなかったとき**（安全装置で止まった・例外になった）: 片付けはその夜に急がない。Webhook と Cron は無効のまま、v1 だけ戻し（5）、原因を調べてから翌日に片付ける。
+上書きの変数は作らない（G2 で止まったなら 22:00 の無効化が漏れて Stripe に書いた恐れがあり、Dashboard でそのあいだのイベントの配信を見てから決める。G4 なら余分な人が誰かを見てから `expected_users` を決め直す。例外は 22:52 の Google ログインが自動リンクされず、自分のメールの新しいユーザーができていたとき（G4 の案内の `created_at desc` で一番上に出る）: それを確かめたら `expected_users=<N+1>` でその夜に流してよい）
+
+### 14.5 確かめ方
+
+**ローカル（クラウドのセッション）**:
+
+1. 本番の形を作る: `npx supabase db reset` → seed の管理用以外を消す（`delete from auth.users where email <> 'admin@example.com'`）→ 管理用アカウント 1 人・店舗 0 件
+2. fixtures（`scripts/migrate-v1/fixtures` を scratchpad に写したもの。`report.json` を repo の下に書かせない）で `npm run migrate:v1`（COMMIT）→ 移した 1 人に、22:52 の Google ログインに当たる `auth.identities`（`google`）と `auth.sessions` の行を足す
+3. 確認だけのモード → 件数が出て ROLLBACK、DB は変わらない
+4. COMMIT → 14 表の件数が `report.json` の `before` と一致、消した人の `auth.*` の行が 0
+5. 同じ fixtures で `npm run migrate:v1` がもう一度通り（`--allow-existing` なし）、`migrate:v1:verify` が通る → もう一度片付ける
+6. 安全装置: G1（管理者を 2 人にする・0 人にする）/ G2（`billing_subscriptions` に 1 行）/ G3（管理用アカウントに店舗）/ G4（`expected_users` を 1 ずらす）/ `expected_users` なし / `-v commit=0`（ROLLBACK になる）。どれも何も消さずに止まる。
+   G0 は BYPASSRLS の無いロール（`set role authenticated` 相当の別ロール）で流して止まることを見る。
+   読み取り専用: `alter database postgres set default_transaction_read_only = on` の後の新しい接続で COMMIT まで通ることを見て、設定を戻す
+7. **規模の計測**（先に `df` で空きを見る。2026-10-16 は 25 GB）: リハーサルの件数（021 §15 のインポート 3 回目）で合成データを SQL で作る（`users` 29,010・`tenants` 27,609・`staffs` 160,272・`patterns` 167,253・`shifts` 11,496,340・`required_nums` 358,507・`restrictions` 10,144・`date_notes` 157,025・`shares` 57,978・`staff_count_history` 29,010・`staff_patterns` / `staff_default_patterns` はスタッフ 1 人に数行。作る SQL は scratchpad だけ。import と同じく `staffs_record_staff_count` を止め、上限の門番 `staffs_guard_staff_limit` も止めて入れる）。
+   (a) 比較: `delete from auth.users where id <> <管理用>` だけ（cascade の DELETE）を BEGIN〜ROLLBACK で流し、所要と WAL（`pg_current_wal_lsn()` の差）を測る
+   (b) 本命: `undo.sql` を COMMIT で流し、所要と `pg_database_size()` の前後を測る
+   ローカルは本番と計算機が違う。(b) は行数によらない部分が大半なので、本番でも同じ桁の見込み（§12 に書く）
+8. `lint` / `typecheck` / `test`（SQL は対象外だが、変更の無いことを確かめる）
+
+**本番（人の作業。§4-1 の予行の日。main の `undo.sql` で）**: 本番が管理用アカウントだけの状態で
+`psql '<Session pooler>' -X -v ON_ERROR_STOP=1 -v expected_users=0 -f scripts/migrate-v1/undo.sql`（確認だけ）が、G0〜G4 を通り、TRUNCATE と DELETE が権限のエラーなしに通り、ROLLBACK で終わる（0 行の空振りでは RLS で黙って 0 行になる失敗を見分けられないので、G0 で BYPASSRLS を見る）。
+つながらなければ §5 T-0 と同じく `&sslrootcert=system` を足す
+
+### 14.6 ファイル
+
+| ファイル | 変更 |
+| --- | --- |
+| `scripts/migrate-v1/undo.sql` | 新規（§14.3） |
+| `AGENTS.md` | ディレクトリの `scripts/migrate-v1/` に `undo` を足す |
+| `docs/plans/026-cutover/README.md` | 冒頭の予定・状態・「リポジトリの変更は §7・§8 の 2 つだけ」/ §2 の表 / §4-3 / §5 の 10/27 の行 / §6.4 の「日を改めたとき」/ §4-1 の確かめ方（本番での空振り）/ §5 の行（§14 を指し、消し方を TRUNCATE に）/ §6.4 の行（§14.4）/ §10 / §12 |
+| `docs/plans/021-data-migration/README.md` | §9.3 の確かめることに「026 §14 の確認だけのモード」 |
+
+当夜の手順書（Artifact）の中止の行と、リリース計画のこのタスクも合わせて直す。

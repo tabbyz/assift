@@ -373,7 +373,7 @@ SQL で数え直さない（2 つの数え方を持たない）。§8.1 で DB �
 
 本番のプロジェクト（022 で作る）が出来たら、管理用アカウントだけの状態で `--rollback` を流す。
 
-- 確かめること: Session pooler につながる / **管理用アカウントのメールが v1 のどのユーザーとも重ならない**（重なると `auth.users` の一意制約で全体が ROLLBACK する。変換はv1 の中の重複しか見ない）/ `postgres` ロールで `auth.users` に INSERT できる・トリガを止められる（クラウドの `postgres` は superuser ではない。できなければ §13-4）/ `statement_timeout` と `idle_in_transaction_session_timeout` を 0 にできる / `pg` の SSL（`sslmode=require` の解釈は版で変わる。つながらなければ Supabase の CA を渡して `verify-full`） / 所要時間（手元との差）/ §8.1 がすべて通る
+- 確かめること: Session pooler につながる / **管理用アカウントのメールが v1 のどのユーザーとも重ならない**（重なると `auth.users` の一意制約で全体が ROLLBACK する。変換はv1 の中の重複しか見ない）/ `postgres` ロールで `auth.users` に INSERT できる・トリガを止められる（クラウドの `postgres` は superuser ではない。できなければ §13-4）/ `statement_timeout` と `idle_in_transaction_session_timeout` を 0 にできる / `pg` の SSL（`sslmode=require` の解釈は版で変わる。つながらなければ Supabase の CA を渡して `verify-full`） / 所要時間（手元との差）/ §8.1 がすべて通る / 026 §14 の片付けの SQL が確認だけのモードで通る（TRUNCATE と `auth.users` の DELETE の権限。026 §14.5）
 - 何も残らないので、何度でも流せる。**当日の前に最低 1 回**、できれば当日の朝にもう 1 回（ネットワークと権限の最終確認）
 
 ## 10. カットオーバーでの位置（022 に渡す）
