@@ -216,5 +216,6 @@ Google のリダイレクト URI の `https://assift.supabase.co/auth/v1/callbac
 
 - B-1: `vanity-subdomains delete` → `get` で無いことを確かめた。B-2: `NEXT_PUBLIC_SUPABASE_URL` を `https://<ref>.supabase.co` にして Redeploy、書き戻しなし、ref のホストの health が 200、`v2.assift.com` でログインできた
 - B-3: `domains create` → `Custom hostname setup is being initialized; please request re-verification in a few seconds.`。
-  直後の `domains reverify` は `status 400: {"message":"Verification has been completed, please proceed to activation."}` で、**TXT を足さないうちに確認が済んだ**
-  （CNAME だけで確認と証明書の発行が通る形だった。§3.3-3 の TXT は要らなかった）。CLI は 400 をエラーとして表示するが、中身は完了の知らせ
+  `_acme-challenge.api` の TXT を Gehirn に足したあとの `domains reverify` は `status 400: {"message":"Verification has been completed, please proceed to activation."}`。
+  CLI は 400 をエラーとして表示するが、中身は完了の知らせ
+- §3.3-6: `domains activate` → `Custom hostname setup completed. Project is now accessible at api.assift.com.`
