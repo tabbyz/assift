@@ -57,21 +57,41 @@ export function escapeHtml(text: string): string {
     .replaceAll("'", '&#39;')
 }
 
-/** 文の中の URL とメールアドレスをリンクにする（エスケープした後の文字列に掛ける。全角の括弧や空白で切れる） */
+/*
+ * 文の中の URL とメールアドレス。エスケープの前の文に掛け、見つけた範囲とそれ以外を別々にエスケープする
+ * （エスケープの後に探すと `&amp;` の途中で切れる）。全角の括弧・空白・日本語で切れる。末尾の「.」「,」「)」は URL に含めない
+ */
 const LINK_PATTERN =
-  /https:\/\/[A-Za-z0-9\-._~/?#=&%+]+|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g
+  /https:\/\/[A-Za-z0-9\-._~/?#=&%+:@!$'()*,;]+|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g
+const TRAILING_PUNCTUATION = /[.,;:!?)']+$/
 
-function linkify(escaped: string): string {
-  return escaped.replace(LINK_PATTERN, (match) => {
-    // エスケープの後なので、& は &amp; のまま href に入る（HTML の属性として正しい）
-    const href = match.startsWith('https://') ? match : `mailto:${match}`
-    return `<a href="${href}" style="color:${COLOR.text};text-decoration:underline;">${match}</a>`
+/** 文を HTML にする（エスケープ + リンク）。リンクの一覧はテストで固定する（`linksIn`） */
+function inline(text: string): string {
+  let html = ''
+  let last = 0
+  for (const match of text.matchAll(LINK_PATTERN)) {
+    const found = match[0].replace(TRAILING_PUNCTUATION, '')
+    const start = match.index
+    const href = found.startsWith('https://') ? found : `mailto:${found}`
+    html += escapeHtml(text.slice(last, start))
+    html += `<a href="${escapeHtml(href)}" style="${FONT_STYLE}color:${COLOR.text};text-decoration:underline;">${escapeHtml(found)}</a>`
+    last = start + found.length
+  }
+  return html + escapeHtml(text.slice(last))
+}
+
+/** 文の中のリンクの行き先（テスト用。本物の文面のリンクを固定する） */
+export function linksIn(text: string): string[] {
+  return [...text.matchAll(LINK_PATTERN)].map((match) => {
+    const found = match[0].replace(TRAILING_PUNCTUATION, '')
+    return found.startsWith('https://') ? found : `mailto:${found}`
   })
 }
 
-const inline = (text: string) => linkify(escapeHtml(text))
+/* Outlook のデスクトップ版は外側の table の書体を p・li に引き継がないことがあるので、文字の要素ごとに書体を付ける */
+const FONT_STYLE = `font-family:${escapeHtml(FONT)};`
 
-const P = `margin:0 0 16px;font-size:16px;line-height:1.7;color:${COLOR.text};`
+const P = `margin:0 0 16px;${FONT_STYLE}font-size:16px;line-height:1.7;color:${COLOR.text};`
 
 function blockHtml(block: AnnouncementBlock): string {
   switch (block.type) {
@@ -81,18 +101,19 @@ function blockHtml(block: AnnouncementBlock): string {
       return `<ul style="margin:0 0 16px;padding-left:1.4em;">${block.items
         .map(
           (item) =>
-            `<li style="margin:0 0 8px;font-size:16px;line-height:1.7;color:${COLOR.text};">${inline(item)}</li>`
+            `<li style="margin:0 0 8px;${FONT_STYLE}font-size:16px;line-height:1.7;color:${COLOR.text};">${inline(item)}</li>`
         )
         .join('')}</ul>`
     case 'subheading':
-      return `<h3 style="margin:24px 0 8px;font-size:16px;line-height:1.5;font-weight:bold;color:${COLOR.text};">${inline(block.text)}</h3>`
+      return `<h3 style="margin:24px 0 8px;${FONT_STYLE}font-size:16px;line-height:1.5;font-weight:bold;color:${COLOR.text};">${inline(block.text)}</h3>`
     case 'pdf':
-      // 画像のボタンにしない。押せる高さ 44px 以上（上下 12px + 行の高さ）。下に URL も出す（030 §5.6）
+      // 画像のボタンにしない。押せる高さ 44px 以上（上下 12px + 行の高さ）。下に URL も出す（030 §5.6）。
+      // 余白は td に付ける（Outlook のデスクトップ版は a の padding を無視する。bulletproof button の形）
       return [
-        `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 4px;"><tr><td style="border-radius:4px;background:${COLOR.button};">`,
-        `<a href="${escapeHtml(block.url)}" style="display:inline-block;padding:12px 20px;font-size:16px;line-height:1.4;font-weight:bold;color:${COLOR.buttonText};text-decoration:none;border-radius:4px;">${escapeHtml(block.label)}（PDF）</a>`,
+        `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 4px;"><tr><td style="padding:12px 20px;border-radius:4px;background:${COLOR.button};">`,
+        `<a href="${escapeHtml(block.url)}" style="display:block;${FONT_STYLE}font-size:16px;line-height:1.4;font-weight:bold;color:${COLOR.buttonText};text-decoration:none;">${escapeHtml(block.label)}（PDF）</a>`,
         `</td></tr></table>`,
-        `<p style="margin:0 0 16px;font-size:12px;line-height:1.6;color:${COLOR.muted};word-break:break-all;">${inline(block.url)}</p>`,
+        `<p style="margin:0 0 16px;${FONT_STYLE}font-size:12px;line-height:1.6;color:${COLOR.muted};word-break:break-all;">${inline(block.url)}</p>`,
       ].join('')
     case 'lines':
       return `<p style="${P}">${block.lines.map(inline).join('<br>')}</p>`
@@ -107,17 +128,17 @@ export function renderAnnouncementHtml(a: Announcement): string {
   const sections = a.sections
     .map(
       (section) =>
-        `<h2 style="margin:32px 0 12px;font-size:18px;line-height:1.5;font-weight:bold;color:${COLOR.text};">${inline(section.heading)}</h2>` +
+        `<h2 style="margin:32px 0 12px;${FONT_STYLE}font-size:18px;line-height:1.5;font-weight:bold;color:${COLOR.text};">${inline(section.heading)}</h2>` +
         section.blocks.map(blockHtml).join('')
     )
     .join('')
   const summary =
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 8px;border:1px solid ${COLOR.border};border-radius:4px;"><tr><td style="padding:16px 20px;">` +
-    `<p style="margin:0 0 8px;font-size:16px;line-height:1.5;font-weight:bold;color:${COLOR.text};">要点</p>` +
+    `<p style="margin:0 0 8px;${FONT_STYLE}font-size:16px;line-height:1.5;font-weight:bold;color:${COLOR.text};">要点</p>` +
     `<ul style="margin:0;padding-left:1.4em;">${a.summary
       .map(
         (item) =>
-          `<li style="margin:0 0 6px;font-size:16px;line-height:1.7;color:${COLOR.text};">${inline(item)}</li>`
+          `<li style="margin:0 0 6px;${FONT_STYLE}font-size:16px;line-height:1.7;color:${COLOR.text};">${inline(item)}</li>`
       )
       .join('')}</ul>` +
     `</td></tr></table>`
@@ -134,13 +155,13 @@ export function renderAnnouncementHtml(a: Announcement): string {
     `<body style="margin:0;padding:0;background:#ffffff;">`,
     `<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#ffffff;">${escapeHtml(a.preheader)}${PREHEADER_PADDING}</div>`,
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;"><tr><td align="center" style="padding:24px 16px;">`,
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;font-family:${escapeHtml(FONT)};"><tr><td style="text-align:left;">`,
-    `<p style="margin:0 0 24px;font-size:20px;line-height:1.4;font-weight:bold;color:${COLOR.text};">assift</p>`,
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;${FONT_STYLE}"><tr><td style="text-align:left;">`,
+    `<p style="margin:0 0 24px;${FONT_STYLE}font-size:20px;line-height:1.4;font-weight:bold;color:${COLOR.text};">assift</p>`,
     a.intro.map((text) => `<p style="${P}">${inline(text)}</p>`).join(''),
     summary,
     sections,
     `<hr style="margin:32px 0 16px;border:0;border-top:1px solid ${COLOR.border};">`,
-    `<p style="margin:0;font-size:14px;line-height:1.7;color:${COLOR.muted};">${a.signature.map(inline).join('<br>')}</p>`,
+    `<p style="margin:0;${FONT_STYLE}font-size:14px;line-height:1.7;color:${COLOR.muted};">${a.signature.map(inline).join('<br>')}</p>`,
     '</td></tr></table>',
     '</td></tr></table>',
     '</body>',

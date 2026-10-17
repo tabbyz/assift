@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ANNOUNCEMENT, PRIVACY_PDF_URL, TERMS_PDF_URL, type Announcement } from './content'
-import { escapeHtml, renderAnnouncementHtml, renderAnnouncementText } from './render'
+import { escapeHtml, linksIn, renderAnnouncementHtml, renderAnnouncementText } from './render'
 
 const sample: Announcement = {
   subject: '件名',
@@ -74,6 +74,18 @@ describe('renderAnnouncementHtml', () => {
     expect(html).toContain('display:none')
   })
 
+  it('URL の & は切らずにエスケープし、末尾の約物は URL に含めない', () => {
+    const one = renderAnnouncementHtml({
+      ...sample,
+      intro: ['見る https://example.com/a?x=1&y=2. と (https://assift.com/terms) と a@b.co。'],
+    })
+    expect(one).toContain('href="https://example.com/a?x=1&amp;y=2"')
+    expect(one).toContain('>https://example.com/a?x=1&amp;y=2</a>. と')
+    expect(one).toContain('href="https://assift.com/terms"')
+    expect(one).toContain('</a>) と')
+    expect(one).toContain('href="mailto:a@b.co"')
+  })
+
   it('escapeHtml は属性に入れても壊れない', () => {
     expect(escapeHtml(`"'<>&`)).toBe('&quot;&#39;&lt;&gt;&amp;')
   })
@@ -86,6 +98,33 @@ describe('ANNOUNCEMENT（本物の文面）', () => {
   it('HTML は 100 KB 未満・画像なし・計測なし（030 §5.6。Gmail は約 102 KB で折りたたむ）', () => {
     expect(Buffer.byteLength(html, 'utf8')).toBeLessThan(100 * 1024)
     expect(html).not.toMatch(/<img|<style|<script|https?:\/\/(?!api\.assift\.com|assift\.com)/)
+  })
+
+  it('本文のリンクの行き先（変えたら確かめてここを直す）', () => {
+    const all = [
+      ...ANNOUNCEMENT.intro,
+      ...ANNOUNCEMENT.summary,
+      ...ANNOUNCEMENT.sections.flatMap((section) =>
+        section.blocks.flatMap((block) => {
+          if (block.type === 'list') return block.items
+          if (block.type === 'lines') return block.lines
+          if (block.type === 'pdf') return [block.url]
+          return [block.text]
+        })
+      ),
+      ...ANNOUNCEMENT.signature,
+    ].flatMap(linksIn)
+    expect([...new Set(all)].sort()).toEqual(
+      [
+        TERMS_PDF_URL,
+        PRIVACY_PDF_URL,
+        'https://assift.com/terms',
+        'https://assift.com/privacy',
+        'https://assift.com/users/edit',
+        'https://assift.com',
+        'mailto:support@assift.com',
+      ].sort()
+    )
   })
 
   it('PDF のリンクは 029 の公開バケット', () => {

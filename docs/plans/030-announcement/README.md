@@ -269,7 +269,7 @@ https://assift.com
 ### 5.6 HTML 版（2026-10-17。§3-7）
 
 文言は §5.2 と同じにし、HTML では組み方だけを変える。HTML は `src/lib/announce/render.ts` の `renderAnnouncementHtml()` が `content.ts` から組む（React Email は使わない。依存を足さずに済み、テキスト版と同じデータから組める）。
-2026-10-17 に `--preview` の HTML を Chromium の 375px と 1024px で開き、横にはみ出さない（`scrollWidth` が画面の幅のまま）・要点の枠・見出し・PDF のボタンと URL が出ることを見た（17,849 バイト）。
+2026-10-17 に `--preview` の HTML を Chromium の 375px と 1024px で開き、横にはみ出さない（`scrollWidth` が画面の幅のまま）・要点の枠・見出し・PDF のボタンと URL が出ることを見た（レビューの反映の後で 30,107 バイト）。
 
 構成（上から）:
 
@@ -286,13 +286,13 @@ https://assift.com
 作りの決まり:
 
 - 幅 600px までの 1 列（スマホでは画面の幅）。レイアウトは `<table>`、CSS は要素ごとに直接書く（`<style>` を読まないメールソフトがある）
-- 本文 16px・行間 1.7。書体は端末の標準（`-apple-system, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, sans-serif`。Web フォントは使わない）
+- 本文 16px・行間 1.7。書体は端末の標準（`-apple-system, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, sans-serif`。Web フォントは使わない）。書体は文字の要素（p・li・h2・h3・a）ごとに付ける（Outlook のデスクトップ版は外側の table から引き継がないことがある）
 - 色はアプリと同じ考え（`src/theme.ts`: 主色は gray、ボタンは dark。ブランド色で塗らない）。リンクは下線で示す。白地で文字のコントラスト 4.5:1 以上
-- ボタンは `<a>` に背景色と余白を付けた形（画像のボタンにしない）。押せる高さ 44px 以上
+- ボタンは `<td>` に背景色と余白を付け、中に `<a>`（bulletproof button。Outlook のデスクトップ版は `<a>` の余白を無視する）。画像のボタンにしない。押せる高さ 44px 以上
 - 画像なし・開封の計測なし・クリックの計測なし（029 §2-6）。HTML は 100 KB 未満（Gmail は約 102 KB を超えると途中を折りたたむ）
 - `<html lang="ja">`・文字コードは UTF-8。ダークモードで色が反転しても読めるよう、背景色の上に文字を置く箇所を作らない
 
-見る先（試し送り。029 §3.4-4）: Gmail（iPhone のアプリと PC の Web）・iPhone の標準のメール・Outlook（Web）・携帯のキャリアのメール（HTML が出なければテキスト版が出る）。
+見る先（試し送り。029 §3.4-4）: Gmail（iPhone のアプリと PC の Web）・iPhone の標準のメール・Outlook（Web。あればデスクトップ版も）・携帯のキャリアのメール（HTML が出なければテキスト版が出る）。
 スマホで横にずれない・ボタンが押せる・PDF が開く・プレヘッダーが一覧に出る、を見る。
 
 ## 6. Resend のバッチで送る（2026-10-17。公式ドキュメント）
@@ -312,8 +312,13 @@ https://assift.com
 
 - **1 通に宛先は 1 人**。100 通の配列の要素ごとに `to` を 1 人にする（`to` は 1 通に 50 人まで並べられるが、並べると互いのアドレスが見える）。`cc`・`bcc` は使わない
 - 要素ごとに `from`（`assift <noreply@assift.com>`）・`reply_to`（`support@assift.com`）・`subject`・`html`（§5.6）・`text`（§5.2）を同じ値で入れる。`text` を省くと Resend が HTML から作るが、日本語の改行や記号が崩れうるので必ず渡す
-- **二重送信の防止**: `Idempotency-Key` はバッチの呼び出しごとに 1 つ（24 時間有効・256 文字まで）。宛先の一覧を 100 人ずつに区切った番号で `announce-20261029/batch-0001` のようにする。
-  一覧の並びを途中で変えると番号と中身がずれるので、**送り始めたら一覧を作り直さない**（作り直すなら 24 時間あける）
+- **二重送信の防止**: `Idempotency-Key` はバッチの呼び出しごとに 1 つ（24 時間有効・256 文字まで）。`announce-20261029/batch-0001-<宛先と文面の指紋 12 桁>` の形にする。
+  同じ中身なら同じ鍵（やり直しても Resend は二重に送らず、前の応答を返す）、中身が違えば別の鍵（同じ鍵で中身が違うと `409 invalid_idempotent_request` で詰まる）
+- **続きの位置は結果の CSV（送った記録）から決める**。記録したバッチのアドレスの並びが今の宛先の区切りと合わなければ止まる。
+  **送り始めたら宛先の一覧を作り直さない**（10/29 に誰かがログインすると、最近ログインした順の並びが 1 つずれ、続きのバッチに送り済みの人が入る）。
+  鍵の 24 時間はまだ送っていないバッチを守らないので、待っても解決しない。作り直すしかないときは、新しい送信の識別子（`--campaign`）と新しい結果の CSV で、
+  前の結果の CSV を `--exclude` に渡して送り済みの人を外す
+- 要素ごとに `tags: [{ name: 'campaign', value: 'announce-20261029' }]` を付ける（Resend のログと Metrics で告知だけを絞る。§6.3-b）
 - **速度**: チームで 1 秒に 10 回まで（API キーごとではなく、Supabase の認証メールと共有）。バッチなら約 29,010 通（021 §15 の移す人）が **291 回**で、速度の制限は問題にならない。
   ただし数分で全員に送ると受け取る側が絞ることがあるので、**1 回ごとに数秒あけ**、§6.3-b の区切りで止まって確かめる
 - **月の上限**: Pro（月 20 ドル）は月 5 万通・日の上限なし。10 月は告知の 2.9 万通 + 認証メールで収まる見込み（超えても 1,000 通 0.9 ドルの従量。5 倍で止まる）
@@ -344,28 +349,37 @@ Resend はアカウントに **バウンス率 4% 未満・迷惑メールの報
 | --- | --- |
 | `src/lib/announce/content.ts` | 文面のデータ（件名・プレヘッダー・本文・PDF の URL・差出人・返信先・`ANNOUNCEMENT_CAMPAIGN`）。文言の正 |
 | `src/lib/announce/render.ts` | テキスト版と HTML 版を組む純関数 |
-| `src/lib/announce/recipients.ts` | 宛先の CSV を読む（小文字にそろえ、形の違う行・同じアドレスの 2 行目を外す。並びは変えない）・100 通ずつに区切る・`Idempotency-Key`・1 通に宛先 1 人のバッチの中身 |
+| `src/lib/announce/recipients.ts` | 宛先の CSV を読む（小文字にそろえ、送れない形・除外・同じアドレスの 2 行目を外す。並びは変えない）・100 通ずつに区切る・文面の指紋・`Idempotency-Key`・結果の CSV から続きの位置を決める（`resumePoint`）・1 通に宛先 1 人のバッチの中身 |
 | `scripts/announce/send.ts` | CLI。Resend の REST（`POST /emails/batch`）を `fetch` で呼ぶ（SDK は足さない） |
 
-使い方（鍵はコマンドごとに渡す。`.env.local` に書かない。結果の CSV にはアドレスが入るのでリポジトリの外に書く）:
+使い方（鍵はコマンドごとに渡す。`.env.local` に書かない。結果の CSV と付随のファイルにはアドレスが入るのでリポジトリの外に書く）:
 
 ```bash
 # 文面を書き出す（鍵は要らない）
 npm run announce:send -- --preview ~/announce/preview
 # 自分宛てに 1 通（029 §3.4-4 の試し送り。Idempotency-Key を付けないので何度でも）
 RESEND_API_KEY='<鍵>' npm run announce:send -- --to <自分のアドレス> --send
-# 予定だけ出す（--send が無ければ送らない）
+# 予定だけ出す（--send が無ければ送らない）。外した行（送れない形・重複）の一覧もここで出る
 npm run announce:send -- --input ~/announce/recipients-20261029.csv --output ~/announce/results-20261029.csv --batches 10
 # 最初の 10 回（1,000 通）を送って止まる
 RESEND_API_KEY='<鍵>' npm run announce:send -- --input ~/announce/recipients-20261029.csv --output ~/announce/results-20261029.csv --batches 10 --send
-# Resend の Metrics でバウンス率を見て（2% を超えたら止める。§6.3-b）、出てきたコマンドで続ける
-RESEND_API_KEY='<鍵>' npm run announce:send -- --input ~/announce/recipients-20261029.csv --output ~/announce/results-20261029.csv --from-batch 11 --send
+# Resend の Metrics でバウンス率を見て（2% を超えたら止める。§6.3-b）、同じコマンドで続ける（--batches を外せば最後まで）
+RESEND_API_KEY='<鍵>' npm run announce:send -- --input ~/announce/recipients-20261029.csv --output ~/announce/results-20261029.csv --send
 ```
 
-- 1 回ごとに 3 秒あける（`--interval-ms`）。291 回で約 15 分。429・5xx・通信の失敗は同じ `Idempotency-Key` で 5 回までやり直し、それ以外（400・422 など）は止まって `--from-batch` の続け方を出す
-- 結果の CSV（`batch,v1_user_id,email,resend_id,sent_at`）は 1 回ごとに追記する。`--from-batch 1` で既にあるファイルを指すと止まる（最初からの流し直しで記録を混ぜない）
-- 確かめたこと（2026-10-17）: Vitest（`content` / `render` / `recipients`。14 件。HTML が 100 KB 未満・画像なし・テキスト版と HTML 版に同じ文言・548 条の 4 の項目）。
-  `fetch` を差し替えて架空の 252 行（形の違う行と重複を 1 つずつ含む）で通した: 2 回目の呼び出しの 429 を同じ鍵でやり直す・3 回目の 422 で止まる・同じ出力で最初から流すと止まる・`--from-batch 3` で続きだけ送る・結果は 250 行で重複なし・どの呼び出しも 1 通に宛先 1 人で `html` と `text` と `reply_to` がある
+- 書くファイル: 結果の CSV（`batch,v1_user_id,email,resend_id,sent_at`。1 回ごとに追記）・`<結果の CSV>.meta.json`（送信の識別子・文面の指紋・git のコミット・始めた時刻。送った版の記録。記録が 1 行でもあれば、続きで識別子か文面が違うと止まる）・
+  `<結果の CSV>.raw.jsonl`（Resend の生の応答。1 回ごとに追記）
+- 1 回ごとに 3 秒あける（`--interval-ms`）。291 回で約 15 分。1 回 30 秒で時間切れ
+- やり直す: 429（上限を除く）・5xx・時間切れ・通信の失敗・`409 concurrent_idempotent_requests` は同じ鍵で 5 回まで
+- 止まる: 上限（`daily_quota_exceeded` / `monthly_quota_exceeded`）・`409 invalid_idempotent_request`（文面か宛先が送り始めと違う）・400・422 など。同じコマンドで続きから流せる。
+  422 がアドレスのせいなら、そのアドレスを 1 行の CSV（`email` の列）にして `--exclude` に渡す（外すと区切りがずれるのは、まだ送っていないバッチだけ。記録したバッチは変わらない）
+- 200 なのに応答が読めないときは「送れている可能性がある」と別の文で止まる。Resend のログ（`tags` の campaign で絞る）で確かめ、送れていれば結果の CSV にそのバッチの行を足してから続ける
+- 送れない形のアドレス（携帯のキャリアの古い形の `taro..yamada@docomo.ne.jp` など）は送る前に外し、予定の出力に一覧で出る。Resend が受け付けず、1 通のせいでバッチごと断られうるため。外した人数は実装ログに残す（§7-11）
+- 確かめたこと（2026-10-17）: Vitest（`content` / `render` / `recipients`。24 件。HTML が 100 KB 未満・画像なし・テキスト版と HTML 版に同じ文言・548 条の 4 の項目・本文のリンクの一覧・アドレスの検査・続きの位置）。
+  `fetch` を差し替えて架空の 252 行（送れない形と重複を 1 つずつ含む）で通した: 鍵が無ければファイルを作らずに止まる・`--batches 2` で区切る（2 回目の呼び出しの 429 は同じ鍵でやり直す）・
+  同じコマンドで 3 番目から続く・3 番目の 422 で止まる・宛先の並びを 1 つずらすと止まる・文面の指紋が違うと止まる・上限の 429 と `invalid_idempotent_request` はやり直さずに止まる・
+  200 で読めない応答は「送れている可能性」で止まる・`concurrent_idempotent_requests` はやり直して最後まで送る・全部送った後は何もしない・結果は 250 行で重複なし・
+  どの呼び出しも 1 通に宛先 1 人で `tags` と時間切れがある
 
 ### 6.5 宛先
 
@@ -375,15 +389,18 @@ v2 に移す人と同じ（021 §7.1: `confirmed_at IS NOT NULL OR sign_in_count
 select id, lower(trim(email)) as email, current_sign_in_at
 from users
 where confirmed_at is not null or sign_in_count > 0
-order by current_sign_in_at desc nulls last;
+order by current_sign_in_at desc nulls last, id;
 ```
 
 ```bash
-heroku pg:psql -a assift -c "\copy (select id, lower(trim(email)) as email, current_sign_in_at from users where confirmed_at is not null or sign_in_count > 0 order by current_sign_in_at desc nulls last) to stdout with csv header" > ~/announce/recipients-20261029.csv
+heroku pg:psql -a assift -c "\copy (select id, lower(trim(email)) as email, current_sign_in_at from users where confirmed_at is not null or sign_in_count > 0 order by current_sign_in_at desc nulls last, id) to stdout with csv header" > ~/announce/recipients-20261029.csv
+head -3 ~/announce/recipients-20261029.csv   # 見出しが id,email,current_sign_in_at
+wc -l < ~/announce/recipients-20261029.csv   # 約 29,000（見出しの 1 行を含む）
 ```
 
 - 移さない人（招待未承認・未確認）には送らない。v1 でもログインできず、規約に同意していない
-- `current_sign_in_at` の新しい順は §6.3-b の順番
+- `current_sign_in_at` の新しい順は §6.3-b の順番。同じ値（ログインしていない人は null）の中は `id` の順にして、出すたびに並びが変わらないようにする
+- **出したら送り終えるまで作り直さない**（§6.2）
 
 ## 7. 未確定（質問）
 
@@ -399,6 +416,8 @@ heroku pg:psql -a assift -c "\copy (select id, lower(trim(email)) as email, curr
 | 8 | v1 で上限 11 人以上なのに、Stripe の状態が `active` / `trialing` / `past_due` / `unpaid` 以外（`canceled` など）の人がいるか。いれば有料の節を読むが、v2 では無料になる | 019 §8.2.1 の集計に無い。昼の予行の dry-run の CSV（026 §5）で数える。多ければ個別に連絡 |
 | 9 | ~~形式~~ | 決定（2026-10-17）: HTML + テキスト（§3-7・§5.6） |
 | 10 | ~~件名を短くするか~~ | 決定: 短くする（§5.1） |
+| 11 | 送れない形のアドレスで外れた人（§6.4）への周知。人数を見て、多ければ別の手（ログイン後の画面のお知らせなど）を考える | 10/29 の予定の出力で人数を見る |
+| 12 | 本文の `https://assift.com/users/edit`（v1 の退会の画面）は、切り替えの後は v2 に無いので 404 になる。メールは受信箱に残るので、v2 で `/account` へ転送するか | 未定（別のタスクの候補） |
 
 ## 8. 実装ログ
 
@@ -446,3 +465,22 @@ heroku pg:psql -a assift -c "\copy (select id, lower(trim(email)) as email, curr
 - §7 の 1〜6・10 を決めた（送信の一時停止への備えは b だけ・SendGrid は使わない・14:00 に送り始める・保管期限は決めない・「お客さま」はこのまま・件名を短く）
 - 送信のスクリプトを実装した（§6.4）。文言の正を `src/lib/announce/content.ts` に移し、§5.2 はそこからの写しにした
 
+### 2026-10-17（送信のスクリプトのレビュー 1 回目。中 3・低 10、文面の 1 件を除いて反映）
+
+別の担当に、コードと Resend のドキュメントを突き合わせて読ませた。
+
+| # | 指摘 | 対応 |
+| --- | --- | --- |
+| 1 | 中: 続きを `--from-batch` の手入力と 24 時間の鍵に頼っていた。一覧を作り直すと番号と中身がずれ、「24 時間あける」は逆に危ない | 続きの位置を結果の CSV から決め、記録と区切りが合わなければ止める（`resumePoint`）。`--from-batch` をやめた。鍵に宛先と文面の指紋を入れた。§6.2 を書き直した |
+| 2 | 中: アドレスの検査が緩く、携帯のキャリアの古い形などでバッチごと 422 になりうる | RFC の形で検査する（`isSendableEmail`）。当日に外すための `--exclude` を足した。外した人への周知は §7-11 |
+| 3 | 中: 409 を区別していなかった | `concurrent_idempotent_requests` はやり直し、`invalid_idempotent_request` は別の文で止める。文面の指紋と git のコミットを `meta.json` に残し、続きで文面が違えば止める |
+| 4 | 低〜中: 200 で読めない応答のとき、送れたのに記録しない | 生の応答を `raw.jsonl` に残し、「送れている可能性」で止める |
+| 5 | 低: 1 番目の前に失敗すると、案内どおりに流し直せない | 鍵を見てからファイルを作る。記録が 0 行なら最初からでも通す |
+| 6 | 低: 上限の 429 もやり直す・時間切れが無い | 上限は止める。1 回 30 秒で時間切れ |
+| 7 | 低: `--interval-ms` を検査していない | 0 以上の整数に限る |
+| 8 | 低: 宛先が 0 人でも正常に終わる | データの行が無い・送る宛先が 0 人なら止める。§6.5 に `head` と `wc -l` |
+| 9 | 低: SQL の並びが毎回同じにならない | `order by …, id` |
+| 10 | 低: `/users/edit` は切り替えの後に 404 | 文面は変えず、§7-12 に残した |
+| 11 | 低: Outlook のデスクトップ版で書体とボタンが崩れうる | 書体を要素ごとに付け、ボタンの余白を `td` に。見る先にデスクトップ版 |
+| 12 | 低: URL のリンク化が `&` や末尾の約物で崩れうる | 見つけてからエスケープし、末尾の約物を外す。本文のリンクの一覧をテストで固定 |
+| 13 | 低（任意）: tags で告知だけを絞る | 足した |

@@ -119,7 +119,7 @@ assets/fonts/                     PDF に埋め込む Noto Sans JP（public/ に
 scripts/vercel/ignore-build.sh    Vercel の Ignored Build Step（vercel.json の ignoreCommand）。PR の無いブランチのプレビューを作らない
 scripts/stripe/                   setup（Product / Meter / Price / Coupon / Portal。冪等）/ migrate-v1-subscriptions（カットオーバーで 1 回）/
                                   sync-all（全員の同期だけ。人数は送らない。カットオーバーで引き継ぎのあとに 1 回。026 §7）
-scripts/announce/send.ts          カットオーバーの告知を Resend のバッチで送る（030 §6.4）。手元で流す。既定は予定を出すだけで、--send で送る
+scripts/announce/send.ts          カットオーバーの告知を Resend のバッチで送る（030 §6.4）。手元で流す。既定は予定を出すだけで、--send で送る。続きの位置は結果の CSV から決める
 scripts/migrate-v1/               v1 データ移行（021）。import（読む → 変換 → 1 トランザクション → 突合 → COMMIT / ROLLBACK）/ verify（移行後の突合）/
                                   pg（型パーサ。date を文字列のまま）/ overrides.example.json / v1/v2_export.rake（v1 に写して流す）/
                                   fixtures（架空の JSONL。Vitest の通しとローカルの通しに使う）/
@@ -524,7 +524,7 @@ npm run format:check
 npm run assist:eval    # 自動アサインの評価（012 §6.3。手動。LLM を使う評価は AI_GATEWAY_API_KEY が要る）
 npm run migrate:v1 -- --input <dir> [--rollback] [--allow-existing]   # v1 データのインポート（021。MIGRATION_DATABASE_URL で直接つなぐ）
 npm run migrate:v1:verify -- --input <dir>                             # 移行後の突合
-npm run announce:send -- --preview <dir> | --to <自分> --send | --input <宛先の CSV> --output <結果の CSV> [--batches N] [--from-batch N] --send   # 告知（030 §6.4）
+npm run announce:send -- --preview <dir> | --to <自分> --send | --input <宛先の CSV> --output <結果の CSV> [--batches N] [--exclude <CSV>] --send   # 告知（030 §6.4）。続きは同じコマンド
 ```
 
 Prettier: `{ "semi": false, "singleQuote": true, "tabWidth": 2, "trailingComma": "es5", "printWidth": 100 }`
