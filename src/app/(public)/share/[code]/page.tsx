@@ -8,6 +8,7 @@ import { holidaysIn } from '@/lib/calendar/holidays'
 import { todayJst } from '@/lib/calendar/today'
 import { getSharedShiftTable } from '@/lib/queries/publicShare'
 import { toShiftMap } from '@/lib/shifts/key'
+import { SHARE_DESCRIPTION } from '@/lib/site/metadata'
 import { ShareTable } from './_components/ShareTable'
 import classes from '@/components/shiftTable/ShiftTable.module.css'
 
@@ -20,9 +21,11 @@ export const dynamic = 'force-dynamic'
 /**
  * **店舗名はタイトルに入れない。** LINE などに URL を貼るとリンクプレビューに出てしまう
  * （v1 の公開ページのタイトルにも店舗名は入っていない）。URL を知っている人だけの前提なので `noindex`。
+ * 説明は公開シフト表の文（root の LP の宣伝文をスタッフに出さない。028 §2.3-3）。`openGraph` は書かない（画像ごと消える）
  */
 export const metadata: Metadata = {
   title: 'シフト表',
+  description: SHARE_DESCRIPTION,
   robots: { index: false, follow: false },
 }
 

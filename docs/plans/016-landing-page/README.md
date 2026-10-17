@@ -162,7 +162,7 @@ Artifact の hex は Mantine の変数に置き換える（theme.ts に集約す
 
 - 利用規約・プライバシーポリシー・特商法・お問い合わせのページ（フッターは既存の `/terms` `/privacy` へのリンクだけ。
   サインアップ画面が既に同じリンクを張っている）
-- OGP 画像・favicon の差し替え
+- OGP 画像・favicon の差し替え（favicon は 027、OGP 画像と manifest は 028 で対応）
 - 製品側の和欧間の表記の統一（「AI で作成」など）
 - LP のダークモード（アプリは `defaultColorScheme="light"`）
 

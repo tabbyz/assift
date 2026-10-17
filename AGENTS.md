@@ -68,6 +68,8 @@ src/
             _components/          このルート専用 Client UI
             _lib/                 このルート専用ロジック（Vitest 対象）
     serviceworker.js/route.ts     v1 の Service Worker を解除する JS（026 §8）。2027-10-30 以降に消してよい
+    opengraph-image.png (+.alt.txt)  OGP 画像（028。ロゴだけ・1200×630。全ページに継承。作り方は 028 §4）。alt.txt は末尾の改行なし
+    manifest.ts                   /manifest.webmanifest（028。display: browser）
     api/tenants/[tenantId]/shifts/{pdf,csv}/route.ts   エクスポート（Route Handler。下記）
     api/stripe/webhook/route.ts   Stripe の Webhook（POST。署名で守る。019）
     api/cron/billing-usage/route.ts  毎日の同期と最大人数の送信（GET。CRON_SECRET で守る。vercel.json の crons）
@@ -97,6 +99,7 @@ src/
     shares/                       expiry（公開期限。v1 の DATE_LIMIT = 6）/ code（8 文字のコード）
     security/                     CSP（022）。csp（nonce の生成・方針の文字列・ヘッダ名。純関数。proxy と root layout が使う。
                                   レスポンスの方針を付けない唯一の例外は PDF の応答で、その判定は lib/export/path の isPdfExportPath）
+    site/                         サイト共通のメタデータの文言（028）。metadata（SITE_NAME / SITE_DESCRIPTION / SHARE_DESCRIPTION）
     analytics/                    アクセス解析（025）。load（読み込むか。本番の本体のホストだけ）/ url（送る URL からクエリとハッシュを落とす）
     export/                       request（認証 → 店舗 → 期間 → 表。PDF / CSV 共通の入口）/ filename / path（URL を組む。リンクと旧 URL の書き換えが共有）
     csv/                          shiftCsv（純関数）/ encode（CP932 か BOM 付き UTF-8。iconv-lite）
@@ -170,6 +173,14 @@ AI シフト作成の両方から呼ぶ。`[tenantId]/actions.ts` はシフト�
 認証必須ページは `(protected)/layout.tsx` が `getAuthUser()` で守る。テナント配下は `tenants/[tenantId]/layout.tsx` がテナントを解決する。
 
 認可ロールは `auth.users.user_metadata` ではなくアプリ側の `profiles`（RLS 経由）を信頼する。
+
+## メタデータ・OGP（028）
+
+- `metadataBase` は root layout が `SITE_URL` から入れる。file-based の OGP 画像の URL は、開発は localhost・プレビューはブランチの URL に固定（Next の仕様）。`SITE_URL` が効くのは本番と `next start` だけ
+- `og:title` / `og:description` は各ページの `title` / `description` を Next が写す。**子の segment で `openGraph` を書かない**（浅いマージで、root の値も OGP 画像も丸ごと消え、`twitter:card` が `summary` に落ちる）。
+  ページごとに説明を変えるならトップレベルの `description` を書く（公開シフト表がそうしている）
+- 未ログインのページで `generateMetadata` に待ち（DB・fetch）を入れる、または Suspense / `loading.tsx` を足すと、ボットの一覧に無いクローラーにはタグが `<body>` に出る
+  （Next 16 のストリーミングのメタデータ）。直すなら `next.config.ts` の `htmlLimitedBots`（既定の一覧を置き換えるので、既定の正規表現に足す形で）
 
 ## Server Actions
 
@@ -339,7 +350,7 @@ Stripe の API の版は SDK が固定する最新（`lib/billing/stripe.ts`）�
 2. `updateSession()`: Supabase の cookie 更新 + 保護ルートの未ログイン redirect
 3. 開いている `/tenants/<uuid>` を直近店舗の cookie に記録
 
-- `config.matcher` から外すのは静的アセット（`_next/static` / `_next/image` / アイコン（`favicon.ico` / `icon.svg` / `apple-icon.png`。027））と Stripe の Webhook・cron（ログイン状態と無関係で、セッションの更新が要らない）だけ。
+- `config.matcher` から外すのは静的アセット（`_next/static` / `_next/image` / アイコン（`favicon.ico` / `icon.svg` / `apple-icon.png`。027）/ OGP 画像と manifest（`opengraph-image.png` / `manifest.webmanifest`。028））と Stripe の Webhook・cron（ログイン状態と無関係で、セッションの更新が要らない）だけ。
   Vercel Web Analytics のスクリプトと送信は Vercel が Next より手前で受け、proxy は走らない（025 §8 の本番の確認）。matcher で外す必要は無い（025 §3-7）。
   **除外は実在するパスに完全一致（`$`）で書く。** 前方一致や拡張子で除外すると、存在しない URL が 404 の HTML になるのに proxy を通らず、CSP の付かない HTML ができる（`public/` は無い）
 - **`config.matcher` から prefetch を除外しない。** セッション cookie を書けるのは proxy だけで、除外するとトークン更新が Server Component の描画中に起き、新しい refresh token を保存できずに次の遷移でログアウトする（`enable_refresh_token_rotation = true`）

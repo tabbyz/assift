@@ -221,7 +221,7 @@ Workspace は `sundbox.app` の 1 つだけで、`assift.com` はその追加の
 | `SUPABASE_SECRET_KEY` | Project Settings → API Keys の secret key（連携が同じ名前で入れていなければ足す。**Sensitive**） | 本プラン |
 | `AI_GATEWAY_API_KEY` | Vercel AI Gateway のキー（Production にもあるか見る。**Sensitive**） | 本プラン |
 | `ADMIN_HOST` | `admin-v2.assift.com`（当日に `admin.assift.com`。§6） | 本プラン |
-| `SITE_URL` | `https://v2.assift.com`（当日に `https://assift.com`。§6） | 本プラン |
+| `SITE_URL` | `https://v2.assift.com`（当日に `https://assift.com`。§6） | 本プラン・028（`og:image` の URL） |
 | `ASSIST_DAILY_LIMIT` / `ASSIST_INTERPRET_MODEL` | 入れない（既定 10 回 / `openai/gpt-6.1-sol`。2026-10-15 に `gpt-6-sol` から切り替え。012 §10.9） | — |
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `CRON_SECRET` | **入れない**。Stripe の live のタスクで入れる | 別タスク |
 
