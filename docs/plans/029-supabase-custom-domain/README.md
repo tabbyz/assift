@@ -192,3 +192,9 @@ Google のリダイレクト URI の `https://assift.supabase.co/auth/v1/callbac
 ## 7. 実装ログ
 
 （作業のあとに、日時・確かめた結果・つまずいた点を書く。秘密の値は書かない）
+
+### 2026-10-17（§3.1・§3.2）
+
+- §3.1: Pro プラン・Owner / Admin・Gehirn に `api` と `_acme-challenge.api` が無い・Resend の Click Tracking がオフ、を確かめた。Custom Domain のアドオンを有効にした
+- §3.2: バケット `legal` を作った（Public・10 MB・`application/pdf`）。`https://assift.supabase.co/storage/v1/object/public/legal/test-20261017.pdf` が `200 application/pdf`（§2-8 の代わりが使える）
+- Storage は無いオブジェクトに 404 ではなく **400 + JSON**（`application/json`）を返す（ファイルを上げる前に叩いて 400 だった）。§3.4-3 の `curl -f` は 400 でも失敗になるので、照合の手順はそのままでよい
