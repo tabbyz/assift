@@ -100,6 +100,7 @@ src/
     security/                     CSP（022）。csp（nonce の生成・方針の文字列・ヘッダ名。純関数。proxy と root layout が使う。
                                   レスポンスの方針を付けない唯一の例外は PDF の応答で、その判定は lib/export/path の isPdfExportPath）
     site/                         サイト共通のメタデータの文言（028）。metadata（SITE_NAME / SITE_DESCRIPTION）
+    announce/                     カットオーバーの告知（030）。content（文面のデータ。文言の正）/ render（テキスト版と HTML 版）/ recipients（宛先の CSV・100 通ずつの区切り・Idempotency-Key）
     analytics/                    アクセス解析（025）。load（読み込むか。本番の本体のホストだけ）/ url（送る URL からクエリとハッシュを落とす）
     export/                       request（認証 → 店舗 → 期間 → 表。PDF / CSV 共通の入口）/ filename / path（URL を組む。リンクと旧 URL の書き換えが共有）
     csv/                          shiftCsv（純関数）/ encode（CP932 か BOM 付き UTF-8。iconv-lite）
@@ -118,6 +119,7 @@ assets/fonts/                     PDF に埋め込む Noto Sans JP（public/ に
 scripts/vercel/ignore-build.sh    Vercel の Ignored Build Step（vercel.json の ignoreCommand）。PR の無いブランチのプレビューを作らない
 scripts/stripe/                   setup（Product / Meter / Price / Coupon / Portal。冪等）/ migrate-v1-subscriptions（カットオーバーで 1 回）/
                                   sync-all（全員の同期だけ。人数は送らない。カットオーバーで引き継ぎのあとに 1 回。026 §7）
+scripts/announce/send.ts          カットオーバーの告知を Resend のバッチで送る（030 §6.4）。手元で流す。既定は予定を出すだけで、--send で送る
 scripts/migrate-v1/               v1 データ移行（021）。import（読む → 変換 → 1 トランザクション → 突合 → COMMIT / ROLLBACK）/ verify（移行後の突合）/
                                   pg（型パーサ。date を文字列のまま）/ overrides.example.json / v1/v2_export.rake（v1 に写して流す）/
                                   fixtures（架空の JSONL。Vitest の通しとローカルの通しに使う）/
@@ -522,6 +524,7 @@ npm run format:check
 npm run assist:eval    # 自動アサインの評価（012 §6.3。手動。LLM を使う評価は AI_GATEWAY_API_KEY が要る）
 npm run migrate:v1 -- --input <dir> [--rollback] [--allow-existing]   # v1 データのインポート（021。MIGRATION_DATABASE_URL で直接つなぐ）
 npm run migrate:v1:verify -- --input <dir>                             # 移行後の突合
+npm run announce:send -- --preview <dir> | --to <自分> --send | --input <宛先の CSV> --output <結果の CSV> [--batches N] [--from-batch N] --send   # 告知（030 §6.4）
 ```
 
 Prettier: `{ "semi": false, "singleQuote": true, "tabWidth": 2, "trailingComma": "es5", "printWidth": 100 }`
