@@ -93,7 +93,8 @@ Dashboard なら Project Settings → Add-ons（Custom Domain を有効にする
 
 1. **Google のリダイレクト URI に足す**（独自ドメインを有効にした直後から、Auth は OAuth のコールバックに新しいホストを使う。ドキュメント「Prepare to activate your domain」）:
    Google Auth Platform → Clients → `assift-production` → 承認済みのリダイレクト URI に `https://api.assift.com/auth/v1/callback`。
-   今ある `https://assift.supabase.co/...` と `https://<ref>.supabase.co/...` は残す（ドキュメントも「in addition to the Supabase project URL」。消すのは §4 の後）
+   あわせて `https://<ref>.supabase.co/auth/v1/callback` も足す（§3.3-6・§3.3-B・§6-1 の逃がし先。2026-10-17 に見たら入っていなかった。§7）。
+   今ある `https://assift.supabase.co/...` は残す（ドキュメントも「in addition to the Supabase project URL」。消すのは §4 の後）
 2. **Gehirn DNS に CNAME**: `api` → `<ref>.supabase.co.`（TTL 300）
 3. **独自ドメインを登録**: `npx supabase domains create --project-ref <ref> --custom-hostname api.assift.com`。
    `Required outstanding validation records:` に出る TXT を Gehirn DNS に足す（名前 `_acme-challenge.api`、値は前後の空白を落とす、TTL 300）。
@@ -121,7 +122,7 @@ vanity subdomain を先に外す。証明書を待つあいだ本番が止まら
 
 1. §3.3-1・2 のあと、§3.3-5（vanity subdomain を外す）
 2. すぐに Vercel の `NEXT_PUBLIC_SUPABASE_URL` を `https://<ref>.supabase.co` にして Redeploy（cookie 名がいったん `sb-<ref>-auth-token` になる。害は無い）。
-   Google のリダイレクト URI の `<ref>.supabase.co` の分は 024 §9 2026-10-14 から入っている
+   Google のリダイレクト URI の `<ref>.supabase.co` の分は §3.3-1 で足してある
 3. §3.3-3・4（登録・TXT・確認）→ §3.3-6（有効にする）→ §3.3-7（`https://api.assift.com` にして Redeploy）。
    §3.3-4 で打ち切ったときは、ref のホストのまま §6 で vanity subdomain に戻す
 
@@ -198,3 +199,8 @@ Google のリダイレクト URI の `https://assift.supabase.co/auth/v1/callbac
 - §3.1: Pro プラン・Owner / Admin・Gehirn に `api` と `_acme-challenge.api` が無い・Resend の Click Tracking がオフ、を確かめた。Custom Domain のアドオンを有効にした
 - §3.2: バケット `legal` を作った（Public・10 MB・`application/pdf`）。`https://assift.supabase.co/storage/v1/object/public/legal/test-20261017.pdf` が `200 application/pdf`（§2-8 の代わりが使える）
 - Storage は無いオブジェクトに 404 ではなく **400 + JSON**（`application/json`）を返す（ファイルを上げる前に叩いて 400 だった）。§3.4-3 の `curl -f` は 400 でも失敗になるので、照合の手順はそのままでよい
+
+### 2026-10-17（§3.3-1 の前に Google のリダイレクト URI を見た）
+
+- 登録されていたのは `https://assift.supabase.co/auth/v1/callback` の 1 つだけで、`https://<ref>.supabase.co/auth/v1/callback` は無かった
+  （024 §9 2026-10-14 の「2 つ入れた」と違う。その後に消したか、保存されていなかった）。逃がし先に要るので、§3.3-1 で `api.assift.com` と一緒に足す
