@@ -204,3 +204,10 @@ Google のリダイレクト URI の `https://assift.supabase.co/auth/v1/callbac
 
 - 登録されていたのは `https://assift.supabase.co/auth/v1/callback` の 1 つだけで、`https://<ref>.supabase.co/auth/v1/callback` は無かった
   （024 §9 2026-10-14 の「2 つ入れた」と違う。その後に消したか、保存されていなかった）。逃がし先に要るので、§3.3-1 で `api.assift.com` と一緒に足す
+
+### 2026-10-17（§3.3-1〜3）
+
+- §3.3-1: Google のリダイレクト URI を `assift.supabase.co`・`api.assift.com`・`<ref>.supabase.co` の 3 つにした
+- §3.3-3: `domains create` は vanity subdomain のあるうちは断られた:
+  `unexpected create hostname status 544: {"message":"Delete the vanity subdomain associated with your project before attempting to create a new custom hostname"}`。
+  §3.3-B の順に切り替える（証明書を待つあいだは ref のホストで動かす）
