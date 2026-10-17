@@ -43,7 +43,7 @@
 - DNS の切り替え（`assift.com` / `admin.assift.com`）・告知・当日の移行（021 §10）。当日に差し替える値は §6 に置く
 - アクセス解析（`@vercel/analytics`。017: 10/30 までに入れる。コードの変更と CSP の確認が要る）→ 025
 - PITR（リリース後に検討。§3-6）
-- Supabase の独自ドメイン（Google の同意画面に `<ref>.supabase.co` が出る。リリース後に検討）
+- Supabase の独自ドメイン（Google の同意画面に `<ref>.supabase.co` が出る。リリース後に検討）→ 029 で `api.assift.com` にした（2026-10-17。告知の PDF のリンクのため）
 
 ## 3. 決定（2026-10-14）
 
@@ -169,7 +169,8 @@ npx supabase vanity-subdomains get --project-ref <ref> --experimental
     **Supabase の Vercel 連携が ref の URL に書き戻さないか**、Redeploy の後に Environment Variables で見る（書き戻されると本番の Auth が止まる）
 - セッションの cookie 名は URL のホストの先頭から作られる（`sb-<ref>-auth-token` → `sb-assift-auth-token`）。切り替えた時点のセッションは切れる。利用者のいないリリース前に行う
 - 変わらないもの: CSP（ブラウザから Supabase を呼ばない。`utils/supabase/client.ts` は使われていない）/ プレビューのブランチ DB（別の ref）/ 移行の接続先（DB の pooler のホスト）
-- `activate` の前に料金を確かめる
+- `activate` の前に料金を確かめる → vanity subdomain は無料だった（029 §2-2）
+- **029 で外した**（2026-10-17）。いまは独自ドメイン `api.assift.com`（以下の `assift.supabase.co` は 029 の前の値）
 
 ### 4.5 Google OAuth（新しい Google Cloud のプロジェクト）
 
@@ -181,7 +182,8 @@ npx supabase vanity-subdomains get --project-ref <ref> --experimental
 3. 公開ステータスを **In production** にする（テスト中のままだとテストユーザーしかログインできない）
 4. Clients → Create: 種類 **Web application**、
    承認済みの JavaScript 生成元 `https://v2.assift.com`（当日に `https://assift.com` を足す。§6）、
-   承認済みのリダイレクト URI **`https://assift.supabase.co/auth/v1/callback`**（Supabase のコールバック。§4.4.1 の vanity subdomain。アプリの `/auth/callback` ではない。当日も変えない）
+   承認済みのリダイレクト URI **`https://assift.supabase.co/auth/v1/callback`**（Supabase のコールバック。§4.4.1 の vanity subdomain。アプリの `/auth/callback` ではない。当日も変えない）。
+   → 029 で **`https://api.assift.com/auth/v1/callback`** と `https://<ref>.supabase.co/auth/v1/callback` を足した（2026-10-17）。`assift.supabase.co` の分は公開の後に消す（026 §6.6）。当日も変えないのは同じ
 5. Supabase → Authentication → Sign In / Providers → Google: Enable、Client ID / Secret を入れる（**ブラウザの自動入力に注意**。2026-10-14 に Client IDs へメールアドレスが自動で入っていた）。
    **Skip nonce checks はオフ**（`config.toml` の `true` はローカルの Google ログインのためだけ。本番は `signInWithOAuth` のリダイレクト方式で、nonce の確認を飛ばす理由が無い）。Allow users without an email もオフ
 
@@ -216,7 +218,7 @@ Workspace は `sundbox.app` の 1 つだけで、`assift.com` はその追加の
 
 | 名前 | 値 | いつ |
 | --- | --- | --- |
-| `NEXT_PUBLIC_SUPABASE_URL` | **`https://assift.supabase.co`**（§4.4.1。連携が入れた ref の URL から替える。連携が書き戻さないか見る） | 本プラン |
+| `NEXT_PUBLIC_SUPABASE_URL` | **`https://api.assift.com`**（029。2026-10-17 に `https://assift.supabase.co`（§4.4.1）から替えた。連携が書き戻さないか見る） | 本プラン・029 |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | 連携が入れたもの（§4.1 で確かめる） | 済み |
 | `SUPABASE_SECRET_KEY` | Project Settings → API Keys の secret key（連携が同じ名前で入れていなければ足す。**Sensitive**） | 本プラン |
 | `AI_GATEWAY_API_KEY` | Vercel AI Gateway のキー（Production にもあるか見る。**Sensitive**） | 本プラン |

@@ -12,11 +12,11 @@
 10/29 の告知（026 §4-5）で、規約とプライバシーポリシーの PDF を**添付ではなくリンク**で渡す。Resend のバッチ送信（`batch.send`）は添付を受けないため。
 PDF は Supabase Storage の公開バケットに置き、リンクのホストを `*.supabase.co` ではなく自社のドメインにする。
 
-- [ ] 公開バケット `legal` がある（§3.2。切り替えより先に作る）
-- [ ] Supabase のプロジェクトが `api.assift.com` で動く（Auth・REST・Storage）。vanity subdomain（`assift.supabase.co`）は外れている
-- [ ] Vercel の Production の `NEXT_PUBLIC_SUPABASE_URL` が `https://api.assift.com`
-- [ ] §4 の表がすべて通り、片付けまで済んだ
-- [ ] 024・026・016-terms の記述を直した（§5）
+- [x] 公開バケット `legal` がある（§3.2。切り替えより先に作る）
+- [x] Supabase のプロジェクトが `api.assift.com` で動く（Auth・REST・Storage）。vanity subdomain（`assift.supabase.co`）は外れている
+- [x] Vercel の Production の `NEXT_PUBLIC_SUPABASE_URL` が `https://api.assift.com`
+- [x] §4 の表がすべて通り、片付けまで済んだ
+- [x] 024・026・016-terms の記述を直した（§5）
 - **期限: 10/21（水）**。10/22 の本番での `--rollback` の予行（026 §4-1）の前に、§4 の片付けまで終える（試しの店舗が残ると import が
   `tenants が 0 件ではありません` で止まる。`scripts/migrate-v1/import.ts`）。間に合わなければ予行の後、10/27 までに行う。**予行の当日には行わない**
 - 間に合わない・つまずいたときは §2-8（告知は `assift.supabase.co` のリンクで送り、本プランは見送る）。**カットオーバーの日は本プランのために動かさない**
@@ -221,3 +221,10 @@ Google のリダイレクト URI の `https://assift.supabase.co/auth/v1/callbac
 - §3.3-6: `domains activate` → `Custom hostname setup completed. Project is now accessible at api.assift.com.`
 - §3.3-7: `NEXT_PUBLIC_SUPABASE_URL` を `https://api.assift.com` にして Redeploy。health は `api.assift.com` が 200、**ref のホストも 200**（§2-3 の食い違いはドキュメントの側の手がかり。
   health が応えただけで、ref のホストでログインまで動くかは確かめていない）。`https://api.assift.com/storage/v1/object/public/legal/test-20261017.pdf` が `200 application/pdf`
+
+### 2026-10-17（§4・§5）
+
+- §4 の 1〜8 がすべて通った（登録と確認メール・`sb-api-auth-token`・ログイン / パスワード再設定・Google ログイン（同意画面にアプリ名、`redirect_uri` が `api.assift.com`）・店舗とアサイン・CSP の違反 0・管理画面・片付け）
+- 報告待ち: §4 の片付けの SQL の 2 つ（`tenants` が 0、`auth.users` が管理用だけ）/ §3.3-7 の Redeploy の後に Vercel の値が書き戻されていないか / Gehirn の 2 つのレコードの TTL を 3600 に戻したか
+- §5: 024・026・016-terms を直した。026 §4 のゲート（「PDF のリンクのホストが決まっている」）は**足さなかった**: 本プランが期限の前（10/17）に済み、ホストは `api.assift.com` に決まったため。
+  §2-8 の見送りも起きなかったので、026 の値は切り替えた後のもの（`api.assift.com`）だけを書いた
