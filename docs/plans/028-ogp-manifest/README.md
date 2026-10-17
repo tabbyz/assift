@@ -8,7 +8,7 @@
   `resolvers/resolve-opengraph.js`・`resolvers/resolve-url.js`（file-based の画像の URL の決まり方）・`build/webpack/loaders/next-metadata-image-loader.js`（webpack のときだけ。ビルドは Turbopack）
 - 予定: 10/27 までに main へ（026 のコードの締めにそろえる。カットオーバーの前に `v2.assift.com` でリンクプレビューを確かめる）。026 §4 のゲートではない（遅れても切り替えは止めない）
 
-**状態: 実装済み（確認待ち。2026-10-17）。プランはレビュー 4 回で収束（§7）。実装ログと検証は §8。残りはマージ後の本番での確かめ（人間。§5）。**
+**状態: 完了（2026-10-17。PR #49）。プランはレビュー 4 回で収束（§7）。実装ログと検証は §8。残りは当日の後の取り直し（026 §6.6）だけ。**
 
 ---
 
@@ -21,7 +21,7 @@ LINE・X・Facebook・Slack などに assift の URL を貼ったとき、ロゴ
 - [x] 未ログインで開くページ（LP・静的ページ・ログイン系・公開シフト表・404。クローラーが取るページ）の `<head>` に
       `og:image`（絶対 URL・1200×630）・`og:image:alt`（ちょうど `assift`）・`og:title`・`og:description`・`og:site_name`・`og:locale`・`og:type` と、
       `twitter:card`（`summary_large_image`）・`twitter:image` が出る（ボットの一覧に当たる UA でも、当たらない UA でも。§2.2-5）
-- [ ] 本番（Vercel の Production）では `og:image` の URL のホストが `SITE_URL` のホストになる（今 `v2.assift.com`、当日から `assift.com`）。ローカルの `next start` で確認済み、本番はマージ後に見る（§8）
+- [x] 本番（Vercel の Production）では `og:image` の URL のホストが `SITE_URL` のホストになる（今 `v2.assift.com`、当日から `assift.com`）。ローカルの `next start` と本番（マージ後）で確認済み（§8）
 - [x] 公開シフト表（`/share/<code>`）にも同じ画像が出て、説明は「店舗名 期間」（§2.3-3）。期限切れ・解除済みの URL では説明を出さない
 - [x] `<link rel="manifest" href="/manifest.webmanifest">` が出て、manifest を Chrome が誤り無しで読む（本体のホストと管理画面のホストの両方）
 - [x] `/opengraph-image.png`・`/manifest.webmanifest` が 200 で CSP のヘッダが付かず（matcher の外）、`/opengraph-image.png/x` は 404 の HTML + CSP（完全一致の除外）
@@ -282,3 +282,7 @@ seed の共有（#3 の前半）と #9 は Supabase のローカルが要る。�
     curl の既定・`facebookexternalhit/1.1;line-poker/1.0`・`Mozilla/5.0 (compatible; Line-Crawler)`・LINE のアプリ内ブラウザの UA・`Twitterbot/1.0` のどれでも `<head>`
   - 読み取りの先頭に一時的に 0.8 秒の待ちを足してビルドし直しても、上の UA のすべてで `<head>`（確かめたあと戻した）
 
+### 2026-10-17 本番での確かめ（人間）
+
+- PR #49 をマージしたあと、ユーザーが `v2.assift.com` で §5 の「人間」の確かめ（LINE・Facebook・X のリンクプレビュー、Android と iOS の実機の「ホーム画面に追加」）を済ませた（細かい結果の記録は無し）
+- 残りは 10/31 の `https://assift.com/` での取り直し（026 §6.6・カットオーバー手順書の「翌日」）
