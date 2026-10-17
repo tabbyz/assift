@@ -22,7 +22,7 @@ LINE・X・Facebook・Slack などに assift の URL を貼ったとき、ロゴ
       `og:image`（絶対 URL・1200×630）・`og:image:alt`（ちょうど `assift`）・`og:title`・`og:description`・`og:site_name`・`og:locale`・`og:type` と、
       `twitter:card`（`summary_large_image`）・`twitter:image` が出る（ボットの一覧に当たる UA でも、当たらない UA でも。§2.2-5）
 - [ ] 本番（Vercel の Production）では `og:image` の URL のホストが `SITE_URL` のホストになる（今 `v2.assift.com`、当日から `assift.com`）。ローカルの `next start` で確認済み、本番はマージ後に見る（§8）
-- [x] 公開シフト表（`/share/<code>`）にも同じ画像が出て、説明のタグ（`description`・`og:description`・`twitter:description`）は出さない（§2.3-3）。店舗名はどのタグにも出ない（009 §3）
+- [x] 公開シフト表（`/share/<code>`）にも同じ画像が出て、説明は「店舗名 期間」（§2.3-3）。期限切れ・解除済みの URL では説明を出さない
 - [x] `<link rel="manifest" href="/manifest.webmanifest">` が出て、manifest を Chrome が誤り無しで読む（本体のホストと管理画面のホストの両方）
 - [x] `/opengraph-image.png`・`/manifest.webmanifest` が 200 で CSP のヘッダが付かず（matcher の外）、`/opengraph-image.png/x` は 404 の HTML + CSP（完全一致の除外）
 - [x] CSP の違反が 0 件
@@ -84,8 +84,9 @@ root の description を LP にそろえる / プランは 028。
    Next はメタデータを自分の Suspense（`Next.Metadata`）で包んで流す。**メタデータの解決（主に `generateMetadata` の中の DB や fetch の待ち）が、Suspense の外側の描画（シェル）より遅いと**、
    タグが `<body>` の hidden な要素に入る。ページに Suspense / `loading.tsx` があるとシェルが早く出るので起きやすくなるが、無くても起きる
    （レビュー 2 回目の実測: Suspense の無いページでも `generateMetadata` だけ 0.8 秒待つと `<body>`。静的な `metadata` のページは描画が遅くても `<head>`）。
-   - いまの未ログインのページ（LP・静的ページ・ログイン系・公開シフト表・404）は静的な `metadata` だけで `generateMetadata` を使っていない（`loading.tsx` も無い）ので、どの UA でも `<head>` に出る見込み（§5 #2 で確かめる）。
-     `generateMetadata` は店舗の layout にしかない
+   - いまの未ログインのページ（LP・静的ページ・ログイン系・404）は静的な `metadata` だけで `generateMetadata` を使っていない（`loading.tsx` も無い）ので、どの UA でも `<head>` に出る見込み（§5 #2 で確かめる）
+   - 公開シフト表は `generateMetadata` で DB を読む（§2.3-3）が、**page も同じ読み取りを `cache()` で共有して待つ**ので、シェルがメタデータより先に流れない。
+     読み取りに 0.8 秒の待ちを足した実測でも、一覧に無い UA（Line-Crawler・LINE のアプリ内ブラウザ）で `<head>` だった（§8）。page と別のものを `generateMetadata` で待つと崩れる
    - LINE のクローラーの UA は資料によって一覧に当たるもの（`facebookexternalhit/1.1;line-poker/1.0`）と当たらないもの（`Line-Crawler`）があり、はっきりしない。上の条件を満たさない限りどちらでも `<head>` なので、今は `htmlLimitedBots` を設定しない
    - 店舗の `generateMetadata`（DB を読む）ではブラウザで `<body>` になりうるが、ログイン後のページでクローラーは `/login` に送られるので実害は無い
    - AGENTS.md に「未ログインのページで `generateMetadata` に待ち（DB・fetch）を入れる、または Suspense / `loading.tsx` を足すと、ボットの一覧に無いクローラーにはタグが `<body>` に出る
@@ -96,11 +97,15 @@ root の description を LP にそろえる / プランは 028。
 1. **root の `description` を LP の文にそろえる**（ユーザーの決定）。今の root は v1 の文（「スマホだけでシフト表の作成・共有ができる…」）のまま、LP 以外のすべてのページの `description` と、§2.2-2 で `og:description` にもなる
 2. 文は 1 か所に置く: `src/lib/site/metadata.ts` に `SITE_NAME`（`'assift'`）と `SITE_DESCRIPTION` を置き、root layout と manifest（§2.4）が読む。LP の `page.tsx` は自分の `description` を消して root から引き継ぐ
    （`title` の `absolute` は残す）。文の「スタッフ10人まで無料」の人数は手で書かず、LP の料金の欄と同じ `FREE_STAFF_LIMIT`（`lib/billing/pricing.ts`）をテンプレート文字列で埋める
-3. **公開シフト表（`share/[code]/page.tsx`・`not-found.tsx`）は説明を出さない: `description: null`**。
-   書かないと root の LP の宣伝文（「…スタッフ10人まで無料。」）を引き継ぎ、店長が LINE のグループに共有 URL を貼るとスタッフに宣伝文が出る。
-   Next は子のキーが `null` でも親の値を上書きする（`resolve-metadata.js` の `description: metadata[key] ?? null`）ので、`null` で打ち消せる。
-   `og:description` / `twitter:description` も引き継ぐ元が空になって出ない。トップレベルの `description` なので `openGraph` を書かず、§2.2-3 に触れない。not-found も同じ（期限切れの URL を貼っても宣伝文を出さない）
-   - 当初は「assift で作ったシフト表です。」を書いていたが、LINE のプレビューで中身の無い 1 行にしかならない（タイトルの「シフト表 | assift」と同じことしか言っていない）ので、ユーザーの指示で外した（2026-10-17。§8）
+3. **公開シフト表の説明は「店舗名 期間」（例: `小石川ストア 10/1 〜 10/31`。ページの見出しと同じ）**。`share/[code]/page.tsx` の `generateMetadata` で組む（タイトルは `シフト表` のまま）。
+   - 書かないと root の LP の宣伝文（「…スタッフ10人まで無料。」）を引き継ぎ、店長が LINE のグループに共有 URL を貼るとスタッフに宣伝文が出る
+   - **009 の「店舗名をリンクプレビューに出さない」を改めた**（ユーザーの決定。2026-10-17）。LINE は説明が無いと本文の先頭（見出し・店舗名・表の日付）を切り取って出すので、
+     店舗名はどのみちプレビューに出る。出さないことを守れないなら、出し方を整えたほうが見やすい（どの店のいつの表かが一目で分かる）
+   - 読み取りは `getSharedShiftTable` を `cache()` で包み、page と 1 回にする（シフトの全行まで読む関数なので二度読ませない）。`<body>` に回らないことは §2.2-5
+   - 期限切れ・解除済み（page が `notFound()` → `not-found.tsx` の metadata）は `description: null` で root の文を打ち消す。Next は子のキーが `null` でも親の値を上書きする
+     （`resolve-metadata.js` の `description: metadata[key] ?? null`）。LINE には not-found の本文（「ページが見つかりませんでした。…」）が出る
+   - トップレベルの `description` なので `openGraph` を書かず、§2.2-3 に触れない
+   - 経緯: 当初は固定の「assift で作ったシフト表です。」を書いたが、LINE のプレビューで中身の無い 1 行だったので外し（`null`）、すると LINE が本文を切り取って出したので、この形にした（§8）
 
 ### 2.4 manifest
 
@@ -147,7 +152,7 @@ CSP は変えない: manifest は `manifest-src` が無いので `default-src 's
 - `src/lib/site/metadata.ts`（新規。`SITE_NAME` / `SITE_DESCRIPTION`）
 - `src/app/layout.tsx`（`metadataBase`・`openGraph`・`description`）
 - `src/app/(public)/(site)/page.tsx`（`description` を消す）
-- `src/app/(public)/share/[code]/page.tsx`・`not-found.tsx`（`description: null`。§2.3-3）
+- `src/app/(public)/share/[code]/page.tsx`・`not-found.tsx`（`generateMetadata` と `description: null`。§2.3-3）・`src/lib/queries/publicShare.ts`（`cache()`）
 - `src/proxy.ts`（matcher とコメント）
 - `AGENTS.md`（ディレクトリの `app/` 直下の説明と `lib/site/`・matcher の段落・「子の segment で `openGraph` を書かない」と「未ログインのページの Suspense とメタデータ」の注意）
 - `docs/plans/016-landing-page/README.md` §5（「OGP 画像・favicon の差し替え」に 027・028 で対応したと添える）
@@ -189,7 +194,7 @@ env -u SITE_URL npm run start                         # #6
 | --- | --- | --- |
 | 1 | `/`・`/login`・`/terms`・`/nonexistent`（root の 404）の HTML | §1 のタグが `<head>` に出る。`og:image` は `https://v2.assift.com/opengraph-image.png?opengraph-image.<hash>.png`（クエリ付き）。`og:image:alt` と `twitter:image:alt` はちょうど `assift`（改行なし）。`og:title` は各ページの `<title>` と同じ（`/` は `assift｜シフト表づくりに、…`、`/login` は `ログイン \| assift`）。`og:description` は `SITE_DESCRIPTION`。`twitter:card` は `summary_large_image` |
 | 2 | #1 を UA を替えて取る: curl の既定・`-A 'facebookexternalhit/1.1'`・`-A 'Mozilla/5.0 (compatible; Line-Crawler)'`（一覧に無い UA） | どれも `<head>` に出る（§2.2-5） |
-| 3 | `/share/<code>`（seed の共有）と形式違いの `/share/0`（DB を引かずに not-found） | 同じ画像。`og:title` は `シフト表 \| assift` / `ページが見つかりません \| assift`。`description`・`og:description`・`twitter:description` が無い。店舗名がどのタグにも無い |
+| 3 | `/share/<code>`（seed の共有）と形式違いの `/share/0`（DB を引かずに not-found） | 同じ画像。`og:title` は `シフト表 \| assift` / `ページが見つかりません \| assift`。説明（`description`・`og:description`・`twitter:description`）は seed の共有で `小石川ストア 10/1 〜 10/31`、`/share/0` では無い |
 | 4 | `curl -I /opengraph-image.png`・`/manifest.webmanifest` | 200・`image/png`・`application/manifest+json`。`content-security-policy` が無い |
 | 5 | `curl -I /opengraph-image.png/x`・`/xmanifest.webmanifest` | 404 の HTML に `content-security-policy` が付く |
 | 6 | `SITE_URL` を外して起動した `/` | `og:image` が `http://localhost:3000/…`（Next の既定に落ちる）。`next start` のログに `metadataBase property … is not set` の警告が出る |
@@ -267,3 +272,13 @@ seed の共有（#3 の前半）と #9 は Supabase のローカルが要る。�
   公開シフト表の page と not-found を `description: null` にし、`SHARE_DESCRIPTION` を消した（AGENTS.md・009 の記述も直した）
 - 確かめ（`SITE_URL=https://v2.assift.com` の `next start`・ローカルの Supabase）: `/share/SEEDSHR1`（200。本文に「小石川ストア」）と `/share/0` で `description`・`og:description`・`twitter:description` が無く、
   `og:title`・`og:image`・`twitter:card`（`summary_large_image`）は残る。メタタグに店舗名は無い。curl の既定と `facebookexternalhit/1.1` で同じ。`/` の説明は変わらない
+
+### 2026-10-17 公開シフト表の説明を「店舗名 期間」にする
+
+- `null` にしたら、LINE が本文の先頭（`10/1 〜 10/31 小石川ストア 木 1 金 2 …`）を切り取って説明に出した。ユーザーの決定で、説明を「店舗名 期間」にした（§2.3-3。009 の方針を改めた）
+- `getSharedShiftTable` を `cache()` で包み（元の関数は `readSharedShiftTable` にして字下げを変えない）、page の固定の `metadata` を `generateMetadata` に替えた。期間の書式は見出しと共有（`formatPeriod`）
+- 確かめ（`SITE_URL=https://v2.assift.com` の `next start`・ローカルの Supabase）:
+  - `/share/SEEDSHR1` の `description`・`og:description`・`twitter:description` が `小石川ストア 10/1 〜 10/31`、`/share/0` は無い。
+    curl の既定・`facebookexternalhit/1.1;line-poker/1.0`・`Mozilla/5.0 (compatible; Line-Crawler)`・LINE のアプリ内ブラウザの UA・`Twitterbot/1.0` のどれでも `<head>`
+  - 読み取りの先頭に一時的に 0.8 秒の待ちを足してビルドし直しても、上の UA のすべてで `<head>`（確かめたあと戻した）
+

@@ -178,8 +178,9 @@ AI シフト作成の両方から呼ぶ。`[tenantId]/actions.ts` はシフト�
 
 - `metadataBase` は root layout が `SITE_URL` から入れる。file-based の OGP 画像の URL は、開発は localhost・プレビューはブランチの URL に固定（Next の仕様）。`SITE_URL` が効くのは本番と `next start` だけ
 - `og:title` / `og:description` は各ページの `title` / `description` を Next が写す。**子の segment で `openGraph` を書かない**（浅いマージで、root の値も OGP 画像も丸ごと消え、`twitter:card` が `summary` に落ちる）。
-  ページごとに説明を変えるならトップレベルの `description` を書き、無しにするなら `description: null` で root の文を打ち消す（公開シフト表。`og:description` も出なくなる）
-- 未ログインのページで `generateMetadata` に待ち（DB・fetch）を入れる、または Suspense / `loading.tsx` を足すと、ボットの一覧に無いクローラーにはタグが `<body>` に出る
+  ページごとに説明を変えるならトップレベルの `description` を書く（公開シフト表は `generateMetadata` で「店舗名 期間」）。無しにするなら `description: null` で root の文を打ち消す（公開シフト表の not-found）
+- 未ログインのページで `generateMetadata` に待ち（DB・fetch）を入れる、または Suspense / `loading.tsx` を足すと、ボットの一覧に無いクローラーにはタグが `<body>` に出る。
+  例外は page と同じ読み取りを `cache()` で共有して待つとき（公開シフト表。page も待つのでシェルが先に流れない）。
   （Next 16 のストリーミングのメタデータ）。直すなら `next.config.ts` の `htmlLimitedBots`（既定の一覧を置き換えるので、既定の正規表現に足す形で）
 
 ## Server Actions

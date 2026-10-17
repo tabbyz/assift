@@ -1,4 +1,5 @@
 import 'server-only'
+import { cache } from 'react'
 import { isShareCode } from '@/lib/shares/code'
 import { isShareEnabled } from '@/lib/shares/expiry'
 import type { ShiftCell } from '@/lib/shifts/key'
@@ -30,11 +31,12 @@ export type SharedShiftTable = {
  * - `shares` を引き当てたあとは、**すべてのクエリに `.eq('tenant_id', share.tenant_id)` を書く**
  * - `shifts` / `date_notes` は**共有の期間でしか読まない**。URL が漏れても、公開されるのはその期間の表だけ
  * - 存在しない / 期限切れ / 解除済みは**すべて `null`**。呼び出し側は理由を出し分けず 404 にする（店舗の存在を漏らさない）
+ *
+ * `cache()` で包み、page と `generateMetadata`（リンクプレビューの説明。028 §2.3-3）の 2 回の呼び出しを 1 回の読み取りにする
  */
-export async function getSharedShiftTable(
-  code: string,
-  today: string
-): Promise<SharedShiftTable | null> {
+export const getSharedShiftTable = cache(readSharedShiftTable)
+
+async function readSharedShiftTable(code: string, today: string): Promise<SharedShiftTable | null> {
   // 形式が違うものは DB を引く前に落とす（`code` は URL から来る）
   if (!isShareCode(code)) return null
 
