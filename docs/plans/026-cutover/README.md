@@ -502,7 +502,7 @@ DKIM の公開鍵の長い値は省いた（当夜に触らない）。
 | CNAME | `admin-v2` | 3600 | `f319020a4f43f5f1.vercel-dns-016.com.`（仮のホスト） | 触らない（10/31 に消す） |
 | CNAME | `v2` | 3600 | `f319020a4f43f5f1.vercel-dns-016.com.`（仮のホスト） | 同上 |
 | CNAME | `admin` | — | （無い） | **足す**（Vercel が示す参照先、TTL 300） |
-| CNAME | `api` | 3600（029 で 300 で作り、§4 の後に戻す） | `gplvuradjykwxjbfqwnl.supabase.co.`（Supabase の独自ドメイン。2026-10-17 に足した） | 触らない |
+| CNAME | `api` | 3600（029 で 300 で作り、2026-10-17 に戻した） | `gplvuradjykwxjbfqwnl.supabase.co.`（Supabase の独自ドメイン。2026-10-17 に足した） | 触らない |
 | TXT | `_acme-challenge.api` | 3600（同上） | Supabase の独自ドメインの確認（029） | 触らない（消さない。証明書の更新に使われうる） |
 | TXT | `1556601411.gehirn._domainkey` | 3600 | DKIM（Gehirn の SMTP） | 触らない |
 | TXT | `google._domainkey` | 3600 | DKIM（Workspace） | 触らない |

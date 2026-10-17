@@ -225,6 +225,6 @@ Google のリダイレクト URI の `https://assift.supabase.co/auth/v1/callbac
 ### 2026-10-17（§4・§5）
 
 - §4 の 1〜8 がすべて通った（登録と確認メール・`sb-api-auth-token`・ログイン / パスワード再設定・Google ログイン（同意画面にアプリ名、`redirect_uri` が `api.assift.com`）・店舗とアサイン・CSP の違反 0・管理画面・片付け）
-- 報告待ち: §4 の片付けの SQL の 2 つ（`tenants` が 0、`auth.users` が管理用だけ）/ §3.3-7 の Redeploy の後に Vercel の値が書き戻されていないか / Gehirn の 2 つのレコードの TTL を 3600 に戻したか
+- §4 の片付けの SQL: `tenants` が 0 件、`auth.users` は管理用だけ。§3.3-7 の Redeploy の後も Vercel の `NEXT_PUBLIC_SUPABASE_URL` は書き戻されていない。Gehirn の `api`（CNAME）と `_acme-challenge.api`（TXT）の TTL を 3600 に戻した（TXT は残す）
 - §5: 024・026・016-terms を直した。026 §4 のゲート（「PDF のリンクのホストが決まっている」）は**足さなかった**: 本プランが期限の前（10/17）に済み、ホストは `api.assift.com` に決まったため。
   §2-8 の見送りも起きなかったので、026 の値は切り替えた後のもの（`api.assift.com`）だけを書いた
