@@ -9,12 +9,23 @@ import { AppProviders } from '@/components/AppProviders'
 import { SiteAnalytics } from '@/components/SiteAnalytics'
 import { adminHostEnv } from '@/lib/admin/host'
 import { shouldLoadAnalytics } from '@/lib/analytics/load'
+import { normalizeSiteUrl } from '@/lib/auth/requestOrigin'
 import { NONCE_HEADER } from '@/lib/security/csp'
+import { SITE_DESCRIPTION, SITE_NAME } from '@/lib/site/metadata'
 
+const siteUrl = normalizeSiteUrl(process.env.SITE_URL)
+
+/**
+ * OGP（028）。画像は `app/opengraph-image.png`（全ページに継承）、`og:title` / `og:description` は各ページの `title` と `description` を
+ * Next が写す。`twitter:*` も Next が `openGraph` から埋める（`summary_large_image`）。
+ * `metadataBase` は `SITE_URL`（共有 URL と同じ正準のオリジン）。無ければ Next の既定（開発は localhost、プレビューはブランチの URL）。
+ * **子の segment で `openGraph` を書かない**: 浅いマージなので、ここの値も画像も丸ごと消える（028 §2.2-3）
+ */
 export const metadata: Metadata = {
-  title: { default: 'assift', template: '%s | assift' },
-  description:
-    'assift（アシフト）はスマホだけでシフト表の作成・共有ができるシンプルな Web サービスです。',
+  ...(siteUrl && { metadataBase: new URL(siteUrl) }),
+  title: { default: SITE_NAME, template: `%s | ${SITE_NAME}` },
+  description: SITE_DESCRIPTION,
+  openGraph: { siteName: SITE_NAME, locale: 'ja_JP', type: 'website' },
 }
 
 /**

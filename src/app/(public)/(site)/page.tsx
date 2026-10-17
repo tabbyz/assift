@@ -17,8 +17,7 @@ import { demoWeekStart } from './_lib/demoWeek'
 
 export const metadata: Metadata = {
   title: { absolute: 'assift｜シフト表づくりに、もう時間はかけない。' },
-  description:
-    'アルバイト・パートのシフト表を、スマホでもパソコンでも。スタッフの都合や勤務の上限を守ってAIが下書きを作り、できた表はURLでスタッフに共有できます。スタッフ10人まで無料。',
+  // description は root layout（SITE_DESCRIPTION）から引き継ぐ（028 §2.3）
 }
 
 /**

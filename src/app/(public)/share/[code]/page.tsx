@@ -18,12 +18,24 @@ import classes from '@/components/shiftTable/ShiftTable.module.css'
 export const dynamic = 'force-dynamic'
 
 /**
- * **店舗名はタイトルに入れない。** LINE などに URL を貼るとリンクプレビューに出てしまう
- * （v1 の公開ページのタイトルにも店舗名は入っていない）。URL を知っている人だけの前提なので `noindex`。
+ * タイトルは固定（v1 の公開ページのタイトルにも店舗名は入っていない）。URL を知っている人だけの前提なので `noindex`。
+ * 説明は「店舗名 期間」（ページの見出しと同じ）。LINE は説明が無いと本文の先頭を切り取って出すので、店舗名はどのみちプレビューに出る。
+ * それなら出し方を整える（028 §2.3-3。009 の「店舗名をプレビューに出さない」を改めた）。root の LP の宣伝文はスタッフに出さない。
+ * 読み取りは page と `cache()` で共有する。`openGraph` は書かない（画像ごと消える）
  */
-export const metadata: Metadata = {
-  title: 'シフト表',
-  robots: { index: false, follow: false },
+export async function generateMetadata({ params }: PageProps<'/share/[code]'>): Promise<Metadata> {
+  const { code } = await params
+  const shared = await getSharedShiftTable(code, todayJst())
+  return {
+    title: 'シフト表',
+    // 見つからないときは page が notFound() するので not-found の metadata が勝つ。ここは打ち消すだけ
+    description: shared ? `${shared.tenantName} ${formatPeriod(shared.start, shared.end)}` : null,
+    robots: { index: false, follow: false },
+  }
+}
+
+function formatPeriod(start: string, end: string): string {
+  return `${formatMonthDay(start)} 〜 ${formatMonthDay(end)}`
 }
 
 /** 公開シフト表（v1 `SharesController#show`）。未ログインで開ける唯一のシフト表 */
@@ -43,7 +55,7 @@ export default async function SharePage({ params }: PageProps<'/share/[code]'>) 
       <Group justify="space-between" align="center" wrap="nowrap" gap="xs" px="xs" py={8}>
         {/* 単独で開かれるページなので h1 を置く（上位に見出しが無い） */}
         <Title order={1} size="h5">
-          {formatMonthDay(shared.start)} 〜 {formatMonthDay(shared.end)}
+          {formatPeriod(shared.start, shared.end)}
         </Title>
         <Text size="sm" c="dimmed" style={{ wordBreak: 'break-all' }}>
           {shared.tenantName}

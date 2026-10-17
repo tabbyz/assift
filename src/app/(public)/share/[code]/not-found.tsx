@@ -4,6 +4,7 @@ import { LinkAnchor } from '@/components/LinkAnchor'
 
 export const metadata: Metadata = {
   title: 'ページが見つかりません',
+  description: null,
   robots: { index: false, follow: false },
 }
 
