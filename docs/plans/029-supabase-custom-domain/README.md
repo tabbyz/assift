@@ -169,7 +169,7 @@ Google のリダイレクト URI の `https://assift.supabase.co/auth/v1/callbac
 | --- | --- |
 | `docs/plans/029-supabase-custom-domain/README.md` | 本プラン・実装ログ |
 | `docs/plans/024-production/README.md` | §2「しない」の「Supabase の独自ドメイン（リリース後に検討）」→ 029 へ。§4.4.1 に「029 で外した」と「vanity subdomain は無料だった（029 §2-2）」を足す。§4.5-4 のリダイレクト URI（「当日も変えない」はそのまま `api.assift.com` について）・§4.7 の `NEXT_PUBLIC_SUPABASE_URL` を `https://api.assift.com` に。§6 の Google の行の「リダイレクト URI は変えない」はそのまま |
-| `docs/plans/026-cutover/README.md` | §3-2 の理由の「告知・添付の PDF・ページの日付がそろう」→「PDF」。§4 に「PDF のリンクのホストが決まっている（`api.assift.com`、または §2-8 の `assift.supabase.co`）。10/27」を足し、**告知の前の判定**に入れる（026 §4 の冒頭の「1〜4」を書き換える。本プランの完了はゲートにしない）。§6.6（公開後の作業）に「Google のリダイレクト URI から `https://assift.supabase.co/auth/v1/callback` を消す（029 §4）」を足す。§4-5 の「PDF を添付」と確かめ方の「添付の版の記録」→ リンク・SHA-256（029 §3.4）。§5 の 10/29 に「Production の `NEXT_PUBLIC_SUPABASE_URL` が `https://api.assift.com` のまま」を足す。§6 の 23:25 の行: `NEXT_PUBLIC_SUPABASE_URL=https://api.assift.com`・`接続先: Supabase api.assift.com`。§6.3 の Redeploy の後にも `NEXT_PUBLIC_SUPABASE_URL` を見る。§12 2026-10-15 の DNS の表に `api`（CNAME）と `_acme-challenge.api`（TXT）を「触らない」で足す（§5 の 10/29 の「変わっていないか見る」で差分に見えないように） |
+| `docs/plans/026-cutover/README.md` | §3-2 の理由の「告知・添付の PDF・ページの日付がそろう」→「PDF」。§4 に「PDF のリンクのホストが決まっている（`api.assift.com`、または §2-8 の `assift.supabase.co`）。10/27」を足し、**告知の前の判定**に入れる（026 §4 の冒頭の「1〜4」を書き換える。本プランの完了はゲートにしない）。§6.6（公開後の作業）に「029 で `api.assift.com` に切り替えたときだけ、Google のリダイレクト URI から `https://assift.supabase.co/auth/v1/callback` を消す（029 §4）。§2-8 で見送ったときは消さない（Google ログインがそれを使っている）」を足す。以下の `NEXT_PUBLIC_SUPABASE_URL` と `接続先` の値は**切り替えたとき**のもので、見送ったときは `https://assift.supabase.co` のまま。§4-5 の「PDF を添付」と確かめ方の「添付の版の記録」→ リンク・SHA-256（029 §3.4）。§5 の 10/29 に「Production の `NEXT_PUBLIC_SUPABASE_URL` が `https://api.assift.com` のまま」を足す。§6 の 23:25 の行: `NEXT_PUBLIC_SUPABASE_URL=https://api.assift.com`・`接続先: Supabase api.assift.com`。§6.3 の Redeploy の後にも `NEXT_PUBLIC_SUPABASE_URL` を見る。§12 2026-10-15 の DNS の表に `api`（CNAME）と `_acme-challenge.api`（TXT）を「触らない」で足す（§5 の 10/29 の「変わっていないか見る」で差分に見えないように） |
 | `docs/plans/016-terms/README.md` | §7 2026-10-13 の「全文を PDF で添付」（264 行）・「添付の PDF に全文」（272 行）・「添付の PDF は」（296 行）・「添付の版」（297 行）・「告知に添付する PDF」（307 行）。元の文は書き換えずに、日付つきの追記で「→ 029 で上書き: リンク。証拠は写しと SHA-256」とする（026 §3-2 の書き方に合わせる） |
 | `AGENTS.md` | 変えない（ホストを書いていない） |
 
@@ -180,7 +180,8 @@ Google のリダイレクト URI の `https://assift.supabase.co/auth/v1/callbac
 `api.assift.com` で問題が出て、その日のうちに直せないとき:
 
 1. `npx supabase vanity-subdomains check-availability --project-ref <ref> --desired-subdomain assift --experimental` で `assift` が空いていること（外したあとに他のプロジェクトに取られうる）。
-   **空いていなければ** vanity subdomain には戻さず、ref のホストで運用する（§3.3-6 の失敗の分岐と同じ状態）。告知のリンクも `https://<ref>.supabase.co/storage/v1/object/public/legal/…` にする
+   **空いていなければ** vanity subdomain には戻さず、ref のホストで運用する（§3.3-6 の失敗の分岐と同じ状態）。そのときは §6-2・4 を飛ばし、§6-3・6 は行い、
+   §6-5 の URL は `https://<ref>.supabase.co`、§6-7 の告知のリンクは `https://<ref>.supabase.co/storage/v1/object/public/legal/…` に読み替える
 2. Google のリダイレクト URI に `https://assift.supabase.co/auth/v1/callback` があること（消していたら**先に**足し直す。vanity subdomain を有効にした直後から Auth がそれを使う）
 3. `npx supabase domains delete --project-ref <ref>`（§3.3-4 の打ち切りで消していれば飛ばす）
 4. `npx supabase vanity-subdomains activate --project-ref <ref> --desired-subdomain assift --experimental` → `get` で `Status: active`
