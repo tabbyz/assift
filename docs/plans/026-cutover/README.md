@@ -186,6 +186,7 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 | --- | --- | --- |
 | 10/31 昼 | Vercel の Cron Jobs を戻す（**10/31 23:20 より前が必須**。§3-5） | 019 §4.2-3 |
 | 10/31 | 仮のホスト `v2.assift.com` / `admin-v2.assift.com` を Vercel の Domains と Gehirn DNS から外す | 024 §6・§10 |
+| 10/31 | 告知の「新しい規約に同意いただけない場合」で 10/30 22:00 までに届いた退会の依頼（「決済情報」がある人・店舗を持たない人）のうち、まだ処理していないものを v2 の管理画面か SQL で消す | 030 §7-7 |
 | 10/31 | Google のリダイレクト URI から `https://assift.supabase.co/auth/v1/callback` を消す（vanity subdomain は 029 で外した。`api.assift.com` と `<ref>.supabase.co` の分は残す） | 029 §4 |
 | 10/31 | `https://assift.com/` の `og:image` が `https://assift.com/…` を指す（`SITE_URL` の差し替えの確認）。LINE の Page Poker と Facebook のシェアデバッガで `https://assift.com/` を取り直す（v1 や v2 の URL で取られたプレビューが残るため） | 028 §5 |
 | 11/1 朝 | 10/31 23:20・23:50 の cron の実行履歴が成功 / 旧料金の利用者の請求書を Dashboard で突き合わせ、救った 47 件の支払い失敗の数を見る | 019 §8.3-5 |

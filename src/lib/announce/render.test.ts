@@ -120,7 +120,6 @@ describe('ANNOUNCEMENT（本物の文面）', () => {
         PRIVACY_PDF_URL,
         'https://assift.com/terms',
         'https://assift.com/privacy',
-        'https://assift.com/users/edit',
         'https://assift.com',
         'mailto:support@assift.com',
       ].sort()
