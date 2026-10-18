@@ -3,7 +3,10 @@
 - 前提: 016-terms §7 2026-10-13（連絡先 `support@assift.com`。Google Workspace のエイリアス）/ 017（委託先と外国への移転・お問い合わせの内容）/
   018 §2（窓口は `support@` の 1 つ）/ 022（CSP）/ 023（エラー画面の問い合わせ先とエラー番号）/ 024 §4（Resend。差出人 `noreply@assift.com`・Receiving は使わない）/
   020（管理画面。問い合わせの利用者をユーザー id で引く）/ 030 §3-6（告知の Reply-To は `support@`）
-- 参照: `scripts/announce/send.ts`（Resend の REST を `fetch` で呼ぶ形・`Idempotency-Key`）/ Missive の公式ドキュメント（AI の設定・料金。§5）/
+- 参照: `scripts/announce/send.ts`（Resend の REST を `fetch` で呼ぶ形・`Idempotency-Key`）/
+  Missive の公式ドキュメント（2026-10-18 に取得。`administration/billing-and-plans`（+ faq）・`core-features/connected-accounts/email-accounts/gmail-google-workspace`（+ `configuring-google-aliases`）・
+  `core-features/understanding-label-types`・`advanced-features/rules/conditions`・`core-features/connected-accounts/email-accounts/spam-and-blocking`・`ai/overview`・`ai/setup`・`ai/mcp/server`（+ faq）・
+  `administration/security`（+ faq）、`missiveapp.com/privacy`・`missiveapp.com/gdpr`、ドキュメントの質問の窓口（`?ask=`）の回答。§5・§5.1）/
   Vercel BotID のドキュメント（`withBotId`・`initBotId`・`checkBotId`。§4.6）/ `node_modules/next/dist/docs/01-app/03-api-reference/05-config/01-next-config-js/serverActions.md`（`bodySizeLimit`。§4.7）
 - 経緯: 2026-10-18 の相談で、問い合わせの受信箱は **Missive**、入口は**自作のフォーム**に決めた（AI の自動応答・Help Scout・Plain と比べた結果）。
   同じ日のたたき台のレビューで、「開いていた画面」（`?from=`）を外し、迷惑な投稿の対策を BotID 中心に改め、画像の添付を足した（§3-9・11・12）
@@ -54,7 +57,7 @@
 | # | 項目 | 案 | 理由 |
 | --- | --- | --- | --- |
 | 1 | アドレスを載せる場所 | **特商法の表記と global-error だけに残す**。ほかはフォームへのリンク（§4.8） | アドレスは規約・ポリシー・030 の告知・Stripe の公開情報で既に出回っており、消しても届く迷惑メールは減らない。新しく集められるのを減らすのが目的。特商法の表記は法令の確認まで残す（§9-2）。global-error はアプリが落ちたとき（フォームも動かない）にしか描かれず、クローラーが読まない |
-| 2 | 受信箱 | **Missive**（Productive を想定。§5） | iOS / Android / Mac にアプリがある。自分の OpenAI の鍵で AI の下書きを上乗せなしで使える。1 人で対応する前提に合う（2026-10-18 の比較） |
+| 2 | 受信箱 | **Missive**（Productive を想定。§5・§9-1） | iOS / Android / Mac にアプリがある。自分の鍵（OpenAI・Anthropic・Gemini）で AI の下書きを上乗せなしで使える。1 人で対応する前提に合う（2026-10-18 の比較）。**無料プランは無い**（トライアルの 30 日のあとは、プランを選ぶまで止まる。§5.1） |
 | 3 | フォームから受信箱への渡し方 | **メール**（Resend で `support@assift.com` へ送る）。Missive の API は使わない | 受信箱の SaaS を替えても転送先を変えるだけで済む。Missive の API は Productive 以上で、縛られる |
 | 4 | ページ | **`/contact` の 1 つ**（`(public)/(site)/contact`）。ログインの有無で中身を変える | 入口が 1 つなら案内が簡単。ログイン中に (site) のヘッダーの「ログイン」を押しても proxy が `/tenants` へ送るので害は無い（`GUEST_ONLY_PATHS`） |
 | 5 | ログイン中の返信先 | アカウントのメールアドレスを使い、入力させない | 本人確認が済んだアドレスにしか返さない。打ち間違いが無い |
@@ -133,8 +136,9 @@
 | `attachments` | `[{ filename: 'image-1.jpg', content: <base64> }, …]`（§4.7） |
 | `Idempotency-Key` | `contact/{requestId}`。`requestId` はフォームを開いたときにクライアントが作る uuid（`crypto.randomUUID()`）で、送信の連打・やり直しで二重に届かない（Resend は 24 時間、同じ鍵の再送を 1 通にする） |
 
-- Gmail は差出人と件名でスレッドをまとめるので、件名に内容の先頭を入れて問い合わせごとに分ける
-- Missive は差出人（`noreply@`）を連絡先として表示するはず。誰からかは件名と本文の先頭（「返信先: …」）で分かるようにする。**Missive で返信したときの宛先が Reply-To になるか**はトライアルで確かめる（§8）。ならなければ §9-7
+- Gmail は差出人と件名でスレッドをまとめるので、件名に内容の先頭を入れて問い合わせごとに分ける。Missive は件名ではなく Reply-To などのヘッダで会話をまとめる（`core-features/conversations/faq`）。Reply-To は問い合わせの相手ごとに違うので、別の人の問い合わせが 1 つの会話に混ざることは無い見込み（§8 で確かめる）
+- Missive は差出人（`noreply@`）を連絡先として表示するはず。誰からかは件名と本文の先頭（「返信先: …」）で分かるようにする
+- **Missive で返信したときの宛先が Reply-To になるかは、公式ドキュメントに書かれていない**（ドキュメントの質問の窓口の回答も「見つからない。送る前に下書きの宛先を確かめて」。2026-10-18）。トライアルで確かめる（§8）。ならなければ §9-7
 
 ### 4.6 迷惑な投稿の対策
 
@@ -199,33 +203,54 @@
 
 ## 5. Missive の設定（手作業）
 
-Missive の細かい仕様はトライアルで確かめる。受信は今の Google Workspace のまま（MX は触らない。024・026）。
+受信は今の Google Workspace のまま（MX は触らない。024・026）。Missive は Gmail の公式の OAuth の API でつなぎ、ラベルを双方向に同期する。
 
-1. Missive のトライアル（30 日）を始める。プランは Productive を想定（ルールと AI が使える。1 人なら Starter で足りるかも §9-1）
-2. Google のアカウント `admin@sundbox.app`（`support@` と `info@` はこのエイリアス）をつなぐ
-3. 送信元に `support@assift.com` を選べるようにする（Gmail の「他のアドレスからメールを送信」に既にある。Missive が取り込むか確かめる）
-4. ルール: 宛先が `support@assift.com` / `info@assift.com` の会話に「assift」のラベルを付け、返信の送信元を `support@` にする。`sundbox.app` のほかのメールと分ける
-5. iOS アプリを入れ、「assift」のラベルだけ通知する
-6. よく使う返信を Missive の Responses（定型文）にする
-7. AI の下書きを使うなら、自分の OpenAI の鍵をつなぐ（Missive のクレジットは 25% 上乗せ）。ポリシーへの影響は §6・§9-8
+1. Missive のトライアルを始める（**最初の組織に 30 日、Productive の機能**。カードは要らない。トライアル中は**直近 30 日の履歴だけ**見える）
+2. **Settings > Accounts > Add account > Gmail or Google Workspace** で `admin@sundbox.app`（`support@` と `info@` はこのエイリアス）をつなぐ。個人のアカウントとして足す（1 人なので共有にしない）。取り込む履歴は「No history」か「1 month」でよい
+3. **エイリアス**: Google の管理コンソールのエイリアス（済み）と、Gmail の「Send mail as」（`support@`。016-terms §7 で済み）の両方が要る。Missive にだけ足すと Gmail が差出人を元のアドレスに書き換える（Missive に「"From" address reverted」と出る）。
+   両方そろっていれば、**`support@` 宛てのメールに返信するとき Missive が `support@` を差出人に選ぶ**（ドキュメントの質問の窓口の回答。§8 で確かめる）
+4. **assift のメールを分ける**: **Gmail のフィルタ**で、宛先が `support@assift.com` か `info@assift.com` のメールに「assift」のラベルを付ける。Gmail のフィルタは Missive より先にサーバーで走り、ラベルは Missive（iOS を含む）に出る。
+   これは Starter でも使える（Missive のルールは Productive 以上）。`sundbox.app` のほかのメールと受信箱を分けたいときは、フィルタで「受信トレイをスキップ」も付ける
+5. **通知**: iOS アプリを入れる。**Starter では「このラベルだけ通知」ができない**（通知の設定は種類ごとで、ラベルごとではない。ドキュメントの質問の窓口の回答）。`sundbox.app` のほかのメールの通知を止めるには、Productive のルールの「Silence notifications」を使う（§9-1）
+6. よく使う返信を Missive の canned responses（定型文）にする
+7. **迷惑な投稿を「Mark as spam」で弾かない**: Missive の迷惑メールの扱いは**差出人のアドレスかドメインをブロック**する。フォームのメールの差出人は全部 `noreply@assift.com` なので、ブロックすると**以後のフォームの問い合わせがすべて届かなくなる**（`assift.com` のドメインならなおさら）。フォームの迷惑な投稿は削除するだけにする
+8. AI の下書きを使うなら §5.1
+
+### 5.1 Missive について確かめたこと（公式ドキュメント。2026-10-18）
+
+| 項目 | 内容 |
+| --- | --- |
+| プラン | Starter（年払いで月 $14 / 月払いで $18。5 人まで。連携・ルール・API・AI なし）/ Productive（$24 / $30。50 人まで。すべてあり・分析は基本）/ Business（$36 / $45）。1 人あたり。**無料プランは無い** |
+| トライアルの後 | プランを選ぶまで組織が止まる（送れない・過去の会話が隠れる・通知が止まる）。止まったままだと、つないだアカウントが外れ、データはいずれ消える |
+| プランの変更 | 組織の持ち主がパソコンから（スマホのアプリではできない） |
+| AI | Productive 以上。**OpenAI・Anthropic・Google Gemini** のどれか。自分の鍵なら上乗せなし、Missive のクレジットなら 25% 上乗せ（最初に $5 分の無料枠）。プロバイダは組織に 1 つずつ足し、使える人を絞れる。返信の下書き・要約・翻訳・定型文の検索、届いたメールで AI を走らせるルール（AI Rules）もある |
+| MCP サーバー | `https://mcp.missiveapp.com`。Claude などから会話の検索・下書き・送信ができる（Productive 以上・管理者が有効にする）。考える AI は接続した側のもので、Missive のクレジットは使わない。「Send messages」の権限を渡さなければ下書きまでに留められる |
+| 運営会社 | **Heliom Inc.（カナダ・ケベック）** |
+| データの置き場所 | Amazon Web Services。サーバーは現在すべて **US East 1（米国・バージニア北部）**（`administration/security/faq`）。データベースは Crunchy Data（米国） |
+| 安全管理 | SOC 2 Type II（報告書は請求すれば出す）。Google の OAuth API の検証（Gmail につなぐサービスに必須の外部監査）を通過。通信は TLS、保存時も暗号化 |
+| 委託先（Missive のもの） | AWS・Google・Cloudflare・Crunchy Data・Stripe・Segment・Mixpanel・Anthropic（Missive 自身のサポート）など。いずれも米国（ニュースレターの Campaign Monitor だけ豪州） |
+| データ処理の取り決め（DPA） | `privacy@missiveapp.com` に頼めば結べる |
 
 ## 6. プライバシーポリシーの改定
 
 | 箇所 | いま | 改定 |
 | --- | --- | --- |
 | 2. 取得する情報「お問い合わせの内容」 | メールアドレスと、お問い合わせいただいた内容 | 「添付された画像」と、「ログイン中に送った場合は、アカウントと店舗の識別子、ブラウザの種類」を足す |
-| 6. 委託先 | Google（米国）：お問い合わせのメールの受信と保管 | Missive（国とデータの置き場所は確かめる）：お問い合わせへの対応を足す。Google の行は残す（受信は Workspace のまま） |
+| 6. 委託先 | Google（米国）：お問い合わせのメールの受信と保管 | 「Missive（カナダ。データは米国のサーバーに保存）：お問い合わせへの対応」を足す（運営は Heliom Inc.。§5.1）。Google の行は残す（受信は Workspace のまま） |
 | 6. 委託先（Vercel） | サーバー・AI の中継・アクセス解析 | 「不正な送信の判定」を足すか確かめる（BotID はブラウザの情報を判定に使う。Deep Analysis は Vercel が提携する事業者の仕組みを使う） |
-| 6. 外国の制度 | 米国の制度へのリンク | Missive の国が米国以外なら、その国の制度（個人情報保護委員会の調査）へのリンクを足す |
+| 6. 外国の制度 | 米国の制度へのリンク | **カナダ**の制度（個人情報保護委員会「外国における個人情報の保護に関する制度等の調査」のカナダの頁）へのリンクを足す。データの置き場所は米国なので、米国のリンクはそのまま |
+| 6. 基準に適合する体制 | 委託先と取り決めている | Missive とは DPA を結ぶ（§5.1。`privacy@missiveapp.com`）。SOC 2 Type II の報告書も取り寄せておく |
 | 窓口 | `support@assift.com` | フォームへのリンク。氏名と住所の開示の文は残す |
 
 - **時期が問題**（§9-9）: ポリシーは 10/30 に制定し、PDF は 10/28 に確定する（030・029）。Missive を使い始める前にポリシーを直す必要がある
-- AI の下書き（§5-7）を使うなら、問い合わせの内容が OpenAI に渡る。委託先の「AI の提供元：AI を使う機能」で読めるか、文を足すかを決める
+- AI の下書き（§5.1）を使うなら、問い合わせの内容が AI の提供元（自分の鍵なら OpenAI・Anthropic・Google のどれか）に渡る。委託先の「AI の提供元：AI を使う機能」で読めるか、文を足すかを決める。
+  Missive のクレジットで使うと、Missive の米国の提供元のアカウントを通る（自分の鍵なら直接）。MCP サーバー経由（Claude などから下書き）でも、接続した側の AI に内容が渡る
 - スクリーンショットにはスタッフの名前などが写り込む。店舗から委託を受けた情報（ポリシー 4.）を、問い合わせへの対応に使う範囲で受け取ることになる。4. の「店舗が assift を利用するために必要な範囲」で読めるかを確かめる
 
 ## 7. 実装の順番
 
-1. §9 を決める。Missive のトライアルで §5 と Reply-To を確かめる（コードの前に、手で Gmail から `support@` に Reply-To と添付付きのメールを送れば確かめられる）
+1. §9 を決める。Missive のトライアルで §5 と §8 の Missive の項目を確かめる（コードの前に、別のアドレスから `support@` に Reply-To と添付付きのメールを送れば確かめられる）。
+   トライアルは 1 回きり（人に付く）で 30 日なので、**始めるのは実装に取りかかる直前**にする（リリース後。§9-9）
 2. `lib/validation/contact.ts`・`lib/contact/{path,attachments,render}.ts` とテスト
 3. `lib/contact/send.ts`・`contact/actions.ts`・`bodySizeLimit`
 4. `/contact` のページとフォーム・`_lib/resizeImage.ts`
@@ -241,7 +266,12 @@ Missive の細かい仕様はトライアルで確かめる。受信は今の Go
 - 開発: 送るとコンソールにメールの中身が出る。ログイン中は店舗の名前が付き、他人の店舗の id を `?tenant=` に入れても付かない
 - プレビュー（`RESEND_API_KEY` と `CONTACT_INBOX` を自分のアドレスで入れる）: 届いたメールの差出人・Reply-To・件名・本文・添付。同じフォームで 2 回押しても 1 通
 - 添付: iPhone の Safari でスクリーンショットと写真（HEIC）を選び、縮小されて届く。3 枚で 1MB を超える画像でも送れる（`bodySizeLimit`）。届いた JPEG に位置情報が無い
-- Missive: 届いた会話にラベルが付き、iOS アプリに通知が来て、返信が**相手のアドレスに** `support@` から届く。添付の画像が見られる
+- Missive（ドキュメントに書かれていない・回答だけのものを実機で確かめる）:
+  - 返信の宛先が **Reply-To（相手のアドレス）**になる（§4.5。書かれていない）
+  - 返信の差出人に `support@` が自動で選ばれ、相手に `support@` から届く（"From" address reverted が出ない。§5-3）
+  - 別の人の問い合わせが 1 つの会話にまとまらない。同じ人の 2 件目は別の会話になる（件名が違うので）か、まとまっても困らない
+  - Gmail のフィルタの「assift」のラベルが iOS アプリに出る。通知がどう来るか（Starter で決めるなら §9-1）
+  - 添付の画像が見られる
 - CSP: `npm run build && npm run start` で `/contact` を開き、画像を選んで送るまでに `securitypolicyviolation` が 0 件（022 §6）。BotID のスクリプトと送信が同一オリジンで成功する
 - BotID: 本番相当（Vercel のプレビュー）で人が送ると通り、`curl` で Action を直接叩くと弾かれる
 - ハニーポットに値を入れると成功の表示になるが届かない
@@ -250,14 +280,14 @@ Missive の細かい仕様はトライアルで確かめる。受信は今の Go
 
 | # | 項目 | 選択肢 | おすすめ |
 | --- | --- | --- | --- |
-| 1 | Missive のプラン | Starter（月 $14〜。ルール・AI・API なし）/ Productive（月 $24〜） | ラベルで分けたいなら Productive。トライアルで判断 |
+| 1 | Missive のプラン | (a) Starter（年払いで月 $14）/ (b) Productive（年払いで月 $24）/ (c) `support@` 専用の Workspace のユーザーを作って Starter でつなぐ | **(b)**。ラベルで分けるのは Starter でも Gmail のフィルタでできるが、Starter は**ラベルごとに通知を絞れない**ので、`admin@sundbox.app` に届く `sundbox.app` のメールまで通知される（§5-5）。Productive ならルールでほかの通知を止められ、AI と MCP サーバーも使える。(c) は Workspace の 1 人分が増え、合計は Productive とほぼ同じ |
 | 2 | 特商法の表記のアドレス | 残す / フォームに置き換える | **残す**（法令を確かめるまで。施行規則でメールアドレスが要るのは電子メールで広告するとき、という理解だが確認していない） |
 | 3 | 回数の制限 | Vercel Firewall / 自前（DB に数える表） / 当面なし | Vercel Firewall（使えて無料なら） |
 | 4 | 返信の目安 | 書かない / 「3 営業日以内」など | 1 人で対応するので書くなら余裕を持たせる |
 | 5 | 内容の上限 | 2,000 / 5,000 文字 | 5,000 |
 | 6 | 添付の枚数 | 1 / 3 / 5 枚 | 3 枚（縮小すれば 4.5MB の上限に余裕がある） |
-| 7 | Missive で Reply-To が効かなかったとき | Missive の API で会話を作る / 差出人を相手のアドレスに見せる工夫 | トライアルで効くことを確かめてから実装する |
-| 8 | AI の下書き | 使わない / 自分の OpenAI の鍵で使う | 使うならポリシーの文を確かめてから |
+| 7 | Missive で Reply-To が効かなかったとき | (a) Missive の custom channel（Productive 以上の API）で会話を作る / (b) 返信のたびに宛先を手で直す | 公式ドキュメントに書かれていないので、**コードの前にトライアルで確かめる**。効かなければ (a) を設計し直す（受信箱に縛られる・返信の送り方も作る必要がある） |
+| 8 | AI の下書き | 使わない / Missive の AI（自分の鍵。OpenAI・Anthropic・Gemini）/ MCP サーバー（Claude などから下書き） | 運用して返信の手間を感じてから。使うならポリシーの文を確かめてから（§6） |
 | 9 | 時期 | (a) 10/28 のポリシー確定までに入れる / (b) リリース後にポリシーを改定して入れる | **(b)**。カットオーバーの前に規約・ポリシーの PDF を動かさない。リリースまでは今の Gmail で受ける |
 | 10 | BotID の Deep Analysis | Basic だけ / 最初から Deep Analysis | Basic から。止まらない投稿が目立ったら有効にする（費用は月 $1 未満の見込み） |
 
