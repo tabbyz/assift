@@ -183,12 +183,13 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
     body: (
       <>
         <P>
-          assiftの運営のため、次の事業者に業務を委託しています。委託先に提供するのは、それぞれの業務に必要な情報に限ります。
+          assiftの運営のため、主に次の事業者に業務を委託しています。委託先に提供するのは、それぞれの業務に必要な情報に限ります。
         </P>
         <Items
           items={[
             `Supabase（米国）：データベースと認証。データは${PRIVACY.databaseRegion}のサーバーに保存します`,
             'Vercel（米国）：assiftを稼働させるサーバー、AIの提供元への中継、アクセス解析',
+            'Axiom（米国）：エラーの記録と監視',
             'AIの提供元（OpenAI・Anthropic・Google・Microsoft・Amazonなど。主に米国）：AIを使う機能。送信したデータがAIの学習に使われることはありません',
             'Stripe（米国）：有料プランの決済',
             'Resend（米国）：メールの送信',
