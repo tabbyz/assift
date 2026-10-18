@@ -6,6 +6,7 @@ import {
   messageDigest,
   parseExcludeList,
   parseRecipients,
+  planBatches,
   resumePoint,
   toBatches,
   type Recipient,
@@ -42,30 +43,30 @@ describe('isSendableEmail', () => {
 })
 
 describe('parseRecipients', () => {
-  it('並びを保ち、小文字にそろえ、送れない形・除外・同じアドレスの 2 行目を外す', () => {
+  it('並びを保ち、小文字にそろえる。RFC から外れる形は別に分け、形でない・除外・同じアドレスの 2 行目を外す', () => {
     const csv = [
       'id,email,current_sign_in_at',
       '3, Recent@Example.com ,2026-10-28 10:00:00',
       '1,old@example.com,',
       '7,taro..yamada@docomo.ne.jp,',
+      '8,not-an-email,',
       '9,recent@example.com,2020-01-01 00:00:00',
       '4,bounced@example.com,',
       '',
     ].join('\n')
-    const { recipients, skipped } = parseRecipients(csv, new Set(['bounced@example.com']))
+    const { recipients, irregular, skipped } = parseRecipients(
+      csv,
+      new Set(['bounced@example.com'])
+    )
     expect(recipients).toEqual([
       { v1UserId: '3', email: 'recent@example.com' },
       { v1UserId: '1', email: 'old@example.com' },
     ])
+    expect(irregular).toEqual([{ v1UserId: '7', email: 'taro..yamada@docomo.ne.jp' }])
     expect(skipped).toEqual([
-      {
-        row: 4,
-        v1UserId: '7',
-        email: 'taro..yamada@docomo.ne.jp',
-        reason: '送れる形のアドレスではない',
-      },
-      { row: 5, v1UserId: '9', email: 'recent@example.com', reason: '同じアドレスが前の行にある' },
-      { row: 6, v1UserId: '4', email: 'bounced@example.com', reason: '除外の一覧にある' },
+      { row: 5, v1UserId: '8', email: 'not-an-email', reason: 'メールアドレスの形ではない' },
+      { row: 6, v1UserId: '9', email: 'recent@example.com', reason: '同じアドレスが前の行にある' },
+      { row: 7, v1UserId: '4', email: 'bounced@example.com', reason: '除外の一覧にある' },
     ])
   })
 
@@ -91,6 +92,29 @@ describe('toBatches', () => {
     const batches = toBatches(Array.from({ length: 250 }, (_, i) => i))
     expect(batches.map((batch) => batch.length)).toEqual([100, 100, 50])
     expect(batches[2][0]).toBe(200)
+  })
+})
+
+describe('planBatches', () => {
+  it('RFC の形を 100 通ずつ、そのあとに外れる形を 1 通ずつ', () => {
+    const regular = Array.from({ length: 150 }, (_, i) => ({
+      v1UserId: String(i),
+      email: `u${i}@example.com`,
+    }))
+    const irregular = [
+      { v1UserId: 'a', email: 'a..b@docomo.ne.jp' },
+      { v1UserId: 'c', email: '.c@ezweb.ne.jp' },
+    ]
+    const { batches, singlesFrom } = planBatches(regular, irregular)
+    expect(batches.map((batch) => batch.length)).toEqual([100, 50, 1, 1])
+    expect(singlesFrom).toBe(3)
+    expect(batches[2]).toEqual([irregular[0]])
+  })
+
+  it('外れる形が無ければ 1 通ずつのバッチは無い', () => {
+    const { batches, singlesFrom } = planBatches([{ v1UserId: '1', email: 'a@example.com' }], [])
+    expect(batches).toHaveLength(1)
+    expect(singlesFrom).toBe(2)
   })
 })
 

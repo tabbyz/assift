@@ -100,7 +100,7 @@ src/
     security/                     CSP（022）。csp（nonce の生成・方針の文字列・ヘッダ名。純関数。proxy と root layout が使う。
                                   レスポンスの方針を付けない唯一の例外は PDF の応答で、その判定は lib/export/path の isPdfExportPath）
     site/                         サイト共通のメタデータの文言（028）。metadata（SITE_NAME / SITE_DESCRIPTION）
-    announce/                     カットオーバーの告知（030）。content（文面のデータ。文言の正）/ render（テキスト版と HTML 版）/ recipients（宛先の CSV・100 通ずつの区切り・Idempotency-Key）
+    announce/                     カットオーバーの告知（030）。content（文面のデータ。文言の正）/ render（テキスト版と HTML 版）/ recipients（宛先の CSV・100 通ずつの区切り（RFC から外れる形は最後に 1 通ずつ）・Idempotency-Key・続きの位置）
     analytics/                    アクセス解析（025）。load（読み込むか。本番の本体のホストだけ）/ url（送る URL からクエリとハッシュを落とす）
     export/                       request（認証 → 店舗 → 期間 → 表。PDF / CSV 共通の入口）/ filename / path（URL を組む。リンクと旧 URL の書き換えが共有）
     csv/                          shiftCsv（純関数）/ encode（CP932 か BOM 付き UTF-8。iconv-lite）

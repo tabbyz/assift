@@ -14,11 +14,15 @@ export const BATCH_SIZE = 100
 
 /*
  * 送る前の検査（030 §6.4）。Resend は 1 通でも受け付けないアドレスがあるとバッチごと断りうるので、RFC の形（ASCII・ローカル部の
- * 先頭と末尾と連続の「.」なし・ドメインのラベルの規則・英字の TLD）から外れるものは先に外して一覧に出す。
- * 携帯のキャリアの古いアドレス（`taro..yamada@docomo.ne.jp` など）はここで外れる
+ * 先頭と末尾と連続の「.」なし・ドメインのラベルの規則・英字の TLD）に合うものだけを 100 通のバッチに入れる。
+ * 合わないが v1 が受け付けていた形（`[^@\s]+@[^@\s]+`。携帯のキャリアの古い `taro..yamada@docomo.ne.jp` など）は、
+ * 移行の対象で実際に届いていた人なので外さず、最後に 1 通ずつ送る（`irregular`。断られてもその 1 通だけ）
  */
 const LOCAL_PART = /^[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*$/
 const DOMAIN_LABEL = /^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/
+
+/** v1 の Devise の `email_regexp`（`config/initializers/devise.rb`）と同じ。これにも合わなければ送らない */
+const V1_EMAIL = /^[^@\s]+@[^@\s]+$/
 
 export function isSendableEmail(email: string): boolean {
   if (email.length > 254) return false
@@ -41,7 +45,7 @@ export function isSendableEmail(email: string): boolean {
 export function parseRecipients(
   csv: string,
   exclude: ReadonlySet<string> = new Set()
-): { recipients: Recipient[]; skipped: SkippedRecipient[] } {
+): { recipients: Recipient[]; irregular: Recipient[]; skipped: SkippedRecipient[] } {
   const rows = parseCsv(csv)
   const first = rows[0]
   if (!first)
@@ -50,6 +54,7 @@ export function parseRecipients(
     throw new Error('宛先の CSV に id と email の列がありません（030 §6.5 の SQL で出す）')
   }
   const recipients: Recipient[] = []
+  const irregular: Recipient[] = []
   const skipped: SkippedRecipient[] = []
   const seen = new Set<string>()
   rows.forEach((row, index) => {
@@ -57,18 +62,33 @@ export function parseRecipients(
     const line = index + 2
     const v1UserId = row.id.trim()
     const email = row.email.trim().toLowerCase()
-    if (!isSendableEmail(email)) {
-      skipped.push({ row: line, v1UserId, email, reason: '送れる形のアドレスではない' })
+    if (!V1_EMAIL.test(email)) {
+      skipped.push({ row: line, v1UserId, email, reason: 'メールアドレスの形ではない' })
     } else if (exclude.has(email)) {
       skipped.push({ row: line, v1UserId, email, reason: '除外の一覧にある' })
     } else if (seen.has(email)) {
       skipped.push({ row: line, v1UserId, email, reason: '同じアドレスが前の行にある' })
     } else {
       seen.add(email)
-      recipients.push({ v1UserId, email })
+      ;(isSendableEmail(email) ? recipients : irregular).push({ v1UserId, email })
     }
   })
-  return { recipients, skipped }
+  return { recipients, irregular, skipped }
+}
+
+/**
+ * 送る順のバッチ。RFC の形のアドレスを 100 通ずつ、そのあとに RFC から外れる形を 1 通ずつ（030 §6.4）。
+ * `singlesFrom` 番目（1 から）以降が 1 通ずつのバッチ
+ */
+export function planBatches(
+  recipients: Recipient[],
+  irregular: Recipient[]
+): { batches: Recipient[][]; singlesFrom: number } {
+  const batches = toBatches(recipients)
+  return {
+    batches: [...batches, ...irregular.map((recipient) => [recipient])],
+    singlesFrom: batches.length + 1,
+  }
 }
 
 /** `--exclude` のファイル（`email` の列を持つ CSV。結果の CSV もそのまま渡せる）からアドレスの集合を作る */

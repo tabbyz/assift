@@ -31,8 +31,8 @@ import {
   messageDigest,
   parseExcludeList,
   parseRecipients,
+  planBatches,
   resumePoint,
-  toBatches,
   type BatchEmail,
 } from '@/lib/announce/recipients'
 import { renderAnnouncementHtml, renderAnnouncementText } from '@/lib/announce/render'
@@ -55,7 +55,8 @@ const { values } = parseArgs({
 const RESEND_BATCH_URL = 'https://api.resend.com/emails/batch'
 const MAX_ATTEMPTS = 5
 const TIMEOUT_MS = 30_000
-const RESULT_HEADER = ['batch', 'v1_user_id', 'email', 'resend_id', 'sent_at']
+/** `error` は 1 通ずつの段で断られた行だけ（`resend_id` は空。030 §6.4） */
+const RESULT_HEADER = ['batch', 'v1_user_id', 'email', 'resend_id', 'sent_at', 'error']
 
 const text = renderAnnouncementText(ANNOUNCEMENT)
 const html = renderAnnouncementHtml(ANNOUNCEMENT)
@@ -95,6 +96,16 @@ class SentButUnrecordedError extends Error {}
 
 /** 送る前に止めて、案内どおりに直せば続けられる失敗 */
 class StopError extends Error {}
+
+/** Resend が中身を断った（400・422）。1 通ずつの段では、その 1 通を失敗として記録して先へ進む */
+class RejectedError extends StopError {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message)
+  }
+}
 
 /**
  * 1 回のバッチを送る。429（上限を除く）・5xx・時間切れ・通信の失敗・`concurrent_idempotent_requests` は同じ `Idempotency-Key` で
@@ -173,7 +184,10 @@ async function postBatch(
     const retryable =
       response.status === 429 || response.status >= 500 || name === 'concurrent_idempotent_requests'
     if (!retryable || attempt >= MAX_ATTEMPTS) {
-      throw new StopError(`Resend が ${response.status} を返しました: ${body}`)
+      const message = `Resend が ${response.status} を返しました: ${body}`
+      if (response.status === 400 || response.status === 422)
+        throw new RejectedError(message, response.status)
+      throw new StopError(message)
     }
     const retryAfter = Number(response.headers.get('retry-after'))
     const wait = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 2000 * attempt
@@ -231,49 +245,66 @@ async function sendAll(input: string, output: string) {
   const campaign = values.campaign ?? ANNOUNCEMENT_CAMPAIGN
   const interval = integerOption('interval-ms', values['interval-ms'] ?? '3000', 0)
   // 宛先・除外・記録を読む段の失敗は、案内の文だけを出して止める（スタックは要らない）
-  const { recipients, skipped, batches, next, metaPath, rawLog, ledger } = (() => {
-    try {
-      const exclude = values.exclude
-        ? parseExcludeList(readFileSync(values.exclude, 'utf8'))
-        : new Set<string>()
-      const { recipients, skipped } = parseRecipients(readFileSync(input, 'utf8'), exclude)
-      if (recipients.length === 0) throw new StopError('送る宛先が 0 人です')
-      const batches = toBatches(recipients)
+  const { recipients, irregular, skipped, batches, singlesFrom, next, metaPath, rawLog, ledger } =
+    (() => {
+      try {
+        const exclude = values.exclude
+          ? parseExcludeList(readFileSync(values.exclude, 'utf8'))
+          : new Set<string>()
+        const { recipients, irregular, skipped } = parseRecipients(
+          readFileSync(input, 'utf8'),
+          exclude
+        )
+        if (recipients.length + irregular.length === 0) throw new StopError('送る宛先が 0 人です')
+        // RFC の形のアドレスを 100 通ずつ、そのあとに外れる形を 1 通ずつ（断られてもその 1 通だけ。030 §6.4）
+        const { batches, singlesFrom } = planBatches(recipients, irregular)
 
-      // 続きの位置は結果の CSV から決める（記録と今の宛先の区切りが合わなければ止まる）。文面と送信の識別子も前回と同じでなければ止まる
-      const metaPath = `${output}.meta.json`
-      const rawLog = `${output}.raw.jsonl`
-      const ledger = existsSync(output) ? parseCsv(readFileSync(output, 'utf8')) : []
-      const next = resumePoint(
-        batches,
-        ledger.map((row) => ({ batch: row.batch, email: row.email }))
-      )
-      if (ledger.length > 0) {
-        const meta = existsSync(metaPath)
-          ? (JSON.parse(readFileSync(metaPath, 'utf8')) as Meta)
-          : undefined
-        if (!meta)
-          throw new StopError(`${metaPath} がありません。結果の CSV と同じ場所に置いてください`)
-        if (meta.campaign !== campaign || meta.digest !== digest) {
-          throw new StopError(
-            `前回（${meta.startedAt}）と送信の識別子か文面が違います（前回 ${meta.campaign} / ${meta.digest.slice(0, 12)}、今回 ${campaign} / ${digest.slice(0, 12)}）。送った版に戻してから続けてください`
-          )
+        // 続きの位置は結果の CSV から決める（記録と今の宛先の区切りが合わなければ止まる）。文面と送信の識別子も前回と同じでなければ止まる
+        const metaPath = `${output}.meta.json`
+        const rawLog = `${output}.raw.jsonl`
+        const ledger = existsSync(output) ? parseCsv(readFileSync(output, 'utf8')) : []
+        const next = resumePoint(
+          batches,
+          ledger.map((row) => ({ batch: row.batch, email: row.email }))
+        )
+        if (ledger.length > 0) {
+          const meta = existsSync(metaPath)
+            ? (JSON.parse(readFileSync(metaPath, 'utf8')) as Meta)
+            : undefined
+          if (!meta)
+            throw new StopError(`${metaPath} がありません。結果の CSV と同じ場所に置いてください`)
+          if (meta.campaign !== campaign || meta.digest !== digest) {
+            throw new StopError(
+              `前回（${meta.startedAt}）と送信の識別子か文面が違います（前回 ${meta.campaign} / ${meta.digest.slice(0, 12)}、今回 ${campaign} / ${digest.slice(0, 12)}）。送った版に戻してから続けてください`
+            )
+          }
         }
+        return {
+          recipients,
+          irregular,
+          skipped,
+          batches,
+          singlesFrom,
+          next,
+          metaPath,
+          rawLog,
+          ledger,
+        }
+      } catch (error) {
+        throw error instanceof StopError
+          ? error
+          : new StopError(error instanceof Error ? error.message : String(error))
       }
-      return { recipients, skipped, batches, next, metaPath, rawLog, ledger }
-    } catch (error) {
-      throw error instanceof StopError
-        ? error
-        : new StopError(error instanceof Error ? error.message : String(error))
-    }
-  })()
+    })()
   const count = values.batches ? integerOption('batches', values.batches, 1) : batches.length
   const lastBatch = Math.min(batches.length, next + count - 1)
 
   printMessage()
   console.log(
-    `宛先: ${recipients.length.toLocaleString()} 人（外した行 ${skipped.length}）/ バッチ: 全 ${batches.length}`
+    `宛先: ${(recipients.length + irregular.length).toLocaleString()} 人（100 通ずつ ${recipients.length.toLocaleString()} 人・最後に 1 通ずつ ${irregular.length} 人。外した行 ${skipped.length}）/ バッチ: 全 ${batches.length}`
   )
+  for (const r of irregular)
+    console.log(`  1 通ずつ: id=${r.v1UserId} ${r.email}（RFC から外れる形）`)
   for (const s of skipped)
     console.log(`  外した: ${s.row} 行目 id=${s.v1UserId} ${s.email}（${s.reason}）`)
   if (next > batches.length) {
@@ -311,11 +342,19 @@ async function sendAll(input: string, output: string) {
       digest
     )
     let ids: string[]
+    let rejected: string | undefined
     try {
       ids = await postBatch(key, buildBatchEmails(batch, message, campaign), idempotencyKey, rawLog)
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error)
-      if (error instanceof SentButUnrecordedError) {
+      if (error instanceof RejectedError && number >= singlesFrom) {
+        // 1 通ずつの段で中身を断られた: その 1 通を失敗として記録し、先へ進む（個別の対応は結果の CSV の error の列から）
+        console.warn(
+          `  バッチ ${number}: ${batch[0].email} は断られました（${error.status}）。記録して先へ進みます`
+        )
+        ids = ['']
+        rejected = reason
+      } else if (error instanceof SentButUnrecordedError) {
         console.error(`バッチ ${number}: ${reason}`)
         console.error(
           'このバッチは送れている可能性があります。続ける前に Resend のログで送れたかを確かめ、送れていれば結果の CSV にこのバッチの行を足してください（そのまま流すと、24 時間を過ぎていれば二重に送られます）'
@@ -326,8 +365,10 @@ async function sendAll(input: string, output: string) {
           '直してから、同じコマンドをもう一度流すと、このバッチから続けます（24 時間以内なら同じ鍵で二重には送られません）'
         )
       }
-      process.exitCode = 1
-      return
+      if (!rejected) {
+        process.exitCode = 1
+        return
+      }
     }
     const sentAt = new Date().toISOString()
     // 1 回ごとに書く（途中で止まっても、送った分の記録が残る）。見出しは最初に書いた
@@ -337,12 +378,15 @@ async function sendAll(input: string, output: string) {
       email: recipient.email,
       resend_id: ids[index],
       sent_at: sentAt,
+      error: rejected ?? null,
     }))
     appendFileSync(output, toCsv(RESULT_HEADER, rows).split('\n').slice(1).join('\n'))
-    sent += batch.length
-    console.log(
-      `バッチ ${number}/${batches.length}: ${batch.length} 通（今回 ${sent.toLocaleString()} 通）`
-    )
+    if (!rejected) {
+      sent += batch.length
+      console.log(
+        `バッチ ${number}/${batches.length}: ${batch.length} 通（今回 ${sent.toLocaleString()} 通）`
+      )
+    }
     if (number < lastBatch) await sleep(interval)
   }
   if (lastBatch < batches.length) {
