@@ -33,7 +33,7 @@ Next の既定の英語の画面（`Application error: a server-side exception h
 ### 作らない
 
 - **エラー収集サービス（Sentry など）・`instrumentation.ts` の `onRequestError`**: サーバーの例外は Vercel の Runtime Logs に digest 付きで残る。
-  画面に digest を出しておけば、問い合わせから突き合わせられる。収集の仕組みは別のプランで
+  画面に digest を出しておけば、問い合わせから突き合わせられる。収集の仕組みは別のプランで（→ 031。Axiom にログを送り、監視で通知する）
 - **セグメントごとの細かい境界**（設定のナビを残す `settings/error.tsx` など）: 店舗の枠のヘッダーから設定にもシフト表にも移れるので足りる
 - **`(site)` の枠（LP のヘッダー・フッター）を残す境界**: LP は DB をほとんど読まない。ルートの画面で足りる
 - **Server Action の失敗**: `runAction` が `ActionFailure` に変えて通知で出す（境界には来ない）。`redirect()` / `notFound()` も境界の対象外（Next が処理する）
