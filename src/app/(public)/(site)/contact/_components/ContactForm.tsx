@@ -58,7 +58,6 @@ export function ContactForm({ account: initialAccount, tenant, digest, initialTo
   const [topic, setTopic] = useState<string | null>(initialTopic)
   const [email, setEmail] = useState('')
   const [body, setBody] = useState('')
-  const [honeypot, setHoneypot] = useState('')
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [error, setError] = useState<string>()
   const [failed, setFailed] = useState(false)
@@ -71,6 +70,8 @@ export function ContactForm({ account: initialAccount, tenant, digest, initialTo
   const nextAttachmentId = useRef(0)
   // 選んだファイルを入力欄から消す。消さないと、外した画像をもう一度選んでも change が起きない
   const resetFileInput = useRef<() => void>(null)
+  // ハニーポットは React の状態にせず、送るときに DOM の値を読む（イベントを起こさずに `.value` を書くボットも拾う）
+  const honeypotRef = useRef<HTMLInputElement>(null)
 
   /**
    * 選んだ画像を 1 枚ずつ縮小して足す（並行にすると、スマホで大きな写真を同時に展開してメモリが足りなくなる）。
@@ -92,8 +93,10 @@ export function ContactForm({ account: initialAccount, tenant, digest, initialTo
           break
         }
         let blob: Blob
+        let preview: string
         try {
           blob = await resizeImage(file)
+          preview = await toDataUrl(blob)
         } catch {
           message ??= CONTACT_IMAGE_UNREADABLE_MESSAGE
           continue
@@ -108,7 +111,7 @@ export function ContactForm({ account: initialAccount, tenant, digest, initialTo
           continue
         }
         total += blob.size
-        next.push({ id: nextAttachmentId.current++, blob, preview: await toDataUrl(blob) })
+        next.push({ id: nextAttachmentId.current++, blob, preview })
       }
       setAttachments(next)
       setError(message)
@@ -126,7 +129,7 @@ export function ContactForm({ account: initialAccount, tenant, digest, initialTo
     data.set('requestId', requestId)
     if (tenant) data.set('tenantId', tenant.id)
     if (digest) data.set('digest', digest)
-    data.set('honeypot', honeypot)
+    data.set('honeypot', honeypotRef.current?.value ?? '')
     if (account) data.set('asAccount', '1')
     attachments.forEach((a, i) => data.append('images', a.blob, `image-${i + 1}.jpg`))
 
@@ -297,8 +300,8 @@ export function ContactForm({ account: initialAccount, tenant, digest, initialTo
               name="hp_ref_code"
               tabIndex={-1}
               autoComplete="off"
-              value={honeypot}
-              onChange={(e) => setHoneypot(e.currentTarget.value)}
+              ref={honeypotRef}
+              defaultValue=""
             />
           </label>
         </Box>

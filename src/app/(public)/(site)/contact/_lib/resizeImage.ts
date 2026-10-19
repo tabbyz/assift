@@ -1,9 +1,9 @@
+import { CONTACT_IMAGE_JPEG_QUALITY, CONTACT_IMAGE_MAX_EDGE } from '@/lib/validation/contact'
+
 /**
  * 添付の画像を長い辺 1,600px の JPEG に描き直す（ブラウザ専用。031 §4.7）。
  * 転送を小さくするためのもの（Vercel の関数は 1 リクエスト 4.5MB まで）。守りはサーバーの書き出し直し（`lib/contact/attachments.ts`）
  */
-const MAX_EDGE = 1600
-const JPEG_QUALITY = 0.85
 
 export async function resizeImage(file: File): Promise<Blob> {
   // オプションは渡さない: `imageOrientation: 'from-image'` を知らない古いブラウザは例外にする。
@@ -11,7 +11,7 @@ export async function resizeImage(file: File): Promise<Blob> {
   // （描き直すと EXIF が消えるので、サーバーの `rotate()` では直せない）。読めずに添付できないより、向きが違うほうを取る
   const bitmap = await createImageBitmap(file)
   try {
-    const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height))
+    const scale = Math.min(1, CONTACT_IMAGE_MAX_EDGE / Math.max(bitmap.width, bitmap.height))
     const canvas = document.createElement('canvas')
     canvas.width = Math.round(bitmap.width * scale)
     canvas.height = Math.round(bitmap.height * scale)
@@ -25,7 +25,7 @@ export async function resizeImage(file: File): Promise<Blob> {
       canvas.toBlob(
         (blob) => (blob ? resolve(blob) : reject(new Error('JPEG に書き出せません'))),
         'image/jpeg',
-        JPEG_QUALITY
+        CONTACT_IMAGE_JPEG_QUALITY
       )
     })
   } finally {

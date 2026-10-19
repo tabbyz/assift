@@ -16,6 +16,9 @@ export const CONTACT_BODY_MAX_LENGTH = 5000
 
 /** 添付（031 §4.7）。ブラウザで縮小してから送るので、上限は縮小を経ずに送られたものを弾くためのもの */
 export const CONTACT_IMAGE_MAX_COUNT = 3
+/** 長い辺の上限と JPEG の品質（0〜1）。ブラウザの縮小とサーバーの書き出し直しで同じ値を使う */
+export const CONTACT_IMAGE_MAX_EDGE = 1600
+export const CONTACT_IMAGE_JPEG_QUALITY = 0.85
 export const CONTACT_IMAGE_MAX_BYTES = 1.5 * 1024 * 1024
 /** `bodySizeLimit`（`next.config.ts` の `4mb`）から multipart の区切りと本文の分を残す */
 export const CONTACT_IMAGES_TOTAL_MAX_BYTES = 3.5 * 1024 * 1024

@@ -3,7 +3,9 @@ import sharp from 'sharp'
 import { ActionError } from '@/lib/actions/error'
 import {
   CONTACT_IMAGE_MAX_BYTES,
+  CONTACT_IMAGE_JPEG_QUALITY,
   CONTACT_IMAGE_MAX_COUNT,
+  CONTACT_IMAGE_MAX_EDGE,
   CONTACT_IMAGE_TOO_LARGE_MESSAGE,
   CONTACT_IMAGE_UNREADABLE_MESSAGE,
   CONTACT_IMAGES_LIMIT_MESSAGE,
@@ -14,8 +16,6 @@ export type ContactAttachment = { filename: string; content: Buffer }
 
 /** 画素を読む前に通す形式。`sharp` は SVG（画像の形をした文書）・TIFF・GIF・HEIF なども読めるので、ここで絞る（031 §4.7） */
 const ALLOWED_FORMATS = new Set(['jpeg', 'png', 'webp'])
-const MAX_EDGE = 1600
-const JPEG_QUALITY = 85
 /** 読み込むと巨大になる画像（解凍爆弾）を弾く。`sharp` の既定（約 2.7 億画素）より小さく */
 export const CONTACT_IMAGE_MAX_PIXELS = 40_000_000
 
@@ -58,10 +58,13 @@ async function rewriteImage(input: Buffer, index: number, maxPixels: number): Pr
     if (!format || !ALLOWED_FORMATS.has(format)) throw unreadable
     return await image
       .rotate()
-      .resize(MAX_EDGE, MAX_EDGE, { fit: 'inside', withoutEnlargement: true })
+      .resize(CONTACT_IMAGE_MAX_EDGE, CONTACT_IMAGE_MAX_EDGE, {
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
       // 透過は白に（JPEG に透過は無く、そのままだと黒くなる）
       .flatten({ background: '#ffffff' })
-      .jpeg({ quality: JPEG_QUALITY })
+      .jpeg({ quality: Math.round(CONTACT_IMAGE_JPEG_QUALITY * 100) })
       .toBuffer()
   } catch (error) {
     if (error instanceof ActionError) throw error

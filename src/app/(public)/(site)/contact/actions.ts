@@ -33,9 +33,9 @@ export async function sendContact(formData: FormData): Promise<ActionResult<Cont
     if (typeof honeypot === 'string' && honeypot !== '') {
       console.warn('[contact] ハニーポットに値があったので送りませんでした')
       const email = formData.get('email')
-      return user?.email
-        ? { replyTo: user.email, fromAccount: true }
-        : { replyTo: typeof email === 'string' ? email : '', fromAccount: false }
+      return typeof email === 'string' && email !== ''
+        ? { replyTo: email, fromAccount: false }
+        : { replyTo: user?.email ?? '', fromAccount: Boolean(user?.email) }
     }
 
     const input = contactSchema.parse({
@@ -47,7 +47,8 @@ export async function sendContact(formData: FormData): Promise<ActionResult<Cont
       digest: formData.get('digest') ?? undefined,
     })
 
-    const replyTo = user?.email ?? input.email
+    // 返信先は、入力されたアドレス（未ログインの画面）を優先する。描画のあとに別のタブでログインしても、入力したアドレスに返す
+    const replyTo = input.email ?? user?.email
     // 返信先が無い: ログイン中の画面（返信先の欄が無い）から送ったのにセッションが切れていた・アカウントにアドレスが無い。
     // 欄を出してやり直してもらう（未ログインの画面なら欄は必須なので、ふつうは起きない）
     if (!replyTo) {
@@ -100,7 +101,7 @@ export async function sendContact(formData: FormData): Promise<ActionResult<Cont
       console.error('[contact] 送信に失敗しました', error)
       fail(CONTACT_SEND_FAILED_MESSAGE)
     }
-    return { replyTo, fromAccount: Boolean(user?.email) }
+    return { replyTo, fromAccount: !input.email }
   })
 }
 
