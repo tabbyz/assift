@@ -543,6 +543,9 @@ Prettier: `{ "semi": false, "singleQuote": true, "tabWidth": 2, "trailingComma":
 スマホなどのクラウドセッション（`CLAUDE_CODE_REMOTE=true`）で開発するときの決まり。
 
 - dockerd は SessionStart フック（`scripts/cloud-session-start.sh`）が起動し、`node_modules` が無ければ `npm ci` する。ローカルの PC では何もしない
+- 同じフックが、PDF 用に同梱している Noto Sans JP（`assets/fonts/`）を日本語と sans-serif の既定のフォントにする。コンテナにはヒラギノ・游ゴシック・メイリオが無く、
+  そのままだと中国語のフォント（WenQuanYi Zen Hei）で描かれる。スクリーンショットは `deviceScaleFactor: 2` で撮る。
+  ヘルプなど人に見せるスクリーンショットは `npm run build && npm run start` で撮る（開発サーバーの印や開発用の警告が写らない）
 - `supabase start` はセッションの最初ではなく、**DB が必要になったとき**に、使わないサービスを外して起動する:
   `npx supabase start -x studio,storage-api,imgproxy,edge-runtime,logflare,vector,realtime,supavisor,mailpit`
 - `.env.local` は `npx supabase status -o env` の 3 つの値（API URL / publishable key / secret key）から作る（コミットしない）
