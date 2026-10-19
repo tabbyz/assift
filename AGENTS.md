@@ -193,12 +193,12 @@ AI シフト作成の両方から呼ぶ。`[tenantId]/actions.ts` はシフト�
 
 `src/lib/actions/result.ts` に `'use server'` を付けない（付けると全 export がエンドポイントになる）。
 
-| ファイル    | 役割                                                                                             |
-| ----------- | ------------------------------------------------------------------------------------------------ |
-| `result.ts` | `ActionResult<T>`（client から import 可）。失敗に `code`（`'staff_limit'`）が付くことがある     |
-| `run.ts`    | `runAction(fn)`: try/catch → `ActionFailure`。`unstable_rethrow` で redirect/notFound は再スロー |
-| `error.ts`  | `ActionError` / `fail` / `toActionError`（Zod は先頭 issue の日本語）                            |
-| `guards.ts` | `requireUser` / `requireAdmin` 等。失敗は `throw new ActionError(...)`                           |
+| ファイル    | 役割                                                                                                                                            |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `result.ts` | `ActionResult<T>`（client から import 可）。失敗に `code`（`'staff_limit'`）が付くことがある                                                    |
+| `run.ts`    | `runAction(fn)`: try/catch → `ActionFailure`。`unstable_rethrow` で redirect/notFound は再スロー。想定外の例外は `[action]` でログに残す（033） |
+| `error.ts`  | `ActionError` / `fail` / `toActionError`（Zod は先頭 issue の日本語）                                                                           |
+| `guards.ts` | `requireUser` / `requireAdmin` 等。失敗は `throw new ActionError(...)`                                                                          |
 
 引数はシリアル化可能なオブジェクトを直接渡す。Zod で parse する。`FormData` はファイルアップロードのときだけ（いまはお問い合わせの画像の添付だけ。031）。
 Server Action の本文の上限は `next.config.ts` の `serverActions.bodySizeLimit`（`4mb`。添付のため。**全部の Action に効く**）。
