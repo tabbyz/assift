@@ -14,8 +14,8 @@ import { readContactTenant } from '@/lib/contact/tenant'
 import { CONTACT_SEND_FAILED_MESSAGE, contactSchema } from '@/lib/validation/contact'
 import { getAuthUser } from '@/utils/auth/current'
 
-/** 送った返信先。`fromAccount` はログイン中のアカウントのアドレスか（完了の文を変える） */
-export type ContactSent = { replyTo: string; fromAccount: boolean }
+/** 送った返信先（完了の画面に出す） */
+export type ContactSent = { replyTo: string }
 
 /**
  * お問い合わせを送る（031）。ファイルを受けるので `FormData`（AGENTS.md の例外）。
@@ -39,9 +39,7 @@ async function send(formData: FormData): Promise<ContactSent> {
   if (typeof honeypot === 'string' && honeypot !== '') {
     console.warn('[contact] ハニーポットに値があったので送りませんでした')
     const email = formData.get('email')
-    return typeof email === 'string' && email !== ''
-      ? { replyTo: email, fromAccount: false }
-      : { replyTo: user?.email ?? '', fromAccount: Boolean(user?.email) }
+    return { replyTo: typeof email === 'string' && email !== '' ? email : (user?.email ?? '') }
   }
 
   const input = contactSchema.parse({
@@ -107,7 +105,7 @@ async function send(formData: FormData): Promise<ContactSent> {
     console.error('[contact] 送信に失敗しました', error)
     throw new ActionError(CONTACT_SEND_FAILED_MESSAGE, 'contact_send_failed')
   }
-  return { replyTo, fromAccount: !input.email }
+  return { replyTo }
 }
 
 /**

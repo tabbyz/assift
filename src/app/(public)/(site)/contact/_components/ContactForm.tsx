@@ -16,7 +16,6 @@ import {
   Text,
   Textarea,
   TextInput,
-  Title,
 } from '@mantine/core'
 import { IconPhotoPlus } from '@tabler/icons-react'
 import { v4 as uuidv4 } from 'uuid'
@@ -36,6 +35,7 @@ import {
 import { CONTACT_EMAIL } from '@/lib/contact/path'
 import { type ContactSent, sendContact } from '../actions'
 import { resizeImage, toDataUrl } from '../_lib/resizeImage'
+import { ContactSentView } from './ContactSentView'
 
 type Props = {
   /** ログイン中か（アカウント・店舗・ブラウザを添えることを説明する） */
@@ -225,23 +225,12 @@ function ContactFormBody({
 
   if (sent) {
     return (
-      <Paper withBorder p="lg" radius="md">
-        <Stack gap="sm">
-          <Title order={2} size="h4">
-            送信しました
-          </Title>
-          <Text>
-            {sent.fromAccount ? 'ログイン中のアカウントのアドレス' : 'ご入力のアドレス'}（
-            {sent.replyTo}
-            ）へ返信します。数日たっても届かない場合は、迷惑メールのフォルダをご確認ください。
-          </Text>
-          <Group>
-            <Button variant="default" onClick={onAgain}>
-              別のお問い合わせを送る
-            </Button>
-          </Group>
-        </Stack>
-      </Paper>
+      <ContactSentView
+        replyTo={sent.replyTo}
+        requestId={requestId}
+        loggedIn={loggedIn}
+        onAgain={onAgain}
+      />
     )
   }
 
