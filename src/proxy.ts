@@ -136,6 +136,9 @@ export const config = {
     // 除外するとトークン更新（refresh token rotation）が prefetch のレンダリング中に起きて
     // 新しい token を保存できず、次の遷移でログアウトしてしまう。
     // Vercel Web Analytics のスクリプトと送信は Vercel が Next より手前で受けるので、ここは走らない（外す必要も無い。025 §3-7・§8）。
-    '/((?!_next/static/|_next/image$|favicon\\.ico$|icon\\.svg$|apple-icon\\.png$|opengraph-image\\.png$|manifest\\.webmanifest$|api/stripe/webhook$|api/cron/billing-usage$).*)',
+    // Vercel BotID（031 §4.6）の `/149e9513-…/2d206a39-…/` の配下は前方一致で外す（例外）: `withBotId`（`next.config.ts`）のリライトが
+    // 配下をすべて Vercel へ中継するので、Next の 404 の HTML にはならない。通すと Supabase の cookie の更新が走り、proxy の CSP
+    // （`frame-ancestors 'none'`）が BotID 自身のヘッダ（`frame-ancestors 'self'`）と重なる
+    '/((?!_next/static/|_next/image$|favicon\\.ico$|icon\\.svg$|apple-icon\\.png$|opengraph-image\\.png$|manifest\\.webmanifest$|api/stripe/webhook$|api/cron/billing-usage$|149e9513-01fa-4fb0-aad4-566afd725d1b/2d206a39-8ed7-437e-a3be-862e0f06eea3/).*)',
   ],
 }

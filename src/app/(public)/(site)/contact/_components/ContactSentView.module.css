@@ -1,0 +1,43 @@
+/*
+ * 送信完了のチェック（031 §10.8）。開いたときに丸が小さく弾み、チェックの線が引かれる。Mantine に keyframes が無いのでここに書く。
+ * 動きを減らす設定の端末では動かさない
+ */
+
+.badge {
+  animation: pop 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.check {
+  stroke-dasharray: 28;
+  animation: draw 0.35s 0.3s ease-out both;
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.06);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes draw {
+  from {
+    stroke-dashoffset: 28;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .badge,
+  .check {
+    animation: none;
+  }
+}

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Anchor, List, ListItem, Text } from '@mantine/core'
+import { CONTACT_PATH } from '@/lib/contact/path'
 import { TERMS } from '../../terms/_components/terms'
 import { PRIVACY } from './privacy'
 
@@ -91,7 +92,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
             </>,
             <>
               <Label>お問い合わせの内容</Label>
-              ：メールアドレスと、お問い合わせいただいた内容
+              ：メールアドレス、お問い合わせいただいた内容と添付された画像。お問い合わせフォームから送信した場合は、ブラウザの種類（ログイン中は、アカウントのメールアドレスとID、開いていた店舗の名前とIDも）
             </>,
             <>
               <Label>アクセスの記録</Label>
@@ -188,7 +189,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
         <Items
           items={[
             `Supabase（米国）：データベースと認証。データは${PRIVACY.databaseRegion}のサーバーに保存します`,
-            'Vercel（米国）：assiftを稼働させるサーバー、AIの提供元への中継、アクセス解析',
+            'Vercel（米国）：assiftを稼働させるサーバー、AIの提供元への中継、アクセス解析、不正な送信の判定',
             'Axiom（米国）：エラーの記録と監視',
             'AIの提供元（OpenAI・Anthropic・Google・Microsoft・Amazonなど。主に米国）：AIを使う機能。送信したデータがAIの学習に使われることはありません',
             'Stripe（米国）：有料プランの決済',
@@ -297,7 +298,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
         <P>
           このほか、個人情報保護法にもとづき、あなたご自身の個人情報（アカウントの情報、支払いに関する情報、アクセスの記録など）について、開示、訂正、利用停止、第三者提供の記録の開示などを請求できます。ご請求は、
           <SectionLink id="contact">お問い合わせ窓口</SectionLink>
-          までメールでご連絡ください。ご本人であることを確認したうえで、法令に従って対応し、結果をお知らせします。
+          までご連絡ください。ご本人であることを確認したうえで、法令に従って対応し、結果をお知らせします。
         </P>
         <P>
           このご請求の対象は、あなたご自身に関する個人情報です。店舗やシフト表など、assiftに入力されたデータを私たちが書き出してお渡しすることは、このご請求には含まれません。
@@ -329,7 +330,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
   {
     id: 'contact',
     title: 'お問い合わせ窓口',
-    summary: `個人情報に関するお問い合わせや苦情は、${TERMS.contactEmail}で受け付けます。`,
+    summary: `個人情報に関するお問い合わせや苦情は、お問い合わせフォーム（${TERMS.contactUrl}）で受け付けます。`,
     body: (
       <>
         <P>個人情報の取り扱いに関するお問い合わせや苦情は、次の窓口で受け付けます。</P>
@@ -337,7 +338,8 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
           items={[
             `運営者：${TERMS.operator}`,
             <>
-              連絡先：<Anchor href={`mailto:${TERMS.contactEmail}`}>{TERMS.contactEmail}</Anchor>
+              連絡先：お問い合わせフォーム（<Anchor href={CONTACT_PATH}>{TERMS.contactUrl}</Anchor>
+              ）
             </>,
           ]}
         />

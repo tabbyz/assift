@@ -43,7 +43,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 ```
 src/
   proxy.ts                        CSP の nonce（022）+ 管理画面のホストの振り分け + cookie 更新 + 保護ルートの未ログイン redirect
-  instrumentation-client.ts       ブラウザでアプリのコードより先に走る（Next の規約。ここに書くものはブラウザ専用）。Zod の jitless（022）
+  instrumentation-client.ts       ブラウザでアプリのコードより先に走る（Next の規約。ここに書くものはブラウザ専用）。Zod の jitless（022）・Vercel BotID の initBotId（031。開発では読まない）
   fontFamily.ts                   書体の文字列。theme.ts と global-error（Mantine を読まない）が共有する（023）
   theme.ts                        createTheme（色・半径・フォントはここに集約。書体の文字列だけは fontFamily.ts。Client の AppProviders / ShiftDemo からだけ読む）
   app/
@@ -52,7 +52,8 @@ src/
     layout.tsx                    headers() で CSP の nonce を読み、ColorSchemeScript と AppProviders（Client。MantineProvider > ModalsProvider > NuqsAdapter > children + Notifications）に渡す（022）。
                                   本番の本体のホストだけ SiteAnalytics を描く（025）
     (public)/                     認証不要
-      (site)/                     LP（/）と静的ページ（terms / privacy / law）。layout がヘッダー・フッター・LP の書体（016 / 018）
+      (site)/                     LP（/）と静的ページ（terms / privacy / law）。layout がヘッダー・フッター・LP の書体（016 / 018）。ヘッダーはログイン中なら「アプリを開く」だけ（031）
+        contact/                  お問い合わせ（031）。ログインの有無で中身を変える 1 ページ。Action は FormData（画像の添付）
       share/[code]/               公開シフト表（未ログインで開く。読み取りは service_role）。(site) の枠を被せない
     (auth)/                       login, signup, password/*
     (protected)/                  layout で未ログインを弾く
@@ -98,9 +99,12 @@ src/
     shifts/                       key（セルの Map）/ applyAssign（楽観更新。assign_shift と同じ規則）/ satisfaction（必要人数の充足）/ count（集計）/ planDefaultPatterns（デフォルト勤務パターンの行を組む純関数）/ table（エクスポートが共有する表の型）
     shares/                       expiry（公開期限。v1 の DATE_LIMIT = 6）/ code（8 文字のコード）
     security/                     CSP（022）。csp（nonce の生成・方針の文字列・ヘッダ名。純関数。proxy と root layout が使う。
-                                  レスポンスの方針を付けない唯一の例外は PDF の応答で、その判定は lib/export/path の isPdfExportPath）
+                                  レスポンスの方針を付けない例外は PDF の応答（判定は lib/export/path の isPdfExportPath）と、proxy の matcher から外した BotID の中継のパス（031。Vercel の応答をそのまま返す））
     site/                         サイト共通のメタデータの文言（028）。metadata（SITE_NAME / SITE_DESCRIPTION）
     announce/                     カットオーバーの告知（030）。content（文面のデータ。文言の正）/ render（テキスト版と HTML 版）/ recipients（宛先の CSV・100 通ずつの区切り（RFC から外れる形は最後に 1 通ずつ）・Idempotency-Key・続きの位置）
+    contact/                      お問い合わせ（031）。path（contactHref。アプリの各所のリンク）/ render（件名と本文）/ attachments（server-only。sharp で JPEG に書き出し直す）/
+                                  send（server-only。Resend の REST。RESEND_API_KEY と CONTACT_INBOX があるときだけ送る）/
+                                  tenant（server-only。lib/queries の getTenant を、読めなくても問い合わせを止めない形で包む。読み取りそのものは lib/queries のまま）
     analytics/                    アクセス解析（025）。load（読み込むか。本番の本体のホストだけ）/ url（送る URL からクエリとハッシュを落とす）
     export/                       request（認証 → 店舗 → 期間 → 表。PDF / CSV 共通の入口）/ filename / path（URL を組む。リンクと旧 URL の書き換えが共有）
     csv/                          shiftCsv（純関数）/ encode（CP932 か BOM 付き UTF-8。iconv-lite）
@@ -196,7 +200,8 @@ AI シフト作成の両方から呼ぶ。`[tenantId]/actions.ts` はシフト�
 | `error.ts`  | `ActionError` / `fail` / `toActionError`（Zod は先頭 issue の日本語）                                                                           |
 | `guards.ts` | `requireUser` / `requireAdmin` 等。失敗は `throw new ActionError(...)`                                                                          |
 
-引数はシリアル化可能なオブジェクトを直接渡す。Zod で parse する。`FormData` はファイルアップロードのときだけ。
+引数はシリアル化可能なオブジェクトを直接渡す。Zod で parse する。`FormData` はファイルアップロードのときだけ（いまはお問い合わせの画像の添付だけ。031）。
+Server Action の本文の上限は `next.config.ts` の `serverActions.bodySizeLimit`（`4mb`。添付のため。**全部の Action に効く**）。
 
 ```ts
 // actions.ts
@@ -223,7 +228,8 @@ startTransition(async () => {
 流れ: `runAction` → guard → Zod → `createClient()`（anon + RLS）→ `revalidatePath` / `refresh`。
 
 画面が文言以外で分岐するときだけ `new ActionError(message, code)` を投げ、`ActionFailure.code` に載せる。
-いまは在籍スタッフの上限と、料金が上がる追加の確認（019 §5.3・§13）だけ: DB の門番（`staffs` のトリガ）が `staff_limit_exceeded` を投げ、Action は
+いまは在籍スタッフの上限と、料金が上がる追加の確認（019 §5.3・§13）、お問い合わせの返信先の欠け（`contact_email_required`。ログイン中の画面から送ったのにセッションが切れていた。フォームが返信先の欄を出す）と送信の失敗（`contact_send_failed`。フォームが代わりのアドレスを案内する。031）だけ。
+上限と料金: DB の門番（`staffs` のトリガ）が `staff_limit_exceeded` を投げ、Action は
 `throwIfStaffLimit(error)`（`lib/billing/limit.ts`）で日本語 + `code: 'staff_limit'` に写す。有料プランは書き込む前に
 `ensureStaffAddition(user.id, { adding, acknowledgedPeak })`（`lib/billing/addition.ts`）が上限人数（`staff_limit`）→ 料金（`price_increase`）の順に見る。
 クライアントは `openStaffAdditionModal(result, { adding, retry })`（`components/billing/staffAddition.ts`）でモーダルを開き、決めたら
@@ -329,6 +335,8 @@ Stripe の API の版は SDK が固定する最新（`lib/billing/stripe.ts`）�
 - **外部のオリジン（スクリプト・画像・フォント・fetch・iframe）を足すときは `csp.ts` と `csp.test.ts`、022 §3 の表を直す。** 足し忘れの症状は「本番でだけ黙って動かない」（コンソールの `Refused to …`）
 - インラインの `<script>` / `<style>` を足すときは nonce を付ける（Mantine の `<style>` は `AppProviders` の `getStyleNonce` が付ける。`next/script` は `nonce` prop）。
   `style` 属性（Mantine の style props・`style={{…}}`）はそのままでよい（`style-src-attr 'unsafe-inline'`）
+- Vercel BotID（031。お問い合わせの送信だけを守る）も同一オリジン: `withBotId`（`next.config.ts`）が `/149e9513-…/2d206a39-…/` を Vercel へ中継するリライトを足し、
+  判定のスクリプトは `instrumentation-client` の `initBotId` が `createElement` で足す（`'strict-dynamic'` で通る）。スクリプトの中身が CSP に合うかは Vercel の上でしか確かめられない（031 §8）
 - Vercel Web Analytics（025）はスクリプト・送信とも同一オリジン（本番は Vercel が決めるランダムな basePath（`/<basePath>/script.js`・`/<basePath>/view`。SDK の既定は `/_vercel/insights/`））。スクリプトは SDK が `createElement` で足すので `'strict-dynamic'` で通り、方針に足したものは無い
 - `eval` / `new Function` はブラウザで使えない。Zod は `z.object()` を作った時点で `Function("")` を試すので `src/instrumentation-client.ts` が `jitless` にしている
 - nonce はリクエストごとに違うので**全ルートが動的描画**（root layout が `headers()` を読む）。静的化・ISR・PPR は nonce と両立しない
@@ -343,7 +351,7 @@ Stripe の API の版は SDK が固定する最新（`lib/billing/stripe.ts`）�
 
 - 最初に CSP の nonce（022）を作り、**リクエストヘッダ**（`x-nonce` と `Content-Security-Policy`。Next が後者から nonce を拾って自分の `<script>` に付ける）と
   返す**レスポンス**に載せる（段ごとではなく `proxy()` の末尾で 1 回。段を足しても付け忘れない）。例外は PDF の応答（`isPdfExportPath()`。完全一致。
-  HTML を描かない経路で、ブラウザのビューアへの影響を実機で確かめられないため）だけで、**ほかはパスで除外しない**（proxy は応答の種類を見られず、
+  HTML を描かない経路で、ブラウザのビューアへの影響を実機で確かめられないため）と、matcher から外した BotID の中継のパス（031。下記）だけで、**ほかはパスで除外しない**（proxy は応答の種類を見られず、
   存在しないパスはどれも 404 の HTML になる。Route Handler の中の `notFound()` は本文の無い 404。CSV に付いても害は無い）。
   段が `{ request }` を渡し忘れると描画側に nonce が届かない。root layout の `assertNonce()` が名指しする（下記「CSP」）。
   rewrite（`/404`）には `{ request }` を渡す（渡さないと nonce の無い元のヘッダで描かれる）
@@ -353,7 +361,8 @@ Stripe の API の版は SDK が固定する最新（`lib/billing/stripe.ts`）�
 2. `updateSession()`: Supabase の cookie 更新 + 保護ルートの未ログイン redirect
 3. 開いている `/tenants/<uuid>` を直近店舗の cookie に記録
 
-- `config.matcher` から外すのは静的アセット（`_next/static` / `_next/image` / アイコン（`favicon.ico` / `icon.svg` / `apple-icon.png`。027）/ OGP 画像と manifest（`opengraph-image.png` / `manifest.webmanifest`。028））と Stripe の Webhook・cron（ログイン状態と無関係で、セッションの更新が要らない）だけ。
+- `config.matcher` から外すのは静的アセット（`_next/static` / `_next/image` / アイコン（`favicon.ico` / `icon.svg` / `apple-icon.png`。027）/ OGP 画像と manifest（`opengraph-image.png` / `manifest.webmanifest`。028））と Stripe の Webhook・cron（ログイン状態と無関係で、セッションの更新が要らない）、
+  Vercel BotID の中継のパス（031。`/149e9513-…/2d206a39-…/` の配下。リライトで配下がすべて Vercel へ行くので、例外として前方一致）だけ。
   Vercel Web Analytics のスクリプトと送信は Vercel が Next より手前で受け、proxy は走らない（025 §8 の本番の確認）。matcher で外す必要は無い（025 §3-7）。
   **除外は実在するパスに完全一致（`$`）で書く。** 前方一致や拡張子で除外すると、存在しない URL が 404 の HTML になるのに proxy を通らず、CSP の付かない HTML ができる（`public/` は無い）
 - **`config.matcher` から prefetch を除外しない。** セッション cookie を書けるのは proxy だけで、除外するとトークン更新が Server Component の描画中に起き、新しい refresh token を保存できずに次の遷移でログアウトする（`enable_refresh_token_rotation = true`）
