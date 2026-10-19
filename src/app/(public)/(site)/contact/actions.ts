@@ -24,8 +24,8 @@ export type ContactSent = { replyTo: string; fromAccount: boolean }
  */
 export async function sendContact(formData: FormData): Promise<ActionResult<ContactSent>> {
   return runAction(async () => {
-    await assertHuman()
-    const user = await getAuthUser()
+    // BotID の判定（Vercel への問い合わせ）とログインの確かめは独立なので並べる。ボットならここで止まり、ほかは何もしない
+    const [, user] = await Promise.all([assertHuman(), getAuthUser()])
 
     // ハニーポット: ボットに判定の手がかりを与えないよう、入力の検証より先に見て、成功に見せて送らない（031 §4.6）。
     // 自動入力の拡張機能が埋めて人の問い合わせを落とすこともありうるので、ログには残す
@@ -85,7 +85,7 @@ export async function sendContact(formData: FormData): Promise<ActionResult<Cont
 
     try {
       await sendContactEmail({
-        subject: contactSubject(input.topic, input.body),
+        subject: contactSubject(input.topic, input.body, input.requestId),
         text: contactText({
           topic: input.topic,
           body: input.body,

@@ -2,24 +2,33 @@ import { describe, expect, it } from 'vitest'
 import { contactSubject, contactText } from './render'
 
 describe('contactSubject', () => {
-  it('種類と内容の先頭 30 文字', () => {
-    expect(contactSubject('bug', 'シフト表が保存できません')).toBe(
-      '[お問い合わせ] 不具合：シフト表が保存できません'
+  const ID = '1a2b3c4d-0000-4000-8000-000000000000'
+
+  it('種類と内容の先頭 30 文字と受付番号（requestId の頭 8 文字）', () => {
+    expect(contactSubject('bug', 'シフト表が保存できません', ID)).toBe(
+      '[お問い合わせ] 不具合：シフト表が保存できません（#1a2b3c4d）'
     )
-    expect(contactSubject('usage', 'あ'.repeat(31))).toBe(
-      `[お問い合わせ] 使い方：${'あ'.repeat(30)}…`
+    expect(contactSubject('usage', 'あ'.repeat(31), ID)).toBe(
+      `[お問い合わせ] 使い方：${'あ'.repeat(30)}…（#1a2b3c4d）`
+    )
+  })
+
+  it('同じ種類・同じ内容でも、問い合わせが違えば件名が違う（Gmail のスレッドを分ける）', () => {
+    const other = '9f8e7d6c-0000-4000-8000-000000000000'
+    expect(contactSubject('bug', 'ログインできません', ID)).not.toBe(
+      contactSubject('bug', 'ログインできません', other)
     )
   })
 
   it('改行・タブ・制御文字を空白 1 つにまとめる（ヘッダに改行を入れない）', () => {
-    expect(contactSubject('other', '1行目\r\n2行目\t\u0000X\u2028Y')).toBe(
-      '[お問い合わせ] その他：1行目 2行目 X Y'
+    expect(contactSubject('other', '1行目\r\n2行目\t\u0000X\u2028Y', ID)).toBe(
+      '[お問い合わせ] その他：1行目 2行目 X Y（#1a2b3c4d）'
     )
   })
 
   it('サロゲートペアの途中で切らない', () => {
-    const subject = contactSubject('other', '😀'.repeat(31))
-    expect(subject).toBe(`[お問い合わせ] その他：${'😀'.repeat(30)}…`)
+    const subject = contactSubject('other', '😀'.repeat(31), ID)
+    expect(subject).toBe(`[お問い合わせ] その他：${'😀'.repeat(30)}…（#1a2b3c4d）`)
   })
 })
 

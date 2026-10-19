@@ -43,9 +43,12 @@ function clip(value: string, max: number): string {
   return chars.length > max ? `${chars.slice(0, max).join('')}…` : value
 }
 
-/** 件名: `[お問い合わせ] 種類：内容の先頭 30 文字`。Gmail が問い合わせごとに別のスレッドにする（031 §4.5） */
-export function contactSubject(topic: ContactTopic, body: string): string {
-  return `[お問い合わせ] ${CONTACT_TOPICS[topic]}：${clip(singleLine(body), SUBJECT_SNIPPET_LENGTH)}`
+/**
+ * 件名: `[お問い合わせ] 種類：内容の先頭 30 文字（#受付番号）`。差出人と宛先はどの問い合わせも同じなので、
+ * 受付番号（`requestId` の頭 8 文字）で件名を問い合わせごとに変え、Gmail が別の人の問い合わせを 1 つのスレッドにまとめないようにする（031 §4.5）
+ */
+export function contactSubject(topic: ContactTopic, body: string, requestId: string): string {
+  return `[お問い合わせ] ${CONTACT_TOPICS[topic]}：${clip(singleLine(body), SUBJECT_SNIPPET_LENGTH)}（#${requestId.slice(0, 8)}）`
 }
 
 /**

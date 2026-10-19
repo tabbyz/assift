@@ -16,8 +16,9 @@ import {
   Stack,
 } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
-import { IconArrowLeft, IconCreditCard, IconUserCircle } from '@tabler/icons-react'
+import { IconArrowLeft, IconCreditCard, IconMail, IconUserCircle } from '@tabler/icons-react'
 import { LogoutNavLink } from '@/components/LogoutMenuItem'
+import { CONTACT_PATH } from '@/lib/contact/path'
 import classes from './TenantShell.module.css'
 
 type Props = {
@@ -86,6 +87,13 @@ export function SimpleShell({ showBackToTenants = true, children }: Props) {
               leftSection={<IconCreditCard size={18} stroke={1.75} />}
               active={pathname.startsWith('/account/billing')}
               onClick={closeIfActive('/account/billing')}
+              classNames={navLinkClassNames}
+            />
+            <NavLink
+              component={Link}
+              href={CONTACT_PATH}
+              label="お問い合わせ"
+              leftSection={<IconMail size={18} stroke={1.75} />}
               classNames={navLinkClassNames}
             />
             <LogoutNavLink classNames={navLinkClassNames} />

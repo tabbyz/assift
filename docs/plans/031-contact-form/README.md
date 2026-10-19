@@ -131,7 +131,7 @@
 | `from` | `assift <noreply@assift.com>`（024 で検証済みの差出人。認証メールと同じ） |
 | `to` | `CONTACT_INBOX`（本番は `support@assift.com`） |
 | `reply_to` | 相手のアドレス（ログイン中はアカウントのもの） |
-| `subject` | `[お問い合わせ] {種類}：{内容の先頭 30 文字}`。改行・制御文字は空白に置き換える |
+| `subject` | `[お問い合わせ] {種類}：{内容の先頭 30 文字}（#{requestId の頭 8 文字}）`。改行・制御文字は空白に置き換える。受付番号で、同じ件名の別の問い合わせが Gmail で 1 つのスレッドにまとまらない |
 | `text` | 内容 + 区切り線 + 自動で付ける情報（添付の枚数も書く） |
 | `attachments` | `[{ filename: 'image-1.jpg', content: <base64> }, …]`（§4.7） |
 | `Idempotency-Key` | `contact/{requestId}`。`requestId` はフォームを開いたときにクライアントが作る uuid（`crypto.randomUUID()`）で、送信の連打・やり直しで二重に届かない（Resend は 24 時間、同じ鍵の再送を 1 通にする） |
@@ -203,7 +203,7 @@
 | アカウントのメニュー（`TenantShell`。PC とスマホ） | ― | 「お問い合わせ」を足す（`/contact?tenant=…`） |
 | 030 の告知メール | Reply-To `support@` | そのまま（メールで、サイトではない） |
 
-- `CONTACT_EMAIL`（`components/billing/contact.ts`）は global-error・特商法の表記・失敗の表示が使うので残す
+- `CONTACT_EMAIL` は `lib/contact/path.ts` に移した（課金のフォルダから。§10.4 の 12 回目）。global-error・エラー画面・失敗の表示が使う
 - アプリの中からのリンクは `next/link` でよい（Next のページ）。他店舗の先読みの心配は無い（`/contact` は 1 つ）
 
 ### 4.9 環境変数
@@ -352,4 +352,5 @@ Missive の導入（032）はフォームが無くても成り立つ。フォー
 | 9 | 8 回目のフォームの作り直し（描画ごとの乱数の `key`）は、Action が cookie を更新して今のページが描き直されたときにも作り直し、送信の結果や入力が消える / 種類の Select はブラウザの required が効かず、画像を送ってからサーバーで弾かれる / ポリシーは「識別子」と書くが、メールには店舗の名前とアカウントのアドレスも入る | `key` を URL の初期値（種類・店舗・エラー番号）から作る。同じ URL で次を送るのは、完了の画面の「別のお問い合わせを送る」で作り直す / 送る前に種類を確かめる / ポリシーを「アカウントのメールアドレスとID、開いていた店舗の名前とID」に。**`bodySizeLimit` を全部の Action に効かせるのは受け入れたトレードオフのまま**（§4.7。お問い合わせだけ Route Handler にすると、`runAction`・BotID・`FormData` の扱いを別に持つことになる） |
 | 10 | 8 回目に BotID のクライアントを動的 import にしたため、chunk の読み込みに失敗すると `fetch` が包まれず、判定のヘッダの無い送信が必ずボットと判定されて送れなくなる | 静的な import に戻す（全ページで 6KB ほど）。あわせて、画像を選び直しても失敗の案内（アドレス）を消さない・使われない export を外す・AGENTS.md に `lib/contact/tenant` を足す。回数の制限（Firewall）と `bodySizeLimit` の指摘は、§4.6・§4.7 の判断のまま |
 | 11 | プラン・AGENTS.md の記述が今のコードと食い違う（`contactTenantId`・`.module.css`・409 を成功・4,000 万画素・Action の順番・CSP の例外の一覧に BotID の中継が無い） | 記述を今の実装に揃えた。あわせて、エラー番号の欄に文字列でない値が来ても失敗にせず捨てる・送り直すときに前のエラーを消す |
-| 12 | （§10.5） | |
+| 12 | 想定外のエラー（`処理に失敗しました`）では代わりのアドレスが出ない / 件名が種類と本文の頭だけで、別の人の同じ件名の問い合わせが Gmail で 1 つのスレッドにまとまる / アカウントの画面（`SimpleShell`）に入口が無い | 返信先の欄を出すとき以外の失敗はすべてアドレスを案内 / 件名に受付番号（`requestId` の頭 8 文字）/ `SimpleShell` のナビに「お問い合わせ」。あわせて、`CONTACT_EMAIL` を `lib/contact/path.ts` へ・規約の URL の文字と `CONTACT_PATH` をテストで結ぶ・BotID の判定とログインの確かめを並べる |
+| 13 | （§10.5） | |

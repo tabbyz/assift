@@ -22,7 +22,6 @@ import {
 import { IconPhotoPlus } from '@tabler/icons-react'
 import { v4 as uuidv4 } from 'uuid'
 import { FormErrorAlert } from '@/components/FormErrorAlert'
-import { CONTACT_EMAIL } from '@/components/billing/contact'
 import {
   CONTACT_BODY_MAX_LENGTH,
   CONTACT_IMAGE_MAX_BYTES,
@@ -35,6 +34,7 @@ import {
   CONTACT_TOPICS,
   type ContactTopic,
 } from '@/lib/validation/contact'
+import { CONTACT_EMAIL } from '@/lib/contact/path'
 import { type ContactSent, sendContact } from '../actions'
 import { resizeImage, toDataUrl } from '../_lib/resizeImage'
 
@@ -157,10 +157,13 @@ function ContactFormBody({
         const r = await sendContact(data)
         if (!r.ok) {
           setError(r.error)
-          // 入力の誤りは直せば送れるので、代わりのアドレスは送れなかったときだけ案内する
-          setFailed(r.error === CONTACT_SEND_FAILED_MESSAGE)
-          // セッションが切れていた: 入力はそのまま残し、返信先の欄を出す
-          if (r.code === 'contact_email_required') setAccount(null)
+          // セッションが切れていた: 入力はそのまま残し、返信先の欄を出す（欄を埋めれば送れるので、アドレスは案内しない）
+          if (r.code === 'contact_email_required') {
+            setAccount(null)
+            return
+          }
+          // それ以外の失敗は、代わりのアドレスを案内する（入力の誤りは画面で先に止めるので、ここに来るのは送れなかったときがほとんど）
+          setFailed(true)
           return
         }
         setSent(r.data)

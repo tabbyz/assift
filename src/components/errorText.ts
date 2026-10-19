@@ -1,4 +1,4 @@
-import { CONTACT_EMAIL } from '@/components/billing/contact'
+import { CONTACT_EMAIL } from '@/lib/contact/path'
 
 /**
  * エラー画面の文言（023）。`ErrorPanel`（Mantine）と `global-error.tsx`（素の HTML）が共有する。
