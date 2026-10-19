@@ -2,6 +2,7 @@ import sharp from 'sharp'
 import { describe, expect, it } from 'vitest'
 import { CONTACT_IMAGE_MAX_BYTES } from '@/lib/validation/contact'
 import { rewriteContactImages } from './attachments'
+import { contactImageSize } from './scale'
 
 function image(width: number, height: number, alpha = false) {
   return sharp({
@@ -38,10 +39,16 @@ describe('rewriteContactImages', () => {
     }
   })
 
-  it('長い辺を 1,600px に縮める（小さい画像は大きくしない）', async () => {
-    const out = await rewriteOne(await image(3200, 1000).png().toBuffer())
+  it('画素数の上限に縮める（ブラウザと同じ計算。小さい画像は大きくしない）', async () => {
+    const out = await rewriteOne(await image(3200, 2400).png().toBuffer())
     const meta = await sharp(out.content).metadata()
-    expect([meta.width, meta.height]).toEqual([1600, 500])
+    expect({ width: meta.width, height: meta.height }).toEqual(contactImageSize(3200, 2400))
+  })
+
+  it('EXIF の向きを反映してから縮める', async () => {
+    const rotated = await image(30, 10).jpeg().withMetadata({ orientation: 6 }).toBuffer()
+    const meta = await sharp((await rewriteOne(rotated)).content).metadata()
+    expect([meta.width, meta.height]).toEqual([10, 30])
   })
 
   it('EXIF（位置情報など）を落とす', async () => {

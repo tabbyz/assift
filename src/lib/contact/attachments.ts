@@ -1,11 +1,11 @@
 import 'server-only'
 import sharp from 'sharp'
 import { ActionError } from '@/lib/actions/error'
+import { contactImageSize } from './scale'
 import {
   CONTACT_IMAGE_MAX_BYTES,
   CONTACT_IMAGE_JPEG_QUALITY,
   CONTACT_IMAGE_MAX_COUNT,
-  CONTACT_IMAGE_MAX_EDGE,
   CONTACT_IMAGE_TOO_LARGE_MESSAGE,
   CONTACT_IMAGE_UNREADABLE_MESSAGE,
   CONTACT_IMAGES_LIMIT_MESSAGE,
@@ -59,14 +59,13 @@ async function rewriteImage(input: Buffer, index: number, maxPixels: number): Pr
   try {
     // metadata() はヘッダだけを読む。形式が合わなければ画素を読まずに止める
     const image = sharp(input, { limitInputPixels: maxPixels })
-    const { format } = await image.metadata()
+    const { format, autoOrient } = await image.metadata()
     if (!format || !ALLOWED_FORMATS.has(format)) throw unreadable
+    // 大きさはブラウザと同じ計算（`autoOrient` は EXIF の向きを反映したあとの幅と高さ。`rotate()` のあとに合わせる）
+    const size = contactImageSize(autoOrient.width, autoOrient.height)
     return await image
       .rotate()
-      .resize(CONTACT_IMAGE_MAX_EDGE, CONTACT_IMAGE_MAX_EDGE, {
-        fit: 'inside',
-        withoutEnlargement: true,
-      })
+      .resize(size.width, size.height, { fit: 'fill' })
       // 透過は白に（JPEG に透過は無く、そのままだと黒くなる）
       .flatten({ background: '#ffffff' })
       .jpeg({ quality: Math.round(CONTACT_IMAGE_JPEG_QUALITY * 100) })

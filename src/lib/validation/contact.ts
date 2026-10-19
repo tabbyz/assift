@@ -16,8 +16,12 @@ export const CONTACT_BODY_MAX_LENGTH = 5000
 
 /** 添付（031 §4.7）。ブラウザで縮小してから送るので、上限は縮小を経ずに送られたものを弾くためのもの */
 export const CONTACT_IMAGE_MAX_COUNT = 3
-/** 長い辺の上限と JPEG の品質（0〜1）。ブラウザの縮小とサーバーの書き出し直しで同じ値を使う */
-export const CONTACT_IMAGE_MAX_EDGE = 1600
+/**
+ * 縮めたあとの画素数・長い辺の上限と JPEG の品質（0〜1）。ブラウザの縮小とサーバーの書き出し直しで同じ値を使う（`lib/contact/scale.ts`）。
+ * 画素数は 1,920 × 1,280 程度（縦長のスクリーンショットも幅が残る）。長い辺はキャンバスの上限への余裕
+ */
+export const CONTACT_IMAGE_MAX_OUTPUT_PIXELS = 2_500_000
+export const CONTACT_IMAGE_MAX_EDGE = 8000
 export const CONTACT_IMAGE_JPEG_QUALITY = 0.85
 export const CONTACT_IMAGE_MAX_BYTES = 1.5 * 1024 * 1024
 /** `bodySizeLimit`（`next.config.ts` の `4mb`）から multipart の区切りと本文の分を残す */

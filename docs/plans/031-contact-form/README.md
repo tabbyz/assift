@@ -67,7 +67,7 @@
 | 9 | 自動で付ける情報 | ユーザー id・メールアドレス・店舗（id と名前。RLS で見えるものだけ）・エラー番号・ブラウザ（User-Agent）。**押す前に開いていた画面（`?from=`）は付けない** | 「どの店舗の話か」が聞き返しの理由で一番多い。エラー番号はログを探すのに直接使える。メニューはどの画面にもあり、押した画面と困っている画面が同じとは限らないので、開いていた画面は検証の手間のわりに役に立たない（要るなら本文に書いてもらう）。契約の状態はユーザー id から管理画面（020）で引けるので本文に入れない。Stripe の id など、本人に見せない値は入れない（返信の引用で相手に戻りうる。§4.4） |
 | 10 | 環境 | 送るのは `RESEND_API_KEY` と `CONTACT_INBOX` があるときだけ。開発で無ければコンソールに出して成功にする | プレビューから本番の受信箱に届かないようにする（§4.9） |
 | 11 | 迷惑な投稿の対策 | **Vercel BotID**（見えない判定）+ **Vercel Firewall の回数の制限** + **ハニーポット**。時間のチェックはしない | ハニーポットと時間のチェックだけで守るのは古い。ブラウザを丸ごと動かすボットは見えない欄も待ち時間も避ける。今の主流は見えない判定と回数の制限の重ね掛け。BotID は自分のドメインから判定のスクリプトを配るので CSP を変えずに済む見込みで、`src/instrumentation-client.ts`（既にある）に組み込める。ハニーポットはタダなので残す。AI が書いた文面の投稿はどれでも止まらず、受信側の迷惑メールフィルタに任せる |
-| 12 | 添付 | **画像だけ・最大 3 枚**。ブラウザで長い辺 1,600px の JPEG に縮小して送り（転送の大きさのため）、**サーバーで `sharp` が読み込んで JPEG に書き出し直したものだけ**を Resend の添付にする。Storage には上げない | スクリーンショットがあると一度で伝わる。メールに付ければ assift に保存場所が増えず、未ログインの人に Storage へ書かせる口も作らない。縮小すれば 3 枚でも Vercel の関数の上限（1 リクエスト 4.5MB）に収まる。種類の確認を先頭のバイトで手書きするのは、先頭だけ画像に見せたファイルを通すので単独では頼れない（OWASP）。書き出し直せば、画像でないものは失敗し、紛れ込んだ余計な中身とメタデータ（位置情報）も消える。ブラウザの縮小を経ずに送られても同じ形になる。`sharp` は Next が既に使っている（`next` の依存。`serverExternalPackages` の既定に入っている） |
+| 12 | 添付 | **画像だけ・最大 3 枚**。ブラウザで 250 万画素までの JPEG に縮小して送り（転送の大きさのため）、**サーバーで `sharp` が読み込んで JPEG に書き出し直したものだけ**を Resend の添付にする。Storage には上げない | スクリーンショットがあると一度で伝わる。メールに付ければ assift に保存場所が増えず、未ログインの人に Storage へ書かせる口も作らない。縮小すれば 3 枚でも Vercel の関数の上限（1 リクエスト 4.5MB）に収まる。種類の確認を先頭のバイトで手書きするのは、先頭だけ画像に見せたファイルを通すので単独では頼れない（OWASP）。書き出し直せば、画像でないものは失敗し、紛れ込んだ余計な中身とメタデータ（位置情報）も消える。ブラウザの縮小を経ずに送られても同じ形になる。`sharp` は Next が既に使っている（`next` の依存。`serverExternalPackages` の既定に入っている） |
 
 ## 4. 設計
 
@@ -89,7 +89,7 @@
 | `.../contact/searchParams.ts` | nuqs。`tenant`（uuid）・`digest`・`topic` |
 | `.../contact/actions.ts` | `sendContact(formData)`（`'use server'`）。ファイルを受けるので `FormData`（AGENTS.md の例外どおり） |
 | `.../contact/_components/ContactForm.tsx` | Client。フォーム・添付の選択とプレビュー・送信中の `loading`・完了の表示 |
-| `.../contact/_lib/resizeImage.ts` | Client。画像を長い辺 1,600px の JPEG に描き直す（`createImageBitmap` + `canvas.toBlob`） |
+| `.../contact/_lib/resizeImage.ts` | Client。画像を 250 万画素までの JPEG に描き直す（大きさは `lib/contact/scale.ts`）（`createImageBitmap` + `canvas.toBlob`） |
 | `src/lib/validation/contact.ts` | Zod（種類・本文・メール・上限の定数）+ テスト |
 | `src/lib/contact/path.ts` | `contactHref({ tenantId, digest, topic })`。アプリの各所のリンクが使う + テスト |
 | `src/lib/contact/attachments.ts` | `server-only`。添付の枚数・大きさの確認と、`sharp` での書き出し直し（§4.7）+ テスト（テストの画像は `sharp` で作る） |
@@ -168,7 +168,7 @@
 | --- | --- |
 | 選べる種類 | PNG・JPEG・WebP（ファイル選択の `accept`） |
 | 枚数 | 3 枚まで |
-| 縮小 | 長い辺 1,600px・JPEG の品質 0.85（`createImageBitmap` + `canvas.toBlob`）。1 枚 200〜500KB が目安 |
+| 縮小 | **画素数 250 万まで**（長い辺は 8,000px まで）・JPEG の品質 0.85（`createImageBitmap` + `canvas.toBlob`）。計算は `lib/contact/scale.ts` をサーバーと共有。長い辺で縮めると縦長のスクリーンショットの幅が数十 px になり読めない（§10.4 の 15 回目）。1,170 × 20,000 のスクリーンショットは 382 × 6,537・約 730KB |
 | プレビュー | `FileReader.readAsDataURL` の `data:` の URL で描く。`URL.createObjectURL`（`blob:`）は使わない（`img-src` に `blob:` が無い。022） |
 | iPhone の写真（HEIC） | iOS の Safari は `accept` に HEIC が無いと JPEG に変えて渡すことが多い。`createImageBitmap` で読めるかを実機で確かめる（§8）。読めなければ「この画像は添付できません」と出す |
 
@@ -178,9 +178,9 @@
 | --- | --- |
 | 枚数・大きさ | 3 枚まで・1 枚 1.5MB・合計 4MB。超えたら書き出す前に失敗にする |
 | 種類 | `sharp(buffer).metadata()`（ヘッダだけ読む）の `format` が `jpeg` / `png` / `webp` のものだけ通す。`sharp` は SVG・TIFF・GIF・HEIF なども読めるので、**画素を読む前に種類で絞る**（特に SVG は画像の形をした文書） |
-| 書き出し直し | 1 枚ずつ `sharp(buffer, { limitInputPixels: 3000 * 3000 })` → `metadata()` の形式 → `.rotate().resize(1600, 1600, { fit: 'inside', withoutEnlargement: true }).flatten({ background: '#ffffff' }).jpeg({ quality: 85 }).toBuffer()`。読めなければ例外 → 「この画像は添付できません」 |
+| 書き出し直し | 1 枚ずつ `sharp(buffer, { limitInputPixels: 3000 * 3000 })` → `metadata()` の形式と `autoOrient` の大きさ → `.rotate().resize(contactImageSize(…))`（画素数 250 万まで）`.flatten({ background: '#ffffff' }).jpeg({ quality: 85 }).toBuffer()`。読めなければ例外 → 「この画像は添付できません」 |
 | メタデータ | `sharp` は既定で書き出しにメタデータを付けない（`rotate()` で向きを画素に反映してから落とす）。位置情報は残らない |
-| 解凍爆弾 | `limitInputPixels`（3,000 × 3,000 = 900 万画素。ブラウザは 1,600px に縮めて送るので余裕がある。§10.4 の 8 回目で 4,000 万から下げた）。超えたら「大きすぎる」 |
+| 解凍爆弾 | `limitInputPixels`（3,000 × 3,000 = 900 万画素。ブラウザは 250 万画素に縮めて送るので余裕がある。§10.4 の 8 回目で 4,000 万から下げた）。超えたら「大きすぎる」 |
 | 送るファイル名 | サーバーが決める（`image-1.jpg`…）。利用者のファイル名は使わない（制御文字・長さ・個人名の混入を避ける） |
 
 - **依存**: `sharp` を `package.json` の `dependencies` に足す（`next` の optionalDependencies と同じ範囲 `^0.35.4`。重複させない）。`serverExternalPackages` の既定に入っているので Next の設定は要らない。
@@ -258,7 +258,7 @@ Missive の導入（032）はフォームが無くても成り立つ。フォー
 
 - Vitest:
   - スキーマ（日本語のエラー・上限）、件名の改行と制御文字の置き換え、`?digest=` の判定、`contactHref`
-  - 添付: PNG・JPEG・WebP は JPEG になって長い辺が 1,600px 以下・EXIF の位置情報が消える。SVG・GIF・画像でないバイト列・先頭だけ JPEG に見せたファイル・4,000 万画素を超える画像は失敗。枚数と大きさの上限。送るファイル名
+  - 添付: PNG・JPEG・WebP は JPEG になって 250 万画素以下（ブラウザと同じ大きさ）・EXIF の位置情報が消える。SVG・GIF・画像でないバイト列・先頭だけ JPEG に見せたファイル・4,000 万画素を超える画像は失敗。枚数と大きさの上限。送るファイル名
 - 開発: 送るとコンソールにメールの中身が出る。ログイン中は店舗の名前が付き、他人の店舗の id を `?tenant=` に入れても付かない
 - `npm run build`: `/contact` の `.nft.json` に `sharp` の native のファイル（`@img/sharp-linux-x64` など）が入っている
 - プレビュー（`RESEND_API_KEY` と `CONTACT_INBOX` を自分のアドレスで入れる）: 届いたメールの差出人・Reply-To・件名・本文・添付。同じフォームで 2 回押しても 1 通。Vercel の関数で `sharp` が動く
@@ -293,7 +293,7 @@ Missive の導入（032）はフォームが無くても成り立つ。フォー
 | `src/lib/validation/contact.ts`（+ test） | 種類（`CONTACT_TOPICS`）・上限の定数・`contactSchema`・`parseDigest`。任意の欄の `''` は無いものとして扱い、店舗の id とエラー番号は形が違えば失敗にせず捨てる |
 | `src/lib/contact/path.ts`（+ test） | `CONTACT_PATH`・`contactHref({ tenantId, digest, topic })` |
 | `src/lib/contact/render.ts`（+ test） | 件名（改行・制御文字・U+2028/2029 を空白に、先頭 30 文字をコードポイントで切る）と本文（返信先・種類・アカウント・店舗・エラー番号・添付・ブラウザを先に、利用者の入力を後に置き、各行の頭に `| ` を付ける。§10.4） |
-| `src/lib/contact/attachments.ts`（+ test） | 枚数・大きさ → 1 枚ずつ `metadata()` の形式（jpeg / png / webp）→ `rotate` → 長い辺 1,600px → 透過を白に → JPEG（品質 85）。`limitInputPixels` 3,000 × 3,000。テストの画像は `sharp` で作る（SVG・GIF・先頭だけ JPEG のファイル・EXIF が落ちること・解凍爆弾） |
+| `src/lib/contact/attachments.ts`（+ test） | 枚数・大きさ → 1 枚ずつ `metadata()` の形式（jpeg / png / webp）→ `rotate` → 画素数 250 万まで（`lib/contact/scale.ts`）→ 透過を白に → JPEG（品質 85）。`limitInputPixels` 3,000 × 3,000。テストの画像は `sharp` で作る（SVG・GIF・先頭だけ JPEG のファイル・EXIF が落ちること・解凍爆弾） |
 | `src/lib/contact/send.ts` | Resend の `POST /emails`（15 秒で打ち切り）。`Idempotency-Key` は `contact/<requestId>/<本文の SHA-256>`（§10.2-1）。409 も失敗（§10.4 の 1 回目） |
 | `src/lib/contact/tenant.ts` | `readContactTenant`。`getTenant` を、読めなくても問い合わせを止めない形で包む（Next の制御の例外は投げ直す） |
 | `src/app/(public)/(site)/contact/` | `page.tsx`（店舗は RLS で見えたときだけ画面に出す。フォームの `key` は URL の初期値）/ `searchParams.ts` / `actions.ts`（BotID → ハニーポット → Zod → 送れる設定か → 添付 → 自動で付ける情報 → 送信。返信先は入力されたアドレスを優先）/ `_components/ContactForm.tsx`（Mantine の style props だけ。CSS Modules は使わない）/ `_lib/resizeImage.ts` |
@@ -355,4 +355,5 @@ Missive の導入（032）はフォームが無くても成り立つ。フォー
 | 12 | 想定外のエラー（`処理に失敗しました`）では代わりのアドレスが出ない / 件名が種類と本文の頭だけで、別の人の同じ件名の問い合わせが Gmail で 1 つのスレッドにまとまる / アカウントの画面（`SimpleShell`）に入口が無い | 返信先の欄を出すとき以外の失敗はすべてアドレスを案内 / 件名に受付番号（`requestId` の頭 8 文字）/ `SimpleShell` のナビに「お問い合わせ」。あわせて、`CONTACT_EMAIL` を `lib/contact/path.ts` へ・規約の URL の文字と `CONTACT_PATH` をテストで結ぶ・BotID の判定とログインの確かめを並べる |
 | 13 | 12 回目の「失敗はすべてアドレスを案内」は入力の誤りでもアドレスを出す（§4.3 と食い違う）/ multipart で改行が CRLF になり、画面で 5,000 文字以内の本文がサーバーで超える | アドレスの案内は「送れなかった」と想定外のエラー（`GENERIC_ERROR_MESSAGE`）のときだけ。空白だけの本文は画面で止める / 本文は LF に揃えてから数える。あわせて、読み込みが終わるまで送信のボタンを止める（それまでの Enter で素の GET になり入力が消える）。アドレスが JS の chunk に入るのは、エラー画面と同じく受け入れる（コメントを実態に合わせた）。LP のヘッダーの指摘は §3-4 の判断のまま |
 | 14 | （中は無し。直したのは軽いもの）失敗の案内が入力の誤りの表示と並ぶ / 「別のお問い合わせを送る」でログインの切れが元に戻る / エラー画面が、フォームの受け付けない形のエラー番号まで「自動で添えます」と書く | 送るたびに案内を消す / ログインの状態は作り直しの外に持つ / 受け付ける形のときだけ引き継ぐ。**ローカルの `next start` では送信できない**（BotID のクライアントが Vercel への中継を待ち、Vercel の外では読めない。§10.3 の確かめは中継を Playwright で差し替えた）。判断済みの指摘（`bodySizeLimit`・BotID の全ページの読み込み・LP のヘッダー・設定の確かめの重複・切り詰めの重複）はそのまま |
-| 15 | （§10.5） | |
+| 15 | 長い辺 1,600px で縮めると、縦に長いスクリーンショット（シフト表の全体など）の幅が数十 px になり文字が読めない | 画素数（250 万）で縮める計算を `lib/contact/scale.ts` に置き、ブラウザとサーバーで共有（サーバーは `autoOrient` の大きさで計算）。1,170 × 20,000 → 382 × 6,537 で届くことをブラウザで確かめた。あわせて、細長い画像で辺が 0 にならない・プレビューは上限を通った画像だけ作る |
+| 16 | （§10.5） | |

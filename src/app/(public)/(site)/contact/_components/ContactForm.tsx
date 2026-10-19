@@ -122,10 +122,8 @@ function ContactFormBody({
           break
         }
         let blob: Blob
-        let preview: string
         try {
           blob = await resizeImage(file)
-          preview = await toDataUrl(blob)
         } catch {
           message ??= CONTACT_IMAGE_UNREADABLE_MESSAGE
           continue
@@ -137,6 +135,14 @@ function ContactFormBody({
         }
         if (total + blob.size > CONTACT_IMAGES_TOTAL_MAX_BYTES) {
           message ??= CONTACT_IMAGES_LIMIT_MESSAGE
+          continue
+        }
+        // プレビューは上限を通ったものだけ作る（外す画像に base64 を作らない）
+        let preview: string
+        try {
+          preview = await toDataUrl(blob)
+        } catch {
+          message ??= CONTACT_IMAGE_UNREADABLE_MESSAGE
           continue
         }
         total += blob.size
