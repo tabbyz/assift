@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from 'react'
 import Link from 'next/link'
+import { useParams } from 'next/navigation'
 import { Anchor, Button, Group, Loader, Stack, Text } from '@mantine/core'
 import { modals } from '@mantine/modals'
 import { notifications } from '@mantine/notifications'
@@ -14,10 +15,10 @@ import {
 import { FREE_STAFF_LIMIT } from '@/lib/billing/pricing'
 import { minStaffCap, suggestedStaffCap } from '@/lib/billing/staffCap'
 import { formatJapaneseYearMonthDay } from '@/lib/calendar/dateString'
+import { contactHref } from '@/lib/contact/path'
 import { STAFF_CAP_MAX } from '@/lib/validation/billing'
 import { PriceQuoteText } from './PriceIncreaseModal'
 import { StaffCapField, staffCapError } from './StaffCapField'
-import { CONTACT_EMAIL } from './contact'
 import type { StaffAdditionRetry } from './staffAddition'
 
 const MODAL_ID = 'staff-limit'
@@ -44,6 +45,8 @@ export function openStaffLimitModal(options: Options) {
 const close = () => modals.close(MODAL_ID)
 
 function StaffLimitOffer({ adding, retry }: Options) {
+  // お問い合わせに店舗を引き継ぐ（スタッフの追加・復帰・初期設定はどれも店舗の URL の下で開く）
+  const { tenantId } = useParams<{ tenantId?: string }>()
   const [offer, setOffer] = useState<UpgradeOffer | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -106,9 +109,16 @@ function StaffLimitOffer({ adding, retry }: Options) {
     return (
       <Stack gap="md">
         <Text size="sm">
-          ご契約の上限（在籍 {offer.limit} 人）に達しています。人数を増やすには{' '}
-          <Anchor href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</Anchor>{' '}
-          までお問い合わせください。
+          ご契約の上限（在籍 {offer.limit} 人）に達しています。人数を増やすには
+          {/* モーダルは遷移で閉じないので、押したら閉じる */}
+          <Anchor
+            component={Link}
+            href={contactHref({ topic: 'billing', tenantId })}
+            onClick={close}
+          >
+            お問い合わせ
+          </Anchor>
+          ください。
         </Text>
         <Group justify="flex-end">
           <Button variant="default" onClick={close}>

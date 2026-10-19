@@ -1,0 +1,80 @@
+import { z } from 'zod'
+import { parseDigest } from '@/lib/contact/path'
+import { emailSchema } from './auth'
+
+/**
+ * お問い合わせの種類（031 §4.3・§10.7）。並びは多そうな順で、フォームの選択肢もこの順。
+ * キーは URL の `?topic=`（課金の画面は `billing`、エラー画面は `bug`）に使うので変えない。表示名はメールの件名に入る
+ */
+export const CONTACT_TOPICS = {
+  usage: '使い方・操作方法',
+  bug: '不具合・エラー',
+  request: '機能の要望',
+  billing: '料金・お支払い',
+  account: 'アカウント・退会',
+  other: 'その他',
+} as const
+export type ContactTopic = keyof typeof CONTACT_TOPICS
+export const CONTACT_TOPIC_KEYS = Object.keys(CONTACT_TOPICS) as [ContactTopic, ...ContactTopic[]]
+
+export const CONTACT_BODY_MAX_LENGTH = 5000
+
+/** 添付（031 §4.7）。ブラウザで縮小してから送るので、上限は縮小を経ずに送られたものを弾くためのもの */
+export const CONTACT_IMAGE_MAX_COUNT = 3
+/**
+ * 縮めたあとの画素数・長い辺の上限と JPEG の品質（0〜1）。ブラウザの縮小とサーバーの書き出し直しで同じ値を使う（`lib/contact/scale.ts`）。
+ * 画素数は 1,920 × 1,280 程度（縦長のスクリーンショットも幅が残る）。長い辺はキャンバスの上限への余裕。
+ * 品質は先頭から試し、1 枚の上限（`CONTACT_IMAGE_MAX_BYTES`）に収まったところで止める（細かい写真は既定の品質だと超えうる）
+ */
+export const CONTACT_IMAGE_MAX_OUTPUT_PIXELS = 2_500_000
+export const CONTACT_IMAGE_MAX_EDGE = 8000
+export const CONTACT_IMAGE_JPEG_QUALITIES = [0.85, 0.7, 0.5] as const
+/**
+ * サーバーが読み込む画像の画素数の上限（解凍爆弾を弾く。`sharp` の `limitInputPixels`）。ブラウザは `CONTACT_IMAGE_MAX_OUTPUT_PIXELS` 以下に縮めて送るので、
+ * 余裕を見て 3,000 × 3,000（900 万画素。RGBA で約 36MB）。`sharp` の既定（約 2.7 億画素）では、
+ * ブラウザを通さずに送られた画像を展開するだけで関数のメモリが尽きうる
+ */
+export const CONTACT_IMAGE_MAX_INPUT_PIXELS = 3000 * 3000
+export const CONTACT_IMAGE_MAX_BYTES = 1.5 * 1024 * 1024
+/** `bodySizeLimit`（`next.config.ts` の `4mb`）から multipart の区切りと本文の分を残す */
+export const CONTACT_IMAGES_TOTAL_MAX_BYTES = 3.5 * 1024 * 1024
+/** 送れなかったときの文言（`code: 'contact_send_failed'` と一緒に返す。画面はこの code と想定外のエラーのときだけ、代わりのアドレスを案内する。031 §4.3） */
+export const CONTACT_SEND_FAILED_MESSAGE =
+  '送信できませんでした。時間をおいてもう一度お試しください'
+/** 添付の文言。ブラウザ（選んだとき）とサーバー（送ったとき）で同じものを出す */
+export const CONTACT_IMAGE_UNREADABLE_MESSAGE =
+  'この画像は添付できません。PNG・JPEG・WebP の画像を選んでください'
+export const CONTACT_IMAGES_LIMIT_MESSAGE = `画像は${CONTACT_IMAGE_MAX_COUNT}枚まで、合計${CONTACT_IMAGES_TOTAL_MAX_BYTES / 1024 / 1024}MBまで添付できます。枚数を減らしてください`
+export const CONTACT_IMAGE_TOO_LARGE_MESSAGE =
+  '画像が大きすぎて添付できません。画面の一部を切り取るなどして小さくしてください'
+
+/** フォームの空欄は `''` で届く。任意の欄は空なら無いものとして扱う */
+const blankToUndefined = (value: unknown) => (value === '' ? undefined : value)
+
+/**
+ * お問い合わせの送信（`FormData` の文字列の欄。添付は `lib/contact/attachments.ts`、ハニーポットは Action が parse の前に見る）。
+ * `email` はログイン中は使わない（アカウントのアドレスに返す。031 §3-5）ので、ここでは任意にし、Action が未ログインのときだけ求める
+ */
+export const contactSchema = z.object({
+  topic: z.enum(CONTACT_TOPIC_KEYS, { error: 'お問い合わせの種類を選んでください' }),
+  email: z.preprocess(blankToUndefined, emailSchema.optional()),
+  // multipart で送ると、ブラウザは文字列の改行（LF）を CRLF に変える。画面（`maxLength`）と同じ数え方にするため LF に戻してから数える
+  body: z.preprocess(
+    (value) => (typeof value === 'string' ? value.replace(/\r\n?/g, '\n') : value),
+    z
+      .string({ error: 'お問い合わせの内容を入力してください' })
+      .trim()
+      .min(1, { error: 'お問い合わせの内容を入力してください' })
+      .max(CONTACT_BODY_MAX_LENGTH, {
+        error: `お問い合わせの内容は${CONTACT_BODY_MAX_LENGTH.toLocaleString()}文字以内で入力してください`,
+      })
+  ),
+  /** フォームを開いたときにクライアントが作る uuid。Resend の `Idempotency-Key` に使う（031 §4.5） */
+  requestId: z.guid({ error: '送信できませんでした。ページを読み込み直してください' }),
+  /** 店舗（`?tenant=`）。見えるかは Action が RLS で確かめる */
+  tenantId: z.preprocess(blankToUndefined, z.guid().optional().catch(undefined)),
+  digest: z.preprocess(
+    blankToUndefined,
+    z.string().optional().transform(parseDigest).catch(undefined)
+  ),
+})

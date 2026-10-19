@@ -24,10 +24,11 @@ import {
   UnstyledButton,
 } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
-import { IconCreditCard, IconUserCircle } from '@tabler/icons-react'
+import { IconCreditCard, IconMail, IconSettings, IconUserCircle } from '@tabler/icons-react'
 import { AssiftSymbol } from '@/components/brand/AssiftLogo'
 import { LogoutMenuItem, LogoutNavLink } from '@/components/LogoutMenuItem'
 import { TenantSwitcher } from '@/components/TenantSwitcher'
+import { contactHref } from '@/lib/contact/path'
 import type { TenantListItem, TenantSummary } from '@/lib/queries/tenants'
 import {
   isLinkActive,
@@ -107,6 +108,7 @@ export function TenantShell({ tenant, tenants, email, banner, children }: Props)
               className={classes.navLink}
               data-active={settingsActive || undefined}
             >
+              <IconSettings size={16} stroke={1.75} aria-hidden />
               設定
             </UnstyledButton>
 
@@ -118,11 +120,27 @@ export function TenantShell({ tenant, tenants, email, banner, children }: Props)
               </MenuTarget>
               <MenuDropdown>
                 <MenuLabel>{email}</MenuLabel>
-                <MenuItem component={Link} href="/account">
+                {/* アイコンはスマホのメニュー（下の Navbar）と同じもの。大きさはログアウトの項目（16）に合わせる */}
+                <MenuItem
+                  component={Link}
+                  href="/account"
+                  leftSection={<IconUserCircle size={16} />}
+                >
                   アカウント情報
                 </MenuItem>
-                <MenuItem component={Link} href="/account/billing">
+                <MenuItem
+                  component={Link}
+                  href="/account/billing"
+                  leftSection={<IconCreditCard size={16} />}
+                >
                   プランとお支払い
+                </MenuItem>
+                <MenuItem
+                  component={Link}
+                  href={contactHref({ tenantId: tenant.id })}
+                  leftSection={<IconMail size={16} />}
+                >
+                  お問い合わせ
                 </MenuItem>
                 <MenuDivider />
                 <LogoutMenuItem />
@@ -182,6 +200,13 @@ export function TenantShell({ tenant, tenants, email, banner, children }: Props)
               href="/account/billing"
               label="プランとお支払い"
               leftSection={<IconCreditCard size={18} stroke={1.75} />}
+              classNames={navLinkClassNames}
+            />
+            <NavLink
+              component={Link}
+              href={contactHref({ tenantId: tenant.id })}
+              label="お問い合わせ"
+              leftSection={<IconMail size={18} stroke={1.75} />}
               classNames={navLinkClassNames}
             />
             <LogoutNavLink classNames={navLinkClassNames} />

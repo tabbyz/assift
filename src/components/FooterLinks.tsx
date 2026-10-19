@@ -1,9 +1,10 @@
 import Link from 'next/link'
 import { Group, Stack } from '@mantine/core'
+import { CONTACT_PATH } from '@/lib/contact/path'
 import classes from './FooterLinks.module.css'
 
 /**
- * フッターのリンク（利用規約・プライバシーポリシー・特商法表記）と著作権表示。LP と各規約ページで共有する（017 / 018）。
+ * フッターのリンク（利用規約・プライバシーポリシー・特商法表記・お問い合わせ（031））と著作権表示。LP と各規約ページで共有する（017 / 018）。
  * ロゴは各ページのヘッダーにあるので持たない。
  *
  * スマホ幅ではリンクが 2 行に折り返す。© をリンクと同じ行に混ぜると、フォント（LP は Zen Kaku Gothic New、
@@ -22,6 +23,9 @@ export function FooterLinks() {
         </Link>
         <Link href="/law" className={classes.link}>
           特定商取引法に基づく表記
+        </Link>
+        <Link href={CONTACT_PATH} className={classes.link}>
+          お問い合わせ
         </Link>
       </Group>
       <small className={classes.copyright}>© assift</small>

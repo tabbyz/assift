@@ -1,6 +1,7 @@
 'use client'
 
 import { type ReactNode, useEffect, useState, useTransition } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   Alert,
@@ -23,8 +24,8 @@ import { LinkButton } from '@/components/LinkButton'
 import { SettingsSection } from '@/components/SettingsSection'
 import { PortalButton } from '@/components/billing/PortalButton'
 import { openStaffCapModal } from '@/components/billing/StaffCapModal'
-import { CONTACT_EMAIL } from '@/components/billing/contact'
 import { FREE_STAFF_LIMIT, PRICE_PER_STAFF_YEN, monthlyPriceYen } from '@/lib/billing/pricing'
+import { contactHref } from '@/lib/contact/path'
 import { unchangedHeadroomMessage } from '@/lib/billing/staffAddition'
 import {
   addDays,
@@ -314,8 +315,11 @@ function PlanBody({ view }: { view: BillingView }) {
   if (view.kind === 'manual') {
     return (
       <Text size="sm">
-        在籍 {view.limit} 人までご利用いただけます。ご契約の変更は{' '}
-        <Anchor href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</Anchor> までお問い合わせください。
+        在籍 {view.limit} 人までご利用いただけます。ご契約の変更は
+        <Anchor component={Link} href={contactHref({ topic: 'billing' })}>
+          お問い合わせ
+        </Anchor>
+        ください。
       </Text>
     )
   }
@@ -392,11 +396,11 @@ function PlanBody({ view }: { view: BillingView }) {
       {subscription.cancelLastDay &&
         (subscription.hasSchedule ? (
           <Text size="sm" c="orange.8">
-            {formatDate(subscription.cancelLastDay)}で終了予定です。取り消すには{' '}
-            <Anchor href={`mailto:${CONTACT_EMAIL}`} inherit>
-              {CONTACT_EMAIL}
-            </Anchor>{' '}
-            までお問い合わせください。
+            {formatDate(subscription.cancelLastDay)}で終了予定です。取り消すには
+            <Anchor component={Link} href={contactHref({ topic: 'billing' })} inherit>
+              お問い合わせ
+            </Anchor>
+            ください。
           </Text>
         ) : (
           <Text size="sm" c="orange.8">

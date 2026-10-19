@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Anchor, Container, Divider, Paper, Stack, Text, Title } from '@mantine/core'
+import { CONTACT_PATH } from '@/lib/contact/path'
 import { TERMS_ARTICLES } from './_components/articles'
 import { TERMS } from './_components/terms'
 
@@ -51,9 +52,9 @@ export default function TermsPage() {
             </Text>
           )}
           <Text size="sm" c="dimmed">
-            {TERMS.operator}（
-            <Anchor href={`mailto:${TERMS.contactEmail}`} size="sm" c="dimmed">
-              {TERMS.contactEmail}
+            {TERMS.operator}（お問い合わせ：
+            <Anchor href={CONTACT_PATH} size="sm" c="dimmed">
+              {TERMS.contactUrl}
             </Anchor>
             ）
           </Text>
