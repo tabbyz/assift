@@ -1,7 +1,6 @@
 'use client'
 
 import { type FormEvent, useRef, useState, useSyncExternalStore, useTransition } from 'react'
-import Link from 'next/link'
 import {
   Anchor,
   Box,
@@ -381,7 +380,8 @@ function ContactFormBody({
 
         <Text size="xs" c="dimmed">
           送信いただいた内容は、
-          <Anchor component={Link} href="/privacy" inherit>
+          {/* 別のタブで開く（同じタブで移ると、入力と添付が消える） */}
+          <Anchor href="/privacy" target="_blank" rel="noopener" inherit>
             プライバシーポリシー
           </Anchor>
           に従って取り扱います。

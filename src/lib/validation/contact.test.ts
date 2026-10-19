@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { toActionError } from '@/lib/actions/error'
-import { CONTACT_BODY_MAX_LENGTH, contactSchema } from './contact'
+import {
+  CONTACT_BODY_MAX_LENGTH,
+  CONTACT_IMAGE_JPEG_QUALITIES,
+  CONTACT_IMAGE_MAX_INPUT_PIXELS,
+  CONTACT_IMAGE_MAX_OUTPUT_PIXELS,
+  contactSchema,
+} from './contact'
 
 const valid = {
   topic: 'bug',
@@ -68,5 +74,17 @@ describe('contactSchema', () => {
   it('エラー番号の形が違えば失敗にせず捨てる', () => {
     expect(contactSchema.parse({ ...valid, digest: '<script>' }).digest).toBeUndefined()
     expect(contactSchema.parse({ ...valid, digest: '1485408959' }).digest).toBe('1485408959')
+  })
+})
+
+describe('添付の上限', () => {
+  it('サーバーが読む画素数の上限は、ブラウザが縮めた大きさより大きい（正当な画像を「大きすぎる」で弾かない）', () => {
+    expect(CONTACT_IMAGE_MAX_INPUT_PIXELS).toBeGreaterThan(CONTACT_IMAGE_MAX_OUTPUT_PIXELS)
+  })
+
+  it('品質は高い順に試す', () => {
+    expect([...CONTACT_IMAGE_JPEG_QUALITIES].sort((a, b) => b - a)).toEqual([
+      ...CONTACT_IMAGE_JPEG_QUALITIES,
+    ])
   })
 })

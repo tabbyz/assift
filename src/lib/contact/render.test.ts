@@ -26,6 +26,12 @@ describe('contactSubject', () => {
     )
   })
 
+  it('文字の向きを変える制御文字を消す（受付番号の並びを見た目で入れ替えさせない）', () => {
+    expect(contactSubject('other', '\u202eabc\u2066def\u2069\u200f', ID)).toBe(
+      '[お問い合わせ] その他：abcdef（#1a2b3c4d）'
+    )
+  })
+
   it('サロゲートペアの途中で切らない', () => {
     const subject = contactSubject('other', '😀'.repeat(31), ID)
     expect(subject).toBe(`[お問い合わせ] その他：${'😀'.repeat(30)}…（#1a2b3c4d）`)

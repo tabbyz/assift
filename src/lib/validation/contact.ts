@@ -19,11 +19,18 @@ export const CONTACT_BODY_MAX_LENGTH = 5000
 export const CONTACT_IMAGE_MAX_COUNT = 3
 /**
  * 縮めたあとの画素数・長い辺の上限と JPEG の品質（0〜1）。ブラウザの縮小とサーバーの書き出し直しで同じ値を使う（`lib/contact/scale.ts`）。
- * 画素数は 1,920 × 1,280 程度（縦長のスクリーンショットも幅が残る）。長い辺はキャンバスの上限への余裕
+ * 画素数は 1,920 × 1,280 程度（縦長のスクリーンショットも幅が残る）。長い辺はキャンバスの上限への余裕。
+ * 品質は先頭から試し、1 枚の上限（`CONTACT_IMAGE_MAX_BYTES`）に収まったところで止める（細かい写真は既定の品質だと超えうる）
  */
 export const CONTACT_IMAGE_MAX_OUTPUT_PIXELS = 2_500_000
 export const CONTACT_IMAGE_MAX_EDGE = 8000
-export const CONTACT_IMAGE_JPEG_QUALITY = 0.85
+export const CONTACT_IMAGE_JPEG_QUALITIES = [0.85, 0.7, 0.5] as const
+/**
+ * サーバーが読み込む画像の画素数の上限（解凍爆弾を弾く。`sharp` の `limitInputPixels`）。ブラウザは `CONTACT_IMAGE_MAX_OUTPUT_PIXELS` 以下に縮めて送るので、
+ * 余裕を見て 3,000 × 3,000（900 万画素。RGBA で約 36MB）。`sharp` の既定（約 2.7 億画素）では、
+ * ブラウザを通さずに送られた画像を展開するだけで関数のメモリが尽きうる
+ */
+export const CONTACT_IMAGE_MAX_INPUT_PIXELS = 3000 * 3000
 export const CONTACT_IMAGE_MAX_BYTES = 1.5 * 1024 * 1024
 /** `bodySizeLimit`（`next.config.ts` の `4mb`）から multipart の区切りと本文の分を残す */
 export const CONTACT_IMAGES_TOTAL_MAX_BYTES = 3.5 * 1024 * 1024
