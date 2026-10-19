@@ -100,10 +100,6 @@
 /* 業種のボタンは左寄せの 2 行（名前 + 店の例） */
 .industry {
   composes: option;
-  /* button の中身は既定で上下中央に寄る。2 列で隣の枠が高いと、中身が浮いて見えるので上に寄せる */
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
   text-align: left;
   padding: 8px 14px;
   /* 狭い幅で「事務所・コールセ／ンター」と語の途中で折り返さない。「・」の後ろで折り返す（034） */
