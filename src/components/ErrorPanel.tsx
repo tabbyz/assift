@@ -66,7 +66,7 @@ export function ErrorPanel({ error, retry, home }: Props) {
           <Text size="sm" c="dimmed" ta="center">
             {ERROR_TEXT.contactFormPrefix}
             {/* 素の `<a>`（全体の読み込み）。「戻る」と同じく、クライアント遷移だと境界が残ることがある */}
-            <Anchor href={contactHref({ tenantId, digest: formDigest })} inherit>
+            <Anchor href={contactHref({ topic: 'bug', tenantId, digest: formDigest })} inherit>
               {ERROR_TEXT.contactFormLink}
             </Anchor>
             {ERROR_TEXT.contactFormSuffix(formDigest)}

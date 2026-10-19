@@ -6,10 +6,10 @@ describe('contactSubject', () => {
 
   it('種類と内容の先頭 30 文字と受付番号（requestId の頭 8 文字）', () => {
     expect(contactSubject('bug', 'シフト表が保存できません', ID)).toBe(
-      '[お問い合わせ] 不具合：シフト表が保存できません（#1a2b3c4d）'
+      '[お問い合わせ] 不具合・エラー：シフト表が保存できません（#1a2b3c4d）'
     )
     expect(contactSubject('usage', 'あ'.repeat(31), ID)).toBe(
-      `[お問い合わせ] 使い方：${'あ'.repeat(30)}…（#1a2b3c4d）`
+      `[お問い合わせ] 使い方・操作方法：${'あ'.repeat(30)}…（#1a2b3c4d）`
     )
   })
 
@@ -62,7 +62,7 @@ describe('contactText', () => {
         '2 行目',
         '',
         SEPARATOR,
-        '種類: 料金・契約',
+        '種類: 料金・お支払い',
         'アカウント: owner@example.com（ユーザー id: user-1）',
         '店舗: カフェ A（id: tenant-1）',
         'エラー番号: 1485408959',
@@ -87,7 +87,7 @@ describe('contactText', () => {
         '質問です',
         '',
         SEPARATOR,
-        '種類: 使い方',
+        '種類: 使い方・操作方法',
         'アカウント: 未ログイン',
       ].join('\n')
     )
@@ -102,7 +102,7 @@ describe('contactText', () => {
       context: {},
     })
     expect(text.slice(text.lastIndexOf(SEPARATOR))).toBe(
-      [SEPARATOR, '種類: 退会・データ', 'アカウント: 未ログイン'].join('\n')
+      [SEPARATOR, '種類: アカウント・退会', 'アカウント: 未ログイン'].join('\n')
     )
   })
 

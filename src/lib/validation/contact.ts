@@ -2,12 +2,16 @@ import { z } from 'zod'
 import { parseDigest } from '@/lib/contact/path'
 import { emailSchema } from './auth'
 
-/** お問い合わせの種類（031 §4.3）。キーは URL の `?topic=` とメールの件名に使う */
+/**
+ * お問い合わせの種類（031 §4.3・§10.7）。並びは多そうな順で、フォームの選択肢もこの順。
+ * キーは URL の `?topic=`（課金の画面は `billing`、エラー画面は `bug`）に使うので変えない。表示名はメールの件名に入る
+ */
 export const CONTACT_TOPICS = {
-  usage: '使い方',
-  billing: '料金・契約',
-  bug: '不具合',
-  account: '退会・データ',
+  usage: '使い方・操作方法',
+  bug: '不具合・エラー',
+  request: '機能の要望',
+  billing: '料金・お支払い',
+  account: 'アカウント・退会',
   other: 'その他',
 } as const
 export type ContactTopic = keyof typeof CONTACT_TOPICS
