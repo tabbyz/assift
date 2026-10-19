@@ -324,6 +324,10 @@ Missive の導入（032）はフォームが無くても成り立つ。フォー
 - `npm run build`: `/contact` の `.nft.json` に `@img/sharp-linux-x64`（`.node`）と `@img/sharp-libvips-linux-x64`（`.so`）が入っている
 - `npm run start`（本番ビルド）: `/contact`（画像を選んで送るまで）・`/`・`/terms`・`/privacy`・`/law` で `securitypolicyviolation` が 0 件。BotID の判定のスクリプトは同一オリジンのパスに読みに行く。
   この環境は Vercel へ中継できず 500 になり、送信は失敗の表示（アドレスの案内つき）になった（§10.2-3 の落ち方）
-- **残り（merge の前に、Vercel のプレビューで）**: 判定のスクリプト（`c.js`）の中身は Vercel から届くので、ここでは読めなかった。
-  プレビューで `/contact` から送り、(1) `securitypolicyviolation` が 0 件、(2) 送信が通って自分のアドレス（Preview の `CONTACT_INBOX`）に届く、(3) Vercel のログに「BotID の判定に失敗」が出ていない（出るなら OIDC の設定）を確かめる。
-  (1) が 0 件でなければ、BotID を外してハニーポットだけで出す（`withBotId`・`initBotId`・`checkBotId` の 3 か所）
+- **BotID のクライアント（2026-10-19。`*.vercel.com` を許可してから）**: `next start` の中継はこの環境のプロキシを通らないので、Playwright で BotID のパスを横取りし、
+  `withBotId` のリライトと同じ行き先（`api.vercel.com/bot-protection/v1/challenge`・`/proxy/…`）から curl で取って返した。
+  判定のスクリプト（`c.js`。難読化された 24KB。`eval` の文字列は無い）が読まれて動き、**CSP の違反は 0 件**。送信（`POST /contact`）に `x-is-human`・`x-path`・`x-method` が付く。
+  Deep Analysis のスクリプト（`p.js`）は Basic では読まれなかった。サーバーの判定は Vercel の OIDC が無いので失敗し、§10.2-2 のとおり通った（ログに出る）
+- **残り（merge の前に、Vercel のプレビューで）**: サーバーの判定（`checkBotId()`。Vercel の OIDC と Vercel への問い合わせ）は Vercel の上でしか動かない。
+  プレビューで `/contact` から送り、(1) 送信が通って自分のアドレス（Preview の `CONTACT_INBOX`）に届く、(2) Vercel のログに「BotID の判定に失敗」が出ていない（出るなら OIDC の設定）を確かめる。
+  念のため (3) `securitypolicyviolation` が 0 件も見る（ローカルで 0 件。Vercel の本物の中継でも同じはず）
