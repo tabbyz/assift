@@ -16,6 +16,7 @@ import {
   Text,
   Textarea,
   TextInput,
+  Title,
 } from '@mantine/core'
 import { IconPhotoPlus } from '@tabler/icons-react'
 import { v4 as uuidv4 } from 'uuid'
@@ -212,6 +213,8 @@ function ContactFormBody({
           return
         }
         setSent(r.data)
+        // 完了の画面は短いので、送信のボタンのあたりにいると上に何も無い画面になる。先頭へ戻す
+        window.scrollTo({ top: 0 })
       } catch {
         // 大きさの上限（bodySizeLimit）や通信の失敗は Action の外で起きる
         setError(CONTACT_SEND_FAILED_MESSAGE)
@@ -235,172 +238,183 @@ function ContactFormBody({
   }
 
   return (
-    <form onSubmit={submit}>
-      <Stack gap="lg">
-        <FormErrorAlert message={error} />
-        {failed && (
-          // 失敗したときだけアドレスを出す（HTML には出ない。JS の chunk には文字列として入るが、エラー画面の ErrorPanel も同じ。031 §4.3）
-          <Text size="sm" c="dimmed">
-            解決しない場合は {CONTACT_EMAIL} へメールでお問い合わせください。
-          </Text>
-        )}
-
-        {loggedIn && (
-          <Paper withBorder p="md" radius="md" bg="gray.0">
-            <Stack gap={4}>
-              {account && <Text size="sm">ログイン中のアカウント（{account}）へ返信します。</Text>}
-              <Text size="xs" c="dimmed">
-                調査のため、アカウント
-                {tenant ? `・店舗「${tenant.name}」` : ''}
-                {digest ? '・エラー番号' : ''}
-                ・ブラウザの種類を添えてお送りします。
-              </Text>
-            </Stack>
-          </Paper>
-        )}
-        {!account && (
-          <TextInput
-            label="返信先のメールアドレス"
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.currentTarget.value)}
-            required
-          />
-        )}
-
-        <NativeSelect
-          label="お問い合わせの種類"
-          value={topic}
-          onChange={(e) => setTopic(e.currentTarget.value)}
-          // 未選択のあいだは、ほかの欄の placeholder と同じ色にする（選択肢は文字の色に戻す。色は一覧にも引き継がれる）
-          styles={{ input: { color: topic ? undefined : 'var(--input-placeholder-color)' } }}
-          required
-        >
-          <option value="" disabled>
-            選んでください
-          </option>
-          {TOPIC_ENTRIES.map(([value, label]) => (
-            <option key={value} value={value} style={{ color: 'var(--mantine-color-text)' }}>
-              {label}
-            </option>
-          ))}
-        </NativeSelect>
-
-        <Textarea
-          label="お問い合わせの内容"
-          description={digest ? `エラー番号（${digest}）は自動で添えます。` : undefined}
-          autosize
-          minRows={6}
-          maxLength={CONTACT_BODY_MAX_LENGTH}
-          value={body}
-          onChange={(e) => setBody(e.currentTarget.value)}
-          required
-        />
-
-        <Stack gap="xs">
-          <Text size="sm" fw={500}>
-            画像（任意・{CONTACT_IMAGE_MAX_COUNT}枚まで）
-          </Text>
-          <Text size="xs" c="dimmed">
-            エラーや画面の様子が分かるスクリーンショットがあると、スムーズにご案内できます。
-          </Text>
-          {attachments.length > 0 && (
-            <SimpleGrid cols={{ base: 3, xs: 4 }} spacing="xs">
-              {attachments.map((a, i) => (
-                <Box key={a.id} pos="relative">
-                  <Image
-                    src={a.preview}
-                    alt={`添付 ${i + 1} 枚目`}
-                    radius="sm"
-                    h={96}
-                    fit="cover"
-                  />
-                  <CloseButton
-                    pos="absolute"
-                    top={4}
-                    right={4}
-                    bg="white"
-                    size="sm"
-                    aria-label={`添付 ${i + 1} 枚目を外す`}
-                    disabled={isResizing}
-                    onClick={() =>
-                      setAttachments((current) => current.filter((x) => x.id !== a.id))
-                    }
-                  />
-                </Box>
-              ))}
-            </SimpleGrid>
-          )}
-          {attachments.length < CONTACT_IMAGE_MAX_COUNT && (
-            <Group>
-              <FileButton
-                onChange={addImages}
-                resetRef={resetFileInput}
-                accept="image/png,image/jpeg,image/webp"
-                multiple
-              >
-                {(props) => (
-                  <Button
-                    {...props}
-                    variant="default"
-                    leftSection={<IconPhotoPlus size={16} />}
-                    loading={isResizing}
-                  >
-                    画像を選ぶ
-                  </Button>
-                )}
-              </FileButton>
-            </Group>
-          )}
-        </Stack>
-
-        {/* ハニーポット（031 §4.6）。人には見えず、読み上げ・タブ移動でも届かない。`type="hidden"` はボットが避けるので使わない。
-            名前は自動入力の拡張機能が埋めそうな語（website・url・name・email など）を避ける。
-            画面の外に出す（`display: none` は一部のボットが見抜く） */}
-        <Box
-          pos="absolute"
-          left={-10000}
-          w={1}
-          h={1}
-          style={{ overflow: 'hidden' }}
-          aria-hidden="true"
-        >
-          <label>
-            この欄は空のままにしてください
-            <input
-              type="text"
-              name="hp_ref_code"
-              tabIndex={-1}
-              autoComplete="off"
-              ref={honeypotRef}
-              defaultValue=""
-            />
-          </label>
-        </Box>
-
-        <Text size="xs" c="dimmed">
-          送信いただいた内容は、
-          {/* 別のタブで開く（同じタブで移ると、入力と添付が消える） */}
-          <Anchor href="/privacy" target="_blank" rel="noopener" inherit>
-            プライバシーポリシー
-          </Anchor>
-          に従って取り扱います。
-        </Text>
-
-        <Stack gap="xs" align="flex-end">
-          <Button type="submit" loading={isPending} disabled={isResizing || !hydrated}>
-            送信する
-          </Button>
-          {isPending && isSlow && (
-            <Text size="sm" c="dimmed" ta="right">
-              送信に時間がかかっています。このままお待ちいただくか、終わらない場合は入力内容を控えて{' '}
-              {CONTACT_EMAIL} へメールでお問い合わせください。
+    <Stack gap="xl">
+      {/* 見出しはここに置き、完了の画面では出さない */}
+      <Stack gap="xs">
+        <Title order={1} fz={{ base: 22, xs: 34 }}>
+          お問い合わせ
+        </Title>
+        <Text c="dimmed">assift についてのご質問・ご要望・不具合のご連絡を受け付けています。</Text>
+      </Stack>
+      <form onSubmit={submit}>
+        <Stack gap="lg">
+          <FormErrorAlert message={error} />
+          {failed && (
+            // 失敗したときだけアドレスを出す（HTML には出ない。JS の chunk には文字列として入るが、エラー画面の ErrorPanel も同じ。031 §4.3）
+            <Text size="sm" c="dimmed">
+              解決しない場合は {CONTACT_EMAIL} へメールでお問い合わせください。
             </Text>
           )}
+
+          {loggedIn && (
+            <Paper withBorder p="md" radius="md" bg="gray.0">
+              <Stack gap={4}>
+                {account && (
+                  <Text size="sm">ログイン中のアカウント（{account}）へ返信します。</Text>
+                )}
+                <Text size="xs" c="dimmed">
+                  調査のため、アカウント
+                  {tenant ? `・店舗「${tenant.name}」` : ''}
+                  {digest ? '・エラー番号' : ''}
+                  ・ブラウザの種類を添えてお送りします。
+                </Text>
+              </Stack>
+            </Paper>
+          )}
+          {!account && (
+            <TextInput
+              label="返信先のメールアドレス"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.currentTarget.value)}
+              required
+            />
+          )}
+
+          <NativeSelect
+            label="お問い合わせの種類"
+            value={topic}
+            onChange={(e) => setTopic(e.currentTarget.value)}
+            // 未選択のあいだは、ほかの欄の placeholder と同じ色にする（選択肢は文字の色に戻す。色は一覧にも引き継がれる）
+            styles={{ input: { color: topic ? undefined : 'var(--input-placeholder-color)' } }}
+            required
+          >
+            <option value="" disabled>
+              選んでください
+            </option>
+            {TOPIC_ENTRIES.map(([value, label]) => (
+              <option key={value} value={value} style={{ color: 'var(--mantine-color-text)' }}>
+                {label}
+              </option>
+            ))}
+          </NativeSelect>
+
+          <Textarea
+            label="お問い合わせの内容"
+            description={digest ? `エラー番号（${digest}）は自動で添えます。` : undefined}
+            autosize
+            minRows={6}
+            maxLength={CONTACT_BODY_MAX_LENGTH}
+            value={body}
+            onChange={(e) => setBody(e.currentTarget.value)}
+            required
+          />
+
+          <Stack gap="xs">
+            <Text size="sm" fw={500}>
+              画像（任意・{CONTACT_IMAGE_MAX_COUNT}枚まで）
+            </Text>
+            <Text size="xs" c="dimmed">
+              エラーや画面の様子が分かるスクリーンショットがあると、スムーズにご案内できます。
+            </Text>
+            {attachments.length > 0 && (
+              <SimpleGrid cols={{ base: 3, xs: 4 }} spacing="xs">
+                {attachments.map((a, i) => (
+                  <Box key={a.id} pos="relative">
+                    <Image
+                      src={a.preview}
+                      alt={`添付 ${i + 1} 枚目`}
+                      radius="sm"
+                      h={96}
+                      fit="cover"
+                    />
+                    <CloseButton
+                      pos="absolute"
+                      top={4}
+                      right={4}
+                      bg="white"
+                      size="sm"
+                      aria-label={`添付 ${i + 1} 枚目を外す`}
+                      disabled={isResizing}
+                      onClick={() =>
+                        setAttachments((current) => current.filter((x) => x.id !== a.id))
+                      }
+                    />
+                  </Box>
+                ))}
+              </SimpleGrid>
+            )}
+            {attachments.length < CONTACT_IMAGE_MAX_COUNT && (
+              <Group>
+                <FileButton
+                  onChange={addImages}
+                  resetRef={resetFileInput}
+                  accept="image/png,image/jpeg,image/webp"
+                  multiple
+                >
+                  {(props) => (
+                    <Button
+                      {...props}
+                      variant="default"
+                      leftSection={<IconPhotoPlus size={16} />}
+                      loading={isResizing}
+                    >
+                      画像を選ぶ
+                    </Button>
+                  )}
+                </FileButton>
+              </Group>
+            )}
+          </Stack>
+
+          {/* ハニーポット（031 §4.6）。人には見えず、読み上げ・タブ移動でも届かない。`type="hidden"` はボットが避けるので使わない。
+            名前は自動入力の拡張機能が埋めそうな語（website・url・name・email など）を避ける。
+            画面の外に出す（`display: none` は一部のボットが見抜く） */}
+          <Box
+            pos="absolute"
+            left={-10000}
+            w={1}
+            h={1}
+            style={{ overflow: 'hidden' }}
+            aria-hidden="true"
+          >
+            <label>
+              この欄は空のままにしてください
+              <input
+                type="text"
+                name="hp_ref_code"
+                tabIndex={-1}
+                autoComplete="off"
+                ref={honeypotRef}
+                defaultValue=""
+              />
+            </label>
+          </Box>
+
+          <Text size="xs" c="dimmed">
+            送信いただいた内容は、
+            {/* 別のタブで開く（同じタブで移ると、入力と添付が消える） */}
+            <Anchor href="/privacy" target="_blank" rel="noopener" inherit>
+              プライバシーポリシー
+            </Anchor>
+            に従って取り扱います。
+          </Text>
+
+          <Stack gap="xs" align="flex-end">
+            <Button type="submit" loading={isPending} disabled={isResizing || !hydrated}>
+              送信する
+            </Button>
+            {isPending && isSlow && (
+              <Text size="sm" c="dimmed" ta="right">
+                送信に時間がかかっています。このままお待ちいただくか、終わらない場合は入力内容を控えて{' '}
+                {CONTACT_EMAIL} へメールでお問い合わせください。
+              </Text>
+            )}
+          </Stack>
         </Stack>
-      </Stack>
-    </form>
+      </form>
+    </Stack>
   )
 }
 

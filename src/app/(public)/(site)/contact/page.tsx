@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Container, Stack, Text, Title } from '@mantine/core'
+import { Container } from '@mantine/core'
 import { readContactTenant } from '@/lib/contact/tenant'
 import { parseDigest } from '@/lib/contact/path'
 import { getAuthUser } from '@/utils/auth/current'
@@ -23,26 +23,17 @@ export default async function ContactPage({ searchParams }: PageProps<'/contact'
 
   return (
     <Container size={720} py="xl">
-      <Stack gap="xl">
-        <Stack gap="xs">
-          <Title order={1} fz={{ base: 22, xs: 34 }}>
-            お問い合わせ
-          </Title>
-          <Text c="dimmed">
-            assift についてのご質問・ご要望・不具合のご連絡を受け付けています。
-          </Text>
-        </Stack>
-        {/* URL の初期値が変わったら作り直す。描画のたびの値（乱数）にしない: Action が cookie を更新すると今のページが描き直され、
-            送信の結果や入力が消える。同じ URL のまま次の問い合わせを送るのは、完了の画面のボタンで作り直す */}
-        <ContactForm
-          key={`${topic ?? ''}|${tenantParam ?? ''}|${digest ?? ''}`}
-          loggedIn={Boolean(user)}
-          account={user?.email ?? null}
-          tenant={tenant ?? null}
-          digest={parseDigest(digest) ?? null}
-          initialTopic={topic}
-        />
-      </Stack>
+      {/* 見出しはフォームの側に置く（完了の画面では隠す）。
+          URL の初期値が変わったら作り直す。描画のたびの値（乱数）にしない: Action が cookie を更新すると今のページが描き直され、
+          送信の結果や入力が消える。同じ URL のまま次の問い合わせを送るのは、完了の画面のボタンで作り直す */}
+      <ContactForm
+        key={`${topic ?? ''}|${tenantParam ?? ''}|${digest ?? ''}`}
+        loggedIn={Boolean(user)}
+        account={user?.email ?? null}
+        tenant={tenant ?? null}
+        digest={parseDigest(digest) ?? null}
+        initialTopic={topic}
+      />
     </Container>
   )
 }
