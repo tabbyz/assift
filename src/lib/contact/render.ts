@@ -21,15 +21,8 @@ export type ContactEmailInput = {
 
 const SUBJECT_SNIPPET_LENGTH = 30
 const USER_AGENT_MAX_LENGTH = 300
-/** 利用者の入力の見出し。ここより上はサーバーが確かめた情報 */
-const BODY_HEADING = '---- お問い合わせの内容（利用者の入力。各行の頭に「| 」を付けています） ----'
-/** 入力の各行の頭に付ける印。入力の中に見出しや「アカウント: …」の行を書いても、印が付くので区別できる */
-const QUOTE = '| '
-/**
- * 改行として表示されうる文字（CR・LF に加えて、垂直タブ・改ページ・NEL・U+2028・U+2029）。ここで行を分けないと、
- * メールの画面ではそこで改行されるのに印が付かず、偽の「アカウント: …」行を本物に見せかけられる
- */
-const LINE_BREAKS = /\r\n|[\r\n\v\f\u0085\u2028\u2029]/
+/** 本文とサーバーで確かめた情報の区切り */
+const SEPARATOR = '-'.repeat(40)
 
 /**
  * 改行・タブなどの制御文字を空白 1 つにまとめる（件名は 1 行。ヘッダに改行を入れない）。
@@ -61,11 +54,11 @@ export function contactSubject(topic: ContactTopic, body: string, requestId: str
 }
 
 /**
- * 本文（テキストだけ。031 §3-8）。受信箱では差出人が `noreply@` に見えるので、誰からかを先頭に書く。
+ * 本文（テキストだけ。031 §3-8）。受信箱では差出人が `noreply@` に見えるので、返信先を先頭に書き、問い合わせの文、区切り線、
+ * サーバーで確かめた情報の順に並べる。区切り線のあとの情報は返信の引用で相手に戻りうるので、本人の情報だけにする（031 §4.4）。
  *
- * **サーバーで確かめた情報を先に、利用者の入力を後に置き、入力の各行の頭に印（`| `）を付ける**: 入力を先に置いたり、
- * 区切り線だけで分けたりすると、入力に区切り線と「アカウント: …」を書いて本物の情報に見せかけられる（他人のアカウントからの依頼に見せる）。
- * 先頭の情報は返信の引用で相手に戻りうるので、本人の情報だけにする（031 §4.4）
+ * 利用者は問い合わせの文に区切り線と偽の「アカウント: …」を書けるので、本物はいちばん最後の区切り線のあと。
+ * アカウントに関わる依頼は、返信先とアカウントのアドレスが一致するかを確かめてから受ける（031 §4.4。運用で守る）
  */
 export function contactText({
   topic,
@@ -74,7 +67,14 @@ export function contactText({
   context,
   imageCount,
 }: ContactEmailInput): string {
-  const lines = [`返信先: ${replyTo}`, `種類: ${CONTACT_TOPICS[topic]}`]
+  const lines = [
+    `返信先: ${replyTo}`,
+    '',
+    body.trim(),
+    '',
+    SEPARATOR,
+    `種類: ${CONTACT_TOPICS[topic]}`,
+  ]
   if (context.user) {
     lines.push(
       context.user.email
@@ -92,13 +92,5 @@ export function contactText({
   if (context.userAgent) {
     lines.push(`ブラウザ: ${clip(singleLine(context.userAgent), USER_AGENT_MAX_LENGTH)}`)
   }
-  lines.push(
-    '',
-    BODY_HEADING,
-    ...body
-      .trim()
-      .split(LINE_BREAKS)
-      .map((line) => `${QUOTE}${line}`)
-  )
   return lines.join('\n')
 }

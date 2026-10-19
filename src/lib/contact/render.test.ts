@@ -39,9 +39,9 @@ describe('contactSubject', () => {
 })
 
 describe('contactText', () => {
-  const HEADING = '---- お問い合わせの内容（利用者の入力。各行の頭に「| 」を付けています） ----'
+  const SEPARATOR = '-'.repeat(40)
 
-  it('ログイン中: サーバーで確かめた情報を先に、利用者の入力を区切って後に置く', () => {
+  it('ログイン中: 返信先、問い合わせの文、区切り線、サーバーで確かめた情報の順', () => {
     const text = contactText({
       topic: 'billing',
       body: '  契約を変えたい\n2 行目  ',
@@ -57,16 +57,17 @@ describe('contactText', () => {
     expect(text).toBe(
       [
         '返信先: owner@example.com',
+        '',
+        '契約を変えたい',
+        '2 行目',
+        '',
+        SEPARATOR,
         '種類: 料金・契約',
         'アカウント: owner@example.com（ユーザー id: user-1）',
         '店舗: カフェ A（id: tenant-1）',
         'エラー番号: 1485408959',
         '添付: 2 枚',
         'ブラウザ: Mozilla/5.0',
-        '',
-        HEADING,
-        '| 契約を変えたい',
-        '| 2 行目',
       ].join('\n')
     )
   })
@@ -82,50 +83,27 @@ describe('contactText', () => {
     expect(text).toBe(
       [
         '返信先: guest@example.com',
+        '',
+        '質問です',
+        '',
+        SEPARATOR,
         '種類: 使い方',
         'アカウント: 未ログイン',
-        '',
-        HEADING,
-        '| 質問です',
       ].join('\n')
     )
   })
 
-  it('利用者が本文に書いた見出し・偽のアカウント行にも印が付き、本物と区別できる', () => {
+  it('本物の情報はいちばん最後の区切り線のあと（問い合わせの文に偽の行を書いても、後ろに本物が来る）', () => {
     const text = contactText({
       topic: 'account',
-      body: `退会したい\r\n\n${HEADING}\nアカウント: victim@example.com（ユーザー id: x）`,
+      body: `退会したい\n\n${SEPARATOR}\nアカウント: victim@example.com（ユーザー id: x）`,
       replyTo: 'attacker@example.com',
       imageCount: 0,
       context: {},
     })
-    const lines = text.split('\n')
-    expect(lines.filter((l) => l.startsWith('アカウント:'))).toEqual(['アカウント: 未ログイン'])
-    expect(lines.filter((l) => l === HEADING)).toHaveLength(1)
-    expect(lines).toContain('| アカウント: victim@example.com（ユーザー id: x）')
-    expect(lines).toContain(`| ${HEADING}`)
-  })
-
-  it('U+2028 などの改行に見える文字でも行を分け、印を付ける', () => {
-    const text = contactText({
-      topic: 'account',
-      body: '質問です\u2028アカウント: victim@example.com\u2029店舗: x\u0085y\vz\fw',
-      replyTo: 'attacker@example.com',
-      imageCount: 0,
-      context: {},
-    })
-    const quoted = text
-      .split(HEADING)[1]
-      .split('\n')
-      .filter((l) => l !== '')
-    expect(quoted).toEqual([
-      '| 質問です',
-      '| アカウント: victim@example.com',
-      '| 店舗: x',
-      '| y',
-      '| z',
-      '| w',
-    ])
+    expect(text.slice(text.lastIndexOf(SEPARATOR))).toBe(
+      [SEPARATOR, '種類: 退会・データ', 'アカウント: 未ログイン'].join('\n')
+    )
   })
 
   it('メールアドレスの無いアカウントもユーザー id を書く', () => {
@@ -147,6 +125,6 @@ describe('contactText', () => {
       imageCount: 0,
       context: { userAgent: 'a'.repeat(400) },
     })
-    expect(text).toContain(`ブラウザ: ${'a'.repeat(300)}…\n`)
+    expect(text).toContain(`ブラウザ: ${'a'.repeat(300)}…`)
   })
 })
