@@ -1,4 +1,5 @@
 import 'server-only'
+import { unstable_rethrow } from 'next/navigation'
 import { getTenant } from '@/lib/queries/tenants'
 
 /**
@@ -12,6 +13,8 @@ export async function readContactTenant(
     const tenant = await getTenant(tenantId)
     return tenant ? { id: tenant.id, name: tenant.name } : undefined
   } catch (error) {
+    // Next の制御の例外（redirect・notFound・動的描画への切り替え）は握りつぶさない
+    unstable_rethrow(error)
     console.error('[contact] 店舗を読めませんでした', error)
     return undefined
   }

@@ -1,4 +1,3 @@
-import { truncate } from '@/lib/migration/truncate'
 import { CONTACT_TOPICS, type ContactTopic } from '@/lib/validation/contact'
 
 /** 本文の末尾に添える情報（031 §4.4）。サーバーで確かめた値だけを入れる */
@@ -35,10 +34,13 @@ function singleLine(value: string): string {
     .trim()
 }
 
-/** コードポイントで切る（サロゲートペアの途中で切らない。数え方は移行の切り詰めと同じ） */
+/**
+ * コードポイントで切る（サロゲートペアの途中で切らない）。移行の `truncate`（`lib/migration`）と数え方は同じだが、
+ * 移行のコードはカットオーバーのあとに消しうるので借りない
+ */
 function clip(value: string, max: number): string {
-  const t = truncate(value, max)
-  return t.truncated ? `${t.value}…` : t.value
+  const chars = Array.from(value)
+  return chars.length > max ? `${chars.slice(0, max).join('')}…` : value
 }
 
 /** 件名: `[お問い合わせ] 種類：内容の先頭 30 文字`。Gmail が問い合わせごとに別のスレッドにする（031 §4.5） */

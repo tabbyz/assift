@@ -83,6 +83,7 @@ export function ContactForm({ account: initialAccount, tenant, digest, initialTo
     if (files.length === 0 || attachments.length >= CONTACT_IMAGE_MAX_COUNT) return
     setIsResizing(true)
     setError(undefined)
+    setFailed(false)
     try {
       const next = [...attachments]
       let total = next.reduce((sum, a) => sum + a.blob.size, 0)
@@ -133,6 +134,7 @@ export function ContactForm({ account: initialAccount, tenant, digest, initialTo
     if (account) data.set('asAccount', '1')
     attachments.forEach((a, i) => data.append('images', a.blob, `image-${i + 1}.jpg`))
 
+    setFailed(false)
     startTransition(async () => {
       try {
         const r = await sendContact(data)
