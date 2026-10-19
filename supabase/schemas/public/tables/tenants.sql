@@ -9,8 +9,16 @@ create table public.tenants (
   assist_notes  text        check (char_length(assist_notes) <= 500),
   -- 初期設定（014）を終えた日時。null = 準備中。一度入れたら変えない（private.guard_setup_completed_at）
   setup_completed_at timestamptz,
+  -- 店舗の業種（034）。初期設定のステップ 2 で選んだものが入り、店舗情報の画面で直せる。テンプレートを選ぶことと、店舗の分析に使う。
+  -- null = 未回答（初期設定で業種を選んでいない店舗・店舗情報の画面で外した店舗）。
+  -- 値は lib/setup/templates.ts の INDUSTRIES と同じ（templates.test.ts がこのファイルを読んで確かめる）
+  industry      text check (industry in ('food', 'retail', 'beauty', 'care', 'clinic', 'nursery', 'logistics', 'office', 'other')),
+  -- 業種が「その他」のときの任意の一言（034）。上限は lib/validation/tenants.ts の INDUSTRY_NOTE_MAX_LENGTH と同じ
+  industry_note text check (char_length(industry_note) between 1 and 20),
   created_at    timestamptz not null default now(),
-  updated_at    timestamptz not null default now()
+  updated_at    timestamptz not null default now(),
+  -- 一言は「その他」のときだけ。`industry = 'other'` だと業種が null のとき null になり、CHECK を通ってしまう
+  constraint tenants_industry_note_other_only check (industry_note is null or industry is not distinct from 'other')
 );
 
 create index tenants_owner_id_idx on public.tenants (owner_id);

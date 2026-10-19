@@ -9,7 +9,12 @@ import { FormErrorAlert } from '@/components/FormErrorAlert'
 import { SettingsSection } from '@/components/SettingsSection'
 import { SHIFT_CYCLE_OPTIONS, type ShiftCycle } from '@/lib/calendar/shiftCycle'
 import { START_OF_WEEK_OPTIONS } from '@/lib/calendar/weekdays'
-import { TENANT_NAME_MAX_LENGTH } from '@/lib/validation/tenants'
+import { INDUSTRIES, INDUSTRY_LABELS, type Industry, isIndustry } from '@/lib/setup/templates'
+import {
+  INDUSTRY_NOTE_MAX_LENGTH,
+  normalizeIndustry,
+  TENANT_NAME_MAX_LENGTH,
+} from '@/lib/validation/tenants'
 import { deleteTenant } from '../../../../actions'
 import { updateTenant } from '../actions'
 
@@ -18,25 +23,41 @@ type Props = {
   name: string
   shiftCycle: ShiftCycle
   startOfWeek: number
+  industry: Industry | null
+  industryNote: string | null
 }
+
+const INDUSTRY_OPTIONS = INDUSTRIES.map((value) => ({ value, label: INDUSTRY_LABELS[value] }))
 
 export function GeneralSettingsClient(props: Props) {
   const router = useRouter()
   const [name, setName] = useState(props.name)
   const [shiftCycle, setShiftCycle] = useState<ShiftCycle>(props.shiftCycle)
   const [startOfWeek, setStartOfWeek] = useState(String(props.startOfWeek))
+  const [industry, setIndustry] = useState<Industry | null>(props.industry)
+  const [industryNote, setIndustryNote] = useState(props.industryNote ?? '')
   const [error, setError] = useState<string>()
   const [isSaving, startSave] = useTransition()
   const [isDeleting, startDelete] = useTransition()
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    // 業種は変えたときだけ送る（034 §4.3）。比べる相手は props（保存のあと revalidatePath で新しい値になる）。
+    // 両方を normalizeIndustry に通して、一言の '' と null を同じに扱う
+    const next = normalizeIndustry({ industry, industryNote })
+    const current = normalizeIndustry({
+      industry: props.industry,
+      industryNote: props.industryNote,
+    })
+    const industryChanged =
+      next.industry !== current.industry || next.industryNote !== current.industryNote
     startSave(async () => {
       const result = await updateTenant({
         tenantId: props.tenantId,
         name,
         shiftCycle,
         startOfWeek: Number(startOfWeek),
+        ...(industryChanged ? next : {}),
       })
       if (!result.ok) {
         setError(result.error)
@@ -105,6 +126,24 @@ export function GeneralSettingsClient(props: Props) {
               allowDeselect={false}
               required
             />
+            <Select
+              label="業種"
+              description="勤務パターンは変わりません"
+              placeholder="選んでいません"
+              data={INDUSTRY_OPTIONS}
+              value={industry}
+              onChange={(value) => setIndustry(isIndustry(value) ? value : null)}
+              clearable
+            />
+            {industry === 'other' && (
+              <TextInput
+                label="お店の業種（任意）"
+                placeholder="例）ホテル"
+                maxLength={INDUSTRY_NOTE_MAX_LENGTH}
+                value={industryNote}
+                onChange={(event) => setIndustryNote(event.currentTarget.value)}
+              />
+            )}
           </Stack>
         </SettingsSection>
       </form>

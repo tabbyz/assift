@@ -97,12 +97,14 @@
   font-weight: 700;
 }
 
-/* 業種のボタンは左寄せの 2 行（名前 + 中身） */
+/* 業種のボタンは左寄せの 2 行（名前 + 店の例） */
 .industry {
   composes: option;
-  min-height: 64px;
   text-align: left;
-  padding: 10px 14px;
+  padding: 8px 14px;
+  /* 狭い幅で「事務所・コールセ／ンター」と語の途中で折り返さない。「・」の後ろで折り返す（034） */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 /* 選んだ業種と「選びなおす」 */

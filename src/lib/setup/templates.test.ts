@@ -1,10 +1,16 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { patternInputSchema } from '@/lib/validation/patterns'
 import {
   FALLBACK_COLOR,
   INDUSTRIES,
+  INDUSTRY_LABELS,
   industryExample,
+  isIndustry,
   nextUnusedColor,
+  TEMPLATE_KEYS,
+  TEMPLATE_OF,
   templateState,
 } from './templates'
 
@@ -46,13 +52,57 @@ describe('templateState', () => {
     const name = (key: string) => care.rows.find((row) => row.key === key)?.name
     expect(care.pair && [name(care.pair.fromKey), name(care.pair.toKey)]).toEqual(['夜勤', '明け'])
     expect(care.pairEnabled).toBe(true)
-    expect(templateState('food').pair).toBeNull()
-    expect(templateState('retail').pair).toBeNull()
+    for (const industry of INDUSTRIES.filter((value) => value !== 'care')) {
+      expect(templateState(industry).pair, industry).toBeNull()
+    }
   })
 
-  it('ボタンに添える中身は働く日の勤務を 3 つまで', () => {
-    expect(industryExample('food')).toBe('早番・遅番・通し など')
-    expect(industryExample('other')).toBe('日勤 など')
+  it.each(INDUSTRIES)(
+    '%s: お休みの先頭 3 つが 休み・希望休・有給（先頭は完成イメージの見本）。介護だけ 4 つ目に明け',
+    (industry) => {
+      const dayoffs = templateState(industry)
+        .rows.filter((row) => row.kind === 'dayoff')
+        .map((row) => row.name)
+      expect(dayoffs).toEqual(
+        industry === 'care' ? ['休み', '希望休', '有給', '明け'] : ['休み', '希望休', '有給']
+      )
+    }
+  )
+
+  it('業種ごとに当てるテンプレートが決まっていて、6 つのテンプレートがどれも使われている', () => {
+    expect(Object.keys(TEMPLATE_OF).sort()).toEqual([...INDUSTRIES].sort())
+    expect(new Set(Object.values(TEMPLATE_OF))).toEqual(new Set(TEMPLATE_KEYS))
+  })
+})
+
+describe('業種', () => {
+  it('添え書きは業種ごとに書き、重ならない', () => {
+    const examples = INDUSTRIES.map(industryExample)
+    expect(new Set(examples).size).toBe(INDUSTRIES.length)
+    expect(industryExample('food')).toBe('カフェ・居酒屋・レストラン')
+  })
+
+  it('ラベルが重ならない', () => {
+    const labels = INDUSTRIES.map((industry) => INDUSTRY_LABELS[industry])
+    expect(new Set(labels).size).toBe(INDUSTRIES.length)
+  })
+
+  it('isIndustry は一覧の値だけを通す', () => {
+    expect(isIndustry('care')).toBe(true)
+    expect(isIndustry('medical')).toBe(false)
+    expect(isIndustry('constructor')).toBe(false)
+    expect(isIndustry(null)).toBe(false)
+  })
+
+  it('tenants.industry の check の値が INDUSTRIES と同じ（TS にだけ足すと保存が 23514 で止まる）', () => {
+    const sql = readFileSync(
+      join(process.cwd(), 'supabase/schemas/public/tables/tenants.sql'),
+      'utf8'
+    )
+    const check = sql.match(/industry\s+text check \(industry in \(([^)]*)\)\)/)
+    expect(check, 'tenants.sql に industry の check が見つからない').not.toBeNull()
+    const values = [...check![1].matchAll(/'([^']+)'/g)].map((m) => m[1])
+    expect(values).toEqual([...INDUSTRIES])
   })
 })
 

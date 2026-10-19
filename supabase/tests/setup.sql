@@ -1,10 +1,11 @@
 -- 初期設定（014）の DB 側を固定するテスト（npx supabase test db）。
 -- 完了日時のトリガ・埋め戻しの条件・save_setup_patterns / complete_setup の検査（完了済み・スタッフあり・他テナント・anon）。
+-- 業種と一言（034）の制約と、店舗の持ち主が書けること。
 -- 同時実行（for update のロック）は 1 接続では試せないので、手動で確かめる（014 §6.3）。
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(31);
+select plan(39);
 
 -- ---------------------------------------------------------------------------
 -- 準備（postgres として実行）
@@ -174,6 +175,46 @@ select is((select setup_completed_at from public.tenants where id = :t_patonly),
   '埋め戻し: 勤務だけ（スタッフ 0）の店舗は準備中のまま');
 select is((select setup_completed_at from public.tenants where id = :t_b), null,
   '他テナント（B）の完了日時は A の update で変わっていない');
+
+-- ---------------------------------------------------------------------------
+-- 業種と一言（034 §4.1）。値は lib/setup/templates.ts の INDUSTRIES と同じ
+-- ---------------------------------------------------------------------------
+select lives_ok(
+  $q$do $d$
+    declare v text;
+    begin
+      foreach v in array array['food', 'retail', 'beauty', 'care', 'clinic', 'nursery', 'logistics', 'office', 'other'] loop
+        update public.tenants set industry = v where id = 'bbbbbbbb-1414-0000-0000-000000000001';
+      end loop;
+    end
+  $d$$q$,
+  '業種: 9 つの値が入る');
+select throws_ok(
+  $$update public.tenants set industry = 'medical' where id = 'bbbbbbbb-1414-0000-0000-000000000001'$$,
+  '23514', null, '業種: 一覧に無い値は入らない');
+select lives_ok(
+  $$update public.tenants set industry = 'other', industry_note = 'ホテル' where id = 'bbbbbbbb-1414-0000-0000-000000000001'$$,
+  '一言: その他なら入る');
+select throws_ok(
+  $$update public.tenants set industry = 'food', industry_note = 'ホテル' where id = 'bbbbbbbb-1414-0000-0000-000000000001'$$,
+  '23514', null, '一言: その他以外の業種では入らない');
+select throws_ok(
+  $$update public.tenants set industry = null, industry_note = 'ホテル' where id = 'bbbbbbbb-1414-0000-0000-000000000001'$$,
+  '23514', null, '一言: 業種が null なら入らない（industry = ''other'' だと null で通ってしまう）');
+select throws_ok(
+  $$update public.tenants set industry = 'other', industry_note = repeat('あ', 21) where id = 'bbbbbbbb-1414-0000-0000-000000000001'$$,
+  '23514', null, '一言: 21 文字は入らない');
+select throws_ok(
+  $$update public.tenants set industry = 'other', industry_note = '' where id = 'bbbbbbbb-1414-0000-0000-000000000001'$$,
+  '23514', null, '一言: 空文字は入らない（アプリは null にする）');
+
+-- 店舗の持ち主は自分の店舗の業種を書ける（初期設定・店舗情報の Action と同じ経路）
+set local role authenticated;
+select set_config('request.jwt.claims', format('{"sub":"%s","role":"authenticated"}', 'aaaaaaaa-0000-0000-0000-0000000014aa'), true);
+update public.tenants set industry = 'other', industry_note = '民宿' where id = 'aaaaaaaa-1414-0000-0000-000000000001';
+reset role;
+select is((select industry || ':' || industry_note from public.tenants where id = :t_new), 'other:民宿',
+  '業種: 持ち主（authenticated）が自分の店舗に書ける');
 
 select * from finish();
 rollback;

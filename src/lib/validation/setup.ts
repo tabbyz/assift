@@ -1,9 +1,15 @@
 import { z } from 'zod'
 import { SHIFT_CYCLES, type ShiftCycle } from '@/lib/calendar/shiftCycle'
 import { SETUP_STAFFS_MAX } from '@/lib/setup/parseStaffNames'
+import { INDUSTRIES } from '@/lib/setup/templates'
 import { patternInputSchema } from './patterns'
 import { staffNameSchema } from './staffs'
-import { TENANT_NAME_MAX_LENGTH, tenantIdSchema } from './tenants'
+import {
+  industryNoteSchema,
+  normalizeIndustry,
+  TENANT_NAME_MAX_LENGTH,
+  tenantIdSchema,
+} from './tenants'
 
 /** 週の始まりを聞く周期（014 §3.4）。1ヶ月・半月の表は見た目が変わらないので聞かない */
 export function asksStartOfWeek(cycle: ShiftCycle): boolean {
@@ -49,7 +55,7 @@ export const createSetupTenantSchema = setupTenantFields
 
 export const updateSetupTenantSchema = z.object({ tenantId: tenantIdSchema }).and(setupTenantFields)
 
-/** 初期設定で 1 回に保存できる勤務の数（テンプレートは多くて 7 件） */
+/** 初期設定で 1 回に保存できる勤務の数（テンプレートは多くて 8 件。介護: 働く日 4 + お休み 3 + 明け） */
 export const SETUP_PATTERNS_MAX = 20
 
 const NO_WORKDAY_ERROR = '働く日の勤務を 1 つ以上残してください'
@@ -60,7 +66,11 @@ const setupPatternSchema = patternInputSchema
     key: z.string({ error: '勤務が正しくありません' }).min(1, { error: '勤務が正しくありません' }),
   })
 
-/** ステップ 2（勤務の保存）。ペアは `selectedPatterns` が両方残っているときだけ送る */
+/**
+ * ステップ 2（勤務の保存）。ペアは `selectedPatterns` が両方残っているときだけ送る。
+ * 業種（034 §4.2）は undefined / null なら「業種に触らない」（デプロイをまたいだ古いタブは送らない）。
+ * 一覧に無い業種は古いタブの古い key なので、読み込み直してもらう
+ */
 export const saveSetupPatternsSchema = z
   .object({
     tenantId: tenantIdSchema,
@@ -74,6 +84,8 @@ export const saveSetupPatternsSchema = z
         toKey: z.string({ error: '明けの設定が正しくありません' }),
       })
       .nullable(),
+    industry: z.enum(INDUSTRIES, { error: '画面を読み込み直してください' }).nullish(),
+    industryNote: industryNoteSchema.nullish(),
   })
   .refine((v) => v.patterns.some((row) => row.kind === 'workday'), {
     error: NO_WORKDAY_ERROR,
@@ -91,6 +103,10 @@ export const saveSetupPatternsSchema = z
     },
     { error: '明けの設定が正しくありません', path: ['pair'] }
   )
+  .transform((v) => ({
+    ...v,
+    ...normalizeIndustry({ industry: v.industry ?? null, industryNote: v.industryNote }),
+  }))
 
 /** ステップ 3（スタッフを作って完了）。分け方と 10 文字の数え方は `parseStaffNames` と同じ */
 export const completeSetupSchema = z.object({

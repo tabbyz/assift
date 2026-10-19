@@ -42,7 +42,8 @@ function PreviewTable({
   staffWidth,
 }: TableProps) {
   const workdays = patterns.filter((pattern) => pattern.kind === 'workday')
-  const dayoffs = patterns.filter((pattern) => pattern.kind === 'dayoff')
+  // 見本のお休みは先頭の 1 つ（テンプレートでは「休み」）だけ。全部を回すと希望休・有給・明けが散らばる（034 §4.4）
+  const dayoffs = patterns.filter((pattern) => pattern.kind === 'dayoff').slice(0, 1)
   const ghost = staffNames.length === 0
   const names = ghost
     ? Array.from({ length: ghostRows }, (_, i) => `スタッフ ${i + 1}`)

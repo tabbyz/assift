@@ -620,6 +620,8 @@ export type Database = {
           assist_notes: string | null
           created_at: string
           id: string
+          industry: string | null
+          industry_note: string | null
           name: string
           owner_id: string
           setup_completed_at: string | null
@@ -631,6 +633,8 @@ export type Database = {
           assist_notes?: string | null
           created_at?: string
           id?: string
+          industry?: string | null
+          industry_note?: string | null
           name: string
           owner_id?: string
           setup_completed_at?: string | null
@@ -642,6 +646,8 @@ export type Database = {
           assist_notes?: string | null
           created_at?: string
           id?: string
+          industry?: string | null
+          industry_note?: string | null
           name?: string
           owner_id?: string
           setup_completed_at?: string | null

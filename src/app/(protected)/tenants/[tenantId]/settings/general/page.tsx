@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getTenant } from '@/lib/queries/tenants'
+import { isIndustry } from '@/lib/setup/templates'
 import { isUuid } from '@/utils/uuid'
 import { GeneralSettingsClient } from './_components/GeneralSettingsClient'
 
@@ -22,6 +23,8 @@ export default async function GeneralSettingsPage({
       name={tenant.name}
       shiftCycle={tenant.shift_cycle}
       startOfWeek={tenant.start_of_week}
+      industry={isIndustry(tenant.industry) ? tenant.industry : null}
+      industryNote={tenant.industry_note}
     />
   )
 }
