@@ -1,8 +1,10 @@
 'use client'
 
 import { useTransition } from 'react'
+import { usePathname } from 'next/navigation'
 import { Anchor, Button, Container, Group, Stack, Text, Title } from '@mantine/core'
 import { ERROR_TEXT, errorDigest } from '@/components/errorText'
+import { isAdminPath } from '@/lib/admin/paths'
 import { contactHref } from '@/lib/contact/path'
 
 /** `error.tsx` / `global-error.tsx` の props（Next は型を生成しない。`error-boundary.d.ts` の `ErrorInfo` と同じ） */
@@ -18,7 +20,8 @@ type Props = ErrorPageProps & {
   home?: { href: string; label: string }
   /**
    * 問い合わせ先。既定はお問い合わせのフォーム（エラー番号と店舗を引き継ぐ。031 §4.8）。
-   * 管理画面はフォームを開けない（管理画面のホストでは `/-` の外が 404）のでアドレスにする
+   * 管理画面のパス（`/-`）ではアドレスにする: 管理画面のホストでは `/-` の外が 404 でフォームを開けない。
+   * root の `error.tsx` が `-/layout.tsx` の例外を受けたときも、パスで判定するのでアドレスになる
    */
   contact?: { kind: 'form'; tenantId?: string } | { kind: 'email' }
 }
@@ -33,7 +36,10 @@ type Props = ErrorPageProps & {
  * `getDerivedStateFromProps`）。クライアント遷移で `/` へ行くと、redirect の先が落ちたページと同じパス（`/` → 直近の店舗）や
  * いまのパスそのもの（LP で落ちた）のときに、取り直しが成功しても境界が残り、押しても何も変わらない
  */
-export function ErrorPanel({ error, retry, home, contact = { kind: 'form' } }: Props) {
+export function ErrorPanel({ error, retry, home, contact: contactProp }: Props) {
+  const pathname = usePathname()
+  const contact =
+    contactProp ?? (isAdminPath(pathname) ? { kind: 'email' as const } : { kind: 'form' as const })
   // `retry()` は `router.refresh()` を transition で走らせる。描き直しが終わるまでボタンに loading を出す（連打させない）
   const [isPending, startTransition] = useTransition()
   const digest = errorDigest(error)

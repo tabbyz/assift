@@ -13,7 +13,6 @@ export default function AdminError({ error, retry }: ErrorPageProps) {
       error={error}
       retry={retry}
       home={{ href: ADMIN_ROOT, label: '管理画面のトップへ' }}
-      contact={{ kind: 'email' }}
     />
   )
 }

@@ -21,7 +21,7 @@ export type ContactEmail = {
  *
  * `RESEND_API_KEY` と `CONTACT_INBOX` の両方があるときだけ送る。開発で無ければ中身をコンソールに出して終える
  * （プレビューから本番の受信箱に届かないよう、値は環境ごとに入れる）。ほかの環境で無ければ投げる。
- * やり直しはしない（失敗は画面に返り、利用者が送り直す。鍵が同じなので二重には届かない）
+ * やり直しはしない（失敗は画面に返り、利用者が送り直す。中身が同じなら鍵も同じなので二重には届かない）
  */
 export async function sendContactEmail(email: ContactEmail): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY
@@ -60,9 +60,9 @@ export async function sendContactEmail(email: ContactEmail): Promise<void> {
   })
   if (response.ok) return
 
+  // 同じ鍵の送信がまだ処理中（409 concurrent_idempotent_requests）も失敗にする: 先の送信が届くとは限らない。
+  // 少し待って送り直せば、先の送信が通っていれば Resend はその応答（200）を返し、二重には届かない
   const body = await response.text()
-  // 同じ鍵（= 同じ中身）の送信がまだ処理中。その 1 通が届くので成功として扱う
-  if (response.status === 409 && body.includes('concurrent_idempotent_requests')) return
   throw new Error(`Resend が ${response.status} を返しました: ${body}`)
 }
 

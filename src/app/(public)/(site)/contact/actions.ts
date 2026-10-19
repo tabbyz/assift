@@ -31,14 +31,24 @@ export async function sendContact(formData: FormData): Promise<ActionResult> {
       requestId: formData.get('requestId'),
       tenantId: formData.get('tenantId') ?? undefined,
       digest: formData.get('digest') ?? undefined,
-      website: formData.get('website') ?? undefined,
+      honeypot: formData.get('honeypot') ?? undefined,
     })
-    // ハニーポット: ボットに判定の手がかりを与えないよう、成功に見せて送らない（031 §4.6）
-    if (input.website) return
+    // ハニーポット: ボットに判定の手がかりを与えないよう、成功に見せて送らない（031 §4.6）。
+    // 自動入力の拡張機能が埋めて人の問い合わせを落とすこともありうるので、ログには残す
+    if (input.honeypot) {
+      console.warn('[contact] ハニーポットに値があったので送りませんでした')
+      return
+    }
 
     const user = await getAuthUser()
     const replyTo = user?.email ?? input.email
-    if (!replyTo) fail('メールアドレスを入力してください')
+    // ログイン中の画面（返信先の欄が無い）から送ったのにセッションが切れていた。欄を出してやり直してもらう
+    if (!replyTo) {
+      throw new ActionError(
+        'ログインの有効期限が切れました。返信先のメールアドレスを入力して、もう一度送信してください',
+        'contact_email_required'
+      )
+    }
 
     const files = formData.getAll('images').filter((value): value is File => value instanceof File)
     const attachments = await rewriteContactImages(files)

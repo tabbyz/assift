@@ -52,6 +52,6 @@ export const contactSchema = z.object({
   tenantId: z.preprocess(blankToUndefined, z.guid().optional().catch(undefined)),
   digest: z.preprocess(blankToUndefined, z.string().optional().transform(parseDigest)),
   /** ハニーポット（031 §4.6）。人には見えない欄なので、値があればボット */
-  website: z.preprocess(blankToUndefined, z.string().optional()),
+  honeypot: z.preprocess(blankToUndefined, z.string().optional()),
 })
 export type ContactInput = z.infer<typeof contactSchema>

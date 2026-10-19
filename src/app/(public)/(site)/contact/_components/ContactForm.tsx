@@ -1,6 +1,6 @@
 'use client'
 
-import { type FormEvent, useState, useTransition } from 'react'
+import { type FormEvent, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import {
   Anchor,
@@ -25,6 +25,7 @@ import {
   CONTACT_BODY_MAX_LENGTH,
   CONTACT_IMAGE_MAX_BYTES,
   CONTACT_IMAGE_MAX_COUNT,
+  CONTACT_IMAGES_TOTAL_MAX_BYTES,
   CONTACT_TOPICS,
   type ContactTopic,
 } from '@/lib/validation/contact'
@@ -41,26 +42,34 @@ type Props = {
   initialTopic: ContactTopic | null
 }
 
-type Attachment = { blob: Blob; preview: string }
+/** `id` はサムネイルの key（同じ画像を 2 回選んでも別の添付として扱う） */
+type Attachment = { id: number; blob: Blob; preview: string }
 
 const TOPIC_OPTIONS = Object.entries(CONTACT_TOPICS).map(([value, label]) => ({ value, label }))
 const IMAGE_ERROR = 'この画像は添付できません。PNG・JPEG・WebP の画像を選んでください'
+const IMAGES_TOO_LARGE = `画像が大きすぎます。合計${CONTACT_IMAGES_TOTAL_MAX_BYTES / 1024 / 1024}MBまでになるよう、枚数を減らしてください`
 
-export function ContactForm({ account, tenant, digest, initialTopic }: Props) {
+export function ContactForm({ account: initialAccount, tenant, digest, initialTopic }: Props) {
+  // 送るときにセッションが切れていたら null にして、返信先の欄を出す（`contact_email_required`）
+  const [account, setAccount] = useState(initialAccount)
   const [topic, setTopic] = useState<string | null>(initialTopic)
   const [email, setEmail] = useState('')
   const [body, setBody] = useState('')
-  const [website, setWebsite] = useState('')
+  const [honeypot, setHoneypot] = useState('')
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [error, setError] = useState<string>()
   const [failed, setFailed] = useState(false)
-  const [sentTo, setSentTo] = useState<string>()
+  const [sent, setSent] = useState<{ to: string; typed: boolean }>()
   const [isPending, startTransition] = useTransition()
   const [isResizing, setIsResizing] = useState(false)
   // フォーム 1 回分の id。同じ内容の連打・送り直しを Resend が 1 通にまとめる（031 §4.5）
   const [requestId] = useState(() => crypto.randomUUID())
+  const nextAttachmentId = useRef(0)
+  // 選んだファイルを入力欄から消す。消さないと、外した画像をもう一度選んでも change が起きない
+  const resetFileInput = useRef<() => void>(null)
 
   const addImages = async (files: File[]) => {
+    resetFileInput.current?.()
     const room = CONTACT_IMAGE_MAX_COUNT - attachments.length
     if (files.length === 0 || room <= 0) return
     setIsResizing(true)
@@ -68,13 +77,26 @@ export function ContactForm({ account, tenant, digest, initialTopic }: Props) {
     try {
       const added: Attachment[] = []
       for (const file of files.slice(0, room)) {
-        const blob = await resizeImage(file)
-        if (blob.size > CONTACT_IMAGE_MAX_BYTES) throw new Error('too large')
-        added.push({ blob, preview: await toDataUrl(blob) })
+        let blob: Blob
+        try {
+          blob = await resizeImage(file)
+        } catch {
+          setError(IMAGE_ERROR)
+          return
+        }
+        added.push({ id: nextAttachmentId.current++, blob, preview: await toDataUrl(blob) })
       }
-      setAttachments((current) => [...current, ...added].slice(0, CONTACT_IMAGE_MAX_COUNT))
-    } catch {
-      setError(IMAGE_ERROR)
+      // サーバーと同じ上限（1 枚・合計）。超えると送信のときに断られるので、選んだ時点で知らせる
+      const all = [...attachments, ...added]
+      const total = all.reduce((sum, a) => sum + a.blob.size, 0)
+      if (
+        added.some((a) => a.blob.size > CONTACT_IMAGE_MAX_BYTES) ||
+        total > CONTACT_IMAGES_TOTAL_MAX_BYTES
+      ) {
+        setError(IMAGES_TOO_LARGE)
+        return
+      }
+      setAttachments(all)
     } finally {
       setIsResizing(false)
     }
@@ -89,7 +111,7 @@ export function ContactForm({ account, tenant, digest, initialTopic }: Props) {
     data.set('requestId', requestId)
     if (tenant) data.set('tenantId', tenant.id)
     if (digest) data.set('digest', digest)
-    data.set('website', website)
+    data.set('honeypot', honeypot)
     attachments.forEach((a, i) => data.append('images', a.blob, `image-${i + 1}.jpg`))
 
     startTransition(async () => {
@@ -97,10 +119,15 @@ export function ContactForm({ account, tenant, digest, initialTopic }: Props) {
         const r = await sendContact(data)
         if (!r.ok) {
           setError(r.error)
+          if (r.code === 'contact_email_required') {
+            // 入力はそのまま残し、返信先の欄を出す（アドレスの案内は出さない。欄を埋めれば送れる）
+            setAccount(null)
+            return
+          }
           setFailed(true)
           return
         }
-        setSentTo(account ?? email)
+        setSent(account ? { to: account, typed: false } : { to: email, typed: true })
       } catch {
         // 大きさの上限（bodySizeLimit）や通信の失敗は Action の外で起きる
         setError('送信できませんでした。時間をおいてもう一度お試しください')
@@ -109,7 +136,7 @@ export function ContactForm({ account, tenant, digest, initialTopic }: Props) {
     })
   }
 
-  if (sentTo) {
+  if (sent) {
     return (
       <Paper withBorder p="lg" radius="md">
         <Stack gap="sm">
@@ -117,7 +144,7 @@ export function ContactForm({ account, tenant, digest, initialTopic }: Props) {
             送信しました
           </Title>
           <Text>
-            ご入力のアドレス（{sentTo}
+            {sent.typed ? 'ご入力のアドレス' : 'ログイン中のアカウントのアドレス'}（{sent.to}
             ）へ返信します。数日たっても届かない場合は、迷惑メールのフォルダをご確認ください。
           </Text>
         </Stack>
@@ -190,7 +217,7 @@ export function ContactForm({ account, tenant, digest, initialTopic }: Props) {
           {attachments.length > 0 && (
             <SimpleGrid cols={{ base: 3, xs: 4 }} spacing="xs">
               {attachments.map((a, i) => (
-                <div key={a.preview} className={classes.thumb}>
+                <div key={a.id} className={classes.thumb}>
                   <Image
                     src={a.preview}
                     alt={`添付 ${i + 1} 枚目`}
@@ -210,7 +237,12 @@ export function ContactForm({ account, tenant, digest, initialTopic }: Props) {
           )}
           {attachments.length < CONTACT_IMAGE_MAX_COUNT && (
             <Group>
-              <FileButton onChange={addImages} accept="image/png,image/jpeg,image/webp" multiple>
+              <FileButton
+                onChange={addImages}
+                resetRef={resetFileInput}
+                accept="image/png,image/jpeg,image/webp"
+                multiple
+              >
                 {(props) => (
                   <Button
                     {...props}
@@ -226,17 +258,18 @@ export function ContactForm({ account, tenant, digest, initialTopic }: Props) {
           )}
         </Stack>
 
-        {/* ハニーポット（031 §4.6）。人には見えず、読み上げ・タブ移動でも届かない。`type="hidden"` はボットが避けるので使わない */}
+        {/* ハニーポット（031 §4.6）。人には見えず、読み上げ・タブ移動でも届かない。`type="hidden"` はボットが避けるので使わない。
+            名前は自動入力の拡張機能が埋めそうな語（website・url・name・email など）を避ける */}
         <div className={classes.honeypot} aria-hidden="true">
           <label>
-            Website
+            この欄は空のままにしてください
             <input
               type="text"
-              name="website"
+              name="hp_ref_code"
               tabIndex={-1}
               autoComplete="off"
-              value={website}
-              onChange={(e) => setWebsite(e.currentTarget.value)}
+              value={honeypot}
+              onChange={(e) => setHoneypot(e.currentTarget.value)}
             />
           </label>
         </div>
