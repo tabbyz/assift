@@ -314,7 +314,7 @@ function ContactFormBody({
             画像（任意・{CONTACT_IMAGE_MAX_COUNT}枚まで）
           </Text>
           <Text size="xs" c="dimmed">
-            画面のスクリーンショットがあると、状況が伝わりやすくなります。
+            エラーや画面の様子が分かるスクリーンショットがあると、スムーズにご案内できます。
           </Text>
           {attachments.length > 0 && (
             <SimpleGrid cols={{ base: 3, xs: 4 }} spacing="xs">
