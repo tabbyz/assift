@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Anchor, List, ListItem, Text } from '@mantine/core'
+import { CONTACT_PATH } from '@/lib/contact/path'
 import { TERMS } from '../../terms/_components/terms'
 import { PRIVACY } from './privacy'
 
@@ -91,7 +92,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
             </>,
             <>
               <Label>お問い合わせの内容</Label>
-              ：メールアドレスと、お問い合わせいただいた内容
+              ：メールアドレス、お問い合わせいただいた内容と添付された画像。お問い合わせフォームから送信した場合は、ブラウザの種類（ログイン中は、アカウントと店舗の識別子も）
             </>,
             <>
               <Label>アクセスの記録</Label>
@@ -188,7 +189,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
         <Items
           items={[
             `Supabase（米国）：データベースと認証。データは${PRIVACY.databaseRegion}のサーバーに保存します`,
-            'Vercel（米国）：assiftを稼働させるサーバー、AIの提供元への中継、アクセス解析',
+            'Vercel（米国）：assiftを稼働させるサーバー、AIの提供元への中継、アクセス解析、不正な送信の判定',
             'AIの提供元（OpenAI・Anthropic・Google・Microsoft・Amazonなど。主に米国）：AIを使う機能。送信したデータがAIの学習に使われることはありません',
             'Stripe（米国）：有料プランの決済',
             'Resend（米国）：メールの送信',
@@ -328,7 +329,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
   {
     id: 'contact',
     title: 'お問い合わせ窓口',
-    summary: `個人情報に関するお問い合わせや苦情は、${TERMS.contactEmail}で受け付けます。`,
+    summary: `個人情報に関するお問い合わせや苦情は、お問い合わせフォーム（${TERMS.contactUrl}）で受け付けます。`,
     body: (
       <>
         <P>個人情報の取り扱いに関するお問い合わせや苦情は、次の窓口で受け付けます。</P>
@@ -336,7 +337,8 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
           items={[
             `運営者：${TERMS.operator}`,
             <>
-              連絡先：<Anchor href={`mailto:${TERMS.contactEmail}`}>{TERMS.contactEmail}</Anchor>
+              連絡先：お問い合わせフォーム（<Anchor href={CONTACT_PATH}>{TERMS.contactUrl}</Anchor>
+              ）
             </>,
           ]}
         />

@@ -4,8 +4,10 @@
 export const TERMS = {
   /** 運営者の名称 */
   operator: 'assift運営',
-  /** 問い合わせ先 */
+  /** 問い合わせ先のアドレス。サイトに出すのは特商法の表記と global-error・フォームの送信の失敗だけ（031 §3-1） */
   contactEmail: 'support@assift.com',
+  /** 問い合わせの窓口（031）。規約・ポリシーは PDF でも渡すので、リンクの文字にも URL を書く */
+  contactUrl: 'https://assift.com/contact',
   /** 制定日 / 最終更新日（リリース日。016 §6） */
   enactedOn: '2026年10月30日',
   updatedOn: '2026年10月30日',

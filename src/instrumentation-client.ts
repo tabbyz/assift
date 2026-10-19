@@ -1,3 +1,4 @@
+import { initBotId } from 'botid/client/core'
 import { config } from 'zod/v4/core'
 
 /**
@@ -14,3 +15,14 @@ import { config } from 'zod/v4/core'
  * フォームの無いページ（LP・規約・公開シフト表）に Zod 全体を持ち込まない。`config` が書く `globalConfig` は classic と同じ
  */
 config({ jitless: true })
+
+/**
+ * Vercel BotID（031 §4.6）。守る送信（お問い合わせの Server Action = `/contact` への POST）に判定のヘッダを付ける。
+ * BotID は `fetch` を包み、パスとメソッドが合う同一オリジンの送信のときだけ判定のスクリプトを読む（ほかのページ・送信では何もしない）。
+ * スクリプトは自分のドメインから `createElement` で足されるので、`'strict-dynamic'` で通る
+ */
+// 開発では読まない: サーバーの `checkBotId()` は開発で常に人と答え、判定のスクリプトの読み込みに失敗すると送信そのものが止まる（BotID は
+// スクリプトを待ってから `fetch` を通す）。本番でスクリプトが読めないときは送信が失敗の表示になり、フォームはアドレスを案内する（031 §4.3）
+if (process.env.NODE_ENV !== 'development') {
+  initBotId({ protect: [{ path: '/contact', method: 'POST' }] })
+}

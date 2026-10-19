@@ -1,0 +1,20 @@
+/* 添付のサムネイルの右上に「外す」を重ねる */
+.thumb {
+  position: relative;
+}
+
+.remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: var(--mantine-color-white);
+}
+
+/* ハニーポット（031 §4.6）。画面の外に出す（`display: none` は一部のボットが見抜く） */
+.honeypot {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}

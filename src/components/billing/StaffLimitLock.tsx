@@ -1,9 +1,10 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Anchor, Group, Paper, Stack, Text, Title } from '@mantine/core'
+import { Group, Paper, Stack, Text, Title } from '@mantine/core'
 import { LinkButton } from '@/components/LinkButton'
-import { CONTACT_EMAIL } from './contact'
+import { LinkAnchor } from '@/components/LinkAnchor'
+import { contactHref } from '@/lib/contact/path'
 import classes from './StaffLimitLock.module.css'
 
 type Props = {
@@ -33,8 +34,11 @@ export function StaffLimitLock({ tenantId, limit, manual, trialAvailable, childr
             </Title>
             {manual ? (
               <Text size="sm">
-                人数を増やすには <Anchor href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</Anchor>{' '}
-                までお問い合わせいただくか、スタッフを退職にしてください。
+                人数を増やすには
+                <LinkAnchor href={contactHref({ topic: 'billing', tenantId })}>
+                  お問い合わせ
+                </LinkAnchor>
+                いただくか、スタッフを退職にしてください。
               </Text>
             ) : (
               <Text size="sm">

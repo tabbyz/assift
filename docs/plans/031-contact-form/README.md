@@ -11,7 +11,7 @@
   同じ日のたたき台のレビューで、「開いていた画面」（`?from=`）を外し、迷惑な投稿の対策を BotID 中心に改め、画像の添付を足した（§3-9・11・12）。
   2026-10-19 に、添付の確認を先頭のバイトの判定から **`sharp` での書き出し直し**に替え（§3-12）、**Missive の導入を 032 に切り分けた**（本プランはフォームの実装だけ）
 
-**状態: プラン（2026-10-19）。§9 の未決を決めてから実装する。ヘルプ記事はリリース後に別のプランで検討する（範囲外）。**
+**状態: 実装済み（2026-10-19。§10）。merge 前にプレビューで BotID を確かめる（§10.3）。ヘルプ記事はリリース後に別のプランで検討する（範囲外）。**
 
 ## 1. 目的と完了条件
 
@@ -148,7 +148,7 @@
 | 段 | 内容 | 失敗したとき |
 | --- | --- | --- |
 | 1. BotID | `next.config.ts` を `withBotId()` で包む（判定のスクリプトを自分のドメインから配るリライトが足される）。`src/instrumentation-client.ts` で `initBotId({ protect: [{ path: '/contact', method: 'POST' }] })`。Action の先頭で `checkBotId()` | 失敗を返して送らない（「送信できませんでした」。人が誤判定されたときにやり直せるように、黙って成功にしない） |
-| 2. 回数の制限 | **Vercel Firewall のレート制限**（`/contact` への POST を IP ごとに 10 分で 5 回など）。コードは書かない | Vercel が 429 を返す。Action は失敗の表示になる |
+| 2. 回数の制限 | **Vercel Firewall のレート制限**（`/contact` への POST を IP ごとに 10 分で 5 回など）。コードは書かない。merge のあとに利用者が作る | Vercel が 429 を返す。Action は失敗の表示になる |
 | 3. ハニーポット | 画面の外に置いた入力欄（`website`。`tabIndex={-1}`・`autoComplete="off"`・`aria-hidden`。`type="hidden"` にはしない）。値が入っていればボット | **成功を返して送らない**（ボットに判定の手がかりを与えない） |
 
 - BotID は Basic（無料）から始める。Deep Analysis（Pro で 1,000 回の判定ごとに $1）は送信のときだけ走るので、月 100 件でも約 $0.1。Basic で止まらない投稿が目立ったら有効にする（§9-7）
@@ -267,6 +267,9 @@ Missive の導入（032）はフォームが無くても成り立つ。フォー
 
 ## 9. 未決（利用者が決める）
 
+**2026-10-19 に決定**: 1 = 残す / 2 = Vercel Firewall で merge のあとに利用者が作る（コードは書かない）/ 3 = 書かない / 4 = 5,000 文字 /
+5 = **(a) 今日（10/19）実装して merge**（10/27 の merge 止めより前。ポリシーの改定も 10/30 制定の版に最初から載る）/ 6 = 032 の結果を待つ（Gmail は Reply-To に返すので、それまでも動く）/ 7 = Basic / 8 = 3 枚
+
 | # | 項目 | 選択肢 | おすすめ |
 | --- | --- | --- | --- |
 | 1 | 特商法の表記のアドレス | 残す / フォームに置き換える | **残す**（法令を確かめるまで。施行規則でメールアドレスが要るのは電子メールで広告するとき、という理解だが確認していない） |
@@ -280,4 +283,47 @@ Missive の導入（032）はフォームが無くても成り立つ。フォー
 
 ## 10. 実装ログ
 
-（実装後に追記する）
+### 10.1 実装（2026-10-19）
+
+| ファイル | 内容 |
+| --- | --- |
+| `src/lib/validation/contact.ts`（+ test） | 種類（`CONTACT_TOPICS`）・上限の定数・`contactSchema`・`parseDigest`。任意の欄の `''` は無いものとして扱い、店舗の id とエラー番号は形が違えば失敗にせず捨てる |
+| `src/lib/contact/path.ts`（+ test） | `CONTACT_PATH`・`contactHref({ tenantId, digest, topic })` |
+| `src/lib/contact/render.ts`（+ test） | 件名（改行・制御文字・U+2028/2029 を空白に、先頭 30 文字をコードポイントで切る）と本文（返信先・本文・区切り線・種類・添付・アカウント・店舗・エラー番号・ブラウザ） |
+| `src/lib/contact/attachments.ts`（+ test） | 枚数・大きさ → `metadata()` の形式（jpeg / png / webp）→ `rotate` → 長い辺 1,600px → 透過を白に → JPEG（品質 85）。`limitInputPixels` 4,000 万。テストの画像は `sharp` で作る（SVG・GIF・先頭だけ JPEG のファイル・EXIF が落ちること・解凍爆弾） |
+| `src/lib/contact/send.ts` | Resend の `POST /emails`（15 秒で打ち切り）。`Idempotency-Key` は `contact/<requestId>/<本文の SHA-256>`（§10.2-1）。409 の `concurrent_idempotent_requests` は成功 |
+| `src/app/(public)/(site)/contact/` | `page.tsx`（店舗は RLS の `getTenant` で見えたときだけ画面に出す）/ `searchParams.ts` / `actions.ts`（BotID → Zod → ハニーポット → 添付 → 自動で付ける情報 → 送信）/ `_components/ContactForm.tsx`（+ `.module.css`）/ `_lib/resizeImage.ts` |
+| `next.config.ts` | `withBotId()` で包む。`experimental.serverActions.bodySizeLimit: '4mb'` |
+| `src/instrumentation-client.ts` | `initBotId({ protect: [{ path: '/contact', method: 'POST' }] })`。開発では呼ばない（§10.2-3） |
+| `src/proxy.ts` | matcher から BotID の中継のパスを外す（前方一致。§10.2-4） |
+| `ErrorPanel`・`errorText.ts`・`[tenantId]/error.tsx`・`-/error.tsx` | エラー画面の問い合わせ先をフォームへ（エラー番号と店舗を引き継ぐ）。管理画面はフォームを開けないのでアドレスのまま（`contact={{ kind: 'email' }}`）。global-error はアドレスのまま |
+| `StaffLimitLock`・`StaffLimitModal`・`BillingClient` | `mailto:` → `contactHref({ topic: 'billing' … })`。モーダルの中のリンクは押したらモーダルを閉じる |
+| 規約・ポリシーのページの末尾 | 「assift運営（お問い合わせ：https://assift.com/contact）」。PDF でも渡すので、リンクの文字に URL を書く（`TERMS.contactUrl`） |
+| ポリシー 2. / 6. / 窓口 | お問い合わせの内容に「添付された画像」「フォームから送信した場合は、ブラウザの種類（ログイン中は、アカウントと店舗の識別子も）」、Vercel に「不正な送信の判定」、窓口をフォーム（URL を併記）に |
+| `FooterLinks`・`TenantShell` | 「お問い合わせ」を足す（アカウントのメニューと、スマホのナビ） |
+| `.env.example` | `RESEND_API_KEY`・`CONTACT_INBOX` |
+| `package.json` | `botid@^1.5.11`（2026-03-03 公開）・`sharp@^0.35.5`（`next` の optionalDependencies と同じ版にまとまる） |
+
+### 10.2 実装で決めたこと
+
+1. **`Idempotency-Key` に本文の指紋を入れた**（§4.5 の `contact/{requestId}` から変えた）: 鍵が同じで中身が違うと Resend は 409 で断る。
+   失敗のあとに本文を直して送り直すと届かなくなるので、同じ中身の連打・送り直しだけを 1 通にまとめる
+2. **BotID の判定そのものが失敗したら通す**（fail-open）: Vercel の外（`next start`）・OIDC の設定漏れ・通信の失敗で例外になる。問い合わせを取りこぼすほうが困り、ハニーポットと回数の制限は残る。ログには出す
+3. **開発では `initBotId` を呼ばない**: サーバーの `checkBotId()` は開発（`NODE_ENV !== 'production'`）で常に人と答える。一方クライアントは判定のスクリプトを読み終えるまで `fetch` を止めるので、読めないと送信そのものが止まる（この環境では `api.vercel.com` に出られず実際に止まった）。
+   **本番でもスクリプトが読めなければ送信は失敗する**（BotID の作り）。そのときはフォームの失敗の表示がアドレスを案内する（§4.3）
+4. **proxy の matcher から BotID の中継のパスを前方一致で外した**（完全一致の決まりの例外）: `withBotId` のリライトが配下をすべて Vercel へ中継するので、Next の 404 の HTML にはならない。
+   通すと Supabase の cookie の更新が判定のたびに走り、proxy の CSP（`frame-ancestors 'none'`）と BotID 自身のヘッダ（`frame-ancestors 'self'`）が重なる
+5. **透過の画像は白を敷く**（ブラウザの縮小とサーバーの書き出しの両方）。JPEG に透過は無く、そのままだと黒くなる
+6. 返信の目安は書かない・特商法の表記のアドレスは残す・回数の制限は Firewall で後から（§9 の決定）
+
+### 10.3 確かめたこと（2026-10-19）
+
+- `npm run lint`（警告は既存の 1 件だけ）/ `npm run typecheck` / `npm test`（105 ファイル・977 件）/ `npm run format:check` が通る。スキーマは触らない（`supabase test db` は対象外）
+- 開発（ローカルの Supabase・Playwright・390px 幅）: 未ログイン（画像 2 枚）・ログイン中（`?tenant=` に自分の店舗・`?digest=`）・ハニーポットの 3 通りを送り、コンソールのメールを確かめた。
+  ログイン中は店舗の名前と id が付き、他人の店舗の id を `?tenant=` に入れると画面にも出ない。ハニーポットは「送信しました」になり、メールは出ない。添付は JPEG（1 枚 10KB 前後）
+- `npm run build`: `/contact` の `.nft.json` に `@img/sharp-linux-x64`（`.node`）と `@img/sharp-libvips-linux-x64`（`.so`）が入っている
+- `npm run start`（本番ビルド）: `/contact`（画像を選んで送るまで）・`/`・`/terms`・`/privacy`・`/law` で `securitypolicyviolation` が 0 件。BotID の判定のスクリプトは同一オリジンのパスに読みに行く。
+  この環境は Vercel へ中継できず 500 になり、送信は失敗の表示（アドレスの案内つき）になった（§10.2-3 の落ち方）
+- **残り（merge の前に、Vercel のプレビューで）**: 判定のスクリプト（`c.js`）の中身は Vercel から届くので、ここでは読めなかった。
+  プレビューで `/contact` から送り、(1) `securitypolicyviolation` が 0 件、(2) 送信が通って自分のアドレス（Preview の `CONTACT_INBOX`）に届く、(3) Vercel のログに「BotID の判定に失敗」が出ていない（出るなら OIDC の設定）を確かめる。
+  (1) が 0 件でなければ、BotID を外してハニーポットだけで出す（`withBotId`・`initBotId`・`checkBotId` の 3 か所）

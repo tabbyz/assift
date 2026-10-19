@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next'
+import { withBotId } from 'botid/next/config'
 import { assertSupabaseBuildEnv } from './src/lib/supabase/buildEnv'
 
 // Vercel のビルドで Supabase の公開設定が無ければ止める（プレビューの最初のデプロイが黙って 500 になるのを防ぐ。023 §6）
@@ -53,7 +54,18 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     optimizePackageImports: ['@mantine/core', '@mantine/hooks'],
+    /**
+     * お問い合わせの画像の添付（031 §4.7）。既定の 1MB では縮小した画像 3 枚が入らない。**全部の Server Action に効く**
+     * （ほかの Action も 4MB までのリクエストを受ける）。Vercel の関数の上限（4.5MB）より小さく、各 Action は Zod で中身を確かめる。
+     * 上限は multipart の区切りを含む本文全体に掛かるので、添付の合計は `CONTACT_IMAGES_TOTAL_MAX_BYTES`（3.5MB）に抑えている
+     */
+    serverActions: { bodySizeLimit: '4mb' },
   },
 }
 
-export default nextConfig
+/**
+ * Vercel BotID（031 §4.6）。判定のスクリプト（`/149e9513-…/2d206a39-…/a-4-a/c.js`）と送信を、自分のドメインから
+ * Vercel へ中継するリライトとヘッダを足す（ブラウザから見て同一オリジンなので CSP の方針は変えない）。
+ * このパスは proxy の matcher から外している（`src/proxy.ts`）
+ */
+export default withBotId(nextConfig)

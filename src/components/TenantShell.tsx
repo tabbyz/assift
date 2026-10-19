@@ -24,10 +24,11 @@ import {
   UnstyledButton,
 } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
-import { IconCreditCard, IconUserCircle } from '@tabler/icons-react'
+import { IconCreditCard, IconMail, IconUserCircle } from '@tabler/icons-react'
 import { AssiftSymbol } from '@/components/brand/AssiftLogo'
 import { LogoutMenuItem, LogoutNavLink } from '@/components/LogoutMenuItem'
 import { TenantSwitcher } from '@/components/TenantSwitcher'
+import { contactHref } from '@/lib/contact/path'
 import type { TenantListItem, TenantSummary } from '@/lib/queries/tenants'
 import {
   isLinkActive,
@@ -124,6 +125,9 @@ export function TenantShell({ tenant, tenants, email, banner, children }: Props)
                 <MenuItem component={Link} href="/account/billing">
                   プランとお支払い
                 </MenuItem>
+                <MenuItem component={Link} href={contactHref({ tenantId: tenant.id })}>
+                  お問い合わせ
+                </MenuItem>
                 <MenuDivider />
                 <LogoutMenuItem />
               </MenuDropdown>
@@ -182,6 +186,13 @@ export function TenantShell({ tenant, tenants, email, banner, children }: Props)
               href="/account/billing"
               label="プランとお支払い"
               leftSection={<IconCreditCard size={18} stroke={1.75} />}
+              classNames={navLinkClassNames}
+            />
+            <NavLink
+              component={Link}
+              href={contactHref({ tenantId: tenant.id })}
+              label="お問い合わせ"
+              leftSection={<IconMail size={18} stroke={1.75} />}
               classNames={navLinkClassNames}
             />
             <LogoutNavLink classNames={navLinkClassNames} />

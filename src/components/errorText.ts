@@ -15,6 +15,11 @@ export const ERROR_TEXT = {
   contactSuffix: (digest: string | undefined) =>
     digest ? ' まで、下のエラー番号を添えてお問い合わせください。' : ' までお問い合わせください。',
   digest: (digest: string) => `エラー番号: ${digest}`,
+  /** `ErrorPanel` はアドレスではなくお問い合わせのフォームへ送る（031 §4.8）。global-error はアプリが落ちていてフォームも動かないのでアドレスのまま */
+  contactFormPrefix: '解決しない場合は、',
+  contactFormLink: 'お問い合わせフォーム',
+  contactFormSuffix: (digest: string | undefined) =>
+    digest ? 'からご連絡ください（下のエラー番号は自動で添えます）。' : 'からご連絡ください。',
 }
 
 /**
