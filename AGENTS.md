@@ -52,7 +52,7 @@ src/
     layout.tsx                    headers() で CSP の nonce を読み、ColorSchemeScript と AppProviders（Client。MantineProvider > ModalsProvider > NuqsAdapter > children + Notifications）に渡す（022）。
                                   本番の本体のホストだけ SiteAnalytics を描く（025）
     (public)/                     認証不要
-      (site)/                     LP（/）と静的ページ（terms / privacy / law）。layout がヘッダー・フッター・LP の書体（016 / 018）。ヘッダーの右上はログイン中なら「アプリを開く」（031）
+      (site)/                     LP（/）と静的ページ（terms / privacy / law）。layout がヘッダー・フッター・LP の書体（016 / 018）。ヘッダーはログイン中なら「アプリを開く」だけ（031）
         contact/                  お問い合わせ（031）。ログインの有無で中身を変える 1 ページ。Action は FormData（画像の添付）
       share/[code]/               公開シフト表（未ログインで開く。読み取りは service_role）。(site) の枠を被せない
     (auth)/                       login, signup, password/*
