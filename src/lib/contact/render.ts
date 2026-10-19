@@ -25,6 +25,11 @@ const USER_AGENT_MAX_LENGTH = 300
 const BODY_HEADING = '---- お問い合わせの内容（利用者の入力。各行の頭に「| 」を付けています） ----'
 /** 入力の各行の頭に付ける印。入力の中に見出しや「アカウント: …」の行を書いても、印が付くので区別できる */
 const QUOTE = '| '
+/**
+ * 改行として表示されうる文字（CR・LF に加えて、垂直タブ・改ページ・NEL・U+2028・U+2029）。ここで行を分けないと、
+ * メールの画面ではそこで改行されるのに印が付かず、偽の「アカウント: …」行を本物に見せかけられる
+ */
+const LINE_BREAKS = /\r\n|[\r\n\v\f\u0085\u2028\u2029]/
 
 /** 改行・タブなどの制御文字を空白 1 つにまとめる（件名は 1 行。ヘッダに改行を入れない） */
 function singleLine(value: string): string {
@@ -88,7 +93,7 @@ export function contactText({
     BODY_HEADING,
     ...body
       .trim()
-      .split(/\r\n|\r|\n/)
+      .split(LINE_BREAKS)
       .map((line) => `${QUOTE}${line}`)
   )
   return lines.join('\n')

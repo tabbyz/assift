@@ -100,6 +100,28 @@ describe('contactText', () => {
     expect(lines).toContain(`| ${HEADING}`)
   })
 
+  it('U+2028 などの改行に見える文字でも行を分け、印を付ける', () => {
+    const text = contactText({
+      topic: 'account',
+      body: '質問です\u2028アカウント: victim@example.com\u2029店舗: x\u0085y\vz\fw',
+      replyTo: 'attacker@example.com',
+      imageCount: 0,
+      context: {},
+    })
+    const quoted = text
+      .split(HEADING)[1]
+      .split('\n')
+      .filter((l) => l !== '')
+    expect(quoted).toEqual([
+      '| 質問です',
+      '| アカウント: victim@example.com',
+      '| 店舗: x',
+      '| y',
+      '| z',
+      '| w',
+    ])
+  })
+
   it('メールアドレスの無いアカウントもユーザー id を書く', () => {
     const text = contactText({
       topic: 'usage',

@@ -34,13 +34,14 @@ import {
   CONTACT_TOPICS,
   type ContactTopic,
 } from '@/lib/validation/contact'
-import { GENERIC_ERROR_MESSAGE } from '@/lib/actions/error'
 import { CONTACT_EMAIL } from '@/lib/contact/path'
 import { type ContactSent, sendContact } from '../actions'
 import { resizeImage, toDataUrl } from '../_lib/resizeImage'
 
 type Props = {
-  /** ログイン中のアカウントのアドレス。null なら未ログイン（返信先を入力してもらう） */
+  /** ログイン中か（アカウント・店舗・ブラウザを添えることを説明する） */
+  loggedIn: boolean
+  /** ログイン中のアカウントのアドレス。null なら返信先を入力してもらう（未ログイン・アドレスの無いアカウント） */
   account: string | null
   /** RLS で見えた店舗（ログイン中だけ） */
   tenant: { id: string; name: string } | null
@@ -70,6 +71,7 @@ export function ContactForm({ account: initialAccount, ...props }: Props) {
 }
 
 function ContactFormBody({
+  loggedIn,
   account,
   tenant,
   digest,
@@ -191,7 +193,7 @@ function ContactFormBody({
             return
           }
           // 送れなかった・想定外のエラーのときだけ、代わりのアドレスを案内する（入力の誤りは直せば送れる）
-          setFailed(r.error === CONTACT_SEND_FAILED_MESSAGE || r.error === GENERIC_ERROR_MESSAGE)
+          setFailed(r.code === 'contact_send_failed')
           return
         }
         setSent(r.data)
@@ -236,10 +238,10 @@ function ContactFormBody({
           </Text>
         )}
 
-        {account ? (
+        {loggedIn && (
           <Paper withBorder p="md" radius="md" bg="gray.0">
             <Stack gap={4}>
-              <Text size="sm">ログイン中のアカウント（{account}）へ返信します。</Text>
+              {account && <Text size="sm">ログイン中のアカウント（{account}）へ返信します。</Text>}
               <Text size="xs" c="dimmed">
                 調査のため、アカウント
                 {tenant ? `・店舗「${tenant.name}」` : ''}
@@ -248,7 +250,8 @@ function ContactFormBody({
               </Text>
             </Stack>
           </Paper>
-        ) : (
+        )}
+        {!account && (
           <TextInput
             label="返信先のメールアドレス"
             type="email"

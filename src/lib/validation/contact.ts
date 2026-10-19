@@ -27,7 +27,7 @@ export const CONTACT_IMAGE_JPEG_QUALITY = 0.85
 export const CONTACT_IMAGE_MAX_BYTES = 1.5 * 1024 * 1024
 /** `bodySizeLimit`（`next.config.ts` の `4mb`）から multipart の区切りと本文の分を残す */
 export const CONTACT_IMAGES_TOTAL_MAX_BYTES = 3.5 * 1024 * 1024
-/** 送れなかったときの文言。画面はこの文言と、想定外のエラー（`GENERIC_ERROR_MESSAGE`）のときだけ、代わりのアドレスを案内する（031 §4.3） */
+/** 送れなかったときの文言（`code: 'contact_send_failed'` と一緒に返す。画面はこの code と想定外のエラーのときだけ、代わりのアドレスを案内する。031 §4.3） */
 export const CONTACT_SEND_FAILED_MESSAGE =
   '送信できませんでした。時間をおいてもう一度お試しください'
 /** 添付の文言。ブラウザ（選んだとき）とサーバー（送ったとき）で同じものを出す */

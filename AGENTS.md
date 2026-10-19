@@ -228,7 +228,7 @@ startTransition(async () => {
 流れ: `runAction` → guard → Zod → `createClient()`（anon + RLS）→ `revalidatePath` / `refresh`。
 
 画面が文言以外で分岐するときだけ `new ActionError(message, code)` を投げ、`ActionFailure.code` に載せる。
-いまは在籍スタッフの上限と、料金が上がる追加の確認（019 §5.3・§13）、お問い合わせの返信先の欠け（`contact_email_required`。ログイン中の画面から送ったのにセッションが切れていた。フォームが返信先の欄を出す。031）だけ。
+いまは在籍スタッフの上限と、料金が上がる追加の確認（019 §5.3・§13）、お問い合わせの返信先の欠け（`contact_email_required`。ログイン中の画面から送ったのにセッションが切れていた。フォームが返信先の欄を出す）と送信の失敗（`contact_send_failed`。フォームが代わりのアドレスを案内する。031）だけ。
 上限と料金: DB の門番（`staffs` のトリガ）が `staff_limit_exceeded` を投げ、Action は
 `throwIfStaffLimit(error)`（`lib/billing/limit.ts`）で日本語 + `code: 'staff_limit'` に写す。有料プランは書き込む前に
 `ensureStaffAddition(user.id, { adding, acknowledgedPeak })`（`lib/billing/addition.ts`）が上限人数（`staff_limit`）→ 料金（`price_increase`）の順に見る。

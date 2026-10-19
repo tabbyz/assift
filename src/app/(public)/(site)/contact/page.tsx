@@ -43,6 +43,7 @@ export default async function ContactPage({ searchParams }: PageProps<'/contact'
             送信の結果や入力が消える。同じ URL のまま次の問い合わせを送るのは、完了の画面のボタンで作り直す */}
         <ContactForm
           key={`${topic ?? ''}|${tenantParam ?? ''}|${digest ?? ''}`}
+          loggedIn={Boolean(user)}
           account={user?.email ?? null}
           tenant={tenant ?? null}
           digest={parseDigest(digest) ?? null}
