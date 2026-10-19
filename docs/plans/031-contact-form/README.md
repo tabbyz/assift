@@ -428,4 +428,4 @@ PR tabbyz/assift#54 を merge した。
 - iPhone の Safari: 画像（HEIC の写真を含む）を添付して送り、届いた（§4.7・§8）
 - BotID: 本番でブラウザから送ったリクエストを Copy as cURL で写し、`x-is-human` のヘッダだけを外して送り直すと、応答は `contact_send_failed`（弾かれた。§4.6・§8）。
   写したリクエストは受付番号も中身も同じで、すり抜けても Resend の `Idempotency-Key` で 1 通にまとまるため、届かないことではなく応答で判定した
-- 残り: Missive から返したときの Reply-To は 032 §4-1（10/25〜10/26）
+- 031 の範囲はこれで終わり。Missive から返したときの Reply-To は別のタスク（032 §4-1。リリース計画の ops-03）で確かめる
