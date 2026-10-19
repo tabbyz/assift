@@ -103,7 +103,8 @@ src/
     site/                         サイト共通のメタデータの文言（028）。metadata（SITE_NAME / SITE_DESCRIPTION）
     announce/                     カットオーバーの告知（030）。content（文面のデータ。文言の正）/ render（テキスト版と HTML 版）/ recipients（宛先の CSV・100 通ずつの区切り（RFC から外れる形は最後に 1 通ずつ）・Idempotency-Key・続きの位置）
     contact/                      お問い合わせ（031）。path（contactHref。アプリの各所のリンク）/ render（件名と本文）/ attachments（server-only。sharp で JPEG に書き出し直す）/
-                                  send（server-only。Resend の REST。RESEND_API_KEY と CONTACT_INBOX があるときだけ送る）
+                                  send（server-only。Resend の REST。RESEND_API_KEY と CONTACT_INBOX があるときだけ送る）/
+                                  tenant（server-only。lib/queries の getTenant を、読めなくても問い合わせを止めない形で包む。読み取りそのものは lib/queries のまま）
     analytics/                    アクセス解析（025）。load（読み込むか。本番の本体のホストだけ）/ url（送る URL からクエリとハッシュを落とす）
     export/                       request（認証 → 店舗 → 期間 → 表。PDF / CSV 共通の入口）/ filename / path（URL を組む。リンクと旧 URL の書き換えが共有）
     csv/                          shiftCsv（純関数）/ encode（CP932 か BOM 付き UTF-8。iconv-lite）

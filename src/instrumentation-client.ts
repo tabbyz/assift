@@ -1,3 +1,4 @@
+import { initBotId } from 'botid/client/core'
 import { config } from 'zod/v4/core'
 
 /**
@@ -22,9 +23,8 @@ config({ jitless: true })
  */
 // 開発では読まない: サーバーの `checkBotId()` は開発で常に人と答え、判定のスクリプトの読み込みに失敗すると送信そのものが止まる（BotID は
 // スクリプトを待ってから `fetch` を通す）。本番でスクリプトが読めないときは送信が失敗の表示になり、フォームはアドレスを案内する（031 §4.3）
-// 遅れて読む（全ページの最初の chunk に入れない）。送信はフォームを開いて入力してからなので、それまでに `fetch` が包まれる
+// 遅れて読む（動的 import）にはしない: chunk の読み込みに失敗すると `fetch` が包まれず、判定のヘッダの無い送信がサーバーで
+// 必ずボットと判定されて、問い合わせが送れなくなる。増えるのは全ページで 6KB ほど
 if (process.env.NODE_ENV !== 'development') {
-  void import('botid/client/core').then(({ initBotId }) =>
-    initBotId({ protect: [{ path: '/contact', method: 'POST' }] })
-  )
+  initBotId({ protect: [{ path: '/contact', method: 'POST' }] })
 }

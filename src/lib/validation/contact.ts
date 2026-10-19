@@ -64,4 +64,3 @@ export const contactSchema = z.object({
   tenantId: z.preprocess(blankToUndefined, z.guid().optional().catch(undefined)),
   digest: z.preprocess(blankToUndefined, z.string().optional().transform(parseDigest)),
 })
-export type ContactInput = z.infer<typeof contactSchema>

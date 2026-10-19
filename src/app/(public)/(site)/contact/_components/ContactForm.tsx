@@ -95,7 +95,6 @@ function ContactFormBody({
     if (files.length === 0 || attachments.length >= CONTACT_IMAGE_MAX_COUNT) return
     setIsResizing(true)
     setError(undefined)
-    setFailed(false)
     try {
       const next = [...attachments]
       let total = next.reduce((sum, a) => sum + a.blob.size, 0)
@@ -141,7 +140,7 @@ function ContactFormBody({
       return
     }
     const data = new FormData()
-    data.set('topic', topic ?? '')
+    data.set('topic', topic)
     if (!account) data.set('email', email)
     data.set('body', body)
     data.set('requestId', requestId)

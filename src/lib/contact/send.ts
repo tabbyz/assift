@@ -72,7 +72,7 @@ export async function sendContactEmail(email: ContactEmail): Promise<void> {
  * 同じ中身の連打・送り直しは 1 通になり、失敗のあとに内容を直して送ったものは別の 1 通になる
  * （鍵が同じで中身が違うと Resend は 409 で断るので、直した送信が届かなくなるのを避ける）
  */
-export function idempotencyKey(requestId: string, payload: string): string {
+function idempotencyKey(requestId: string, payload: string): string {
   return `contact/${requestId}/${createHash('sha256').update(payload).digest('hex')}`
 }
 
