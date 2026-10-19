@@ -97,6 +97,7 @@ function ContactFormBody({
   const [failed, setFailed] = useState(false)
   const [sent, setSent] = useState<ContactSent>()
   const [isPending, startTransition] = useTransition()
+  const [isSlow, setIsSlow] = useState(false)
   const [isResizing, setIsResizing] = useState(false)
   // フォーム 1 回分の id。同じ内容の連打・送り直しを Resend が 1 通にまとめる（031 §4.5）。
   // `uuid` の v4 は `crypto.randomUUID()` が無い http の LAN（開発）でも `getRandomValues` で作る
@@ -193,8 +194,9 @@ function ContactFormBody({
 
     setError(undefined)
     startTransition(async () => {
+      const slowTimer = setTimeout(() => setIsSlow(true), SLOW_SEND_MS)
       try {
-        const r = await withTimeout(sendContact(data), SEND_TIMEOUT_MS)
+        const r = await sendContact(data)
         if (!r.ok) {
           setError(r.error)
           // セッションが切れていた: 入力はそのまま残し、返信先の欄を出す（欄を埋めれば送れるので、アドレスは案内しない）
@@ -208,9 +210,12 @@ function ContactFormBody({
         }
         setSent(r.data)
       } catch {
-        // 大きさの上限（bodySizeLimit）・通信の失敗・時間切れは Action の外で起きる
+        // 大きさの上限（bodySizeLimit）や通信の失敗は Action の外で起きる
         setError(CONTACT_SEND_FAILED_MESSAGE)
         setFailed(true)
+      } finally {
+        clearTimeout(slowTimer)
+        setIsSlow(false)
       }
     })
   }
@@ -382,11 +387,17 @@ function ContactFormBody({
           に従って取り扱います。
         </Text>
 
-        <Group justify="flex-end">
+        <Stack gap="xs" align="flex-end">
           <Button type="submit" loading={isPending} disabled={isResizing || !hydrated}>
             送信する
           </Button>
-        </Group>
+          {isPending && isSlow && (
+            <Text size="sm" c="dimmed" ta="right">
+              送信に時間がかかっています。このままお待ちいただくか、終わらない場合は入力内容を控えて{' '}
+              {CONTACT_EMAIL} へメールでお問い合わせください。
+            </Text>
+          )}
+        </Stack>
       </Stack>
     </form>
   )
@@ -395,15 +406,9 @@ function ContactFormBody({
 const noopSubscribe = () => () => {}
 
 /**
- * 送信の待ちの上限。BotID の判定のスクリプトが読めないと、送信の fetch が返らないまま止まることがある（`botid` の実装）。
- * 遅い回線で画像を 3.5MB 送る時間を見て 90 秒。時間切れのあとに届いても、同じ id・同じ内容の送り直しは Resend が 1 通にまとめる
+ * 送信がこれより長くかかったら、代わりのアドレスを案内する（待つのはやめない）。
+ * BotID の判定のスクリプトが読めないと、送信の fetch が返らないまま止まることがある（`botid` の実装）。
+ * 打ち切って送り直させると、Next は Action を 1 本ずつ流すので、止まった前の送信の後ろに並んで送られない。
+ * また遅い回線の正当な送信を打ち切ると、届いたのに「送れなかった」と出て二重に問い合わせられる
  */
-const SEND_TIMEOUT_MS = 90_000
-
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error('timeout')), ms)
-  })
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
-}
+const SLOW_SEND_MS = 60_000
