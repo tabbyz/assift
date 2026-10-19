@@ -5,21 +5,30 @@
   line-height: 0;
 }
 
+/*
+ * ヘッダーの「設定」。文字は本文色（薄い色だと、並ぶ相手のいない 1 項目が押せないように見える）。
+ * 開いているときは背景と太字で示し、マウスを乗せたときはそれより薄い背景で押せることを示す
+ */
 .navLink {
-  /* アイコンと文字を横に並べる（「設定」の歯車） */
+  /* アイコンと文字を横に並べる（歯車） */
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 6px 8px;
+  border-radius: var(--mantine-radius-sm);
   font-size: 13px;
-  color: var(--mantine-color-dimmed);
+  color: var(--mantine-color-text);
+}
+
+@media (hover: hover) {
+  .navLink:hover {
+    background-color: var(--mantine-color-gray-0);
+  }
 }
 
 .navLink[data-active='true'] {
-  border-radius: var(--mantine-radius-sm);
   background-color: var(--mantine-color-gray-1);
   font-weight: 650;
-  color: var(--mantine-color-text);
 }
 
 /*
