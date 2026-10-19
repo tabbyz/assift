@@ -425,5 +425,6 @@ PR tabbyz/assift#54 を merge した。
 - 本番: Production に `RESEND_API_KEY` と `CONTACT_INBOX=support@assift.com` を入れ、本番の `/contact` から送って届いた
 - Vercel Firewall: カスタムルール `contact-rate-limit` を Publish した（§4.6）。
   条件は Method = `POST` かつ Request Header `Content-Type` が `multipart/form-data` を含む。Rate Limit は Fixed Window・600 秒に 5 回・キーは IP。超えたら 429（Persistent Action は付けない）
-- 残り（手が空いたとき）: iPhone の Safari での添付（HEIC の写真を含む）と、`curl` で Action を直接叩いて BotID に弾かれるか（§8）。
+- iPhone の Safari: 画像（HEIC の写真を含む）を添付して送り、届いた（§4.7・§8）
+- 残り（手が空いたとき）: `curl` で Action を直接叩いて BotID に弾かれるか（§8）。
   Missive から返したときの Reply-To は 032 §4-1（10/25〜10/26）
