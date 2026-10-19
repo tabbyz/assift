@@ -47,7 +47,7 @@
    | `other` | その他 | 上にないお店 | その他 |
 
    - 足したのは v1 で店舗名から推定できた中で数が多いもの（美容 72・事務所 42・物流 36 店舗。§5.1）。ホテル・警備・娯楽（各 20 店舗前後）は
-     分けても件数が少なくて読めないので、その他に入れる。スマホで 2 列 × 5 段（9 つ）を上限にし、これより細かくしない
+     分けても件数が少なくて読めないので、その他に入れる。スマホでも 2 列 × 5 段（9 つ）で並べ（§4.4）、これより細かくしない
    - **ボタンの添え書きは、勤務の例ではなく店の例にする。** 同じテンプレートを当てる業種があるので、勤務の例では添え書きが重なる（レビュー 4 回目の指摘）。
      選ぶときに要るのは「自分はどれか」で、勤務は選んだ直後の画面で見える
    - 「小売・コンビニ」を「小売・販売」に、「介護・医療」を「介護・福祉」と「クリニック・歯科」に分ける
@@ -76,7 +76,7 @@
    移行した利用者が最初から新しいテンプレートと業種の保存を使える）。Deploy to production はオフのままなので、merge の前に `db push` で migration を本番へ入れ、
    アプリはその後に出す（§4.6）。026 §5 の 10/29 の確認（`migration list` で本番と main が揃う）に 034 の migration も入る
 10. **「その他」を選んだときだけ、任意で一言（20 文字まで）書いてもらう**（`industry_note`）。9 つに無い業種を見つける手段にする
-    （v1 では店舗名から業種が分からない店舗が 76% あり、勤務の名前に「同伴」がある店舗が 45 あった。§5.1）。ほかの業種では持たない
+    （v1 では店舗名から業種が分からない店舗が 76% あり、勤務の名前に「同伴」がある店舗が 45 あった。§5.1・§5.2 の q7・r3）。ほかの業種では持たない
 
 ## 3. 集計（v1 の実データ）
 
@@ -160,7 +160,7 @@ industry      text check (industry in ('food', 'retail', 'beauty', 'care', 'clin
 industry_note text check (char_length(industry_note) between 1 and 20),
 ```
 
-表の制約として `check (industry_note is null or industry = 'other')` を足す（「その他」以外では持たない）。
+表の制約として `constraint tenants_industry_note_other_only check (industry_note is null or industry = 'other')` を足す（「その他」以外では持たない。名前を付けて、あとの差分 migration で差し替えやすくする）。
 
 - enum ではなく `text` + `check`。業種を足す・まとめるときに、制約の差し替えで済む（enum は値を消せない）
 - `gen types` は `text` を `string` で出すので、TS の型では `INDUSTRIES` とのずれに気付けない。
@@ -184,20 +184,24 @@ industry_note text check (char_length(industry_note) between 1 and 20),
   - `industry: z.enum(INDUSTRIES, { error: '画面を読み込み直してください' }).nullish()`。undefined / null は「業種に触らない」
     （デプロイをまたいだ古いタブは業種を送らない。Server Action の id はビルドキャッシュが残ればデプロイをまたいで変わらない。
     `node_modules/next/dist/docs/01-app/02-guides/data-security.md`。古いタブの古い業種の key は一覧に無いので読み込み直してもらう）
-  - `industryNote: industryNoteSchema.nullish()`（`lib/validation/tenants.ts` に置く。trim・20 文字まで・日本語のエラー）
-  - `transform` で `{ industry, industryNote: industry === 'other' ? (note || null) : null }` にそろえる（その他以外の一言は捨てる。空欄は null）
+  - `industryNote: industryNoteSchema.nullish()`。`industryNoteSchema` は `lib/validation/tenants.ts` に置き、trim・20 文字まで（日本語のエラー）・**空欄は null** まで受け持つ
+  - 業種と一言をそろえる処理は `lib/validation/tenants.ts` の `normalizeIndustry({ industry, industryNote })` 1 つに置き、初期設定と店舗情報の両方から使う:
+    その他以外の一言は捨て、空欄は null（DB の `char_length between 1 and 20` に `''` を届けない。前例は `assist_notes: parsed.instructions || null`）
+  - スキーマの `transform` は `tenantId`・`patterns`・`pair` を残したまま、業種の 2 つだけを `normalizeIndustry` で整える
 - 業種が無いときは `tenants` を書かない（勤務だけ保存する）
 
 **画面**（`SetupWizard` / `PatternsStep`）:
 
-- 業種の状態（`industry`）は、再開したとき保存済みの `tenant.industry`（`isIndustry` で絞る）で始まる。一言（`industryNote`）も `tenant.industry_note` で始まる。
+- `/setup` の page が `tenant` に `industry`（page の側で `isIndustry` で絞る）と `industryNote` を足して渡す。`SetupWizard` の Props の型も直す。
+  業種の状態（`industry`）と一言（`industryNote`）は、再開したときこの値で始まる。
   保存のときは、業種があれば `industry` と `industryNote` を送る（同じ値を送り直しても害は無い）。null（業種を選ばずに勤務がある店舗。
   v1 から準備中のまま移した店舗や、034 より前に勤務を保存した店舗）なら送らない
 - 業種の帯（「業種：介護・福祉」）は、再開したときも保存済みの業種で出る。null は今までどおり「保存してある勤務」
 - 業種が「その他」のときだけ、業種の帯の下に一言の欄（`TextInput`。ラベル「お店の業種（任意）」・placeholder「例）ホテル」・`maxLength` 20）を出す
 - 「業種を選びなおす」で業種の選択に戻ったら、`industry` と `industryNote` を null に戻す（今までどおり。選び直すとテンプレートが当たる）
 - 「次へ」で保存し直すかの判定に業種と一言を含める。保存済みかを見る文字列は初めの値（`savedSnapshot`）・`dirty`・保存した直後の `setSaved` の 3 か所で作っているので、
-  `snapshot(state, industry, industryNote)` の 1 つの関数にまとめて 3 か所から使う（1 か所でも入れ忘れると、保存した直後も保存し直しが要る扱いになる）
+  `snapshot(state, industry, industryNote)` の 1 つの関数にまとめて 3 か所から使う（1 か所でも入れ忘れると、保存した直後も保存し直しが要る扱いになる）。
+  **勤務の状態が null なら null を返す**（いまの `savedSnapshot` と同じ。`saved !== null` は「勤務を保存済み」の印として `fromSaved`・「あとで続ける」の着地にも使われている）
 
 ### 4.3 店舗情報の画面で直す
 
@@ -209,7 +213,7 @@ industry_note text check (char_length(industry_note) between 1 and 20),
 - 説明（`description`）: 「勤務パターンは変わりません」。業種を変えてもテンプレートは当て直さない
 - `updateTenant` の入力と `updateTenantSchema`（`lib/validation/tenants.ts`）に `industry: z.enum(INDUSTRIES, { error: '業種を選び直してください' }).nullish()` と
   `industryNote: industryNoteSchema.nullish()` を足す。**`industry` が undefined なら業種と一言に触らない**。
-  Action は `...(industry !== undefined ? { industry, industry_note: industry === 'other' ? industryNote ?? null : null } : {})` で書く
+  Action は `industry !== undefined` のときだけ、`normalizeIndustry` で整えた 2 つを `industry` / `industry_note` に書く（§4.2 と同じ関数）
 - 画面は業種か一言を変えたときだけ 2 つを送る。**比べる相手は `props`**（保存のあと `revalidatePath` で新しい値になる。マウントしたときの値を控えて比べると、
   A → B と保存したあと B → A に戻した保存が送られない）。送らない理由は 2 つ:
   - Server Action の id はデプロイをまたいで残りうるので（§4.2）、リリース前に開いたタブ（業種を送らない）からの保存を止めない。`nullable()` だと止まり、
@@ -223,8 +227,13 @@ industry_note text check (char_length(industry_note) between 1 and 20),
 - テンプレートを業種から切り離す: `TEMPLATES` の key を `food` / `shifts3`（早番・中番・遅番）/ `care` / `clinic` / `nursery` / `general`（その他）にし、
   `TEMPLATE_OF: Record<Industry, TemplateKey>`（§2-6 の右の列）を足す。`templateState(industry)` は `TEMPLATES[TEMPLATE_OF[industry]]` を使う
 - `TEMPLATES` の行を §2-7 の値にする。お休みの共通の行 `DAYOFF_ROWS` を 休み・希望休・有給 にする（key は `dayoff` / `request` / `paid`）
+- 業種のボタンの並び（`PatternsStep.tsx` の `SimpleGrid`）を `cols={{ base: 1, xs: 2 }}` から `cols={2}` にする（390px で 1 列 × 9 段だと縦に長い）。
+  添え書きは 2 行に折り返してよい。390px で「事務所・コールセンター」が収まるかを手で見る
+- 完成イメージの見本のお休みは、テンプレートの先頭のお休み（休み）だけにする（`SetupPreview` が `samplePattern` にお休みの先頭 1 つだけを渡す）。
+  全部を回すと、希望休（ピンク）・有給・明けが見本の表に散らばる
 - `validation/setup.ts` の `SETUP_PATTERNS_MAX` のコメント「テンプレートは多くて 7 件」を 8 件に直す（介護: 働く日 4 + 明け + お休み 3）
-- 古くなるコメントを直す: `templates.ts` 冒頭の「値は仮のもので、v1 の実データを見て決めたものではない」（→ 034 で v1 の実データから決めた）、
+- 古くなるコメントを直す: `templates.ts` 冒頭の「値は仮のもので、v1 の実データを見て決めたものではない」（→ 034 で v1 の実データから決めた）と
+  「同じ業種の中で重ならない」（→ 同じテンプレートの中で）、
   `patternsState.ts` の `fromSavedPatterns` の「業種は保存していないので」（業種は保存するようになったが、ペアのスイッチの戻し方は変えない）、
   `PatternsStep.tsx` の props `industry` の「保存済みから戻したときは null」（→ 業種を選ばずに勤務がある店舗だけ null）
 - LP（`(site)/_components/SetupSteps.tsx`）: タグは `INDUSTRIES` から作るので、その他を除く 8 つになる（折り返して並ぶ）。
@@ -243,12 +252,12 @@ industry_note text check (char_length(industry_note) between 1 and 20),
   - `isIndustry`
   - **`supabase/schemas/public/tables/tenants.sql` の `industry` の check の値が `INDUSTRIES` と同じ**（`node:fs` で読む）
 - `patternsState.test.ts`: 飲食の行の並びの期待値を `['早番', '通し', '休み', '希望休', '有給']` に、その他のテンプレートで「公休」の行を探しているところを「休み」に直す
-- `validation/setup.test.ts`（既存）: `industry` は 9 つの値と省略を通し、一覧に無い値は「画面を読み込み直してください」/ その他以外の一言は捨てる / 空欄の一言は null /
+- `validation/tenants.test.ts` に `normalizeIndustry`（その他以外の一言を捨てる・空欄は null）。`validation/setup.test.ts`（既存）: `industry` は 9 つの値と省略を通し、一覧に無い値は「画面を読み込み直してください」/ その他以外の一言は捨てる / 空欄の一言は null /
   21 文字の一言は日本語のエラー
 - `validation/tenants.test.ts`（新規）: `updateTenantSchema` が業種の省略・null・9 つの値を通し、ほかを日本語のエラーで弾く / 一言は同上
 - pgTAP（`supabase/tests/setup.sql`。`plan()` の数を直す）: `tenants.industry` に 9 つの値が入る・ほかは 23514 / 一言は「その他」のときだけ入る（ほかは 23514）・
   21 文字は 23514・空文字は 23514
-- 手で: 新しい店舗で 9 業種を一巡（PC 幅・390px）。業種を選んで「あとで続ける」→ 開き直して帯に業種が出る。その他の一言を入れて保存 → 開き直して残る。
+- 手で（**プレビューで**。本番では試さない。§4.6）: 新しい店舗で 9 業種を一巡（PC 幅・390px。ボタンの並びと完成イメージも見る）。業種を選んで「あとで続ける」→ 開き直して帯に業種が出る。その他の一言を入れて保存 → 開き直して残る。
   店舗情報で業種を変える・外す・その他の一言を直す
 
 ### 4.6 出し方
@@ -259,6 +268,7 @@ industry_note text check (char_length(industry_note) between 1 and 20),
    **PR を閉じて開き直す**（ブランチ DB が作り直される）。プレビューで初期設定をもう一度通す。
    **`db push` はレビューが終わってから。** 本番に入れた後に直すことになったら、入れたものは書き換えず、新しい migration を足す（AGENTS.md「適用済みの migration は書き換えない」）
 3. **10/26 までに**（§2-9）、merge の前に本番へ `npx supabase db push` で migration を入れる（Deploy to production がオフのあいだ。024 §3-10）。
+   - 先に `npx supabase db push --dry-run` で、入るのが 034 の 1 本だけであることを確かめる（024 §4.2 と同じ）
    - push の直前に main を取り込み、`migration list` で本番の migration がすべてブランチにあり、034 の migration が一番新しいことを確かめる。
      古ければ（作ってから本番に入れるまでに main に新しい migration が入った）、手順 2 のとおり作り直し、PR を開き直してプレビューを通してから push する
    - push したら、`anon` が実行できる `public` の関数が 0 件であることを確かめる（生成 migration の GRANT を打ち消せているか）。024 §4.2 の SQL（`information_schema.role_routine_grants`）は
@@ -266,6 +276,13 @@ industry_note text check (char_length(industry_note) between 1 and 20),
      `select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and has_function_privilege('anon', p.oid, 'EXECUTE')` が 0 行
    - 列を足すだけなので、入れた直後も古いアプリはそのまま動く。**push と merge は続けて行う**（間にほかの migration の PR を merge しない）
    - **アプリが先に出ると、初期設定のステップ 2 で業種の書き込みが「列が無い」で失敗する**（勤務は保存されるが、画面は失敗を出して先に進めない）。必ず migration が先
+   - **push したのにアプリの PR を merge できない**とき（CI・プレビューの不具合、10/26 に間に合わない）は、同じ日のうちに migration だけの PR を main に merge する
+     （列を足すだけで古いアプリと両立する）。本番にあって main に無い migration を残さない（026 §5 の 10/29 の `migration list` が揃わず、以後の `db push` も失敗する）。
+     push する前に間に合わないと分かったら、push しない（カットオーバーの後に回す）
+   - push と merge をしたら、026 の実装ログに「10/26（実際の日）に 034 の migration を本番へ入れた」と 1 行書く（当夜の手順書に、本番のスキーマが変わった日を残す）
+4. **merge のあと、本番では店舗もアカウントも作らない。** 本番はインポートの前まで「管理用アカウント 1 件・店舗 0 件」でなければならない（024 §5・021 §9.3）。
+   店舗が 1 件でもあると `import.ts` が `--allow-existing` なしで止まり、アカウントは undo.sql の想定（管理用だけ）を狂わせ、v1 のメールと重なればインポート全体が ROLLBACK する。
+   確かめはプレビューで済ませ、本番で見るのは `migration list` と anon の確認だけ。どうしても本番で試したら、024 §5 の #14（片付け）の手順で消し、`tenants` が 0 件・`auth.users` が管理用だけに戻ったことを確かめる
 
 ## 5. テンプレートの見直し（§3 の結果で埋める）
 
@@ -396,7 +413,7 @@ v2 ではこの区分が出勤日数の集計（`lib/shifts/count.ts`）と自�
 
 - プランを書いた。`analysis-v1.sql` をローカルの Postgres で確かめた（§3.4）
 - v1 の実データの集計を 2 回（`analysis-v1.sql` / `analysis-v1-2.sql`）流してもらい、結果を §5 にまとめた
-- 決定: 業種は 6 つ・飲食は案 A・明けは「働く日」→ 自動作成の H10（ペア先に枠が無い日は夜勤を置けない）が分かって「お休み」に戻した（§2-7）
+- 決定: 業種は 6 つ・飲食は案 A・明けは「働く日」→ 自動作成の H10（ペア先に枠が無い日は夜勤を置けない）が分かって「お休み」に戻した（§2-8）
 - プランのレビュー（実際のコードと突き合わせる。中以上が無くなるまで）:
 
   | 回 | 高 / 中 / 低 | 主な中の指摘と直し |
@@ -413,3 +430,4 @@ v2 ではこの区分が出勤日数の集計（`lib/shifts/count.ts`）と自�
 
   | 回 | 高 / 中 / 低 | 主な中の指摘と直し |
   | --- | --- | --- |
+  | 6 | 0 / 2 / 7 | 店舗情報で一言を空欄にすると `''` が DB の制約で落ちる → 空欄は null・その他以外は捨てる処理を `normalizeIndustry` 1 つに置く / merge の後に本番で試すと 10/30 のインポートが止まる → 本番では店舗もアカウントも作らない |
