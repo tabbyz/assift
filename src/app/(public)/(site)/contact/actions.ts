@@ -27,6 +27,7 @@ export type ContactSent = { replyTo: string; fromAccount: boolean }
 export async function sendContact(formData: FormData): Promise<ActionResult<ContactSent>> {
   return runAction(async () => {
     await assertHuman()
+    const user = await getAuthUser()
 
     // ハニーポット: ボットに判定の手がかりを与えないよう、入力の検証より先に見て、成功に見せて送らない（031 §4.6）。
     // 自動入力の拡張機能が埋めて人の問い合わせを落とすこともありうるので、ログには残す
@@ -34,9 +35,8 @@ export async function sendContact(formData: FormData): Promise<ActionResult<Cont
     if (typeof honeypot === 'string' && honeypot !== '') {
       console.warn('[contact] ハニーポットに値があったので送りませんでした')
       const email = formData.get('email')
-      const accountEmail = (await getAuthUser())?.email
-      return accountEmail
-        ? { replyTo: accountEmail, fromAccount: true }
+      return user?.email
+        ? { replyTo: user.email, fromAccount: true }
         : { replyTo: typeof email === 'string' ? email : '', fromAccount: false }
     }
 
@@ -49,7 +49,6 @@ export async function sendContact(formData: FormData): Promise<ActionResult<Cont
       digest: formData.get('digest') ?? undefined,
     })
 
-    const user = await getAuthUser()
     const replyTo = user?.email ?? input.email
     // 返信先が無い: ログイン中の画面（返信先の欄が無い）から送ったのにセッションが切れていた・アカウントにアドレスが無い。
     // 欄を出してやり直してもらう（未ログインの画面なら欄は必須なので、ふつうは起きない）
@@ -65,12 +64,16 @@ export async function sendContact(formData: FormData): Promise<ActionResult<Cont
     const files = formData.getAll('images').filter((value): value is File => value instanceof File)
     const attachments = await rewriteContactImages(files)
 
+    const [tenant, requestHeaders] = await Promise.all([
+      // 店舗は RLS で見えたときだけ添える。未ログインなら読まない（見えないので）
+      user && input.tenantId ? readContactTenant(input.tenantId) : undefined,
+      headers(),
+    ])
     const context: ContactContext = {
       user: user ? { id: user.id, email: user.email } : undefined,
-      // 店舗は RLS で見えたときだけ添える。未ログインなら読まない（見えないので）
-      tenant: user && input.tenantId ? await readContactTenant(input.tenantId) : undefined,
+      tenant,
       digest: input.digest,
-      userAgent: (await headers()).get('user-agent') ?? undefined,
+      userAgent: requestHeaders.get('user-agent') ?? undefined,
     }
 
     try {

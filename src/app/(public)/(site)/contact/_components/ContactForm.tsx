@@ -4,6 +4,7 @@ import { type FormEvent, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import {
   Anchor,
+  Box,
   Button,
   CloseButton,
   FileButton,
@@ -19,6 +20,7 @@ import {
   Title,
 } from '@mantine/core'
 import { IconPhotoPlus } from '@tabler/icons-react'
+import { v4 as uuidv4 } from 'uuid'
 import { FormErrorAlert } from '@/components/FormErrorAlert'
 import { CONTACT_EMAIL } from '@/components/billing/contact'
 import {
@@ -34,7 +36,6 @@ import {
 } from '@/lib/validation/contact'
 import { type ContactSent, sendContact } from '../actions'
 import { resizeImage, toDataUrl } from '../_lib/resizeImage'
-import classes from './ContactForm.module.css'
 
 type Props = {
   /** ログイン中のアカウントのアドレス。null なら未ログイン（返信先を入力してもらう） */
@@ -63,8 +64,9 @@ export function ContactForm({ account: initialAccount, tenant, digest, initialTo
   const [sent, setSent] = useState<ContactSent>()
   const [isPending, startTransition] = useTransition()
   const [isResizing, setIsResizing] = useState(false)
-  // フォーム 1 回分の id。同じ内容の連打・送り直しを Resend が 1 通にまとめる（031 §4.5）
-  const [requestId] = useState(randomUuid)
+  // フォーム 1 回分の id。同じ内容の連打・送り直しを Resend が 1 通にまとめる（031 §4.5）。
+  // `uuid` の v4 は `crypto.randomUUID()` が無い http の LAN（開発）でも `getRandomValues` で作る
+  const [requestId] = useState(() => uuidv4())
   const nextAttachmentId = useRef(0)
   // 選んだファイルを入力欄から消す。消さないと、外した画像をもう一度選んでも change が起きない
   const resetFileInput = useRef<() => void>(null)
@@ -235,7 +237,7 @@ export function ContactForm({ account: initialAccount, tenant, digest, initialTo
           {attachments.length > 0 && (
             <SimpleGrid cols={{ base: 3, xs: 4 }} spacing="xs">
               {attachments.map((a, i) => (
-                <div key={a.id} className={classes.thumb}>
+                <Box key={a.id} pos="relative">
                   <Image
                     src={a.preview}
                     alt={`添付 ${i + 1} 枚目`}
@@ -244,13 +246,18 @@ export function ContactForm({ account: initialAccount, tenant, digest, initialTo
                     fit="cover"
                   />
                   <CloseButton
-                    className={classes.remove}
+                    pos="absolute"
+                    top={4}
+                    right={4}
+                    bg="white"
                     size="sm"
                     aria-label={`添付 ${i + 1} 枚目を外す`}
                     disabled={isResizing}
-                    onClick={() => setAttachments((current) => current.filter((_, j) => j !== i))}
+                    onClick={() =>
+                      setAttachments((current) => current.filter((x) => x.id !== a.id))
+                    }
                   />
-                </div>
+                </Box>
               ))}
             </SimpleGrid>
           )}
@@ -278,8 +285,16 @@ export function ContactForm({ account: initialAccount, tenant, digest, initialTo
         </Stack>
 
         {/* ハニーポット（031 §4.6）。人には見えず、読み上げ・タブ移動でも届かない。`type="hidden"` はボットが避けるので使わない。
-            名前は自動入力の拡張機能が埋めそうな語（website・url・name・email など）を避ける */}
-        <div className={classes.honeypot} aria-hidden="true">
+            名前は自動入力の拡張機能が埋めそうな語（website・url・name・email など）を避ける。
+            画面の外に出す（`display: none` は一部のボットが見抜く） */}
+        <Box
+          pos="absolute"
+          left={-10000}
+          w={1}
+          h={1}
+          style={{ overflow: 'hidden' }}
+          aria-hidden="true"
+        >
           <label>
             この欄は空のままにしてください
             <input
@@ -291,7 +306,7 @@ export function ContactForm({ account: initialAccount, tenant, digest, initialTo
               onChange={(e) => setHoneypot(e.currentTarget.value)}
             />
           </label>
-        </div>
+        </Box>
 
         <Text size="xs" c="dimmed">
           送信いただいた内容は、
@@ -309,16 +324,4 @@ export function ContactForm({ account: initialAccount, tenant, digest, initialTo
       </Stack>
     </form>
   )
-}
-
-/**
- * フォーム 1 回分の id（uuid v4 の形）。`crypto.randomUUID()` は安全なオリジン（https・localhost）でしか使えず、
- * LAN の http（`http://192.168.x.x:3000` の開発）ではページごと落ちるので、どこでも使える `getRandomValues` で作る
- */
-function randomUuid(): string {
-  const b = crypto.getRandomValues(new Uint8Array(16))
-  b[6] = (b[6] & 0x0f) | 0x40
-  b[8] = (b[8] & 0x3f) | 0x80
-  const hex = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }

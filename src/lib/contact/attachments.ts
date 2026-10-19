@@ -4,6 +4,7 @@ import { ActionError } from '@/lib/actions/error'
 import {
   CONTACT_IMAGE_MAX_BYTES,
   CONTACT_IMAGE_MAX_COUNT,
+  CONTACT_IMAGE_TOO_LARGE_MESSAGE,
   CONTACT_IMAGE_UNREADABLE_MESSAGE,
   CONTACT_IMAGES_LIMIT_MESSAGE,
   CONTACT_IMAGES_TOTAL_MAX_BYTES,
@@ -31,13 +32,11 @@ export async function rewriteContactImages(
 ): Promise<ContactAttachment[]> {
   const images = files.filter((file) => file.size > 0)
   if (images.length > CONTACT_IMAGE_MAX_COUNT) throw new ActionError(CONTACT_IMAGES_LIMIT_MESSAGE)
-  const total = images.reduce((sum, file) => sum + file.size, 0)
-  if (
-    images.some((file) => file.size > CONTACT_IMAGE_MAX_BYTES) ||
-    total > CONTACT_IMAGES_TOTAL_MAX_BYTES
-  ) {
-    throw new ActionError(CONTACT_IMAGES_LIMIT_MESSAGE)
+  if (images.some((file) => file.size > CONTACT_IMAGE_MAX_BYTES)) {
+    throw new ActionError(CONTACT_IMAGE_TOO_LARGE_MESSAGE)
   }
+  const total = images.reduce((sum, file) => sum + file.size, 0)
+  if (total > CONTACT_IMAGES_TOTAL_MAX_BYTES) throw new ActionError(CONTACT_IMAGES_LIMIT_MESSAGE)
 
   return Promise.all(
     images.map(async (file, index) => {

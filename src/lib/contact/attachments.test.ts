@@ -87,7 +87,9 @@ describe('rewriteContactImages', () => {
       '画像は3枚まで、合計3.5MBまで添付できます。枚数を減らしてください'
     )
     const tooBig = Buffer.alloc(CONTACT_IMAGE_MAX_BYTES + 1)
-    await expect(rewriteContactImages([file(tooBig)])).rejects.toThrow('画像は3枚まで')
+    await expect(rewriteContactImages([file(tooBig)])).rejects.toThrow(
+      '画像が大きすぎて添付できません'
+    )
     const nearMax = Buffer.alloc(1.4 * 1024 * 1024)
     await expect(
       rewriteContactImages([file(nearMax), file(nearMax), file(nearMax)])
