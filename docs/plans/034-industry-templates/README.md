@@ -25,8 +25,10 @@
 3. **既存の店舗（v1 から移した店舗・初期設定を終えた店舗）には聞きに行かない。** `industry` は null のまま。
    ログイン時に聞く画面を挟むと、移行直後の利用者の問い合わせが増える。答えても画面が何も変わらず、答える理由が無い。
    店舗情報の画面に任意の欄を置くだけにする。既存の店舗の傾向は §3 の集計で見る
-4. **どの版のテンプレートを当てたかも残す**（`industry_template_version`）。テンプレートを差し替えたあとに、新旧の版を比べられるようにする。
-   014 のテンプレートを版 1、このプランのものを版 2 とする
+4. **いまの業種と、初期設定で当てたテンプレートを分けて残す。** `industry` は店舗情報の画面で直せるいまの業種、
+   `setup_industry` と `setup_template_version` は初期設定で当てたテンプレート（業種と版）で、初期設定でだけ書く。
+   1 つの列にまとめると、店舗情報で業種を直したときに「当てたのはどの業種のテンプレートか」が分からなくなる（レビュー 1 回目）。
+   版はこのプランのテンプレートを 2 とする。014 のテンプレート（版 1）は保存していなかったので記録に残らず、比べられるのは版 2 と、この先の版 3 以降
 5. **業種は 6 つ**（§5.3）: 飲食店 / 小売・サービス / 介護・福祉 / クリニック・歯科（新設）/ 保育・教育 / その他。
    美容・サロンは専用のテンプレートにする理由が無いので足さない（§5.2 の r5）。「小売・コンビニ」は「小売・サービス」に広げる
 6. **テンプレート（版 2）**:
@@ -40,8 +42,8 @@
    | `nursery` | 保育・教育 | 早番 7-16時 / 中番 8時半-17時半 / 遅番 10-19時 | そのまま |
    | `other` | その他 | 日勤 9-18時 / 早番 8-17時 / 遅番 11-20時 | 早番・遅番を足す（全体で最も合う組み合わせ） |
 
-   働く日の色は今の割り当て（早番 `#FF5722`・日勤と中番 `#FFC107`・遅番 `#3F51B5`・夜勤 `#607D8B` など）を引き継ぎ、業種の中で重ならないようにする。
-   クリニックの午前・午後は `#03A9F4`・`#009688`。
+   働く日の色は今の割り当てを引き継ぎ、業種の中で重ならないようにする: 早番 `#FF5722` / 日勤 `#FFC107` / 遅番 `#3F51B5` / 夜勤 `#607D8B` /
+   通し `#009688` / 小売の中番 `#FFC107` / 保育の中番 `#03A9F4`（そのまま）/ クリニックの午前 `#03A9F4`・午後 `#009688`。
 
    お休み（全業種で共通）: **休み（白 `#FFFFFF`）/ 希望休（ピンク `#E91E63`）/ 有給（緑 `#4CAF50`）**。いまの「公休・有給」から替える。
    希望休は休みと見分けられる色にする。赤（`#F44336`）は早番の `#FF5722` と並ぶと見分けにくいのでピンクにする。
@@ -124,23 +126,27 @@ v1 と同じ列の小さな表（13 店舗・運営の店舗 1 件・半角カ�
 
 ### 4.1 スキーマ（`supabase/schemas/public/tables/tenants.sql`）
 
-`tenants` に 2 列を足す。差分 migration は `declarative sync --name tenant_industry`。
+`tenants` に 3 列を足す。差分 migration は `declarative sync --name tenant_industry`。
 
 ```sql
--- 店舗の業種（034）。初期設定のステップ 2 で選んだもの。店舗情報の画面でも直せる。
+-- 店舗のいまの業種（034）。初期設定のステップ 2 で選んだものが入り、店舗情報の画面で直せる。
 -- null = 未回答（v1 から移した店舗・034 より前に初期設定を終えた店舗・店舗情報の画面で外した店舗）。
--- 値は lib/setup/templates.ts の INDUSTRIES と手で合わせる
-industry                  text check (industry in ('food', 'retail', 'care', 'clinic', 'nursery', 'other')),
--- 初期設定で当てたテンプレートの版（lib/setup/templates.ts の TEMPLATE_VERSION）。
--- 初期設定で業種を選んで保存したときだけ書く。店舗情報の画面で業種を直しても変えない
-industry_template_version smallint check (industry_template_version > 0),
+-- 値は lib/setup/templates.ts の INDUSTRIES と同じ（templates.test.ts がこのファイルを読んで確かめる）
+industry               text check (industry in ('food', 'retail', 'care', 'clinic', 'nursery', 'other')),
+-- 初期設定で当てたテンプレート（034）。業種と版（lib/setup/templates.ts の TEMPLATE_VERSION）。
+-- 初期設定でテンプレートを選んで保存したときだけ書く。店舗情報の画面では変えない
+setup_industry         text check (setup_industry in ('food', 'retail', 'care', 'clinic', 'nursery', 'other')),
+setup_template_version smallint check (setup_template_version > 0),
 ```
 
+表の制約として `check ((setup_industry is null) = (setup_template_version is null))` を足す（片方だけは入らない）。
+
 - enum ではなく `text` + `check`。業種を足す・まとめるときに、制約の差し替えで済む（enum は値を消せない）
-- `gen types` は `text` を `string` で出すので、TS の型では `INDUSTRIES` とのずれに気付けない。pgTAP で「6 つの値が入る / 一覧に無い値は 23514」を確かめる（§4.5）
-- 2 列は独立させる（「版があるなら業種もある」の制約は置かない）。店舗情報の画面で業種を外しても、初期設定で当てた版の記録は残す
+- `gen types` は `text` を `string` で出すので、TS の型では `INDUSTRIES` とのずれに気付けない。
+  **`templates.test.ts` で `tenants.sql` を読み、2 つの check の値の並びが `INDUSTRIES` と同じことを確かめる**（TS にだけ足すと、その業種の保存が 23514 で止まる）
 - RLS・GRANT は `tenants` の既存のまま（列を足すだけ。`authenticated` は既に UPDATE できる）。`select('*')` で読んでいる `getTenant` などは型が増えるだけ
-- v1 のインポート（021）は列を指定して入れるので影響しない。カットオーバーの後に出すので（§2-8）、当日の手順にも関わらない
+- DB から読んだ値は `string | null` なので、画面に渡す前に `isIndustry()`（`lib/setup/templates.ts` に足す。`INDUSTRIES` に含まれるか）で絞り、一覧に無い値は null として扱う
+- v1 のインポート（021）は列を指定して入れるので影響しない（`scripts/migrate-v1/import.ts`）。カットオーバーの後に出すので（§2-8）、当日の手順にも関わらない
 
 ### 4.2 初期設定で保存する
 
@@ -154,54 +160,62 @@ create or replace function public.save_setup_patterns(
   p_template_version smallint default null
 )
 ...
-  -- 業種（034）。null は「この回は業種を選んでいない」なので、既存の値を残す
-  update public.tenants
-     set industry = coalesce(p_industry, industry),
-         industry_template_version = coalesce(p_template_version, industry_template_version)
-   where id = p_tenant_id;
+  -- テンプレート（034）。この回にテンプレートを選んでいなければ（null）、店舗の行に触らない
+  if p_industry is not null then
+    update public.tenants
+       set industry = p_industry,
+           setup_industry = p_industry,
+           setup_template_version = p_template_version
+     where id = p_tenant_id;
+  end if;
 ```
 
 - 先頭の `select ... for update` で店舗の行を確かめてロックしてあるので、この UPDATE は必ず 1 行に当たる（`get diagnostics` は要らない）
-- 引数を足すと別の関数（オーバーロード）になる。古い 2 引数の関数が残ると、PostgREST は 2 引数の呼び出しでどちらを使うか決められずに失敗するので、
+- 業種だけ・版だけの呼び出しは表の制約（§4.1）が 23514 で弾く
+- 引数を足すと別の関数（オーバーロード）になる。古い 2 引数の関数が残ると、PostgREST は 2 引数の呼び出しでどちらを使うか決められずに失敗する（PGRST203）ので、
   **差分 migration で `drop function public.save_setup_patterns(uuid, jsonb)` を必ず入れる**（pg-delta が出さなければ追記する）。
   新しい関数は新しい関数として扱い、`supabase/unmanaged/restrict_anon_grants.sql` を migration の末尾に追記する（AGENTS.md「スキーマ」）。
   `revoke ... from public` / `grant ... to authenticated` も新しい引数で書き直す
 - 新しい関数は既定値があるので、**古いアプリ（2 引数で呼ぶ）からもそのまま呼べる**。migration を先に入れれば、アプリを出すまでの間も初期設定が止まらない（§4.6）
 
-**Server Action**（`setup/actions.ts` の `saveSetupPatterns`）: 入力に `industry` と `templateVersion` を足し、RPC に渡す。
+**Server Action**（`setup/actions.ts` の `saveSetupPatterns`）: 入力に `industry` を足す。
 
-- Zod（`lib/validation/setup.ts` の `saveSetupPatternsSchema`）: `industry: z.enum(INDUSTRIES, { error }).nullish()`・`templateVersion: z.int({ error }).positive({ error }).nullish()`。
-  **両方あるか、両方無いか**を `refine` で確かめる。`nullish` にするのは、デプロイをまたいだ古いタブ（2 つを送らない）でも保存を止めないため。無いときは null として RPC に渡す
-- `templateVersion` はクライアントが送る（そのタブが当てたテンプレートの版。デプロイをまたいでも、実際に当てた版が残る）
+- Zod（`lib/validation/setup.ts` の `saveSetupPatternsSchema`）: `industry: z.enum(INDUSTRIES, { error: '業種を選び直してください' }).nullish()`。
+  `nullish` は「この回はテンプレートを選んでいない」を表す
+- **版はサーバーの `TEMPLATE_VERSION` で決める**（クライアントからは受けない。任意の版を書かせない。Server Action の id はビルドごとに変わりうるので、
+  デプロイをまたいだ古いタブは新しい Action を呼べず、クライアントが版を送る理由が無い。`node_modules/next/dist/docs/01-app/02-guides/data-security.md`）
+- 業種が無いときは `p_industry` / `p_template_version` を**渡さない**（`...(industry ? { p_industry: industry, p_template_version: TEMPLATE_VERSION } : {})`）。
+  `gen types` は既定値つきの引数を省略可の非 null（`p_industry?: string`）で出すので、null は渡せない（既存の `[tenantId]/actions.ts` の `p_pattern_id` と同じ書き方）
 
 **画面**（`SetupWizard` / `PatternsStep`）:
 
-- 業種の状態を 2 つに分ける: 表示用の `industry`（保存済みの業種で始まる）と、**この画面で業種を選んだか**（`picked`）。
-  保存のときは `picked` のときだけ `{ industry, templateVersion: TEMPLATE_VERSION }` を送り、それ以外は送らない（DB の値が残る）。
-  再開した画面で業種を選び直さずに勤務を直して保存しても、業種と版は変わらない
-- 再開したとき（`/setup` の page）: `tenant.industry` を `SetupWizard` に渡し、業種の帯に「業種：介護・福祉」と出す。
+- 業種の状態を 2 つに分ける: 表示用の `industry`（保存済みの `setup_industry` で始まる）と、**この画面でテンプレートを選んだか**（`picked`）。
+  保存のときは `picked` のときだけ `industry` を送る。再開した画面で業種を選び直さずに勤務を直して保存しても、業種と版は変わらない
+- 再開したとき（`/setup` の page）: `isIndustry(tenant.setup_industry)` で絞った値を `SetupWizard` に渡し、業種の帯に「業種：介護・福祉」と出す。
   null（034 より前に勤務を保存した店舗）は今までどおり「保存してある勤務」
-- 「業種を選びなおす」で業種の選択に戻ったら、`industry` と `picked` を戻す（今までどおり。選び直すと `picked` になる）
-- 「次へ」で保存し直すかの判定（`savedSnapshot` / `dirty`）に業種を含める。業種だけ変わった場合も保存する
-  （勤務の行は業種で必ず変わるので実際には起きないが、判定の意味をそろえる）
+- 「業種を選びなおす」で業種の選択に戻ったら、`industry` を null・`picked` を false に戻す（選び直すと `picked` になる）
+- 「次へ」で保存し直すかの判定（`savedSnapshot` / `dirty`）に `picked ? industry : null` を含める（判定の意味を「送るもの全部」にそろえる）
 
 ### 4.3 店舗情報の画面で直す
 
 `settings/general` の `GeneralSettingsClient` に「業種」の `Select` を足す（店舗名・作成周期・週の始まりの下）。
 
-- 選択肢は `INDUSTRIES` と `INDUSTRY_LABELS`。未選択（null）は「選んでいません」の placeholder で出し、`clearable` で未選択に戻せる
+- 選択肢は `INDUSTRIES` と `INDUSTRY_LABELS`。未選択（null）は「選んでいません」の placeholder で出し、`clearable` で未選択に戻せる。
+  page は `isIndustry(tenant.industry)` で絞った値を渡す
 - 説明（`description`）: 「勤務パターンは変わりません」。業種を変えてもテンプレートは当て直さない
 - `updateTenant` の入力と `updateTenantSchema`（`lib/validation/tenants.ts`）に `industry: z.enum(INDUSTRIES, { error: '業種を選び直してください' }).nullable()` を足し、
-  `tenants.industry` に書く。`industry_template_version` は書かない
-- 業種の一覧の定数（`INDUSTRIES` / `INDUSTRY_LABELS`）は `lib/setup/templates.ts` に置いたまま、`lib/validation/` から読む（純関数のファイルで、サーバー専用の依存は無い）
+  `tenants.industry` だけに書く。`setup_industry` / `setup_template_version` は書かない
+- 業種の一覧の定数（`INDUSTRIES` / `INDUSTRY_LABELS` / `isIndustry`）は `lib/setup/templates.ts` に置いたまま、`lib/validation/` から読む（純関数のファイルで、サーバー専用の依存は無い）
 
 ### 4.4 テンプレートを差し替える（`lib/setup/templates.ts`）
 
 - `INDUSTRIES = ['food', 'retail', 'care', 'clinic', 'nursery', 'other']`（ボタンの並び）、ラベルは §2-5
-- `TEMPLATES` を §2-6 の値にする。`TEMPLATE_VERSION = 2` を export する（コメントに「行を変えたら上げる」）
+- `TEMPLATES` を §2-6 の値にする。`TEMPLATE_VERSION = 2` を export する（コメントに「行・時刻・色を変えたら上げる」）
 - お休みの共通の行 `DAYOFF_ROWS` を 休み・希望休・有給 にする（key は `dayoff` / `request` / `paid`）
 - ボタンの添え書き `industryExample()` は働く日の先頭 3 つから作るので、そのまま（例: クリニック・歯科は「日勤・午前・午後 など」）
 - `validation/setup.ts` の `SETUP_PATTERNS_MAX` のコメント「テンプレートは多くて 7 件」を 8 件に直す（介護: 働く日 4 + 明け + お休み 3）
+- 古くなるコメントを直す: `templates.ts` 冒頭の「値は仮のもので、v1 の実データを見て決めたものではない」（→ 034 で v1 の実データから決めた）、
+  `patternsState.ts` の `fromSavedPatterns` の「業種は保存していないので」（業種は保存するようになったが、ペアのスイッチの戻し方は変えない）
 - LP（`(site)/_components/SetupSteps.tsx`）: タグは `INDUSTRIES` から作るので自動で 5 つ（その他を除く）になる。本文の「早番・遅番・公休など」を「早番・遅番・休みなど」に直す。
   LP のデモ（`_lib/demoData.ts` の「公休」）は利用者が付けた名前の例なので変えない
 - 014 のプランの §3.4「業種は保存しない」と §5.3 のテンプレートの表に、034 で変えた旨を 1 行ずつ注記する。AGENTS.md の `setup/` の説明「業種テンプレート（templates。仮の値）」を直す
@@ -209,21 +223,26 @@ create or replace function public.save_setup_patterns(
 ### 4.5 テスト
 
 - `templates.test.ts`: 既存の検査（全行が `patternInputSchema` を通る・色が業種の中で重ならない・key が重ならない・働く日がある）が新しい 6 業種で通る。
-  足すもの: 介護だけペア（夜勤 → 明け）を持ち、明けはお休み / どの業種もお休みが 休み・希望休・有給 / `TEMPLATE_VERSION` が正の整数
-- `validation/setup.test.ts`（無ければ作る）: `industry` と `templateVersion` は両方あるか両方無いときだけ通る / 一覧に無い業種は日本語のエラー / 省略（古いタブ）も通る
-- `validation/tenants.test.ts`（同上）: `updateTenantSchema` が業種の null と 6 つの値を通し、ほかを弾く
-- pgTAP（`supabase/tests/setup.sql`）: `save_setup_patterns` が業種と版を書く / 2 回目に null を渡すと残る / 2 引数で呼べる（古いアプリ）/
-  一覧に無い業種は 23514 / 古い 2 引数の関数が残っていない（`pg_proc` で `save_setup_patterns` が 1 つ）。
-  `tenants` の check（6 つの値が入る・ほかは 23514）は `rls_tenant_isolation.sql` ではなく `setup.sql` に置く（RLS の検査ではない）
+  足すもの: 介護だけペア（夜勤 → 明け）を持ち、明けはお休み / どの業種もお休みが 休み・希望休・有給 / `TEMPLATE_VERSION` が正の整数 /
+  `isIndustry` / **`supabase/schemas/public/tables/tenants.sql` の `industry` と `setup_industry` の check の値が `INDUSTRIES` と同じ**（`node:fs` で読む）。
+  直す期待値: `industryExample('other')` が「日勤・早番・遅番 など」
+- `patternsState.test.ts`: 期待値の「公休」を「休み」に直す（飲食のテンプレートの行の並び）
+- `validation/setup.test.ts`（既存）: `industry` は 6 つの値と省略を通し、一覧に無い値は日本語のエラー
+- `validation/tenants.test.ts`（新規）: `updateTenantSchema` が業種の null と 6 つの値を通し、ほかを日本語のエラーで弾く
+- pgTAP（`supabase/tests/setup.sql`。`plan()` の数を直す）: `save_setup_patterns` が業種と版を 3 列に書く / 2 回目に業種を渡さないと 3 列とも残る /
+  2 引数で呼べる（古いアプリ）/ 一覧に無い業種は 23514 / 業種だけ・版だけは 23514 / 古い 2 引数の関数が残っていない（`pg_proc` で `save_setup_patterns` が 1 つ）/
+  `tenants.industry` を直接 UPDATE しても `setup_*` は変わらない
 - 手で: 新しい店舗で 6 業種を一巡（PC 幅・390px）。業種を選んで「あとで続ける」→ 開き直して帯に業種が出る。店舗情報で業種を変える・外す
 
 ### 4.6 出し方
 
 1. ブランチでスキーマを変え、`npx supabase db reset` → `npx supabase test db` → `gen types`。PR を作り、プレビュー（ブランチ DB）で初期設定を一巡する
-2. **カットオーバーの後**（§2-8）、merge の前に本番へ `npx supabase db push` で migration を入れる（Deploy to production がオフのあいだ。024 §3-10）。
+2. **`db push` はレビューが終わってから。** 本番に入れた後に migration を直すことになったら、入れたものは書き換えず、新しい migration を足す（AGENTS.md「適用済みの migration は書き換えない」）
+3. **カットオーバーの後**（§2-8）、merge の前に本番へ `npx supabase db push` で migration を入れる（Deploy to production がオフのあいだ。024 §3-10）。
    入れた直後から、古いアプリの初期設定は新しい関数（既定値つき）で動く。`migration list` で Local と Remote が揃ったのを見てから merge する
-3. Deploy to production をオンにした後（026 §5 では 11/2〜11/6）に出す場合は、migration だけの PR を先に merge し、本番に入ったのを見てからアプリの PR を merge する
-   （オンのときは migration と Vercel のデプロイのどちらが先か決まっていない。024 §4.8）。**アプリが先に出ると、初期設定のステップ 2 の保存が「関数が無い」で失敗する**
+4. Deploy to production をオンにした後（026 §5 では 11/2〜11/6）に出す場合は、migration だけの PR を先に merge し、本番に入ったのを見てからアプリの PR を merge する
+   （オンのときは migration と Vercel のデプロイのどちらが先か決まっていない。024 §4.8）。**アプリが先に出ると、初期設定のステップ 2 の保存が「関数が無い」で失敗する**。
+   その migration の PR がオンにした直後の最初の merge になるなら、024 §4.8 の確かめ（merge の前後で Auth の画面を比べる）も兼ねる
 
 ## 5. テンプレートの見直し（§3 の結果で埋める）
 
