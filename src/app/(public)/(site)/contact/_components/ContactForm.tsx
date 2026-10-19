@@ -9,8 +9,8 @@ import {
   FileButton,
   Group,
   Image,
+  NativeSelect,
   Paper,
-  Select,
   SimpleGrid,
   Stack,
   Text,
@@ -51,7 +51,11 @@ type Props = {
 /** `id` はサムネイルの key（同じ画像を 2 回選んでも別の添付として扱う） */
 type Attachment = { id: number; blob: Blob; preview: string }
 
-const TOPIC_OPTIONS = Object.entries(CONTACT_TOPICS).map(([value, label]) => ({ value, label }))
+/**
+ * 種類はブラウザ本来の `<select>`（`NativeSelect`）。Mantine の `Select` は読み取り専用の入力欄と hidden の欄でできていて、
+ * ブラウザの `required` が効かない。先頭の空の選択肢は選べないようにし、未選択ならブラウザが吹き出しを出す
+ */
+const TOPIC_ENTRIES = Object.entries(CONTACT_TOPICS)
 
 /** 完了の画面の「別のお問い合わせを送る」で、入力・添付・id を空にして作り直す */
 export function ContactForm({
@@ -88,7 +92,7 @@ function ContactFormBody({
   onAccountLost,
   onAgain,
 }: Props & { onAccountLost: () => void; onAgain: () => void }) {
-  const [topic, setTopic] = useState<string | null>(initialTopic)
+  const [topic, setTopic] = useState<string>(initialTopic ?? '')
   const [email, setEmail] = useState('')
   const [body, setBody] = useState('')
   const [attachments, setAttachments] = useState<Attachment[]>([])
@@ -169,7 +173,7 @@ function ContactFormBody({
 
   const submit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    // 種類の Select は読み取り専用の input なので、ブラウザの required が効かない。画像を送る前にここで止める
+    // 種類と本文はブラウザの required が先に止める。ここは保険（required を外す拡張機能・古いブラウザ）
     setFailed(false)
     if (!topic) {
       setError('お問い合わせの種類を選んでください')
@@ -276,15 +280,23 @@ function ContactFormBody({
           />
         )}
 
-        <Select
+        <NativeSelect
           label="お問い合わせの種類"
-          placeholder="選んでください"
-          data={TOPIC_OPTIONS}
           value={topic}
-          onChange={setTopic}
-          allowDeselect={false}
+          onChange={(e) => setTopic(e.currentTarget.value)}
+          // 未選択のあいだは、ほかの欄の placeholder と同じ色にする（選択肢は文字の色に戻す。色は一覧にも引き継がれる）
+          styles={{ input: { color: topic ? undefined : 'var(--input-placeholder-color)' } }}
           required
-        />
+        >
+          <option value="" disabled>
+            選んでください
+          </option>
+          {TOPIC_ENTRIES.map(([value, label]) => (
+            <option key={value} value={value} style={{ color: 'var(--mantine-color-text)' }}>
+              {label}
+            </option>
+          ))}
+        </NativeSelect>
 
         <Textarea
           label="お問い合わせの内容"
