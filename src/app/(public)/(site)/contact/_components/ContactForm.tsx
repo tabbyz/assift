@@ -150,6 +150,7 @@ function ContactFormBody({
     if (account) data.set('asAccount', '1')
     attachments.forEach((a, i) => data.append('images', a.blob, `image-${i + 1}.jpg`))
 
+    setError(undefined)
     setFailed(false)
     startTransition(async () => {
       try {

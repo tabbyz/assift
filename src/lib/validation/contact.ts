@@ -62,5 +62,8 @@ export const contactSchema = z.object({
   requestId: z.guid({ error: '送信できませんでした。ページを読み込み直してください' }),
   /** 店舗（`?tenant=`）。見えるかは Action が RLS で確かめる */
   tenantId: z.preprocess(blankToUndefined, z.guid().optional().catch(undefined)),
-  digest: z.preprocess(blankToUndefined, z.string().optional().transform(parseDigest)),
+  digest: z.preprocess(
+    blankToUndefined,
+    z.string().optional().transform(parseDigest).catch(undefined)
+  ),
 })

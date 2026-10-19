@@ -178,9 +178,9 @@
 | --- | --- |
 | 枚数・大きさ | 3 枚まで・1 枚 1.5MB・合計 4MB。超えたら書き出す前に失敗にする |
 | 種類 | `sharp(buffer).metadata()`（ヘッダだけ読む）の `format` が `jpeg` / `png` / `webp` のものだけ通す。`sharp` は SVG・TIFF・GIF・HEIF なども読めるので、**画素を読む前に種類で絞る**（特に SVG は画像の形をした文書） |
-| 書き出し直し | `sharp(buffer, { limitInputPixels: 40_000_000 }).rotate().resize(1600, 1600, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 85 }).toBuffer()`。読めなければ例外 → 「この画像は添付できません」 |
+| 書き出し直し | 1 枚ずつ `sharp(buffer, { limitInputPixels: 3000 * 3000 })` → `metadata()` の形式 → `.rotate().resize(1600, 1600, { fit: 'inside', withoutEnlargement: true }).flatten({ background: '#ffffff' }).jpeg({ quality: 85 }).toBuffer()`。読めなければ例外 → 「この画像は添付できません」 |
 | メタデータ | `sharp` は既定で書き出しにメタデータを付けない（`rotate()` で向きを画素に反映してから落とす）。位置情報は残らない |
-| 解凍爆弾 | `limitInputPixels`（4,000 万画素。既定の約 2.7 億より小さく）で、小さいファイルなのに読み込むと巨大になる画像を弾く |
+| 解凍爆弾 | `limitInputPixels`（3,000 × 3,000 = 900 万画素。ブラウザは 1,600px に縮めて送るので余裕がある。§10.4 の 8 回目で 4,000 万から下げた）。超えたら「大きすぎる」 |
 | 送るファイル名 | サーバーが決める（`image-1.jpg`…）。利用者のファイル名は使わない（制御文字・長さ・個人名の混入を避ける） |
 
 - **依存**: `sharp` を `package.json` の `dependencies` に足す（`next` の optionalDependencies と同じ範囲 `^0.35.4`。重複させない）。`serverExternalPackages` の既定に入っているので Next の設定は要らない。
@@ -293,13 +293,14 @@ Missive の導入（032）はフォームが無くても成り立つ。フォー
 | `src/lib/validation/contact.ts`（+ test） | 種類（`CONTACT_TOPICS`）・上限の定数・`contactSchema`・`parseDigest`。任意の欄の `''` は無いものとして扱い、店舗の id とエラー番号は形が違えば失敗にせず捨てる |
 | `src/lib/contact/path.ts`（+ test） | `CONTACT_PATH`・`contactHref({ tenantId, digest, topic })` |
 | `src/lib/contact/render.ts`（+ test） | 件名（改行・制御文字・U+2028/2029 を空白に、先頭 30 文字をコードポイントで切る）と本文（返信先・種類・アカウント・店舗・エラー番号・添付・ブラウザを先に、利用者の入力を後に置き、各行の頭に `| ` を付ける。§10.4） |
-| `src/lib/contact/attachments.ts`（+ test） | 枚数・大きさ → `metadata()` の形式（jpeg / png / webp）→ `rotate` → 長い辺 1,600px → 透過を白に → JPEG（品質 85）。`limitInputPixels` 4,000 万。テストの画像は `sharp` で作る（SVG・GIF・先頭だけ JPEG のファイル・EXIF が落ちること・解凍爆弾） |
-| `src/lib/contact/send.ts` | Resend の `POST /emails`（15 秒で打ち切り）。`Idempotency-Key` は `contact/<requestId>/<本文の SHA-256>`（§10.2-1）。409 の `concurrent_idempotent_requests` は成功 |
-| `src/app/(public)/(site)/contact/` | `page.tsx`（店舗は RLS の `getTenant` で見えたときだけ画面に出す）/ `searchParams.ts` / `actions.ts`（BotID → Zod → ハニーポット → 添付 → 自動で付ける情報 → 送信）/ `_components/ContactForm.tsx`（+ `.module.css`）/ `_lib/resizeImage.ts` |
+| `src/lib/contact/attachments.ts`（+ test） | 枚数・大きさ → 1 枚ずつ `metadata()` の形式（jpeg / png / webp）→ `rotate` → 長い辺 1,600px → 透過を白に → JPEG（品質 85）。`limitInputPixels` 3,000 × 3,000。テストの画像は `sharp` で作る（SVG・GIF・先頭だけ JPEG のファイル・EXIF が落ちること・解凍爆弾） |
+| `src/lib/contact/send.ts` | Resend の `POST /emails`（15 秒で打ち切り）。`Idempotency-Key` は `contact/<requestId>/<本文の SHA-256>`（§10.2-1）。409 も失敗（§10.4 の 1 回目） |
+| `src/lib/contact/tenant.ts` | `readContactTenant`。`getTenant` を、読めなくても問い合わせを止めない形で包む（Next の制御の例外は投げ直す） |
+| `src/app/(public)/(site)/contact/` | `page.tsx`（店舗は RLS で見えたときだけ画面に出す。フォームの `key` は URL の初期値）/ `searchParams.ts` / `actions.ts`（BotID → ハニーポット → Zod → 送れる設定か → 添付 → 自動で付ける情報 → 送信。返信先は入力されたアドレスを優先）/ `_components/ContactForm.tsx`（Mantine の style props だけ。CSS Modules は使わない）/ `_lib/resizeImage.ts` |
 | `next.config.ts` | `withBotId()` で包む。`experimental.serverActions.bodySizeLimit: '4mb'` |
 | `src/instrumentation-client.ts` | `initBotId({ protect: [{ path: '/contact', method: 'POST' }] })`。開発では呼ばない（§10.2-3） |
 | `src/proxy.ts` | matcher から BotID の中継のパスを外す（前方一致。§10.2-4） |
-| `ErrorPanel`・`errorText.ts`・`[tenantId]/error.tsx` | エラー画面の問い合わせ先をフォームへ（エラー番号と店舗（`contactTenantId`）を引き継ぐ）。管理画面のパス（`/-`）はフォームを開けないのでアドレスのまま（`usePathname()` で決める）。global-error はアドレスのまま |
+| `ErrorPanel`・`errorText.ts` | エラー画面の問い合わせ先をフォームへ（エラー番号と、URL の店舗（`useParams`）を引き継ぐ）。管理画面のパス（`/-`）と `/contact` 自身はアドレス（`usePathname()` で決める）。global-error はアドレスのまま |
 | `StaffLimitLock`・`StaffLimitModal`・`BillingClient` | `mailto:` → `contactHref({ topic: 'billing' … })`。モーダルの中のリンクは押したらモーダルを閉じる |
 | 規約・ポリシーのページの末尾 | 「assift運営（お問い合わせ：https://assift.com/contact）」。PDF でも渡すので、リンクの文字に URL を書く（`TERMS.contactUrl`） |
 | ポリシー 2. / 6. / 窓口 | お問い合わせの内容に「添付された画像」「フォームから送信した場合は、ブラウザの種類（ログイン中は、アカウントのメールアドレスとID、開いていた店舗の名前とIDも）」、Vercel に「不正な送信の判定」、窓口をフォーム（URL を併記）に |
@@ -350,4 +351,5 @@ Missive の導入（032）はフォームが無くても成り立つ。フォー
 | 8 | 送信のあとに同じページ（`/contact`）へ移っても、完了の表示と前の id が残る / サーバーの画素数の上限（4,000 万）が大きすぎ、3 枚を同時に展開すると関数のメモリが尽きうる | ナビゲーションのたびにフォームを作り直す（サーバーで `key`）/ 上限を 3,000 × 3,000 に下げ、1 枚ずつ書き出す。あわせて、画素数の超過は「大きすぎる」と伝える・エラー画面と上限のモーダルは URL の店舗を引き継ぐ（`useParams`）・BotID のクライアントを遅れて読む（全ページの最初の chunk に入れない）・コメントの「末尾」を「先頭」に |
 | 9 | 8 回目のフォームの作り直し（描画ごとの乱数の `key`）は、Action が cookie を更新して今のページが描き直されたときにも作り直し、送信の結果や入力が消える / 種類の Select はブラウザの required が効かず、画像を送ってからサーバーで弾かれる / ポリシーは「識別子」と書くが、メールには店舗の名前とアカウントのアドレスも入る | `key` を URL の初期値（種類・店舗・エラー番号）から作る。同じ URL で次を送るのは、完了の画面の「別のお問い合わせを送る」で作り直す / 送る前に種類を確かめる / ポリシーを「アカウントのメールアドレスとID、開いていた店舗の名前とID」に。**`bodySizeLimit` を全部の Action に効かせるのは受け入れたトレードオフのまま**（§4.7。お問い合わせだけ Route Handler にすると、`runAction`・BotID・`FormData` の扱いを別に持つことになる） |
 | 10 | 8 回目に BotID のクライアントを動的 import にしたため、chunk の読み込みに失敗すると `fetch` が包まれず、判定のヘッダの無い送信が必ずボットと判定されて送れなくなる | 静的な import に戻す（全ページで 6KB ほど）。あわせて、画像を選び直しても失敗の案内（アドレス）を消さない・使われない export を外す・AGENTS.md に `lib/contact/tenant` を足す。回数の制限（Firewall）と `bodySizeLimit` の指摘は、§4.6・§4.7 の判断のまま |
-| 11 | （§10.5） | |
+| 11 | プラン・AGENTS.md の記述が今のコードと食い違う（`contactTenantId`・`.module.css`・409 を成功・4,000 万画素・Action の順番・CSP の例外の一覧に BotID の中継が無い） | 記述を今の実装に揃えた。あわせて、エラー番号の欄に文字列でない値が来ても失敗にせず捨てる・送り直すときに前のエラーを消す |
+| 12 | （§10.5） | |

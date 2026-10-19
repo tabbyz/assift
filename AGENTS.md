@@ -99,7 +99,7 @@ src/
     shifts/                       key（セルの Map）/ applyAssign（楽観更新。assign_shift と同じ規則）/ satisfaction（必要人数の充足）/ count（集計）/ planDefaultPatterns（デフォルト勤務パターンの行を組む純関数）/ table（エクスポートが共有する表の型）
     shares/                       expiry（公開期限。v1 の DATE_LIMIT = 6）/ code（8 文字のコード）
     security/                     CSP（022）。csp（nonce の生成・方針の文字列・ヘッダ名。純関数。proxy と root layout が使う。
-                                  レスポンスの方針を付けない唯一の例外は PDF の応答で、その判定は lib/export/path の isPdfExportPath）
+                                  レスポンスの方針を付けない例外は PDF の応答（判定は lib/export/path の isPdfExportPath）と、proxy の matcher から外した BotID の中継のパス（031。Vercel の応答をそのまま返す））
     site/                         サイト共通のメタデータの文言（028）。metadata（SITE_NAME / SITE_DESCRIPTION）
     announce/                     カットオーバーの告知（030）。content（文面のデータ。文言の正）/ render（テキスト版と HTML 版）/ recipients（宛先の CSV・100 通ずつの区切り（RFC から外れる形は最後に 1 通ずつ）・Idempotency-Key・続きの位置）
     contact/                      お問い合わせ（031）。path（contactHref。アプリの各所のリンク）/ render（件名と本文）/ attachments（server-only。sharp で JPEG に書き出し直す）/
@@ -351,7 +351,7 @@ Stripe の API の版は SDK が固定する最新（`lib/billing/stripe.ts`）�
 
 - 最初に CSP の nonce（022）を作り、**リクエストヘッダ**（`x-nonce` と `Content-Security-Policy`。Next が後者から nonce を拾って自分の `<script>` に付ける）と
   返す**レスポンス**に載せる（段ごとではなく `proxy()` の末尾で 1 回。段を足しても付け忘れない）。例外は PDF の応答（`isPdfExportPath()`。完全一致。
-  HTML を描かない経路で、ブラウザのビューアへの影響を実機で確かめられないため）だけで、**ほかはパスで除外しない**（proxy は応答の種類を見られず、
+  HTML を描かない経路で、ブラウザのビューアへの影響を実機で確かめられないため）と、matcher から外した BotID の中継のパス（031。下記）だけで、**ほかはパスで除外しない**（proxy は応答の種類を見られず、
   存在しないパスはどれも 404 の HTML になる。Route Handler の中の `notFound()` は本文の無い 404。CSV に付いても害は無い）。
   段が `{ request }` を渡し忘れると描画側に nonce が届かない。root layout の `assertNonce()` が名指しする（下記「CSP」）。
   rewrite（`/404`）には `{ request }` を渡す（渡さないと nonce の無い元のヘッダで描かれる）
