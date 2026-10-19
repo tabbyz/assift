@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import { Container, Stack, Text, Title } from '@mantine/core'
-import { LinkAnchor } from '@/components/LinkAnchor'
 import { readContactTenant } from '@/lib/contact/tenant'
 import { parseDigest } from '@/lib/contact/path'
 import { getAuthUser } from '@/utils/auth/current'
@@ -26,12 +25,6 @@ export default async function ContactPage({ searchParams }: PageProps<'/contact'
     <Container size={720} py="xl">
       <Stack gap="xl">
         <Stack gap="xs">
-          {user && (
-            // この枠（LP のヘッダー）には店舗へ戻る導線が無いので、ログイン中だけ置く
-            <LinkAnchor href={tenant ? `/tenants/${tenant.id}` : '/tenants'} size="sm">
-              ← {tenant ? `${tenant.name}に戻る` : 'アプリに戻る'}
-            </LinkAnchor>
-          )}
           <Title order={1} fz={{ base: 22, xs: 34 }}>
             お問い合わせ
           </Title>

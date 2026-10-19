@@ -7,9 +7,10 @@ import classes from '../Site.module.css'
 /**
  * LP と静的ページ（規約・ポリシー・特商法表記）のヘッダー。
  * LP の見出しへの行き先は `/#…`。LP の上ではその見出しへスクロールし、ほかのページからは LP へ移る
- * （`#price` だけにすると `/terms` の「料金」条へ飛んでしまう）
+ * （`#price` だけにすると `/terms` の「料金」条へ飛んでしまう）。
+ * ログイン中は「ログイン」「無料ではじめる」の代わりに「アプリを開く」（`/tenants` が直近の店舗へ送る。031）
  */
-export function SiteHeader() {
+export function SiteHeader({ loggedIn }: { loggedIn: boolean }) {
   return (
     <header className={classes.header}>
       <Container size={1120} px={{ base: 'md', sm: 'lg' }}>
@@ -27,12 +28,20 @@ export function SiteHeader() {
                 よくある質問
               </Link>
             </Group>
-            <Link href="/login" className={classes.loginLink}>
-              ログイン
-            </Link>
-            <LinkButton href="/signup" radius="xl">
-              無料ではじめる
-            </LinkButton>
+            {loggedIn ? (
+              <LinkButton href="/tenants" radius="xl">
+                アプリを開く
+              </LinkButton>
+            ) : (
+              <>
+                <Link href="/login" className={classes.loginLink}>
+                  ログイン
+                </Link>
+                <LinkButton href="/signup" radius="xl">
+                  無料ではじめる
+                </LinkButton>
+              </>
+            )}
           </Group>
         </Group>
       </Container>

@@ -1,4 +1,5 @@
 import { Zen_Kaku_Gothic_New } from 'next/font/google'
+import { getAuthUser } from '@/utils/auth/current'
 import { SiteFooter } from './_components/SiteFooter'
 import { SiteHeader } from './_components/SiteHeader'
 import classes from './Site.module.css'
@@ -16,12 +17,14 @@ const siteFont = Zen_Kaku_Gothic_New({
 
 /**
  * LP など、ログイン前に見るページの枠（ヘッダー + フッター）。
- * 公開シフト表（`/share/[code]`）はこのグループの外に置く（全画面の表なので枠を被せない。009 §7.1）
+ * 公開シフト表（`/share/[code]`）はこのグループの外に置く（全画面の表なので枠を被せない。009 §7.1）。
+ * ログイン中も開く（規約・ポリシー・お問い合わせ。LP は proxy が `/tenants` へ送る）ので、ヘッダーの右上をログインの有無で変える（031）
  */
-export default function SiteLayout({ children }: LayoutProps<'/'>) {
+export default async function SiteLayout({ children }: LayoutProps<'/'>) {
+  const user = await getAuthUser()
   return (
     <div className={`${siteFont.variable} ${classes.site}`}>
-      <SiteHeader />
+      <SiteHeader loggedIn={Boolean(user)} />
       {children}
       <SiteFooter />
     </div>
