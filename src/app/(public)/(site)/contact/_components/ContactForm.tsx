@@ -55,16 +55,26 @@ type Attachment = { id: number; blob: Blob; preview: string }
 const TOPIC_OPTIONS = Object.entries(CONTACT_TOPICS).map(([value, label]) => ({ value, label }))
 
 /** 完了の画面の「別のお問い合わせを送る」で、入力・添付・id を空にして作り直す */
-export function ContactForm({ account: initialAccount, ...props }: Props) {
+export function ContactForm({
+  account: initialAccount,
+  loggedIn: initialLoggedIn,
+  ...props
+}: Props) {
   const [round, setRound] = useState(0)
-  // 作り直しても、送るときに分かったログインの切れ（`contact_email_required`）は引き継ぐ
+  // 作り直しても、送るときに分かったログインの切れ（`contact_email_required`）は引き継ぐ。
+  // 切れたあとはアカウントも店舗も添えられないので、ログイン中の説明も消す
   const [account, setAccount] = useState(initialAccount)
+  const [loggedIn, setLoggedIn] = useState(initialLoggedIn)
   return (
     <ContactFormBody
       key={round}
       {...props}
+      loggedIn={loggedIn}
       account={account}
-      onAccountLost={() => setAccount(null)}
+      onAccountLost={() => {
+        setAccount(null)
+        setLoggedIn(false)
+      }}
       onAgain={() => setRound((r) => r + 1)}
     />
   )
@@ -184,7 +194,7 @@ function ContactFormBody({
     setError(undefined)
     startTransition(async () => {
       try {
-        const r = await sendContact(data)
+        const r = await withTimeout(sendContact(data), SEND_TIMEOUT_MS)
         if (!r.ok) {
           setError(r.error)
           // セッションが切れていた: 入力はそのまま残し、返信先の欄を出す（欄を埋めれば送れるので、アドレスは案内しない）
@@ -198,7 +208,7 @@ function ContactFormBody({
         }
         setSent(r.data)
       } catch {
-        // 大きさの上限（bodySizeLimit）や通信の失敗は Action の外で起きる
+        // 大きさの上限（bodySizeLimit）・通信の失敗・時間切れは Action の外で起きる
         setError(CONTACT_SEND_FAILED_MESSAGE)
         setFailed(true)
       }
@@ -383,3 +393,17 @@ function ContactFormBody({
 }
 
 const noopSubscribe = () => () => {}
+
+/**
+ * 送信の待ちの上限。BotID の判定のスクリプトが読めないと、送信の fetch が返らないまま止まることがある（`botid` の実装）。
+ * 遅い回線で画像を 3.5MB 送る時間を見て 90 秒。時間切れのあとに届いても、同じ id・同じ内容の送り直しは Resend が 1 通にまとめる
+ */
+const SEND_TIMEOUT_MS = 90_000
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('timeout')), ms)
+  })
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
+}

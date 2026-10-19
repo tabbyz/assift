@@ -17,7 +17,7 @@ export type ContactAttachment = { filename: string; content: Buffer }
 /** 画素を読む前に通す形式。`sharp` は SVG（画像の形をした文書）・TIFF・GIF・HEIF なども読めるので、ここで絞る（031 §4.7） */
 const ALLOWED_FORMATS = new Set(['jpeg', 'png', 'webp'])
 /**
- * 読み込むと巨大になる画像（解凍爆弾）を弾く。ブラウザは長い辺 1,600px に縮めて送る（最大 256 万画素）ので、
+ * 読み込むと巨大になる画像（解凍爆弾）を弾く。ブラウザは 250 万画素以下に縮めて送る（`contactImageSize`）ので、
  * 余裕を見て 3,000 × 3,000（900 万画素。RGBA で約 36MB）。`sharp` の既定（約 2.7 億画素）では、
  * ブラウザを通さずに送られた画像を展開するだけで関数のメモリが尽きうる
  */
