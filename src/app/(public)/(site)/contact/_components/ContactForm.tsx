@@ -31,6 +31,7 @@ import {
   CONTACT_IMAGE_UNREADABLE_MESSAGE,
   CONTACT_IMAGES_LIMIT_MESSAGE,
   CONTACT_IMAGES_TOTAL_MAX_BYTES,
+  CONTACT_SEND_FAILED_MESSAGE,
   CONTACT_TOPICS,
   type ContactTopic,
 } from '@/lib/validation/contact'
@@ -72,46 +73,42 @@ export function ContactForm({ account: initialAccount, tenant, digest, initialTo
   const resetFileInput = useRef<() => void>(null)
 
   /**
-   * 選んだ画像を縮小して足す。読めない画像・上限を超える画像だけを外し、ほかは足す（理由は 1 つにまとめて出す）。
+   * 選んだ画像を 1 枚ずつ縮小して足す（並行にすると、スマホで大きな写真を同時に展開してメモリが足りなくなる）。
+   * 読めない画像・上限を超える画像は外し、空きがある限り後ろの画像を試す。外した理由は 1 つにまとめて出す。
    * 縮小のあいだは外すボタンと送信を止めるので、`attachments` はこの間に変わらない
    */
   const addImages = async (files: File[]) => {
     resetFileInput.current?.()
-    const room = CONTACT_IMAGE_MAX_COUNT - attachments.length
-    if (files.length === 0 || room <= 0) return
+    if (files.length === 0 || attachments.length >= CONTACT_IMAGE_MAX_COUNT) return
     setIsResizing(true)
     setError(undefined)
     try {
-      const resized = await Promise.all(
-        files.slice(0, room).map(async (file) => {
-          try {
-            const blob = await resizeImage(file)
-            return { blob, preview: await toDataUrl(blob) }
-          } catch {
-            return null
-          }
-        })
-      )
-      let message = resized.includes(null)
-        ? CONTACT_IMAGE_UNREADABLE_MESSAGE
-        : files.length > room
-          ? CONTACT_IMAGES_LIMIT_MESSAGE
-          : undefined
-      // サーバーと同じ上限（1 枚・合計）。超えると送信のときに断られるので、選んだ時点で外す
       const next = [...attachments]
       let total = next.reduce((sum, a) => sum + a.blob.size, 0)
-      for (const r of resized) {
-        if (!r) continue
-        if (r.blob.size > CONTACT_IMAGE_MAX_BYTES) {
+      let message: string | undefined
+      for (const file of files) {
+        if (next.length >= CONTACT_IMAGE_MAX_COUNT) {
+          message ??= CONTACT_IMAGES_LIMIT_MESSAGE
+          break
+        }
+        let blob: Blob
+        try {
+          blob = await resizeImage(file)
+        } catch {
+          message ??= CONTACT_IMAGE_UNREADABLE_MESSAGE
+          continue
+        }
+        // サーバーと同じ上限（1 枚・合計）。超えると送信のときに断られるので、選んだ時点で外す
+        if (blob.size > CONTACT_IMAGE_MAX_BYTES) {
           message ??= CONTACT_IMAGE_TOO_LARGE_MESSAGE
           continue
         }
-        if (total + r.blob.size > CONTACT_IMAGES_TOTAL_MAX_BYTES) {
+        if (total + blob.size > CONTACT_IMAGES_TOTAL_MAX_BYTES) {
           message ??= CONTACT_IMAGES_LIMIT_MESSAGE
           continue
         }
-        total += r.blob.size
-        next.push({ id: nextAttachmentId.current++, ...r })
+        total += blob.size
+        next.push({ id: nextAttachmentId.current++, blob, preview: await toDataUrl(blob) })
       }
       setAttachments(next)
       setError(message)
@@ -138,18 +135,16 @@ export function ContactForm({ account: initialAccount, tenant, digest, initialTo
         const r = await sendContact(data)
         if (!r.ok) {
           setError(r.error)
-          if (r.code === 'contact_email_required') {
-            // 入力はそのまま残し、返信先の欄を出す（アドレスの案内は出さない。欄を埋めれば送れる）
-            setAccount(null)
-            return
-          }
-          setFailed(true)
+          // 入力の誤りは直せば送れるので、代わりのアドレスは送れなかったときだけ案内する
+          setFailed(r.error === CONTACT_SEND_FAILED_MESSAGE)
+          // セッションが切れていた: 入力はそのまま残し、返信先の欄を出す
+          if (r.code === 'contact_email_required') setAccount(null)
           return
         }
         setSent(r.data)
       } catch {
         // 大きさの上限（bodySizeLimit）や通信の失敗は Action の外で起きる
-        setError('送信できませんでした。時間をおいてもう一度お試しください')
+        setError(CONTACT_SEND_FAILED_MESSAGE)
         setFailed(true)
       }
     })

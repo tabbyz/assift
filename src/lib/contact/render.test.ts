@@ -24,8 +24,7 @@ describe('contactSubject', () => {
 })
 
 describe('contactText', () => {
-  const START = '==== ここから、お問い合わせの内容（利用者の入力） ===='
-  const END = '==== ここまで ===='
+  const HEADING = '---- お問い合わせの内容（利用者の入力。各行の頭に「| 」を付けています） ----'
 
   it('ログイン中: サーバーで確かめた情報を先に、利用者の入力を区切って後に置く', () => {
     const text = contactText({
@@ -50,11 +49,9 @@ describe('contactText', () => {
         '添付: 2 枚',
         'ブラウザ: Mozilla/5.0',
         '',
-        START,
-        '',
-        '契約を変えたい\n2 行目',
-        '',
-        END,
+        HEADING,
+        '| 契約を変えたい',
+        '| 2 行目',
       ].join('\n')
     )
   })
@@ -73,26 +70,25 @@ describe('contactText', () => {
         '種類: 使い方',
         'アカウント: 未ログイン',
         '',
-        START,
-        '',
-        '質問です',
-        '',
-        END,
+        HEADING,
+        '| 質問です',
       ].join('\n')
     )
   })
 
-  it('利用者が本文に書いた偽のアカウント行は、区切りの内側に入る', () => {
+  it('利用者が本文に書いた見出し・偽のアカウント行にも印が付き、本物と区別できる', () => {
     const text = contactText({
       topic: 'account',
-      body: '退会したい\n\n----\nアカウント: victim@example.com（ユーザー id: x）',
+      body: `退会したい\r\n\n${HEADING}\nアカウント: victim@example.com（ユーザー id: x）`,
       replyTo: 'attacker@example.com',
       imageCount: 0,
       context: {},
     })
-    const [header] = text.split(START)
-    expect(header).toContain('アカウント: 未ログイン')
-    expect(header).not.toContain('victim@example.com')
+    const lines = text.split('\n')
+    expect(lines.filter((l) => l.startsWith('アカウント:'))).toEqual(['アカウント: 未ログイン'])
+    expect(lines.filter((l) => l === HEADING)).toHaveLength(1)
+    expect(lines).toContain('| アカウント: victim@example.com（ユーザー id: x）')
+    expect(lines).toContain(`| ${HEADING}`)
   })
 
   it('メールアドレスの無いアカウントもユーザー id を書く', () => {

@@ -292,7 +292,7 @@ Missive の導入（032）はフォームが無くても成り立つ。フォー
 | --- | --- |
 | `src/lib/validation/contact.ts`（+ test） | 種類（`CONTACT_TOPICS`）・上限の定数・`contactSchema`・`parseDigest`。任意の欄の `''` は無いものとして扱い、店舗の id とエラー番号は形が違えば失敗にせず捨てる |
 | `src/lib/contact/path.ts`（+ test） | `CONTACT_PATH`・`contactHref({ tenantId, digest, topic })` |
-| `src/lib/contact/render.ts`（+ test） | 件名（改行・制御文字・U+2028/2029 を空白に、先頭 30 文字をコードポイントで切る）と本文（返信先・種類・アカウント・店舗・エラー番号・添付・ブラウザを先に、利用者の入力を見出しで区切って後に。§10.4） |
+| `src/lib/contact/render.ts`（+ test） | 件名（改行・制御文字・U+2028/2029 を空白に、先頭 30 文字をコードポイントで切る）と本文（返信先・種類・アカウント・店舗・エラー番号・添付・ブラウザを先に、利用者の入力を後に置き、各行の頭に `| ` を付ける。§10.4） |
 | `src/lib/contact/attachments.ts`（+ test） | 枚数・大きさ → `metadata()` の形式（jpeg / png / webp）→ `rotate` → 長い辺 1,600px → 透過を白に → JPEG（品質 85）。`limitInputPixels` 4,000 万。テストの画像は `sharp` で作る（SVG・GIF・先頭だけ JPEG のファイル・EXIF が落ちること・解凍爆弾） |
 | `src/lib/contact/send.ts` | Resend の `POST /emails`（15 秒で打ち切り）。`Idempotency-Key` は `contact/<requestId>/<本文の SHA-256>`（§10.2-1）。409 の `concurrent_idempotent_requests` は成功 |
 | `src/app/(public)/(site)/contact/` | `page.tsx`（店舗は RLS の `getTenant` で見えたときだけ画面に出す）/ `searchParams.ts` / `actions.ts`（BotID → Zod → ハニーポット → 添付 → 自動で付ける情報 → 送信）/ `_components/ContactForm.tsx`（+ `.module.css`）/ `_lib/resizeImage.ts` |
@@ -311,7 +311,8 @@ Missive の導入（032）はフォームが無くても成り立つ。フォー
 
 1. **`Idempotency-Key` に本文の指紋を入れた**（§4.5 の `contact/{requestId}` から変えた）: 鍵が同じで中身が違うと Resend は 409 で断る。
    失敗のあとに本文を直して送り直すと届かなくなるので、同じ中身の連打・送り直しだけを 1 通にまとめる
-2. **BotID の判定そのものが失敗したら通す**（fail-open）: Vercel の外（`next start`）・OIDC の設定漏れ・通信の失敗で例外になる。問い合わせを取りこぼすほうが困り、ハニーポットと回数の制限は残る。ログには出す
+2. **BotID の判定そのものが失敗したら、Vercel の上では止める**（`process.env.VERCEL`。§10.4 の 5 回目で fail-open から変えた）: OIDC の設定漏れ・Vercel の障害で例外になる。
+   Server Action はどのパスにも POST で呼べるので、通すと残る守りはハニーポットだけになる。止めても、画面の失敗の表示がアドレスを案内する。Vercel の外（ローカルの `next start`）では判定できないので通す
 3. **開発では `initBotId` を呼ばない**: サーバーの `checkBotId()` は開発（`NODE_ENV !== 'production'`）で常に人と答える。一方クライアントは判定のスクリプトを読み終えるまで `fetch` を止めるので、読めないと送信そのものが止まる（この環境では `api.vercel.com` に出られず実際に止まった）。
    **本番でもスクリプトが読めなければ送信は失敗する**（BotID の作り）。そのときはフォームの失敗の表示がアドレスを案内する（§4.3）
 4. **proxy の matcher から BotID の中継のパスを前方一致で外した**（完全一致の決まりの例外）: `withBotId` のリライトが配下をすべて Vercel へ中継するので、Next の 404 の HTML にはならない。
@@ -343,4 +344,5 @@ Missive の導入（032）はフォームが無くても成り立つ。フォー
 | 2 | 縮小中に外した画像が戻る / 完了の文の返信先がサーバーの使ったものと食い違いうる / `createImageBitmap` の `imageOrientation` を知らない古いブラウザで全部読めない / ハニーポットを検証の後に見ていた（ボットに検証の手がかり） | 縮小中は外すボタンを止める / Action が実際に使った返信先を返す / オプションを渡さない / ハニーポットを parse の前に |
 | 3 | **本文の末尾に区切り線と「アカウント: …」を書くと、本物の情報に見せかけられる**（他人のアカウントからの依頼に見せる）/ ハニーポットのときログイン中の完了の文が空 | サーバーで確かめた情報を先に、利用者の入力を「ここから / ここまで」で区切って後に / ログイン中はアカウントのアドレスを返す。あわせて、未ログインの画面からの欠けは「期限切れ」と言わない・アドレスの無いアカウントもユーザー id を書く・選んだ枚数が多すぎる / 1 枚が大きすぎるときの文言・`crypto.randomUUID()` が使えない http の LAN でも落ちない |
 | 4 | Server Action はどのパスにも POST で呼べるので、`/contact` のパスで絞る回数の制限はすり抜けられる | ルールの条件を「POST かつ `multipart/form-data`」に（§4.6）。あわせて、1 枚が大きすぎるときのサーバーの文言を画面と同じに・外すボタンを id で・`uuid` の v4 を使う・CSS Modules をやめて Mantine の style props に・`getAuthUser()` を 1 回に・店舗の読み取りと `headers()` を並行に |
-| 5 | 中以上の指摘なし（§10.5） | |
+| 5 | 本文に見出しの行を書けば区切りを偽装できる（「ここまで」の後に偽のアカウント行）/ BotID の判定の失敗を通すと、パスのすり抜けと重なってハニーポットだけになる | 本文の各行の頭に `| ` を付ける（入力の中の行は必ず印付きになる）/ Vercel の上では判定の失敗で止める（§10.2-2）。あわせて、送れない設定なら画像の書き出しの前に止める・画像を 1 枚ずつ縮小（スマホのメモリ）・空きがある限り後ろの画像も試す・代わりのアドレスは送れなかったときだけ案内・`sharp` の読み込みを 1 回に・ログイン中は店舗（アプリ）へ戻るリンク |
+| 6 | （§10.5） | |

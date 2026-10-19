@@ -28,14 +28,13 @@ export async function sendContactEmail(email: ContactEmail): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY
   const inbox = process.env.CONTACT_INBOX
   if (!apiKey || !inbox) {
-    if (process.env.NODE_ENV === 'development') {
-      const images = email.attachments.map((a) => `${a.filename}（${a.content.length} バイト）`)
-      console.info(
-        `[contact] RESEND_API_KEY / CONTACT_INBOX が無いので送らずに表示します\n件名: ${email.subject}\nReply-To: ${email.replyTo}\n添付: ${images.join('、') || 'なし'}\n\n${email.text}`
-      )
-      return
-    }
-    throw new Error('RESEND_API_KEY と CONTACT_INBOX を設定してください（031 §4.9）')
+    // 開発のほかは投げる。開発は送らずに中身を出す
+    assertContactMailConfigured()
+    const images = email.attachments.map((a) => `${a.filename}（${a.content.length} バイト）`)
+    console.info(
+      `[contact] RESEND_API_KEY / CONTACT_INBOX が無いので送らずに表示します\n件名: ${email.subject}\nReply-To: ${email.replyTo}\n添付: ${images.join('、') || 'なし'}\n\n${email.text}`
+    )
+    return
   }
 
   const payload = JSON.stringify({
@@ -74,4 +73,12 @@ export async function sendContactEmail(email: ContactEmail): Promise<void> {
  */
 export function idempotencyKey(requestId: string, payload: string): string {
   return `contact/${requestId}/${createHash('sha256').update(payload).digest('hex')}`
+}
+
+/** 送れる設定か。開発は設定が無くてもコンソールに出すので通す。ほかの環境で無ければ投げる */
+export function assertContactMailConfigured(): void {
+  if (process.env.NODE_ENV === 'development') return
+  if (!process.env.RESEND_API_KEY || !process.env.CONTACT_INBOX) {
+    throw new Error('RESEND_API_KEY と CONTACT_INBOX を設定してください（031 §4.9）')
+  }
 }

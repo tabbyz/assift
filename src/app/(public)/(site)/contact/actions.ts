@@ -7,12 +7,10 @@ import type { ActionResult } from '@/lib/actions/result'
 import { runAction } from '@/lib/actions/run'
 import { rewriteContactImages } from '@/lib/contact/attachments'
 import { contactSubject, contactText, type ContactContext } from '@/lib/contact/render'
-import { sendContactEmail } from '@/lib/contact/send'
+import { assertContactMailConfigured, sendContactEmail } from '@/lib/contact/send'
 import { readContactTenant } from '@/lib/contact/tenant'
-import { contactSchema } from '@/lib/validation/contact'
+import { CONTACT_SEND_FAILED_MESSAGE, contactSchema } from '@/lib/validation/contact'
 import { getAuthUser } from '@/utils/auth/current'
-
-const SEND_FAILED = '送信できませんでした。時間をおいてもう一度お試しください'
 
 /** 送った返信先。`fromAccount` はログイン中のアカウントのアドレスか（完了の文を変える） */
 export type ContactSent = { replyTo: string; fromAccount: boolean }
@@ -61,6 +59,14 @@ export async function sendContact(formData: FormData): Promise<ActionResult<Cont
       )
     }
 
+    // 送れない設定なら、画像の書き出し（重い）の前に止める
+    try {
+      assertContactMailConfigured()
+    } catch (error) {
+      console.error('[contact] 送信の設定がありません', error)
+      fail(CONTACT_SEND_FAILED_MESSAGE)
+    }
+
     const files = formData.getAll('images').filter((value): value is File => value instanceof File)
     const attachments = await rewriteContactImages(files)
 
@@ -92,7 +98,7 @@ export async function sendContact(formData: FormData): Promise<ActionResult<Cont
       })
     } catch (error) {
       console.error('[contact] 送信に失敗しました', error)
-      fail(SEND_FAILED)
+      fail(CONTACT_SEND_FAILED_MESSAGE)
     }
     return { replyTo, fromAccount: Boolean(user?.email) }
   })
@@ -100,16 +106,22 @@ export async function sendContact(formData: FormData): Promise<ActionResult<Cont
 
 /**
  * BotID（031 §4.6）。ボットと判定されたら止める（人が誤判定されたときにやり直せるよう、失敗として返す）。
- * 判定そのものが失敗したとき（Vercel の外・OIDC の設定漏れ・通信）は通す: 問い合わせを取りこぼすほうが困り、
- * ハニーポットと回数の制限は残る。開発（`NODE_ENV !== 'production'`）では BotID が常に人と答える
+ *
+ * 判定そのものが失敗したとき（OIDC の設定漏れ・Vercel の障害）は、**Vercel の上では止める**: Server Action はどのパスにも
+ * POST で呼べるので、判定が効かないと残る守りはハニーポットだけになる。止めても、画面の失敗の表示がアドレスを案内する（031 §4.3）。
+ * Vercel の外（ローカルの `next start`）では判定できないので通す。開発（`NODE_ENV !== 'production'`）では BotID が常に人と答える
  */
 async function assertHuman() {
   let isBot: boolean
   try {
     isBot = (await checkBotId()).isBot
   } catch (error) {
-    console.error('[contact] BotID の判定に失敗したので通します', error)
+    if (process.env.VERCEL) {
+      console.error('[contact] BotID の判定に失敗したので止めます', error)
+      throw new ActionError(CONTACT_SEND_FAILED_MESSAGE)
+    }
+    console.warn('[contact] Vercel の外なので BotID の判定を飛ばします', error)
     return
   }
-  if (isBot) throw new ActionError(SEND_FAILED)
+  if (isBot) throw new ActionError(CONTACT_SEND_FAILED_MESSAGE)
 }

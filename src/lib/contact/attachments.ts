@@ -53,9 +53,10 @@ async function rewriteImage(input: Buffer, index: number, maxPixels: number): Pr
   const unreadable = new ActionError(`${index + 1}枚目: ${CONTACT_IMAGE_UNREADABLE_MESSAGE}`)
   try {
     // metadata() はヘッダだけを読む。形式が合わなければ画素を読まずに止める
-    const { format } = await sharp(input, { limitInputPixels: maxPixels }).metadata()
+    const image = sharp(input, { limitInputPixels: maxPixels })
+    const { format } = await image.metadata()
     if (!format || !ALLOWED_FORMATS.has(format)) throw unreadable
-    return await sharp(input, { limitInputPixels: maxPixels })
+    return await image
       .rotate()
       .resize(MAX_EDGE, MAX_EDGE, { fit: 'inside', withoutEnlargement: true })
       // 透過は白に（JPEG に透過は無く、そのままだと黒くなる）

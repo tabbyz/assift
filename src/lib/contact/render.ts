@@ -22,9 +22,10 @@ export type ContactEmailInput = {
 
 const SUBJECT_SNIPPET_LENGTH = 30
 const USER_AGENT_MAX_LENGTH = 300
-/** 利用者の入力の範囲。ここより上はサーバーが確かめた情報 */
-const BODY_START = '==== ここから、お問い合わせの内容（利用者の入力） ===='
-const BODY_END = '==== ここまで ===='
+/** 利用者の入力の見出し。ここより上はサーバーが確かめた情報 */
+const BODY_HEADING = '---- お問い合わせの内容（利用者の入力。各行の頭に「| 」を付けています） ----'
+/** 入力の各行の頭に付ける印。入力の中に見出しや「アカウント: …」の行を書いても、印が付くので区別できる */
+const QUOTE = '| '
 
 /** 改行・タブなどの制御文字を空白 1 つにまとめる（件名は 1 行。ヘッダに改行を入れない） */
 function singleLine(value: string): string {
@@ -48,8 +49,8 @@ export function contactSubject(topic: ContactTopic, body: string): string {
 /**
  * 本文（テキストだけ。031 §3-8）。受信箱では差出人が `noreply@` に見えるので、誰からかを先頭に書く。
  *
- * **サーバーで確かめた情報を先に、利用者の入力を後に置き、入力の範囲を見出しで区切る**: 入力を先に置くと、
- * 入力の末尾に区切り線と「アカウント: …」を書いて、本物の情報に見せかけられる（他人のアカウントからの依頼に見せる）。
+ * **サーバーで確かめた情報を先に、利用者の入力を後に置き、入力の各行の頭に印（`| `）を付ける**: 入力を先に置いたり、
+ * 区切り線だけで分けたりすると、入力に区切り線と「アカウント: …」を書いて本物の情報に見せかけられる（他人のアカウントからの依頼に見せる）。
  * 末尾の情報は返信の引用で相手に戻りうるので、本人の情報だけにする（031 §4.4）
  */
 export function contactText({
@@ -77,6 +78,13 @@ export function contactText({
   if (context.userAgent) {
     lines.push(`ブラウザ: ${clip(singleLine(context.userAgent), USER_AGENT_MAX_LENGTH)}`)
   }
-  lines.push('', BODY_START, '', body.trim(), '', BODY_END)
+  lines.push(
+    '',
+    BODY_HEADING,
+    ...body
+      .trim()
+      .split(/\r\n|\r|\n/)
+      .map((line) => `${QUOTE}${line}`)
+  )
   return lines.join('\n')
 }
