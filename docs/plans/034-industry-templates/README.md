@@ -2,7 +2,7 @@
 
 - 前提: 014（初期設定。§3.2「テンプレートは仮の値」・§3.4「業種は保存しない」・§7「実データで見直す」の申し送り）/
   021（v1 データ移行。v1 のスキーマと件数）/ 026（カットオーバー。10/30 予定）
-- 状態: **プラン（2026-10-19）。集計（§3・§5）を終え、業種の一覧とテンプレートを決めた（§2）。レビュー中**
+- 状態: **プラン確定（2026-10-19）。集計（§3・§5）を終え、業種の一覧とテンプレートを決めた（§2）。レビューを 5 回行って収束した（§8。5 回目は高・中 0 件）。実装はこれから、リリースはカットオーバーの後（§2-8）**
 
 ## 1. 目的と完了条件
 
@@ -194,7 +194,7 @@ create or replace function public.save_setup_patterns(
 
 - Zod（`lib/validation/setup.ts` の `saveSetupPatternsSchema`）: `templateVersion: z.literal(TEMPLATE_VERSION, { error: 'ひな形が新しくなりました。画面を読み込み直してください' }).nullish()`・
   `industry: z.enum(INDUSTRIES, { error: 'ひな形が新しくなりました。画面を読み込み直してください' }).nullish()`。
-  キーは `templateVersion` を先に置く（Zod はキーの順にエラーを出す。業種の一覧と版を一緒に変えたリリースで、古いタブに「選び直して」ではなく「読み込み直して」を出す）。
+  どちらも同じ文言にする（業種の一覧と版を一緒に変えたリリースでも、古いタブにはどちらが先に出ても「読み込み直して」が出る）。
   両方あるか両方無いかを `refine` で確かめる（`{ error: '画面を読み込み直してください', path: ['industry'] }`。英語の既定の文言を出さない）。
   そのあと `transform` で `template: { industry, version } | null` にまとめる（`refine` では型が絞られず、`p_template_version` に null 型を渡せないため）。
   無いときは「この回はテンプレートを選んでいない」
@@ -224,7 +224,8 @@ create or replace function public.save_setup_patterns(
 - 説明（`description`）: 「勤務パターンは変わりません」。業種を変えてもテンプレートは当て直さない
 - `updateTenant` の入力と `updateTenantSchema`（`lib/validation/tenants.ts`）に `industry: z.enum(INDUSTRIES, { error: '業種を選び直してください' }).nullish()` を足す。
   **undefined は「業種に触らない」**: Action は `...(industry !== undefined ? { industry } : {})` で `tenants.industry` に書き、`setup_*` は書かない。
-  画面は業種を変えたときだけ送る（初めの値と同じなら送らない）。理由は 2 つ:
+  画面は業種を変えたときだけ送る。**比べる相手は `props.industry`**（保存のあと `revalidatePath` で新しい値になる。マウントしたときの値を控えて比べると、
+  A → B と保存したあと B → A に戻した保存が送られない）。業種を送る理由は 2 つ:
   - Server Action の id はデプロイをまたいで残りうるので（§4.2）、リリース前に開いたタブ（業種を送らない）からの保存を止めない。`nullable()` だと「業種を選び直してください」で止まり、
     `industry ?? null` だと黙って業種を消す
   - page は `isIndustry()` で一覧に無い値を null にして渡す。将来一覧を変えた直後でも、店舗名を直しただけで業種が消えない
@@ -262,9 +263,10 @@ create or replace function public.save_setup_patterns(
 - `templates.test.ts`: 既存の検査（全行が `patternInputSchema` を通る・色が業種の中で重ならない・key が重ならない・働く日がある）が新しい 6 業種で通る。
   足すもの: 介護だけペア（夜勤 → 明け）を持ち、明けはお休み / どの業種もお休みが 休み・希望休・有給 / `TEMPLATE_VERSION` が正の整数 /
   `isIndustry` / **`supabase/schemas/public/tables/tenants.sql` の `industry` の check の値が `INDUSTRIES` と同じで、`setup_industry` の check の値が `INDUSTRIES` を含む**（`node:fs` で読む）。
-  **添え書きが業種の間で重ならない**。直す期待値: `industryExample('other')` が「日勤・早番・遅番 など」
+  **添え書きが業種の間で重ならない** / **添え書きの名前（「など」を除いて `・` で区切ったもの）がどれもその業種のテンプレートの行にある**（手で書くので、行の名前を変えたときのずれを防ぐ）。
+  直す期待値とテスト名: `industryExample('other')` が「日勤・早番・遅番 など」、テスト名「ボタンに添える中身は働く日の勤務を 3 つまで」を「添え書きは業種ごとに書き、重ならない」に
 - `patternsState.test.ts`: 飲食の行の並びの期待値を `['早番', '通し', '休み', '希望休', '有給']` に、その他のテンプレートで「公休」の行を探しているところを「休み」に直す
-- `validation/setup.test.ts`（既存）: `industry` は 6 つの値と省略を通し、一覧に無い値は「画面を読み込み直してください」 / `templateVersion` はいまの版だけを通す / 片方だけは「画面を読み込み直してください」で弾く
+- `validation/setup.test.ts`（既存）: `industry` は 6 つの値と省略を通し、一覧に無い値は「ひな形が新しくなりました。画面を読み込み直してください」 / `templateVersion` はいまの版だけを通す / 片方だけは「画面を読み込み直してください」で弾く
 - `validation/tenants.test.ts`（新規）: `updateTenantSchema` が業種の省略・null・6 つの値を通し、ほかを日本語のエラーで弾く
 - pgTAP（`supabase/tests/setup.sql`。`plan()` の数を直す）: `save_setup_patterns` が業種と版を 3 列に書く / 2 回目に業種を渡さないと 3 列とも残る /
   2 引数で呼べる（古いアプリ）/ 版は `2` のまま渡せる（引数が integer）/ 一覧に無い業種は 23514 / 業種だけ・版だけは `template incomplete`（P0001。勤務は消えていない）/ 古い 2 引数の関数が残っていない（`pg_proc` で `save_setup_patterns` が 1 つ）
@@ -410,3 +412,14 @@ v2 ではこの区分が出勤日数の集計（`lib/shifts/count.ts`）と自�
 ### 2026-10-19
 
 - プランを書いた。`analysis-v1.sql` をローカルの Postgres で確かめた（§3.4）
+- v1 の実データの集計を 2 回（`analysis-v1.sql` / `analysis-v1-2.sql`）流してもらい、結果を §5 にまとめた
+- 決定: 業種は 6 つ・飲食は案 A・明けは「働く日」→ 自動作成の H10（ペア先に枠が無い日は夜勤を置けない）が分かって「お休み」に戻した（§2-7）
+- プランのレビュー（実際のコードと突き合わせる。中以上が無くなるまで）:
+
+  | 回 | 高 / 中 / 低 | 主な中の指摘と直し |
+  | --- | --- | --- |
+  | 1 | 0 / 1 / 9 | 版の列 1 つでは、店舗情報で業種を直すと「どの業種のテンプレートを当てたか」が分からない → `industry` と `setup_industry` + `setup_template_version` に分けた |
+  | 2 | 0 / 1 / 5 | RPC の `if` で版だけの呼び出しが黙って無視される → 先頭で `template incomplete` を投げる |
+  | 3 | 0 / 2 / 5 | migration を作り直すとブランチ DB に届かない → 作り直したら PR を開き直す / 店舗情報の古いタブが業種を送らずに止まる → `nullish` で「触らない」 |
+  | 4 | 0 / 1 / 4 | 業種ボタンの添え書きが 2 組重なる → 業種ごとに書き、重ならないことをテストする |
+  | 5 | 0 / 0 / 4 | （低だけ。文言の食い違い・比べる相手・添え書きのずれの検査を直した） |
