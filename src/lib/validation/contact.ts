@@ -22,7 +22,7 @@ export const CONTACT_IMAGE_JPEG_QUALITY = 0.85
 export const CONTACT_IMAGE_MAX_BYTES = 1.5 * 1024 * 1024
 /** `bodySizeLimit`（`next.config.ts` の `4mb`）から multipart の区切りと本文の分を残す */
 export const CONTACT_IMAGES_TOTAL_MAX_BYTES = 3.5 * 1024 * 1024
-/** 送れなかったときの文言。画面はこの文言のときだけ、代わりのアドレスを案内する（031 §4.3） */
+/** 送れなかったときの文言。画面はこの文言と、想定外のエラー（`GENERIC_ERROR_MESSAGE`）のときだけ、代わりのアドレスを案内する（031 §4.3） */
 export const CONTACT_SEND_FAILED_MESSAGE =
   '送信できませんでした。時間をおいてもう一度お試しください'
 /** 添付の文言。ブラウザ（選んだとき）とサーバー（送ったとき）で同じものを出す */
@@ -51,13 +51,17 @@ const blankToUndefined = (value: unknown) => (value === '' ? undefined : value)
 export const contactSchema = z.object({
   topic: z.enum(CONTACT_TOPIC_KEYS, { error: 'お問い合わせの種類を選んでください' }),
   email: z.preprocess(blankToUndefined, emailSchema.optional()),
-  body: z
-    .string({ error: 'お問い合わせの内容を入力してください' })
-    .trim()
-    .min(1, { error: 'お問い合わせの内容を入力してください' })
-    .max(CONTACT_BODY_MAX_LENGTH, {
-      error: `お問い合わせの内容は${CONTACT_BODY_MAX_LENGTH.toLocaleString()}文字以内で入力してください`,
-    }),
+  // multipart で送ると、ブラウザは文字列の改行（LF）を CRLF に変える。画面（`maxLength`）と同じ数え方にするため LF に戻してから数える
+  body: z.preprocess(
+    (value) => (typeof value === 'string' ? value.replace(/\r\n?/g, '\n') : value),
+    z
+      .string({ error: 'お問い合わせの内容を入力してください' })
+      .trim()
+      .min(1, { error: 'お問い合わせの内容を入力してください' })
+      .max(CONTACT_BODY_MAX_LENGTH, {
+        error: `お問い合わせの内容は${CONTACT_BODY_MAX_LENGTH.toLocaleString()}文字以内で入力してください`,
+      })
+  ),
   /** フォームを開いたときにクライアントが作る uuid。Resend の `Idempotency-Key` に使う（031 §4.5） */
   requestId: z.guid({ error: '送信できませんでした。ページを読み込み直してください' }),
   /** 店舗（`?tenant=`）。見えるかは Action が RLS で確かめる */

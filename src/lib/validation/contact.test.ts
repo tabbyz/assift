@@ -25,6 +25,13 @@ describe('contactSchema', () => {
     })
   })
 
+  it('改行は LF に揃えてから数える（multipart で CRLF になっても、画面で入れた長さで通る）', () => {
+    const lines = Array.from({ length: 10 }, () => 'あ'.repeat(499)).join('\r\n')
+    const r = contactSchema.parse({ ...valid, body: lines })
+    expect(r.body).toBe(lines.replace(/\r\n/g, '\n'))
+    expect(Array.from(r.body).length).toBe(4999)
+  })
+
   it('本文の前後の空白を落とす', () => {
     expect(contactSchema.parse({ ...valid, body: '  あ  ' }).body).toBe('あ')
   })

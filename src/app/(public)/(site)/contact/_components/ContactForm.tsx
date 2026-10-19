@@ -1,6 +1,6 @@
 'use client'
 
-import { type FormEvent, useRef, useState, useTransition } from 'react'
+import { type FormEvent, useRef, useState, useSyncExternalStore, useTransition } from 'react'
 import Link from 'next/link'
 import {
   Anchor,
@@ -34,6 +34,7 @@ import {
   CONTACT_TOPICS,
   type ContactTopic,
 } from '@/lib/validation/contact'
+import { GENERIC_ERROR_MESSAGE } from '@/lib/actions/error'
 import { CONTACT_EMAIL } from '@/lib/contact/path'
 import { type ContactSent, sendContact } from '../actions'
 import { resizeImage, toDataUrl } from '../_lib/resizeImage'
@@ -84,6 +85,13 @@ function ContactFormBody({
   const resetFileInput = useRef<() => void>(null)
   // ハニーポットは React の状態にせず、送るときに DOM の値を読む（イベントを起こさずに `.value` を書くボットも拾う）
   const honeypotRef = useRef<HTMLInputElement>(null)
+  // 読み込みが終わるまで送信を止める（それまでに Enter を押すと、ブラウザが素のフォームとして GET で送り、入力が消える）
+  // （サーバーの描画とハイドレーションでは false、そのあとは true）
+  const hydrated = useSyncExternalStore(
+    noopSubscribe,
+    () => true,
+    () => false
+  )
 
   /**
    * 選んだ画像を 1 枚ずつ縮小して足す（並行にすると、スマホで大きな写真を同時に展開してメモリが足りなくなる）。
@@ -139,6 +147,11 @@ function ContactFormBody({
       setError('お問い合わせの種類を選んでください')
       return
     }
+    // 空白だけの本文はブラウザの required を通るので、ここで止める（サーバーは前後の空白を落としてから数える）
+    if (!body.trim()) {
+      setError('お問い合わせの内容を入力してください')
+      return
+    }
     const data = new FormData()
     data.set('topic', topic)
     if (!account) data.set('email', email)
@@ -162,8 +175,8 @@ function ContactFormBody({
             setAccount(null)
             return
           }
-          // それ以外の失敗は、代わりのアドレスを案内する（入力の誤りは画面で先に止めるので、ここに来るのは送れなかったときがほとんど）
-          setFailed(true)
+          // 送れなかった・想定外のエラーのときだけ、代わりのアドレスを案内する（入力の誤りは直せば送れる）
+          setFailed(r.error === CONTACT_SEND_FAILED_MESSAGE || r.error === GENERIC_ERROR_MESSAGE)
           return
         }
         setSent(r.data)
@@ -202,7 +215,7 @@ function ContactFormBody({
       <Stack gap="lg">
         <FormErrorAlert message={error} />
         {failed && (
-          // 失敗したときだけアドレスを出す（Client の state でしか描かれないので、クローラーは読まない。031 §4.3）
+          // 失敗したときだけアドレスを出す（HTML には出ない。JS の chunk には文字列として入るが、エラー画面の ErrorPanel も同じ。031 §4.3）
           <Text size="sm" c="dimmed">
             解決しない場合は {CONTACT_EMAIL} へメールでお問い合わせください。
           </Text>
@@ -342,7 +355,7 @@ function ContactFormBody({
         </Text>
 
         <Group justify="flex-end">
-          <Button type="submit" loading={isPending} disabled={isResizing}>
+          <Button type="submit" loading={isPending} disabled={isResizing || !hydrated}>
             送信する
           </Button>
         </Group>
@@ -350,3 +363,5 @@ function ContactFormBody({
     </form>
   )
 }
+
+const noopSubscribe = () => () => {}
