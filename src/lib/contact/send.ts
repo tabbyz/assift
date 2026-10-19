@@ -29,7 +29,7 @@ export async function sendContactEmail(email: ContactEmail): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY
   const inbox = process.env.CONTACT_INBOX
   if (!apiKey || !inbox) {
-    // 開発のほかは投げる。開発は送らずに中身を出す
+    // 開発のほかは投げる（Action は画像の書き出しの前にも同じ関数で確かめている）。開発は送らずに中身を出す
     assertContactMailConfigured()
     const images = email.attachments.map((a) => `${a.filename}（${a.content.length} バイト）`)
     console.info(

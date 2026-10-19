@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { Metadata } from 'next'
 import { Container, Stack, Text, Title } from '@mantine/core'
 import { LinkAnchor } from '@/components/LinkAnchor'
@@ -39,7 +40,9 @@ export default async function ContactPage({ searchParams }: PageProps<'/contact'
             assift についてのご質問・ご要望・不具合のご連絡を受け付けています。
           </Text>
         </Stack>
+        {/* ナビゲーションのたびに作り直す（送信のあとに「お問い合わせ」をもう一度押しても、完了の表示や前の id が残らない） */}
         <ContactForm
+          key={randomUUID()}
           account={user?.email ?? null}
           tenant={tenant ?? null}
           digest={parseDigest(digest) ?? null}

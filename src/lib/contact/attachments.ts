@@ -16,8 +16,12 @@ export type ContactAttachment = { filename: string; content: Buffer }
 
 /** 画素を読む前に通す形式。`sharp` は SVG（画像の形をした文書）・TIFF・GIF・HEIF なども読めるので、ここで絞る（031 §4.7） */
 const ALLOWED_FORMATS = new Set(['jpeg', 'png', 'webp'])
-/** 読み込むと巨大になる画像（解凍爆弾）を弾く。`sharp` の既定（約 2.7 億画素）より小さく */
-export const CONTACT_IMAGE_MAX_PIXELS = 40_000_000
+/**
+ * 読み込むと巨大になる画像（解凍爆弾）を弾く。ブラウザは長い辺 1,600px に縮めて送る（最大 256 万画素）ので、
+ * 余裕を見て 3,000 × 3,000（900 万画素。RGBA で約 36MB）。`sharp` の既定（約 2.7 億画素）では、
+ * ブラウザを通さずに送られた画像を展開するだけで関数のメモリが尽きうる
+ */
+export const CONTACT_IMAGE_MAX_PIXELS = 3000 * 3000
 
 /**
  * 添付の画像を確かめ、JPEG に書き出し直す（031 §3-12・§4.7）。
@@ -38,15 +42,16 @@ export async function rewriteContactImages(
   const total = images.reduce((sum, file) => sum + file.size, 0)
   if (total > CONTACT_IMAGES_TOTAL_MAX_BYTES) throw new ActionError(CONTACT_IMAGES_LIMIT_MESSAGE)
 
-  return Promise.all(
-    images.map(async (file, index) => {
-      const input = Buffer.from(await file.arrayBuffer())
-      return {
-        filename: `image-${index + 1}.jpg`,
-        content: await rewriteImage(input, index, maxPixels),
-      }
+  // 1 枚ずつ（同時に展開するとメモリの山が枚数倍になる）
+  const attachments: ContactAttachment[] = []
+  for (const [index, file] of images.entries()) {
+    const input = Buffer.from(await file.arrayBuffer())
+    attachments.push({
+      filename: `image-${index + 1}.jpg`,
+      content: await rewriteImage(input, index, maxPixels),
     })
-  )
+  }
+  return attachments
 }
 
 async function rewriteImage(input: Buffer, index: number, maxPixels: number): Promise<Buffer> {
@@ -68,6 +73,10 @@ async function rewriteImage(input: Buffer, index: number, maxPixels: number): Pr
       .toBuffer()
   } catch (error) {
     if (error instanceof ActionError) throw error
+    // 画素数の上限（`limitInputPixels`）は「大きすぎる」と伝える（形式を選び直しても直らない）
+    if (error instanceof Error && /pixel limit/i.test(error.message)) {
+      throw new ActionError(`${index + 1}枚目: ${CONTACT_IMAGE_TOO_LARGE_MESSAGE}`)
+    }
     throw unreadable
   }
 }

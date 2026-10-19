@@ -1,4 +1,3 @@
-import { initBotId } from 'botid/client/core'
 import { config } from 'zod/v4/core'
 
 /**
@@ -23,6 +22,9 @@ config({ jitless: true })
  */
 // 開発では読まない: サーバーの `checkBotId()` は開発で常に人と答え、判定のスクリプトの読み込みに失敗すると送信そのものが止まる（BotID は
 // スクリプトを待ってから `fetch` を通す）。本番でスクリプトが読めないときは送信が失敗の表示になり、フォームはアドレスを案内する（031 §4.3）
+// 遅れて読む（全ページの最初の chunk に入れない）。送信はフォームを開いて入力してからなので、それまでに `fetch` が包まれる
 if (process.env.NODE_ENV !== 'development') {
-  initBotId({ protect: [{ path: '/contact', method: 'POST' }] })
+  void import('botid/client/core').then(({ initBotId }) =>
+    initBotId({ protect: [{ path: '/contact', method: 'POST' }] })
+  )
 }

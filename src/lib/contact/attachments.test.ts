@@ -1,6 +1,5 @@
 import sharp from 'sharp'
 import { describe, expect, it } from 'vitest'
-import { ActionError } from '@/lib/actions/error'
 import { CONTACT_IMAGE_MAX_BYTES } from '@/lib/validation/contact'
 import { rewriteContactImages } from './attachments'
 
@@ -76,9 +75,11 @@ describe('rewriteContactImages', () => {
     }
   })
 
-  it('画素の上限を超える画像は失敗（解凍爆弾）', async () => {
+  it('画素の上限を超える画像は「大きすぎる」で失敗（解凍爆弾）', async () => {
     const big = await image(200, 200).png().toBuffer()
-    await expect(rewriteOne(big, { maxPixels: 100 * 100 })).rejects.toBeInstanceOf(ActionError)
+    await expect(rewriteOne(big, { maxPixels: 100 * 100 })).rejects.toThrow(
+      '1枚目: 画像が大きすぎて添付できません'
+    )
   })
 
   it('4 枚以上・1 枚の大きさ・合計の上限で失敗', async () => {

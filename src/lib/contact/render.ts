@@ -1,6 +1,6 @@
 import { CONTACT_TOPICS, type ContactTopic } from '@/lib/validation/contact'
 
-/** 本文の末尾に添える情報（031 §4.4）。サーバーで確かめた値だけを入れる */
+/** 本文の先頭に書く情報（031 §4.4）。サーバーで確かめた値だけを入れる */
 export type ContactContext = {
   /** ログイン中のアカウント。未ログインなら無し（メールアドレスの無いアカウントもありうる） */
   user?: { id: string; email: string | null }
@@ -53,7 +53,7 @@ export function contactSubject(topic: ContactTopic, body: string): string {
  *
  * **サーバーで確かめた情報を先に、利用者の入力を後に置き、入力の各行の頭に印（`| `）を付ける**: 入力を先に置いたり、
  * 区切り線だけで分けたりすると、入力に区切り線と「アカウント: …」を書いて本物の情報に見せかけられる（他人のアカウントからの依頼に見せる）。
- * 末尾の情報は返信の引用で相手に戻りうるので、本人の情報だけにする（031 §4.4）
+ * 先頭の情報は返信の引用で相手に戻りうるので、本人の情報だけにする（031 §4.4）
  */
 export function contactText({
   topic,

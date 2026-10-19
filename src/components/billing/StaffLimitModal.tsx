@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from 'react'
 import Link from 'next/link'
+import { useParams } from 'next/navigation'
 import { Anchor, Button, Group, Loader, Stack, Text } from '@mantine/core'
 import { modals } from '@mantine/modals'
 import { notifications } from '@mantine/notifications'
@@ -44,6 +45,8 @@ export function openStaffLimitModal(options: Options) {
 const close = () => modals.close(MODAL_ID)
 
 function StaffLimitOffer({ adding, retry }: Options) {
+  // お問い合わせに店舗を引き継ぐ（スタッフの追加・復帰・初期設定はどれも店舗の URL の下で開く）
+  const { tenantId } = useParams<{ tenantId?: string }>()
   const [offer, setOffer] = useState<UpgradeOffer | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -108,7 +111,11 @@ function StaffLimitOffer({ adding, retry }: Options) {
         <Text size="sm">
           ご契約の上限（在籍 {offer.limit} 人）に達しています。人数を増やすには
           {/* モーダルは遷移で閉じないので、押したら閉じる */}
-          <Anchor component={Link} href={contactHref({ topic: 'billing' })} onClick={close}>
+          <Anchor
+            component={Link}
+            href={contactHref({ topic: 'billing', tenantId })}
+            onClick={close}
+          >
             お問い合わせ
           </Anchor>
           ください。

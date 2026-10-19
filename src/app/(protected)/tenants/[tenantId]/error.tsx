@@ -1,6 +1,5 @@
 'use client'
 
-import { useParams } from 'next/navigation'
 import { ErrorPanel, type ErrorPageProps } from '@/components/ErrorPanel'
 
 /**
@@ -10,7 +9,5 @@ import { ErrorPanel, type ErrorPageProps } from '@/components/ErrorPanel'
  * layout 自身の例外はルートの `error.tsx`
  */
 export default function TenantError({ error, retry }: ErrorPageProps) {
-  // お問い合わせに店舗を引き継ぐ（Action が RLS で確かめてから添える。031 §4.4）
-  const { tenantId } = useParams<{ tenantId: string }>()
-  return <ErrorPanel error={error} retry={retry} contactTenantId={tenantId} />
+  return <ErrorPanel error={error} retry={retry} />
 }

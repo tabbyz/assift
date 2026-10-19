@@ -1,7 +1,7 @@
 'use client'
 
 import { useTransition } from 'react'
-import { usePathname } from 'next/navigation'
+import { useParams, usePathname } from 'next/navigation'
 import { Anchor, Button, Container, Group, Stack, Text, Title } from '@mantine/core'
 import { ERROR_TEXT, errorDigest } from '@/components/errorText'
 import { isAdminPath } from '@/lib/admin/paths'
@@ -18,8 +18,6 @@ export type ErrorPageProps = {
 type Props = ErrorPageProps & {
   /** 「戻る」の行き先。店舗の境界は枠のナビがあるので渡さない */
   home?: { href: string; label: string }
-  /** お問い合わせのフォームに引き継ぐ店舗（店舗の境界だけ渡す。031 §4.4） */
-  contactTenantId?: string
 }
 
 /**
@@ -32,8 +30,10 @@ type Props = ErrorPageProps & {
  * `getDerivedStateFromProps`）。クライアント遷移で `/` へ行くと、redirect の先が落ちたページと同じパス（`/` → 直近の店舗）や
  * いまのパスそのもの（LP で落ちた）のときに、取り直しが成功しても境界が残り、押しても何も変わらない
  */
-export function ErrorPanel({ error, retry, home, contactTenantId }: Props) {
+export function ErrorPanel({ error, retry, home }: Props) {
   const pathname = usePathname()
+  // お問い合わせに店舗を引き継ぐ（URL の店舗。どの境界で受けても同じ。Action が RLS で確かめてから添える。031 §4.4）
+  const { tenantId } = useParams<{ tenantId?: string }>()
   // 問い合わせ先は既定でお問い合わせのフォーム（エラー番号と店舗を引き継ぐ。031 §4.8）。
   // 管理画面のパス（`/-`）ではアドレス: 管理画面のホストでは `/-` の外が 404 でフォームを開けない。
   // `-/error.tsx` も、root の `error.tsx` が `-/layout.tsx` の例外を受けたときも、パスで決まる。
@@ -64,7 +64,7 @@ export function ErrorPanel({ error, retry, home, contactTenantId }: Props) {
           <Text size="sm" c="dimmed" ta="center">
             {ERROR_TEXT.contactFormPrefix}
             {/* 素の `<a>`（全体の読み込み）。「戻る」と同じく、クライアント遷移だと境界が残ることがある */}
-            <Anchor href={contactHref({ tenantId: contactTenantId, digest })} inherit>
+            <Anchor href={contactHref({ tenantId, digest })} inherit>
               {ERROR_TEXT.contactFormLink}
             </Anchor>
             {ERROR_TEXT.contactFormSuffix(digest)}
