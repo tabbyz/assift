@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { Container, Stack, Text, Title } from '@mantine/core'
-import { getTenant } from '@/lib/queries/tenants'
+import { readContactTenant } from '@/lib/contact/tenant'
 import { parseDigest } from '@/lib/validation/contact'
 import { getAuthUser } from '@/utils/auth/current'
 import { isUuid } from '@/utils/uuid'
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
 export default async function ContactPage({ searchParams }: PageProps<'/contact'>) {
   const { topic, tenant: tenantParam, digest } = await loadContactSearchParams(searchParams)
   const user = await getAuthUser()
-  const tenant = user && isUuid(tenantParam) ? await readTenant(tenantParam) : null
+  const tenant = user && isUuid(tenantParam) ? await readContactTenant(tenantParam) : undefined
 
   return (
     <Container size={720} py="xl">
@@ -34,24 +34,11 @@ export default async function ContactPage({ searchParams }: PageProps<'/contact'
         </Stack>
         <ContactForm
           account={user?.email ?? null}
-          tenant={tenant ? { id: tenant.id, name: tenant.name } : null}
+          tenant={tenant ?? null}
           digest={parseDigest(digest) ?? null}
           initialTopic={topic}
         />
       </Stack>
     </Container>
   )
-}
-
-/**
- * 店舗が読めなくてもページは出す（エラー画面の「お問い合わせ」から来ることがあり、ここまで落ちると問い合わせる道が無くなる）。
- * 店舗は画面の説明に出すだけで、送るときは Action が読み直す
- */
-async function readTenant(tenantId: string) {
-  try {
-    return await getTenant(tenantId)
-  } catch (error) {
-    console.error('[contact] 店舗を読めませんでした', error)
-    return null
-  }
 }

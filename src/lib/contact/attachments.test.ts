@@ -71,7 +71,7 @@ describe('rewriteContactImages', () => {
     ])
     for (const bytes of [svg, gif, 'hello', fakeJpeg]) {
       await expect(rewriteOne(bytes)).rejects.toThrow(
-        '1枚目の画像は添付できません。PNG・JPEG・WebP の画像を選んでください'
+        '1枚目: この画像は添付できません。PNG・JPEG・WebP の画像を選んでください'
       )
     }
   })
@@ -84,7 +84,7 @@ describe('rewriteContactImages', () => {
   it('4 枚以上・1 枚の大きさ・合計の上限で失敗', async () => {
     const small = await image(4, 4).png().toBuffer()
     await expect(rewriteContactImages([1, 2, 3, 4].map(() => file(small)))).rejects.toThrow(
-      '画像は3枚まで、合計3.5MBまで添付できます'
+      '画像は3枚まで、合計3.5MBまで添付できます。枚数を減らしてください'
     )
     const tooBig = Buffer.alloc(CONTACT_IMAGE_MAX_BYTES + 1)
     await expect(rewriteContactImages([file(tooBig)])).rejects.toThrow('画像は3枚まで')

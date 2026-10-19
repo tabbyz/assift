@@ -16,13 +16,12 @@ function errorOf(input: Record<string, unknown>): string {
 
 describe('contactSchema', () => {
   it('最小の入力が通る。空の任意の欄は無いものとして扱う', () => {
-    const r = contactSchema.parse({ ...valid, email: '', tenantId: '', digest: '', honeypot: '' })
+    const r = contactSchema.parse({ ...valid, email: '', tenantId: '', digest: '' })
     expect(r).toEqual({
       ...valid,
       email: undefined,
       tenantId: undefined,
       digest: undefined,
-      honeypot: undefined,
     })
   })
 

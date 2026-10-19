@@ -25,11 +25,13 @@ import {
   CONTACT_BODY_MAX_LENGTH,
   CONTACT_IMAGE_MAX_BYTES,
   CONTACT_IMAGE_MAX_COUNT,
+  CONTACT_IMAGE_UNREADABLE_MESSAGE,
+  CONTACT_IMAGES_LIMIT_MESSAGE,
   CONTACT_IMAGES_TOTAL_MAX_BYTES,
   CONTACT_TOPICS,
   type ContactTopic,
 } from '@/lib/validation/contact'
-import { sendContact } from '../actions'
+import { type ContactSent, sendContact } from '../actions'
 import { resizeImage, toDataUrl } from '../_lib/resizeImage'
 import classes from './ContactForm.module.css'
 
@@ -46,8 +48,6 @@ type Props = {
 type Attachment = { id: number; blob: Blob; preview: string }
 
 const TOPIC_OPTIONS = Object.entries(CONTACT_TOPICS).map(([value, label]) => ({ value, label }))
-const IMAGE_ERROR = 'この画像は添付できません。PNG・JPEG・WebP の画像を選んでください'
-const IMAGES_TOO_LARGE = `画像が大きすぎます。合計${CONTACT_IMAGES_TOTAL_MAX_BYTES / 1024 / 1024}MBまでになるよう、枚数を減らしてください`
 
 export function ContactForm({ account: initialAccount, tenant, digest, initialTopic }: Props) {
   // 送るときにセッションが切れていたら null にして、返信先の欄を出す（`contact_email_required`）
@@ -59,7 +59,7 @@ export function ContactForm({ account: initialAccount, tenant, digest, initialTo
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [error, setError] = useState<string>()
   const [failed, setFailed] = useState(false)
-  const [sent, setSent] = useState<{ to: string; typed: boolean }>()
+  const [sent, setSent] = useState<ContactSent>()
   const [isPending, startTransition] = useTransition()
   const [isResizing, setIsResizing] = useState(false)
   // フォーム 1 回分の id。同じ内容の連打・送り直しを Resend が 1 通にまとめる（031 §4.5）
@@ -68,6 +68,10 @@ export function ContactForm({ account: initialAccount, tenant, digest, initialTo
   // 選んだファイルを入力欄から消す。消さないと、外した画像をもう一度選んでも change が起きない
   const resetFileInput = useRef<() => void>(null)
 
+  /**
+   * 選んだ画像を縮小して足す。読めない画像・上限を超える画像だけを外し、ほかは足す（理由は 1 つにまとめて出す）。
+   * 縮小のあいだは外すボタンと送信を止めるので、`attachments` はこの間に変わらない
+   */
   const addImages = async (files: File[]) => {
     resetFileInput.current?.()
     const room = CONTACT_IMAGE_MAX_COUNT - attachments.length
@@ -75,28 +79,34 @@ export function ContactForm({ account: initialAccount, tenant, digest, initialTo
     setIsResizing(true)
     setError(undefined)
     try {
-      const added: Attachment[] = []
-      for (const file of files.slice(0, room)) {
-        let blob: Blob
-        try {
-          blob = await resizeImage(file)
-        } catch {
-          setError(IMAGE_ERROR)
-          return
+      const resized = await Promise.all(
+        files.slice(0, room).map(async (file) => {
+          try {
+            const blob = await resizeImage(file)
+            return { blob, preview: await toDataUrl(blob) }
+          } catch {
+            return null
+          }
+        })
+      )
+      let message = resized.includes(null) ? CONTACT_IMAGE_UNREADABLE_MESSAGE : undefined
+      // サーバーと同じ上限（1 枚・合計）。超えると送信のときに断られるので、選んだ時点で外す
+      const next = [...attachments]
+      let total = next.reduce((sum, a) => sum + a.blob.size, 0)
+      for (const r of resized) {
+        if (!r) continue
+        if (
+          r.blob.size > CONTACT_IMAGE_MAX_BYTES ||
+          total + r.blob.size > CONTACT_IMAGES_TOTAL_MAX_BYTES
+        ) {
+          message ??= CONTACT_IMAGES_LIMIT_MESSAGE
+          continue
         }
-        added.push({ id: nextAttachmentId.current++, blob, preview: await toDataUrl(blob) })
+        total += r.blob.size
+        next.push({ id: nextAttachmentId.current++, ...r })
       }
-      // サーバーと同じ上限（1 枚・合計）。超えると送信のときに断られるので、選んだ時点で知らせる
-      const all = [...attachments, ...added]
-      const total = all.reduce((sum, a) => sum + a.blob.size, 0)
-      if (
-        added.some((a) => a.blob.size > CONTACT_IMAGE_MAX_BYTES) ||
-        total > CONTACT_IMAGES_TOTAL_MAX_BYTES
-      ) {
-        setError(IMAGES_TOO_LARGE)
-        return
-      }
-      setAttachments(all)
+      setAttachments(next)
+      setError(message)
     } finally {
       setIsResizing(false)
     }
@@ -127,7 +137,7 @@ export function ContactForm({ account: initialAccount, tenant, digest, initialTo
           setFailed(true)
           return
         }
-        setSent(account ? { to: account, typed: false } : { to: email, typed: true })
+        setSent(r.data)
       } catch {
         // 大きさの上限（bodySizeLimit）や通信の失敗は Action の外で起きる
         setError('送信できませんでした。時間をおいてもう一度お試しください')
@@ -144,7 +154,8 @@ export function ContactForm({ account: initialAccount, tenant, digest, initialTo
             送信しました
           </Title>
           <Text>
-            {sent.typed ? 'ご入力のアドレス' : 'ログイン中のアカウントのアドレス'}（{sent.to}
+            {sent.fromAccount ? 'ログイン中のアカウントのアドレス' : 'ご入力のアドレス'}（
+            {sent.replyTo}
             ）へ返信します。数日たっても届かない場合は、迷惑メールのフォルダをご確認ください。
           </Text>
         </Stack>
@@ -229,6 +240,7 @@ export function ContactForm({ account: initialAccount, tenant, digest, initialTo
                     className={classes.remove}
                     size="sm"
                     aria-label={`添付 ${i + 1} 枚目を外す`}
+                    disabled={isResizing}
                     onClick={() => setAttachments((current) => current.filter((_, j) => j !== i))}
                   />
                 </div>

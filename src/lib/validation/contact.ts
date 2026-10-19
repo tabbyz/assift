@@ -19,6 +19,10 @@ export const CONTACT_IMAGE_MAX_COUNT = 3
 export const CONTACT_IMAGE_MAX_BYTES = 1.5 * 1024 * 1024
 /** `bodySizeLimit`（`next.config.ts` の `4mb`）から multipart の区切りと本文の分を残す */
 export const CONTACT_IMAGES_TOTAL_MAX_BYTES = 3.5 * 1024 * 1024
+/** 添付の文言。ブラウザ（選んだとき）とサーバー（送ったとき）で同じものを出す */
+export const CONTACT_IMAGE_UNREADABLE_MESSAGE =
+  'この画像は添付できません。PNG・JPEG・WebP の画像を選んでください'
+export const CONTACT_IMAGES_LIMIT_MESSAGE = `画像は${CONTACT_IMAGE_MAX_COUNT}枚まで、合計${CONTACT_IMAGES_TOTAL_MAX_BYTES / 1024 / 1024}MBまで添付できます。枚数を減らしてください`
 
 /**
  * Next のエラー番号（`error.digest`）。英数字とハイフン・下線だけ。URL（`?digest=`）から来るので形と長さで絞る。
@@ -33,7 +37,7 @@ export function parseDigest(value: string | null | undefined): string | undefine
 const blankToUndefined = (value: unknown) => (value === '' ? undefined : value)
 
 /**
- * お問い合わせの送信（`FormData` の文字列の欄。添付は `lib/contact/attachments.ts` が見る）。
+ * お問い合わせの送信（`FormData` の文字列の欄。添付は `lib/contact/attachments.ts`、ハニーポットは Action が parse の前に見る）。
  * `email` はログイン中は使わない（アカウントのアドレスに返す。031 §3-5）ので、ここでは任意にし、Action が未ログインのときだけ求める
  */
 export const contactSchema = z.object({
@@ -51,7 +55,5 @@ export const contactSchema = z.object({
   /** 店舗（`?tenant=`）。見えるかは Action が RLS で確かめる */
   tenantId: z.preprocess(blankToUndefined, z.guid().optional().catch(undefined)),
   digest: z.preprocess(blankToUndefined, z.string().optional().transform(parseDigest)),
-  /** ハニーポット（031 §4.6）。人には見えない欄なので、値があればボット */
-  honeypot: z.preprocess(blankToUndefined, z.string().optional()),
 })
 export type ContactInput = z.infer<typeof contactSchema>

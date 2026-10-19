@@ -6,8 +6,10 @@ const MAX_EDGE = 1600
 const JPEG_QUALITY = 0.85
 
 export async function resizeImage(file: File): Promise<Blob> {
-  // 向き（EXIF の Orientation）を画素に反映して読む
-  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
+  // オプションは渡さない: `imageOrientation: 'from-image'` を知らない古いブラウザは例外にする。
+  // いまのブラウザは既定で EXIF の向きを反映する（仕様の既定が from-image）。反映しない古いブラウザでは横向きのまま届く
+  // （描き直すと EXIF が消えるので、サーバーの `rotate()` では直せない）。読めずに添付できないより、向きが違うほうを取る
+  const bitmap = await createImageBitmap(file)
   try {
     const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height))
     const canvas = document.createElement('canvas')

@@ -8,21 +8,34 @@ import { runAction } from '@/lib/actions/run'
 import { rewriteContactImages } from '@/lib/contact/attachments'
 import { contactSubject, contactText, type ContactContext } from '@/lib/contact/render'
 import { sendContactEmail } from '@/lib/contact/send'
-import { getTenant } from '@/lib/queries/tenants'
+import { readContactTenant } from '@/lib/contact/tenant'
 import { contactSchema } from '@/lib/validation/contact'
 import { getAuthUser } from '@/utils/auth/current'
 
 const SEND_FAILED = '送信できませんでした。時間をおいてもう一度お試しください'
 
+/** 送った返信先。`fromAccount` はログイン中のアカウントのアドレスか（完了の文を変える） */
+export type ContactSent = { replyTo: string; fromAccount: boolean }
+
 /**
  * お問い合わせを送る（031）。ファイルを受けるので `FormData`（AGENTS.md の例外）。
  *
- * 順番: BotID → Zod → ハニーポット → 添付の書き出し直し → 自動で付ける情報 → Resend。
- * ログインは必須にしない（ログインできない人・導入前の人も使う）。ログイン中はアカウントのアドレスに返す
+ * 順番: BotID → ハニーポット → Zod → 添付の書き出し直し → 自動で付ける情報 → Resend。
+ * ログインは必須にしない（ログインできない人・導入前の人も使う）。ログイン中はアカウントのアドレスに返す。
+ * 戻り値は実際に使った返信先（画面の完了の文に出す。描画と送信のあいだにログインの状態が変わっても食い違わない）
  */
-export async function sendContact(formData: FormData): Promise<ActionResult> {
+export async function sendContact(formData: FormData): Promise<ActionResult<ContactSent>> {
   return runAction(async () => {
     await assertHuman()
+
+    // ハニーポット: ボットに判定の手がかりを与えないよう、入力の検証より先に見て、成功に見せて送らない（031 §4.6）。
+    // 自動入力の拡張機能が埋めて人の問い合わせを落とすこともありうるので、ログには残す
+    const honeypot = formData.get('honeypot')
+    if (typeof honeypot === 'string' && honeypot !== '') {
+      console.warn('[contact] ハニーポットに値があったので送りませんでした')
+      const email = formData.get('email')
+      return { replyTo: typeof email === 'string' ? email : '', fromAccount: false }
+    }
 
     const input = contactSchema.parse({
       topic: formData.get('topic'),
@@ -31,14 +44,7 @@ export async function sendContact(formData: FormData): Promise<ActionResult> {
       requestId: formData.get('requestId'),
       tenantId: formData.get('tenantId') ?? undefined,
       digest: formData.get('digest') ?? undefined,
-      honeypot: formData.get('honeypot') ?? undefined,
     })
-    // ハニーポット: ボットに判定の手がかりを与えないよう、成功に見せて送らない（031 §4.6）。
-    // 自動入力の拡張機能が埋めて人の問い合わせを落とすこともありうるので、ログには残す
-    if (input.honeypot) {
-      console.warn('[contact] ハニーポットに値があったので送りませんでした')
-      return
-    }
 
     const user = await getAuthUser()
     const replyTo = user?.email ?? input.email
@@ -56,7 +62,7 @@ export async function sendContact(formData: FormData): Promise<ActionResult> {
     const context: ContactContext = {
       user: user?.email ? { id: user.id, email: user.email } : undefined,
       // 店舗は RLS で見えたときだけ添える。未ログインなら読まない（見えないので）
-      tenant: user && input.tenantId ? await visibleTenant(input.tenantId) : undefined,
+      tenant: user && input.tenantId ? await readContactTenant(input.tenantId) : undefined,
       digest: input.digest,
       userAgent: (await headers()).get('user-agent') ?? undefined,
     }
@@ -79,6 +85,7 @@ export async function sendContact(formData: FormData): Promise<ActionResult> {
       console.error('[contact] 送信に失敗しました', error)
       fail(SEND_FAILED)
     }
+    return { replyTo, fromAccount: Boolean(user?.email) }
   })
 }
 
@@ -96,15 +103,4 @@ async function assertHuman() {
     return
   }
   if (isBot) throw new ActionError(SEND_FAILED)
-}
-
-async function visibleTenant(tenantId: string): Promise<ContactContext['tenant']> {
-  try {
-    const tenant = await getTenant(tenantId)
-    return tenant ? { id: tenant.id, name: tenant.name } : undefined
-  } catch (error) {
-    // 店舗が読めなくても問い合わせは送る（添える情報が 1 つ減るだけ）
-    console.error('[contact] 店舗を読めませんでした', error)
-    return undefined
-  }
 }

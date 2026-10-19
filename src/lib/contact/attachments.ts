@@ -4,6 +4,8 @@ import { ActionError } from '@/lib/actions/error'
 import {
   CONTACT_IMAGE_MAX_BYTES,
   CONTACT_IMAGE_MAX_COUNT,
+  CONTACT_IMAGE_UNREADABLE_MESSAGE,
+  CONTACT_IMAGES_LIMIT_MESSAGE,
   CONTACT_IMAGES_TOTAL_MAX_BYTES,
 } from '@/lib/validation/contact'
 
@@ -15,8 +17,6 @@ const MAX_EDGE = 1600
 const JPEG_QUALITY = 85
 /** 読み込むと巨大になる画像（解凍爆弾）を弾く。`sharp` の既定（約 2.7 億画素）より小さく */
 export const CONTACT_IMAGE_MAX_PIXELS = 40_000_000
-
-const sizeMessage = `画像は${CONTACT_IMAGE_MAX_COUNT}枚まで、合計${CONTACT_IMAGES_TOTAL_MAX_BYTES / 1024 / 1024}MBまで添付できます`
 
 /**
  * 添付の画像を確かめ、JPEG に書き出し直す（031 §3-12・§4.7）。
@@ -30,13 +30,13 @@ export async function rewriteContactImages(
   { maxPixels = CONTACT_IMAGE_MAX_PIXELS }: { maxPixels?: number } = {}
 ): Promise<ContactAttachment[]> {
   const images = files.filter((file) => file.size > 0)
-  if (images.length > CONTACT_IMAGE_MAX_COUNT) throw new ActionError(sizeMessage)
+  if (images.length > CONTACT_IMAGE_MAX_COUNT) throw new ActionError(CONTACT_IMAGES_LIMIT_MESSAGE)
   const total = images.reduce((sum, file) => sum + file.size, 0)
   if (
     images.some((file) => file.size > CONTACT_IMAGE_MAX_BYTES) ||
     total > CONTACT_IMAGES_TOTAL_MAX_BYTES
   ) {
-    throw new ActionError(sizeMessage)
+    throw new ActionError(CONTACT_IMAGES_LIMIT_MESSAGE)
   }
 
   return Promise.all(
@@ -51,9 +51,7 @@ export async function rewriteContactImages(
 }
 
 async function rewriteImage(input: Buffer, index: number, maxPixels: number): Promise<Buffer> {
-  const unreadable = new ActionError(
-    `${index + 1}枚目の画像は添付できません。PNG・JPEG・WebP の画像を選んでください`
-  )
+  const unreadable = new ActionError(`${index + 1}枚目: ${CONTACT_IMAGE_UNREADABLE_MESSAGE}`)
   try {
     // metadata() はヘッダだけを読む。形式が合わなければ画素を読まずに止める
     const { format } = await sharp(input, { limitInputPixels: maxPixels }).metadata()

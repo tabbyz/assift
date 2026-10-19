@@ -1,3 +1,4 @@
+import { truncate } from '@/lib/migration/truncate'
 import { CONTACT_TOPICS, type ContactTopic } from '@/lib/validation/contact'
 
 /** 本文の末尾に添える情報（031 §4.4）。サーバーで確かめた値だけを入れる */
@@ -31,15 +32,15 @@ function singleLine(value: string): string {
     .trim()
 }
 
-/** コードポイントで切る（サロゲートペアの途中で切らない） */
-function truncate(value: string, max: number): string {
-  const chars = Array.from(value)
-  return chars.length > max ? `${chars.slice(0, max).join('')}…` : value
+/** コードポイントで切る（サロゲートペアの途中で切らない。数え方は移行の切り詰めと同じ） */
+function clip(value: string, max: number): string {
+  const t = truncate(value, max)
+  return t.truncated ? `${t.value}…` : t.value
 }
 
 /** 件名: `[お問い合わせ] 種類：内容の先頭 30 文字`。Gmail が問い合わせごとに別のスレッドにする（031 §4.5） */
 export function contactSubject(topic: ContactTopic, body: string): string {
-  return `[お問い合わせ] ${CONTACT_TOPICS[topic]}：${truncate(singleLine(body), SUBJECT_SNIPPET_LENGTH)}`
+  return `[お問い合わせ] ${CONTACT_TOPICS[topic]}：${clip(singleLine(body), SUBJECT_SNIPPET_LENGTH)}`
 }
 
 /**
@@ -71,7 +72,7 @@ export function contactText({
     lines.push(`店舗: ${singleLine(context.tenant.name)}（id: ${context.tenant.id}）`)
   if (context.digest) lines.push(`エラー番号: ${context.digest}`)
   if (context.userAgent) {
-    lines.push(`ブラウザ: ${truncate(singleLine(context.userAgent), USER_AGENT_MAX_LENGTH)}`)
+    lines.push(`ブラウザ: ${clip(singleLine(context.userAgent), USER_AGENT_MAX_LENGTH)}`)
   }
   return lines.join('\n')
 }
