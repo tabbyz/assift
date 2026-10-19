@@ -2,7 +2,7 @@
 
 - 前提: 014（初期設定。§3.2「テンプレートは仮の値」・§3.4「業種は保存しない」・§7「実データで見直す」の申し送り）/
   021（v1 データ移行。v1 のスキーマと件数）/ 026（カットオーバー。10/30 予定）
-- 状態: **プラン確定（2026-10-19）。集計（§3・§5）を終え、業種の一覧とテンプレートを決めた（§2）。レビューを 5 回行って収束した（§8。5 回目は高・中 0 件）。実装はこれから、リリースはカットオーバーの後（§2-8）**
+- 状態: **プラン確定（2026-10-19）。集計（§3・§5）を終え、業種の一覧とテンプレートを決めた（§2）。レビューを 5 回行って収束した（§8。5 回目は高・中 0 件）。実装はこれから、リリースはカットオーバーの前（10/26 までに merge。§2-8）**
 
 ## 1. 目的と完了条件
 
@@ -53,8 +53,9 @@
    「翌日の明けの必要人数に空きがある日」にしか夜勤を置かなくなる（012 §5.3 の H10。`lib/assist/problem.ts` の `pair_no_slot`）。
    初期設定では必要人数を持たないので、店長が明けの必要人数を夜勤と同じ数だけ入れないかぎり、夜勤が自動で入らない。
    お休みなら出勤日数・週の上限・必要人数に数えず、自動作成はペアの枠を気にせず夜勤を置ける（2026-10-19 に利用者が決めた）
-8. **リリースはカットオーバー（10/30）の後。** 10/27 以降は main への merge を止める（026 §5）。急ぐものではなく、
-   カットオーバーの前後に本番のスキーマを動かさない。migration を先に本番へ入れ、アプリはその後に出す（§4.6）
+8. **リリースはカットオーバー（10/30）の前。** 026 §5 で 10/27 から main への merge を止めるので、**10/26 までに merge する**（2026-10-19 に利用者が決めた。
+   移行した利用者が最初から新しいテンプレートと業種の保存を使える）。Deploy to production はオフのままなので、merge の前に `db push` で migration を本番へ入れ、
+   アプリはその後に出す（§4.6）。026 §5 の 10/29 の確認（`migration list` で本番と main が揃う）に 034 の migration も入る
 
 ## 3. 集計（v1 の実データ）
 
@@ -151,7 +152,7 @@ setup_template_version smallint check (setup_template_version > 0),
   **「`setup_*` は初期設定でだけ書く」はアプリの決まりで、DB では守らない。** 利用者は PostgREST から自分の店舗の `setup_*` を直接書けるが、
   崩れるのは自分の店舗の集計用の値だけなので受け入れる（列ごとの GRANT で絞ると、`security invoker` の RPC 自身も書けなくなる）。`select('*')` で読んでいる `getTenant` などは型が増えるだけ
 - DB から読んだ値は `string | null` なので、画面に渡す前に `isIndustry()`（`lib/setup/templates.ts` に足す。`INDUSTRIES` に含まれるか）で絞り、一覧に無い値は null として扱う
-- v1 のインポート（021）は列を指定して入れるので影響しない（`scripts/migrate-v1/import.ts`）。カットオーバーの後に出すので（§2-8）、当日の手順にも関わらない
+- v1 のインポート（021）は列を指定して入れるので影響しない（`scripts/migrate-v1/import.ts`）。カットオーバーの前に出すので（§2-8）、当日のインポートは新しい列のある表に入れる（3 列とも null で入る。021 のリハーサルの手順は変わらない）
 
 ### 4.2 初期設定で保存する
 
@@ -279,14 +280,14 @@ create or replace function public.save_setup_patterns(
    本番に入れる前に migration を直す・作り直すときは、古い 034 の migration を消してから `declarative sync` で作り直し、DROP FUNCTION と
    `restrict_anon_grants.sql` の追記を確かめ直したうえで、**PR を閉じて開き直す**（ブランチ DB が作り直される）。プレビューで初期設定をもう一度通す。
    **`db push` はレビューが終わってから。** 本番に入れた後に直すことになったら、入れたものは書き換えず、新しい migration を足す（AGENTS.md「適用済みの migration は書き換えない」）
-3. **カットオーバーの後**（§2-8）、merge の前に本番へ `npx supabase db push` で migration を入れる（Deploy to production がオフのあいだ。024 §3-10）。
+3. **10/26 までに**（§2-8）、merge の前に本番へ `npx supabase db push` で migration を入れる（Deploy to production がオフのあいだ。024 §3-10）。
    - push の直前に main を取り込み、`migration list` で本番の migration がすべてブランチにあり、034 の migration が一番新しいことを確かめる。
      古ければ（作ってから本番に入れるまでに main に新しい migration が入った）、手順 2 のとおり作り直し、PR を開き直してプレビューを通してから push する
    - push したら、`anon` が実行できる `public` の関数が 0 件であることを確かめる（関数を足し直したため）。024 §4.2 の SQL（`information_schema.role_routine_grants`）は
      PUBLIC に付いた EXECUTE を数えないので、pgTAP（`rls_tenant_isolation.sql`）と同じ式で見る:
      `select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and has_function_privilege('anon', p.oid, 'EXECUTE')` が 0 行
    - 入れた直後から、古いアプリの初期設定は新しい関数（既定値つき）で動く。**push と merge は続けて行う**（間にほかの migration の PR を merge しない・Deploy to production をオンにしない）
-4. Deploy to production をオンにした後（026 §5 では 11/2〜11/6）に出す場合は、migration だけの PR を先に merge し、本番に入ったのを見てからアプリの PR を merge する
+4. （参考）Deploy to production をオンにした後（026 §5 では 11/2〜11/6）に出す場合は、migration だけの PR を先に merge し、本番に入ったのを見てからアプリの PR を merge する
    （オンのときは migration と Vercel のデプロイのどちらが先か決まっていない。024 §4.8）。**アプリが先に出ると、初期設定のステップ 2 の保存が「関数が無い」で失敗する**。
    その migration の PR がオンにした直後の最初の merge になるなら、024 §4.8 の確かめ（merge の前後で Auth の画面を比べる）も兼ねる
 
