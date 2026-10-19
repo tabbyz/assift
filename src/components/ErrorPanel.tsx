@@ -6,6 +6,7 @@ import { Anchor, Button, Container, Group, Stack, Text, Title } from '@mantine/c
 import { ERROR_TEXT, errorDigest } from '@/components/errorText'
 import { isAdminPath } from '@/lib/admin/paths'
 import { CONTACT_PATH, contactHref } from '@/lib/contact/path'
+import { parseDigest } from '@/lib/validation/contact'
 
 /** `error.tsx` / `global-error.tsx` の props（Next は型を生成しない。`error-boundary.d.ts` の `ErrorInfo` と同じ） */
 export type ErrorPageProps = {
@@ -42,6 +43,8 @@ export function ErrorPanel({ error, retry, home }: Props) {
   // `retry()` は `router.refresh()` を transition で走らせる。描き直しが終わるまでボタンに loading を出す（連打させない）
   const [isPending, startTransition] = useTransition()
   const digest = errorDigest(error)
+  // フォームが受け付ける形のエラー番号だけ引き継ぐ（それ以外は「自動で添えます」と書かない。画面には出す）
+  const formDigest = parseDigest(digest)
 
   return (
     <Container size="sm" py="xl">
@@ -64,10 +67,10 @@ export function ErrorPanel({ error, retry, home }: Props) {
           <Text size="sm" c="dimmed" ta="center">
             {ERROR_TEXT.contactFormPrefix}
             {/* 素の `<a>`（全体の読み込み）。「戻る」と同じく、クライアント遷移だと境界が残ることがある */}
-            <Anchor href={contactHref({ tenantId, digest })} inherit>
+            <Anchor href={contactHref({ tenantId, digest: formDigest })} inherit>
               {ERROR_TEXT.contactFormLink}
             </Anchor>
-            {ERROR_TEXT.contactFormSuffix(digest)}
+            {ERROR_TEXT.contactFormSuffix(formDigest)}
           </Text>
         ) : (
           <Text size="sm" c="dimmed" ta="center">

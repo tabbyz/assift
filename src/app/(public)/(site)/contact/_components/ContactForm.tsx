@@ -54,20 +54,29 @@ type Attachment = { id: number; blob: Blob; preview: string }
 const TOPIC_OPTIONS = Object.entries(CONTACT_TOPICS).map(([value, label]) => ({ value, label }))
 
 /** 完了の画面の「別のお問い合わせを送る」で、入力・添付・id を空にして作り直す */
-export function ContactForm(props: Props) {
+export function ContactForm({ account: initialAccount, ...props }: Props) {
   const [round, setRound] = useState(0)
-  return <ContactFormBody key={round} {...props} onAgain={() => setRound((r) => r + 1)} />
+  // 作り直しても、送るときに分かったログインの切れ（`contact_email_required`）は引き継ぐ
+  const [account, setAccount] = useState(initialAccount)
+  return (
+    <ContactFormBody
+      key={round}
+      {...props}
+      account={account}
+      onAccountLost={() => setAccount(null)}
+      onAgain={() => setRound((r) => r + 1)}
+    />
+  )
 }
 
 function ContactFormBody({
-  account: initialAccount,
+  account,
   tenant,
   digest,
   initialTopic,
+  onAccountLost,
   onAgain,
-}: Props & { onAgain: () => void }) {
-  // 送るときにセッションが切れていたら null にして、返信先の欄を出す（`contact_email_required`）
-  const [account, setAccount] = useState(initialAccount)
+}: Props & { onAccountLost: () => void; onAgain: () => void }) {
   const [topic, setTopic] = useState<string | null>(initialTopic)
   const [email, setEmail] = useState('')
   const [body, setBody] = useState('')
@@ -143,6 +152,7 @@ function ContactFormBody({
   const submit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     // 種類の Select は読み取り専用の input なので、ブラウザの required が効かない。画像を送る前にここで止める
+    setFailed(false)
     if (!topic) {
       setError('お問い合わせの種類を選んでください')
       return
@@ -164,7 +174,6 @@ function ContactFormBody({
     attachments.forEach((a, i) => data.append('images', a.blob, `image-${i + 1}.jpg`))
 
     setError(undefined)
-    setFailed(false)
     startTransition(async () => {
       try {
         const r = await sendContact(data)
@@ -172,7 +181,7 @@ function ContactFormBody({
           setError(r.error)
           // セッションが切れていた: 入力はそのまま残し、返信先の欄を出す（欄を埋めれば送れるので、アドレスは案内しない）
           if (r.code === 'contact_email_required') {
-            setAccount(null)
+            onAccountLost()
             return
           }
           // 送れなかった・想定外のエラーのときだけ、代わりのアドレスを案内する（入力の誤りは直せば送れる）
