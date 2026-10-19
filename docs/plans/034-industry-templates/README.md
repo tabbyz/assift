@@ -160,7 +160,8 @@ industry      text check (industry in ('food', 'retail', 'beauty', 'care', 'clin
 industry_note text check (char_length(industry_note) between 1 and 20),
 ```
 
-表の制約として `constraint tenants_industry_note_other_only check (industry_note is null or industry = 'other')` を足す（「その他」以外では持たない。名前を付けて、あとの差分 migration で差し替えやすくする）。
+表の制約として `constraint tenants_industry_note_other_only check (industry_note is null or industry is not distinct from 'other')` を足す（「その他」以外では持たない。名前を付けて、あとの差分 migration で差し替えやすくする）。
+`industry = 'other'` と書くと、業種が null のとき `false or null` = null になり、CHECK は null を通すので「業種なしで一言あり」が入ってしまう。
 
 - enum ではなく `text` + `check`。業種を足す・まとめるときに、制約の差し替えで済む（enum は値を消せない）
 - `gen types` は `text` を `string` で出すので、TS の型では `INDUSTRIES` とのずれに気付けない。
@@ -201,6 +202,7 @@ industry_note text check (char_length(industry_note) between 1 and 20),
 - 「業種を選びなおす」で業種の選択に戻ったら、`industry` と `industryNote` を null に戻す（今までどおり。選び直すとテンプレートが当たる）
 - 「次へ」で保存し直すかの判定に業種と一言を含める。保存済みかを見る文字列は初めの値（`savedSnapshot`）・`dirty`・保存した直後の `setSaved` の 3 か所で作っているので、
   `snapshot(state, industry, industryNote)` の 1 つの関数にまとめて 3 か所から使う（1 か所でも入れ忘れると、保存した直後も保存し直しが要る扱いになる）。
+  一言は比べる前に `normalizeIndustry` を通す（`TextInput` の `''` と保存済みの null を同じに扱う。通さないと、触っていないのに保存し直しになる）。
   **勤務の状態が null なら null を返す**（いまの `savedSnapshot` と同じ。`saved !== null` は「勤務を保存済み」の印として `fromSaved`・「あとで続ける」の着地にも使われている）
 
 ### 4.3 店舗情報の画面で直す
@@ -214,7 +216,8 @@ industry_note text check (char_length(industry_note) between 1 and 20),
 - `updateTenant` の入力と `updateTenantSchema`（`lib/validation/tenants.ts`）に `industry: z.enum(INDUSTRIES, { error: '業種を選び直してください' }).nullish()` と
   `industryNote: industryNoteSchema.nullish()` を足す。**`industry` が undefined なら業種と一言に触らない**。
   Action は `industry !== undefined` のときだけ、`normalizeIndustry` で整えた 2 つを `industry` / `industry_note` に書く（§4.2 と同じ関数）
-- 画面は業種か一言を変えたときだけ 2 つを送る。**比べる相手は `props`**（保存のあと `revalidatePath` で新しい値になる。マウントしたときの値を控えて比べると、
+- 画面は業種か一言を変えたときだけ 2 つを送る。比べる前に、画面の値と props の両方を `normalizeIndustry` に通す（一言の `''` と null を同じに扱う。
+  通さないと毎回「変えた」扱いになり、page が一覧に無い値を null にして渡したときに、店舗名を直しただけで業種を消してしまう）。**比べる相手は `props`**（保存のあと `revalidatePath` で新しい値になる。マウントしたときの値を控えて比べると、
   A → B と保存したあと B → A に戻した保存が送られない）。送らない理由は 2 つ:
   - Server Action の id はデプロイをまたいで残りうるので（§4.2）、リリース前に開いたタブ（業種を送らない）からの保存を止めない。`nullable()` だと止まり、
     `industry ?? null` だと黙って業種を消す
@@ -230,7 +233,8 @@ industry_note text check (char_length(industry_note) between 1 and 20),
 - 業種のボタンの並び（`PatternsStep.tsx` の `SimpleGrid`）を `cols={{ base: 1, xs: 2 }}` から `cols={2}` にする（390px で 1 列 × 9 段だと縦に長い）。
   添え書きは 2 行に折り返してよい。390px で「事務所・コールセンター」が収まるかを手で見る
 - 完成イメージの見本のお休みは、テンプレートの先頭のお休み（休み）だけにする（`SetupPreview` が `samplePattern` にお休みの先頭 1 つだけを渡す）。
-  全部を回すと、希望休（ピンク）・有給・明けが見本の表に散らばる
+  全部を回すと、希望休（ピンク）・有給・明けが見本の表に散らばる。そのため**介護のテンプレートの明けは、お休みの最後（有給の後ろ）に置く**
+  （いまは共通のお休みの前にあり、先頭のお休みが明けになる）
 - `validation/setup.ts` の `SETUP_PATTERNS_MAX` のコメント「テンプレートは多くて 7 件」を 8 件に直す（介護: 働く日 4 + 明け + お休み 3）
 - 古くなるコメントを直す: `templates.ts` 冒頭の「値は仮のもので、v1 の実データを見て決めたものではない」（→ 034 で v1 の実データから決めた）と
   「同じ業種の中で重ならない」（→ 同じテンプレートの中で）、
@@ -251,11 +255,12 @@ industry_note text check (char_length(industry_note) between 1 and 20),
   - 添え書きが業種の間で重ならない（テスト名「ボタンに添える中身は働く日の勤務を 3 つまで」を「添え書きは業種ごとに書き、重ならない」に）
   - `isIndustry`
   - **`supabase/schemas/public/tables/tenants.sql` の `industry` の check の値が `INDUSTRIES` と同じ**（`node:fs` で読む）
-- `patternsState.test.ts`: 飲食の行の並びの期待値を `['早番', '通し', '休み', '希望休', '有給']` に、その他のテンプレートで「公休」の行を探しているところを「休み」に直す
-- `validation/tenants.test.ts` に `normalizeIndustry`（その他以外の一言を捨てる・空欄は null）。`validation/setup.test.ts`（既存）: `industry` は 9 つの値と省略を通し、一覧に無い値は「画面を読み込み直してください」/ その他以外の一言は捨てる / 空欄の一言は null /
+- `patternsState.test.ts`: 介護のペア（明けを最後に移しても `pair` の key で張れる）を確かめ直す。飲食の行の並びの期待値を `['早番', '通し', '休み', '希望休', '有給']` に、その他のテンプレートで「公休」の行を探しているところを「休み」に直す
+- `validation/setup.test.ts`（既存）: `industry` は 9 つの値と省略を通し、一覧に無い値は「画面を読み込み直してください」/ その他以外の一言は捨てる / 空欄の一言は null /
   21 文字の一言は日本語のエラー
-- `validation/tenants.test.ts`（新規）: `updateTenantSchema` が業種の省略・null・9 つの値を通し、ほかを日本語のエラーで弾く / 一言は同上
-- pgTAP（`supabase/tests/setup.sql`。`plan()` の数を直す）: `tenants.industry` に 9 つの値が入る・ほかは 23514 / 一言は「その他」のときだけ入る（ほかは 23514）・
+- `validation/tenants.test.ts`（新規）: `normalizeIndustry`（その他以外の一言を捨てる・空欄は null）/ `updateTenantSchema` が業種の省略・null・9 つの値を通し、
+  ほかを日本語のエラーで弾く / 一言は同上
+- pgTAP（`supabase/tests/setup.sql`。`plan()` の数を直す）: `tenants.industry` に 9 つの値が入る・ほかは 23514 / 一言は「その他」のときだけ入る（ほかの業種・**業種が null** は 23514）・
   21 文字は 23514・空文字は 23514
 - 手で（**プレビューで**。本番では試さない。§4.6）: 新しい店舗で 9 業種を一巡（PC 幅・390px。ボタンの並びと完成イメージも見る）。業種を選んで「あとで続ける」→ 開き直して帯に業種が出る。その他の一言を入れて保存 → 開き直して残る。
   店舗情報で業種を変える・外す・その他の一言を直す
@@ -277,7 +282,8 @@ industry_note text check (char_length(industry_note) between 1 and 20),
    - 列を足すだけなので、入れた直後も古いアプリはそのまま動く。**push と merge は続けて行う**（間にほかの migration の PR を merge しない）
    - **アプリが先に出ると、初期設定のステップ 2 で業種の書き込みが「列が無い」で失敗する**（勤務は保存されるが、画面は失敗を出して先に進めない）。必ず migration が先
    - **push したのにアプリの PR を merge できない**とき（CI・プレビューの不具合、10/26 に間に合わない）は、同じ日のうちに migration だけの PR を main に merge する
-     （列を足すだけで古いアプリと両立する）。本番にあって main に無い migration を残さない（026 §5 の 10/29 の `migration list` が揃わず、以後の `db push` も失敗する）。
+     （列を足すだけで古いアプリと両立する）。その PR には migration と一緒に `supabase/schemas/public/tables/tenants.sql` の 2 列と制約、`src/types/database.ts` も入れる
+     （migration だけだと宣言的スキーマが正でなくなり、次の `declarative sync` が列を落とす migration を作る）。本番にあって main に無い migration を残さない（026 §5 の 10/29 の `migration list` が揃わず、以後の `db push` も失敗する）。
      push する前に間に合わないと分かったら、push しない（カットオーバーの後に回す）
    - push と merge をしたら、026 の実装ログに「10/26（実際の日）に 034 の migration を本番へ入れた」と 1 行書く（当夜の手順書に、本番のスキーマが変わった日を残す）
 4. **merge のあと、本番では店舗もアカウントも作らない。** 本番はインポートの前まで「管理用アカウント 1 件・店舗 0 件」でなければならない（024 §5・021 §9.3）。
@@ -431,3 +437,4 @@ v2 ではこの区分が出勤日数の集計（`lib/shifts/count.ts`）と自�
   | 回 | 高 / 中 / 低 | 主な中の指摘と直し |
   | --- | --- | --- |
   | 6 | 0 / 2 / 7 | 店舗情報で一言を空欄にすると `''` が DB の制約で落ちる → 空欄は null・その他以外は捨てる処理を `normalizeIndustry` 1 つに置く / merge の後に本番で試すと 10/30 のインポートが止まる → 本番では店舗もアカウントも作らない |
+  | 7 | 0 / 1 / 4 | 一言の制約が業種 null の行を通す（`false or null` = null）→ `is not distinct from 'other'`。ほかに介護の明けの位置・`''` と null の比べ方・migration だけの PR に宣言的スキーマも入れる |
