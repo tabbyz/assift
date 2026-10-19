@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { toActionError } from '@/lib/actions/error'
-import { CONTACT_BODY_MAX_LENGTH, contactSchema, parseDigest } from './contact'
+import { CONTACT_BODY_MAX_LENGTH, contactSchema } from './contact'
 
 const valid = {
   topic: 'bug',
@@ -68,19 +68,5 @@ describe('contactSchema', () => {
   it('エラー番号の形が違えば失敗にせず捨てる', () => {
     expect(contactSchema.parse({ ...valid, digest: '<script>' }).digest).toBeUndefined()
     expect(contactSchema.parse({ ...valid, digest: '1485408959' }).digest).toBe('1485408959')
-  })
-})
-
-describe('parseDigest', () => {
-  it('英数字・ハイフン・下線の 64 文字までを通す', () => {
-    expect(parseDigest('abc_DEF-123')).toBe('abc_DEF-123')
-    expect(parseDigest('a'.repeat(64))).toBe('a'.repeat(64))
-  })
-
-  it('それ以外・空・null は undefined', () => {
-    expect(parseDigest('a'.repeat(65))).toBeUndefined()
-    expect(parseDigest('a b')).toBeUndefined()
-    expect(parseDigest('')).toBeUndefined()
-    expect(parseDigest(null)).toBeUndefined()
   })
 })

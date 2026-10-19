@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { parseDigest } from '@/lib/contact/path'
 import { emailSchema } from './auth'
 
 /** お問い合わせの種類（031 §4.3）。キーは URL の `?topic=` とメールの件名に使う */
@@ -35,15 +36,6 @@ export const CONTACT_IMAGE_UNREADABLE_MESSAGE =
 export const CONTACT_IMAGES_LIMIT_MESSAGE = `画像は${CONTACT_IMAGE_MAX_COUNT}枚まで、合計${CONTACT_IMAGES_TOTAL_MAX_BYTES / 1024 / 1024}MBまで添付できます。枚数を減らしてください`
 export const CONTACT_IMAGE_TOO_LARGE_MESSAGE =
   '画像が大きすぎて添付できません。画面の一部を切り取るなどして小さくしてください'
-
-/**
- * Next のエラー番号（`error.digest`）。英数字とハイフン・下線だけ。URL（`?digest=`）から来るので形と長さで絞る。
- * 形に合わなければ付けない（失敗にはしない）
- */
-const DIGEST_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
-export function parseDigest(value: string | null | undefined): string | undefined {
-  return value && DIGEST_PATTERN.test(value) ? value : undefined
-}
 
 /** フォームの空欄は `''` で届く。任意の欄は空なら無いものとして扱う */
 const blankToUndefined = (value: unknown) => (value === '' ? undefined : value)

@@ -5,8 +5,7 @@ import { useParams, usePathname } from 'next/navigation'
 import { Anchor, Button, Container, Group, Stack, Text, Title } from '@mantine/core'
 import { ERROR_TEXT, errorDigest } from '@/components/errorText'
 import { isAdminPath } from '@/lib/admin/paths'
-import { CONTACT_PATH, contactHref } from '@/lib/contact/path'
-import { parseDigest } from '@/lib/validation/contact'
+import { CONTACT_PATH, contactHref, parseDigest } from '@/lib/contact/path'
 
 /** `error.tsx` / `global-error.tsx` の props（Next は型を生成しない。`error-boundary.d.ts` の `ErrorInfo` と同じ） */
 export type ErrorPageProps = {

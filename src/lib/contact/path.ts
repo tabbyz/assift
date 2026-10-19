@@ -28,3 +28,12 @@ export function contactHref({ tenantId, digest, topic }: ContactHrefOptions = {}
   const query = params.toString()
   return query ? `${CONTACT_PATH}?${query}` : CONTACT_PATH
 }
+
+/**
+ * Next のエラー番号（`error.digest`）。Zod を使わずにここに置く（エラー画面は全ページに入るので、Zod を持ち込まない）。英数字とハイフン・下線だけ。URL（`?digest=`）から来るので形と長さで絞る。
+ * 形に合わなければ付けない（失敗にはしない）
+ */
+const DIGEST_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
+export function parseDigest(value: string | null | undefined): string | undefined {
+  return value && DIGEST_PATTERN.test(value) ? value : undefined
+}
