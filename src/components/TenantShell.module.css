@@ -6,6 +6,10 @@
 }
 
 .navLink {
+  /* アイコンと文字を横に並べる（「設定」の歯車） */
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 6px 8px;
   font-size: 13px;
   color: var(--mantine-color-dimmed);

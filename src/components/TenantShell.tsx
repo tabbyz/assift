@@ -24,7 +24,7 @@ import {
   UnstyledButton,
 } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
-import { IconCreditCard, IconMail, IconUserCircle } from '@tabler/icons-react'
+import { IconCreditCard, IconMail, IconSettings, IconUserCircle } from '@tabler/icons-react'
 import { AssiftSymbol } from '@/components/brand/AssiftLogo'
 import { LogoutMenuItem, LogoutNavLink } from '@/components/LogoutMenuItem'
 import { TenantSwitcher } from '@/components/TenantSwitcher'
@@ -108,6 +108,7 @@ export function TenantShell({ tenant, tenants, email, banner, children }: Props)
               className={classes.navLink}
               data-active={settingsActive || undefined}
             >
+              <IconSettings size={16} stroke={1.75} aria-hidden />
               設定
             </UnstyledButton>
 
