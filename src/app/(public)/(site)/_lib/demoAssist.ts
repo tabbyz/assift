@@ -20,7 +20,7 @@ export type DemoAssistInput = {
   required: RequiredByDate
   /** 割り当てる勤務と順番 */
   patternIds: readonly string[]
-  /** 勤務日に数えるパターンか（公休・有給は数えない） */
+  /** 勤務日に数えるパターンか（デモの公休・有給は数えない。デモは 014 のひな形のまま。034） */
   isWorkday: (patternId: string) => boolean
   /** `after` の翌日に `before` を入れない */
   rest: { readonly after: string; readonly before: string }

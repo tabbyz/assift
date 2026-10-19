@@ -1,21 +1,59 @@
 import type { PatternKind } from '@/lib/patterns/kinds'
 
 /**
- * 初期設定の業種テンプレート（014 §5.3）。値は仮のもので、v1 の実データを見て決めたものではない。
+ * 初期設定の業種とテンプレート（014 §5.3・034 §2-6・§2-7）。テンプレートの値は 034 で v1 の実データから決めた。
+ *
+ * 業種は店舗の分析にも使うので 9 つに分け、テンプレートは 6 つのまま業種ごとに当てるものを決める（`TEMPLATE_OF`）。
+ * 業種の値は `tenants.industry` の check と同じ（`templates.test.ts` が `tenants.sql` を読んで確かめる）。
  *
  * 時間は説明欄（10 文字まで）に入れるので、seed と同じ「9-17時」の書き方にする（`17:00〜23:00` は 11 文字で入らない）。
- * 色は `PATTERN_COLORS` の中から、同じ業種の中で重ならないように選ぶ。必要人数は持たない（初回では聞かない。014 §3.4）。
+ * 色は `PATTERN_COLORS` の中から、同じテンプレートの中で重ならないように選ぶ。必要人数は持たない（初回では聞かない。014 §3.4）。
  */
 
-export const INDUSTRIES = ['food', 'retail', 'care', 'nursery', 'other'] as const
+export const INDUSTRIES = [
+  'food',
+  'retail',
+  'beauty',
+  'care',
+  'clinic',
+  'nursery',
+  'logistics',
+  'office',
+  'other',
+] as const
 export type Industry = (typeof INDUSTRIES)[number]
 
 export const INDUSTRY_LABELS: Record<Industry, string> = {
   food: '飲食店',
-  retail: '小売・コンビニ',
-  care: '介護・医療',
+  retail: '小売・販売',
+  beauty: '美容・サロン',
+  care: '介護・福祉',
+  clinic: 'クリニック・歯科',
   nursery: '保育・教育',
+  logistics: '物流・工場',
+  office: '事務所・コールセンター',
   other: 'その他',
+}
+
+/**
+ * ボタンに添える店の例。勤務の例にすると、同じテンプレートを当てる業種で添え書きが重なる（034 §2-6）。
+ * 選ぶときに要るのは「自分はどれか」で、勤務は選んだ直後の画面で見える
+ */
+const INDUSTRY_EXAMPLES: Record<Industry, string> = {
+  food: 'カフェ・居酒屋・レストラン',
+  retail: 'スーパー・アパレル・コンビニ',
+  beauty: '美容室・ネイル・エステ',
+  care: '施設・デイサービス・訪問',
+  clinic: '医院・歯科・薬局',
+  nursery: '保育園・学童・塾',
+  logistics: '倉庫・工場・配送',
+  office: '事務・受付・コールセンター',
+  other: '上にないお店',
+}
+
+/** DB から読んだ値（`string | null`）を業種に絞る。一覧に無い値は null として扱う */
+export function isIndustry(value: unknown): value is Industry {
+  return typeof value === 'string' && (INDUSTRIES as readonly string[]).includes(value)
 }
 
 /** 画面の 1 行。`key` は画面の中だけの識別子（保存すると DB の id に変わる） */
@@ -50,8 +88,13 @@ type TemplateRow = {
 }
 type Template = { rows: TemplateRow[]; pair: SetupPair | null }
 
+/**
+ * どのテンプレートにもあるお休み（034 §2-7）。先頭の「休み」は完成イメージの見本にも使う。
+ * 希望休は休みと見分けられる色にする（赤は早番の `#FF5722` と並ぶと見分けにくいのでピンク）
+ */
 const DAYOFF_ROWS: TemplateRow[] = [
-  { key: 'dayoff', name: '公休', description: '', colorHex: '#FFFFFF', kind: 'dayoff' },
+  { key: 'dayoff', name: '休み', description: '', colorHex: '#FFFFFF', kind: 'dayoff' },
+  { key: 'request', name: '希望休', description: '', colorHex: '#E91E63', kind: 'dayoff' },
   { key: 'paid', name: '有給', description: '', colorHex: '#4CAF50', kind: 'dayoff' },
 ]
 
@@ -63,32 +106,37 @@ const work = (key: string, name: string, description: string, colorHex: string):
   kind: 'workday',
 })
 
-const TEMPLATES: Record<Industry, Template> = {
+export const TEMPLATE_KEYS = ['food', 'shifts3', 'care', 'clinic', 'nursery', 'general'] as const
+type TemplateKey = (typeof TEMPLATE_KEYS)[number]
+
+const TEMPLATES: Record<TemplateKey, Template> = {
   food: {
     rows: [
-      work('early', '早番', '9-17時', '#FF5722'),
-      work('late', '遅番', '17-23時', '#3F51B5'),
+      work('early', '早番', '10-16時', '#FF5722'),
+      work('late', '遅番', '17-22時', '#3F51B5'),
       work('full', '通し', '10-22時', '#009688'),
       ...DAYOFF_ROWS,
     ],
     pair: null,
   },
-  retail: {
+  // 早番・中番・遅番（小売・美容・物流）
+  shifts3: {
     rows: [
-      work('morning', '朝', '6-9時', '#FFEB3B'),
-      work('day', '日中', '9-17時', '#03A9F4'),
-      work('evening', '夕方', '17-22時', '#9C27B0'),
-      work('night', '夜勤', '22-6時', '#607D8B'),
+      work('early', '早番', '9-18時', '#FF5722'),
+      work('middle', '中番', '10-19時', '#FFC107'),
+      work('late', '遅番', '12-21時', '#3F51B5'),
       ...DAYOFF_ROWS,
     ],
     pair: null,
   },
   care: {
     rows: [
-      work('early', '早番', '7-16時', '#FF5722'),
       work('day', '日勤', '9-18時', '#FFC107'),
+      work('early', '早番', '7-16時', '#FF5722'),
       work('late', '遅番', '11-20時', '#3F51B5'),
       work('night', '夜勤', '16-9時', '#607D8B'),
+      ...DAYOFF_ROWS,
+      // お休みの最後に置く（完成イメージの見本は先頭のお休みを使うので、明けを先頭にしない。034 §4.4）
       {
         key: 'after',
         name: '明け',
@@ -96,9 +144,17 @@ const TEMPLATES: Record<Industry, Template> = {
         colorHex: '#9E9E9E',
         kind: 'dayoff',
       },
-      ...DAYOFF_ROWS,
     ],
     pair: { fromKey: 'night', toKey: 'after' },
+  },
+  clinic: {
+    rows: [
+      work('day', '日勤', '9-18時', '#FFC107'),
+      work('am', '午前', '9-13時', '#03A9F4'),
+      work('pm', '午後', '14-18時', '#009688'),
+      ...DAYOFF_ROWS,
+    ],
+    pair: null,
   },
   nursery: {
     rows: [
@@ -109,15 +165,34 @@ const TEMPLATES: Record<Industry, Template> = {
     ],
     pair: null,
   },
-  other: {
-    rows: [work('day', '日勤', '9-18時', '#FFC107'), ...DAYOFF_ROWS],
+  // その他・事務所。業種を問わず最も合う組み合わせ（034 §5.2 の r5）
+  general: {
+    rows: [
+      work('day', '日勤', '9-18時', '#FFC107'),
+      work('early', '早番', '8-17時', '#FF5722'),
+      work('late', '遅番', '11-20時', '#3F51B5'),
+      ...DAYOFF_ROWS,
+    ],
     pair: null,
   },
 }
 
+/** 業種ごとに当てるテンプレート（034 §2-6） */
+export const TEMPLATE_OF: Record<Industry, TemplateKey> = {
+  food: 'food',
+  retail: 'shifts3',
+  beauty: 'shifts3',
+  care: 'care',
+  clinic: 'clinic',
+  nursery: 'nursery',
+  logistics: 'shifts3',
+  office: 'general',
+  other: 'general',
+}
+
 /** 業種を選んだ直後の状態。全行にチェックが付き、ペアのスイッチはオン */
 export function templateState(industry: Industry): SetupPatternsState {
-  const template = TEMPLATES[industry]
+  const template = TEMPLATES[TEMPLATE_OF[industry]]
   return {
     rows: template.rows.map((row) => ({ ...row, on: true })),
     pair: template.pair,
@@ -125,12 +200,9 @@ export function templateState(industry: Industry): SetupPatternsState {
   }
 }
 
-/** ボタンに添える中身（「早番・遅番 など」） */
+/** ボタンに添える店の例（「カフェ・居酒屋・レストラン」） */
 export function industryExample(industry: Industry): string {
-  const names = TEMPLATES[industry].rows
-    .filter((row) => row.kind === 'workday')
-    .map((row) => row.name)
-  return `${names.slice(0, 3).join('・')} など`
+  return INDUSTRY_EXAMPLES[industry]
 }
 
 /** 足した勤務に割り当てる色の順。働く日は暖色 → 寒色、お休みは淡い色から */

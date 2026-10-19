@@ -29,6 +29,7 @@ import {
   templateState,
 } from '@/lib/setup/templates'
 import { PATTERN_DESCRIPTION_MAX_LENGTH, PATTERN_NAME_MAX_LENGTH } from '@/lib/validation/patterns'
+import { INDUSTRY_NOTE_MAX_LENGTH } from '@/lib/validation/tenants'
 import { FieldError } from './FieldError'
 import classes from './Setup.module.css'
 
@@ -36,9 +37,12 @@ type Props = {
   /** null = まだ業種を選んでいない */
   state: SetupPatternsState | null
   onChange: (state: SetupPatternsState | null) => void
-  /** 業種名（テンプレートから選んだとき）。保存済みから戻したときは null */
+  /** 業種（034）。業種を選ばずに勤務がある店舗（v1 から準備中のまま移した店舗など）だけ null */
   industry: Industry | null
   onIndustryChange: (industry: Industry | null) => void
+  /** 業種が「その他」のときの任意の一言（034 §2-10） */
+  industryNote: string
+  onIndustryNoteChange: (note: string) => void
   /** 保存済みの勤務を表示中か（選びなおすと置き換えるので確かめる） */
   fromSaved: boolean
   /** 「次へ」を押したあとに出す足りないもの（業種が未選択 / 働く日が 0 件） */
@@ -54,6 +58,8 @@ export function PatternsStep({
   onChange,
   industry,
   onIndustryChange,
+  industryNote,
+  onIndustryNoteChange,
   fromSaved,
   error,
   headingRef,
@@ -95,7 +101,8 @@ export function PatternsStep({
           <Text c="dimmed">近いものを選ぶと、よく使う勤務を用意します。</Text>
         </Stack>
         <Stack gap={8}>
-          <SimpleGrid id="setup-field-industry" cols={{ base: 1, xs: 2 }} spacing="sm">
+          {/* 9 つあるので、スマホでも 2 列にする（1 列 × 9 段だと縦に長い。034 §4.4） */}
+          <SimpleGrid id="setup-field-industry" cols={2} spacing="sm">
             {INDUSTRIES.map((value) => (
               <UnstyledButton key={value} className={classes.industry} onClick={() => pick(value)}>
                 <Text component="span" display="block" fw={700}>
@@ -177,6 +184,15 @@ export function PatternsStep({
           業種を選びなおす
         </Button>
       </Group>
+      {industry === 'other' && (
+        <TextInput
+          label="お店の業種（任意）"
+          placeholder="例）ホテル"
+          maxLength={INDUSTRY_NOTE_MAX_LENGTH}
+          value={industryNote}
+          onChange={(event) => onIndustryNoteChange(event.currentTarget.value)}
+        />
+      )}
 
       {groups.map((group) => {
         const rows = state.rows.filter((row) => row.kind === group.kind)

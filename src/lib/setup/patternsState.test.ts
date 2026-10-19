@@ -41,7 +41,8 @@ describe('selectedPatterns', () => {
     expect(selectedPatterns(state).patterns.map((row) => row.name)).toEqual([
       '早番',
       '通し',
-      '公休',
+      '休み',
+      '希望休',
       '有給',
     ])
   })
@@ -117,7 +118,7 @@ describe('fromSavedPatterns', () => {
 
   it('空の説明は空文字に戻す', () => {
     const state = fromSavedPatterns(saved(templateState('other')))
-    expect(state.rows.find((row) => row.name === '公休')?.description).toBe('')
+    expect(state.rows.find((row) => row.name === '休み')?.description).toBe('')
   })
 })
 

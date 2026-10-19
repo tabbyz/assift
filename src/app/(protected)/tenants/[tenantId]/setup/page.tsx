@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation'
 import { SetupWizard } from '@/components/setup/SetupWizard'
 import { todayJst } from '@/lib/calendar/today'
 import { getSetupState, getTenant, listTenants } from '@/lib/queries/tenants'
+import { isIndustry } from '@/lib/setup/templates'
 import { shiftsHref } from '@/lib/tenants/navigation'
 import { getAuthUser } from '@/utils/auth/current'
 import { isUuid } from '@/utils/uuid'
@@ -41,6 +42,8 @@ export default async function SetupPage({ params }: PageProps<'/tenants/[tenantI
         name: tenant.name,
         shiftCycle: tenant.shift_cycle,
         startOfWeek: tenant.start_of_week,
+        industry: isIndustry(tenant.industry) ? tenant.industry : null,
+        industryNote: tenant.industry_note,
       }}
       initialStep={step}
       savedPatterns={patterns}

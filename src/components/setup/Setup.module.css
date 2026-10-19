@@ -103,6 +103,9 @@
   min-height: 64px;
   text-align: left;
   padding: 10px 14px;
+  /* スマホの 2 列（034）で「事務所・コールセ／ンター」と語の途中で折り返さない。「・」の後ろで折り返す */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 /* 選んだ業種と「選びなおす」 */

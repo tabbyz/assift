@@ -111,7 +111,7 @@ src/
     pdf/                          fonts（Font.register + 折り返し）/ styles / paginate / pdfCellStyle / ShiftPdfDocument
     actions/reorder.ts              reorder_positions RPC の共通ラッパ（staffs / patterns。restrictions は 013 で並べ替えをやめた）
     restrictions/                 制約の種類（kinds）/ 説明文（describe。土日祝の上限は表示期間で言い換える）/ 守れない下限の注意（warnings）/ 一覧の 1 行（rowView）
-    setup/                        初期設定（014）。業種テンプレート（templates。仮の値）/ 画面の状態と保存の形（patternsState）/ 名前の分割（parseStaffNames）/ 完成イメージ（preview）
+    setup/                        初期設定（014）。業種とテンプレート（templates。034 で v1 の実データから決めた。業種 9 つ → テンプレート 6 つ）/ 画面の状態と保存の形（patternsState）/ 名前の分割（parseStaffNames）/ 完成イメージ（preview）
     assist/                       自動アサイン（012）。problem → model（MILP）→ solver/highs → validate（最後の門番）→ reasons → levers（効く一手の試算）→ restrictionOutcomes（守れなかった「なるべく」。013）。llm/ は指示の解釈だけ
     supabase/createPrivilegedClient.ts   service_role の唯一の入口
     validation/                   Zod スキーマ

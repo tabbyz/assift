@@ -10,6 +10,7 @@ import { ensureStaffAddition } from '@/lib/billing/addition'
 import { throwIfStaffLimit } from '@/lib/billing/limit'
 import type { ShiftCycle } from '@/lib/calendar/shiftCycle'
 import { type SetupPatternsInput, toRpcPatterns } from '@/lib/setup/patternsState'
+import type { Industry } from '@/lib/setup/templates'
 import { shiftsHref } from '@/lib/tenants/navigation'
 import {
   completeSetupSchema,
@@ -80,13 +81,22 @@ export async function updateSetupTenant(input: {
   })
 }
 
-/** ステップ 2: 勤務をまとめて保存する（置き換え）。id はここで振る（ペアを id で書くため） */
+/**
+ * ステップ 2: 勤務をまとめて保存する（置き換え）。id はここで振る（ペアを id で書くため）。
+ * 業種があれば、勤務を保存したあとに店舗の行へ書く（034 §4.2。1 つのトランザクションではない:
+ * 業種の書き込みが失敗したら失敗を返し、画面は「次へ」で勤務と業種をまとめて書き直す）
+ */
 export async function saveSetupPatterns(
-  input: SetupPatternsInput & { tenantId: string }
+  input: SetupPatternsInput & {
+    tenantId: string
+    industry?: Industry | null
+    industryNote?: string | null
+  }
 ): Promise<SetupResult> {
   return runAction(async () => {
-    const { tenantId, patterns, pair } = saveSetupPatternsSchema.parse(input)
-    await requireUser()
+    const { tenantId, patterns, pair, industry, industryNote } =
+      saveSetupPatternsSchema.parse(input)
+    const user = await requireUser()
 
     // RPC が先頭で tenant not found を投げるので requireTenant() は呼ばない（往復を 1 回にする）
     const supabase = await createClient()
@@ -97,6 +107,16 @@ export async function saveSetupPatterns(
     if (error) {
       if (error.message.includes(SETUP_COMPLETED)) return { redirectTo: shiftsPath(tenantId) }
       failFromRpc(error)
+    }
+
+    // 店舗が見えて準備中なことは RPC の先頭で確かめてある
+    if (industry) {
+      const { error: industryError } = await supabase
+        .from('tenants')
+        .update({ industry, industry_note: industryNote })
+        .eq('id', tenantId)
+        .eq('owner_id', user.id)
+      if (industryError) throw industryError
     }
 
     // 再検証しない: 画面の状態はウィザードが持っていて、/setup は動的なので次に開けば読み直す

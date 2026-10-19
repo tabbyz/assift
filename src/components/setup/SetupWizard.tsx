@@ -20,6 +20,7 @@ import {
 } from '@/lib/setup/patternsState'
 import type { Industry, SetupPatternsState } from '@/lib/setup/templates'
 import { asksStartOfWeek } from '@/lib/validation/setup'
+import { normalizeIndustry } from '@/lib/validation/tenants'
 import { PatternsStep } from './PatternsStep'
 import { DeleteStoreLink, SetupDone, SetupPaused } from './SetupDone'
 import { SetupHeader } from './SetupHeader'
@@ -46,12 +47,24 @@ type Props = Common &
     | {
         /** `/tenants/<id>/setup`: ステップ 2・3（「もどる」でステップ 1 も） */
         mode: 'resume'
-        tenant: { id: string; name: string; shiftCycle: ShiftCycle; startOfWeek: number }
+        tenant: {
+          id: string
+          name: string
+          shiftCycle: ShiftCycle
+          startOfWeek: number
+          /** 保存済みの業種（034）。page が `isIndustry` で絞る */
+          industry: Industry | null
+          industryNote: string | null
+        }
         initialStep: 2 | 3
         savedPatterns: SavedPattern[]
         updateSetupTenant: (input: StoreInput & { tenantId: string }) => Promise<SetupResult>
         saveSetupPatterns: (
-          input: SetupPatternsInput & { tenantId: string }
+          input: SetupPatternsInput & {
+            tenantId: string
+            industry?: Industry | null
+            industryNote?: string | null
+          }
         ) => Promise<SetupResult>
         completeSetup: (
           input: { tenantId: string; names: string[] },
@@ -112,8 +125,22 @@ function openShifts(path: string) {
   window.location.assign(path)
 }
 
-const savedSnapshot = (state: SetupPatternsState | null) =>
-  state ? JSON.stringify(selectedPatterns(state)) : null
+/**
+ * 保存済みかを見る文字列。送るもの全部（勤務と業種・一言）を含める（034 §4.2）。
+ * 勤務が null なら null（`saved !== null` は「勤務を保存済み」の印として、選びなおしの確認と「あとで続ける」の着地にも使う）。
+ * 一言は `normalizeIndustry` を通す（入力欄の '' と保存済みの null を同じに扱う）
+ */
+const snapshot = (
+  state: SetupPatternsState | null,
+  industry: Industry | null,
+  industryNote: string
+) =>
+  state
+    ? JSON.stringify({
+        patterns: selectedPatterns(state),
+        ...normalizeIndustry({ industry, industryNote }),
+      })
+    : null
 
 /** 初期設定のウィザード（014 §4）。ヘッダー・ステップ・主ボタン・完成イメージを持つ */
 /** 「次へ」を押したときに足りないもの。`field` は入力欄の id（`setup-field-<field>`）に対応する */
@@ -156,10 +183,15 @@ export function SetupWizard(props: Props) {
         }
       : { name: '', shiftCycle: 'month', startOfWeek: null }
   )
+  const initialIndustry = props.mode === 'resume' ? props.tenant.industry : null
+  const initialIndustryNote = props.mode === 'resume' ? (props.tenant.industryNote ?? '') : ''
   const [patterns, setPatterns] = useState<SetupPatternsState | null>(initialPatterns)
-  const [industry, setIndustry] = useState<Industry | null>(null)
-  // 最後に保存した勤務（「あとで続ける」で保存が要るか・「次へ」で保存し直すかを決める）
-  const [saved, setSaved] = useState<string | null>(() => savedSnapshot(initialPatterns))
+  const [industry, setIndustry] = useState<Industry | null>(initialIndustry)
+  const [industryNote, setIndustryNote] = useState(initialIndustryNote)
+  // 最後に保存した勤務と業種（「あとで続ける」で保存が要るか・「次へ」で保存し直すかを決める）
+  const [saved, setSaved] = useState<string | null>(() =>
+    snapshot(initialPatterns, initialIndustry, initialIndustryNote)
+  )
   const [namesText, setNamesText] = useState('')
   // 再開の案内。サーバーでは出さず（false）、ハイドレーションのあとに sessionStorage を読む
   const resumedOnOpen = useSyncExternalStore(
@@ -172,7 +204,7 @@ export function SetupWizard(props: Props) {
 
   const parsedNames = useMemo(() => parseStaffNames(namesText), [namesText])
   const selected = patterns ? selectedPatterns(patterns) : null
-  const dirty = patterns !== null && JSON.stringify(selected) !== saved
+  const dirty = patterns !== null && snapshot(patterns, industry, industryNote) !== saved
 
   // ステップが変わったら見出しにフォーカスを移す（スクリーンリーダーが新しい問いを読む。014 §4.9）
   const headingRef = useRef<HTMLHeadingElement>(null)
@@ -250,7 +282,12 @@ export function SetupWizard(props: Props) {
   // ---------------------------------------------------------------------------
   const savePatterns = async (): Promise<boolean> => {
     if (props.mode !== 'resume' || !selected) return false
-    const result = await props.saveSetupPatterns({ tenantId: props.tenant.id, ...selected })
+    // 業種を選んでいれば一緒に送る。null（業種を選ばずに勤務がある店舗）なら送らず、DB の値に触らない
+    const result = await props.saveSetupPatterns({
+      tenantId: props.tenant.id,
+      ...selected,
+      ...(industry ? normalizeIndustry({ industry, industryNote }) : {}),
+    })
     if (!result.ok) {
       fail(result.error)
       return false
@@ -259,7 +296,7 @@ export function SetupWizard(props: Props) {
       openShifts(result.data.redirectTo)
       return false
     }
-    setSaved(JSON.stringify(selected))
+    setSaved(snapshot(patterns, industry, industryNote))
     return true
   }
 
@@ -423,7 +460,12 @@ export function SetupWizard(props: Props) {
                     state={patterns}
                     onChange={setPatterns}
                     industry={industry}
-                    onIndustryChange={setIndustry}
+                    onIndustryChange={(next) => {
+                      setIndustry(next)
+                      setIndustryNote('')
+                    }}
+                    industryNote={industryNote}
+                    onIndustryNoteChange={setIndustryNote}
                     fromSaved={saved !== null}
                     error={issueFor('industry') ?? issueFor('workday')}
                     headingRef={headingRef}

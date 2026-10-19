@@ -85,7 +85,7 @@ const AFTER_NAME = '明け'
  *
  * ペアは名前ではなく `pair_pattern_id` で戻す（「夜勤」を直していても戻せるように）。
  * ペアが無ければ、名前が「夜勤」「明け」の行が両方あるときだけスイッチをオフで出す
- * （業種は保存していないので、オフで保存したペアは名前でしか見つけられない）。
+ * （オフで保存したペアは DB に残らないので、名前でしか見つけられない。業種は 034 から保存するが、ペアの戻し方は変えない）。
  */
 export function fromSavedPatterns(patterns: readonly SavedPattern[]): SetupPatternsState {
   const rows: SetupPatternRow[] = patterns.map((pattern) => ({

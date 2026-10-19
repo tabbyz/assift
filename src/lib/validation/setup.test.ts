@@ -103,6 +103,38 @@ describe('saveSetupPatternsSchema', () => {
     )
   })
 
+  it('業種と一言（034）: 省略は「業種に触らない」、その他以外の一言は捨て、空欄は null', () => {
+    const parse = (extra: object) => saveSetupPatternsSchema.parse({ ...input(), ...extra })
+    expect(parse({})).toMatchObject({ industry: null, industryNote: null })
+    expect(parse({ industry: 'care', industryNote: 'ホテル' })).toMatchObject({
+      industry: 'care',
+      industryNote: null,
+    })
+    expect(parse({ industry: 'other', industryNote: ' ホテル ' })).toMatchObject({
+      industry: 'other',
+      industryNote: 'ホテル',
+    })
+    expect(parse({ industry: 'other', industryNote: '  ' })).toMatchObject({
+      industry: 'other',
+      industryNote: null,
+    })
+    // 勤務・ペアは残る
+    expect(parse({ industry: 'care' }).pair).toEqual({ fromKey: 'night', toKey: 'after' })
+  })
+
+  it('一覧に無い業種（古いタブ）は読み込み直してもらう。21 文字の一言は日本語のエラー', () => {
+    expect(message(saveSetupPatternsSchema, { ...input(), industry: 'medical' })).toBe(
+      '画面を読み込み直してください'
+    )
+    expect(
+      message(saveSetupPatternsSchema, {
+        ...input(),
+        industry: 'other',
+        industryNote: 'あ'.repeat(21),
+      })
+    ).toBe('お店の業種は20文字以内で入れてください')
+  })
+
   it('ペアの片方が無ければ弾く', () => {
     expect(
       message(saveSetupPatternsSchema, { ...input(), pair: { fromKey: 'night', toKey: 'missing' } })

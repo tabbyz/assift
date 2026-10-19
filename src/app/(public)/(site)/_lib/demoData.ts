@@ -26,7 +26,7 @@ export type DemoPattern = {
   kind: PatternKind
 }
 
-/** 飲食店のひな形（014 の業種テンプレート）から通しを外したもの */
+/** 014 の飲食店のひな形をもとにした例（通しを外したもの）。034 でひな形は変わったが、デモはそのままにする */
 export const DEMO_PATTERNS: DemoPattern[] = [
   {
     id: 'early',
