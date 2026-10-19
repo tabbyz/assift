@@ -426,5 +426,6 @@ PR tabbyz/assift#54 を merge した。
 - Vercel Firewall: カスタムルール `contact-rate-limit` を Publish した（§4.6）。
   条件は Method = `POST` かつ Request Header `Content-Type` が `multipart/form-data` を含む。Rate Limit は Fixed Window・600 秒に 5 回・キーは IP。超えたら 429（Persistent Action は付けない）
 - iPhone の Safari: 画像（HEIC の写真を含む）を添付して送り、届いた（§4.7・§8）
-- 残り（手が空いたとき）: `curl` で Action を直接叩いて BotID に弾かれるか（§8）。
-  Missive から返したときの Reply-To は 032 §4-1（10/25〜10/26）
+- BotID: 本番でブラウザから送ったリクエストを Copy as cURL で写し、`x-is-human` のヘッダだけを外して送り直すと、応答は `contact_send_failed`（弾かれた。§4.6・§8）。
+  写したリクエストは受付番号も中身も同じで、すり抜けても Resend の `Idempotency-Key` で 1 通にまとまるため、届かないことではなく応答で判定した
+- 残り: Missive から返したときの Reply-To は 032 §4-1（10/25〜10/26）
