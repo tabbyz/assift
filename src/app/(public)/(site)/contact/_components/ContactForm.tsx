@@ -52,7 +52,19 @@ type Attachment = { id: number; blob: Blob; preview: string }
 
 const TOPIC_OPTIONS = Object.entries(CONTACT_TOPICS).map(([value, label]) => ({ value, label }))
 
-export function ContactForm({ account: initialAccount, tenant, digest, initialTopic }: Props) {
+/** 完了の画面の「別のお問い合わせを送る」で、入力・添付・id を空にして作り直す */
+export function ContactForm(props: Props) {
+  const [round, setRound] = useState(0)
+  return <ContactFormBody key={round} {...props} onAgain={() => setRound((r) => r + 1)} />
+}
+
+function ContactFormBody({
+  account: initialAccount,
+  tenant,
+  digest,
+  initialTopic,
+  onAgain,
+}: Props & { onAgain: () => void }) {
   // 送るときにセッションが切れていたら null にして、返信先の欄を出す（`contact_email_required`）
   const [account, setAccount] = useState(initialAccount)
   const [topic, setTopic] = useState<string | null>(initialTopic)
@@ -123,6 +135,11 @@ export function ContactForm({ account: initialAccount, tenant, digest, initialTo
 
   const submit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    // 種類の Select は読み取り専用の input なので、ブラウザの required が効かない。画像を送る前にここで止める
+    if (!topic) {
+      setError('お問い合わせの種類を選んでください')
+      return
+    }
     const data = new FormData()
     data.set('topic', topic ?? '')
     if (!account) data.set('email', email)
@@ -167,6 +184,11 @@ export function ContactForm({ account: initialAccount, tenant, digest, initialTo
             {sent.replyTo}
             ）へ返信します。数日たっても届かない場合は、迷惑メールのフォルダをご確認ください。
           </Text>
+          <Group>
+            <Button variant="default" onClick={onAgain}>
+              別のお問い合わせを送る
+            </Button>
+          </Group>
         </Stack>
       </Paper>
     )
