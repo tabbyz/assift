@@ -119,13 +119,26 @@ export function TenantShell({ tenant, tenants, email, banner, children }: Props)
               </MenuTarget>
               <MenuDropdown>
                 <MenuLabel>{email}</MenuLabel>
-                <MenuItem component={Link} href="/account">
+                {/* アイコンはスマホのメニュー（下の Navbar）と同じもの。大きさはログアウトの項目（16）に合わせる */}
+                <MenuItem
+                  component={Link}
+                  href="/account"
+                  leftSection={<IconUserCircle size={16} />}
+                >
                   アカウント情報
                 </MenuItem>
-                <MenuItem component={Link} href="/account/billing">
+                <MenuItem
+                  component={Link}
+                  href="/account/billing"
+                  leftSection={<IconCreditCard size={16} />}
+                >
                   プランとお支払い
                 </MenuItem>
-                <MenuItem component={Link} href={contactHref({ tenantId: tenant.id })}>
+                <MenuItem
+                  component={Link}
+                  href={contactHref({ tenantId: tenant.id })}
+                  leftSection={<IconMail size={16} />}
+                >
                   お問い合わせ
                 </MenuItem>
                 <MenuDivider />
