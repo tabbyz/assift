@@ -12,5 +12,5 @@ import { ErrorPanel, type ErrorPageProps } from '@/components/ErrorPanel'
 export default function TenantError({ error, retry }: ErrorPageProps) {
   // お問い合わせに店舗を引き継ぐ（Action が RLS で確かめてから添える。031 §4.4）
   const { tenantId } = useParams<{ tenantId: string }>()
-  return <ErrorPanel error={error} retry={retry} contact={{ kind: 'form', tenantId }} />
+  return <ErrorPanel error={error} retry={retry} contactTenantId={tenantId} />
 }

@@ -34,7 +34,10 @@ export async function sendContact(formData: FormData): Promise<ActionResult<Cont
     if (typeof honeypot === 'string' && honeypot !== '') {
       console.warn('[contact] ハニーポットに値があったので送りませんでした')
       const email = formData.get('email')
-      return { replyTo: typeof email === 'string' ? email : '', fromAccount: false }
+      const accountEmail = (await getAuthUser())?.email
+      return accountEmail
+        ? { replyTo: accountEmail, fromAccount: true }
+        : { replyTo: typeof email === 'string' ? email : '', fromAccount: false }
     }
 
     const input = contactSchema.parse({
@@ -48,10 +51,13 @@ export async function sendContact(formData: FormData): Promise<ActionResult<Cont
 
     const user = await getAuthUser()
     const replyTo = user?.email ?? input.email
-    // ログイン中の画面（返信先の欄が無い）から送ったのにセッションが切れていた。欄を出してやり直してもらう
+    // 返信先が無い: ログイン中の画面（返信先の欄が無い）から送ったのにセッションが切れていた・アカウントにアドレスが無い。
+    // 欄を出してやり直してもらう（未ログインの画面なら欄は必須なので、ふつうは起きない）
     if (!replyTo) {
       throw new ActionError(
-        'ログインの有効期限が切れました。返信先のメールアドレスを入力して、もう一度送信してください',
+        formData.get('asAccount') === '1' && !user
+          ? 'ログインの有効期限が切れました。返信先のメールアドレスを入力して、もう一度送信してください'
+          : '返信先のメールアドレスを入力してください',
         'contact_email_required'
       )
     }
@@ -60,7 +66,7 @@ export async function sendContact(formData: FormData): Promise<ActionResult<Cont
     const attachments = await rewriteContactImages(files)
 
     const context: ContactContext = {
-      user: user?.email ? { id: user.id, email: user.email } : undefined,
+      user: user ? { id: user.id, email: user.email } : undefined,
       // 店舗は RLS で見えたときだけ添える。未ログインなら読まない（見えないので）
       tenant: user && input.tenantId ? await readContactTenant(input.tenantId) : undefined,
       digest: input.digest,

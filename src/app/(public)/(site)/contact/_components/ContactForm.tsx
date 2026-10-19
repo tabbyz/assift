@@ -25,6 +25,7 @@ import {
   CONTACT_BODY_MAX_LENGTH,
   CONTACT_IMAGE_MAX_BYTES,
   CONTACT_IMAGE_MAX_COUNT,
+  CONTACT_IMAGE_TOO_LARGE_MESSAGE,
   CONTACT_IMAGE_UNREADABLE_MESSAGE,
   CONTACT_IMAGES_LIMIT_MESSAGE,
   CONTACT_IMAGES_TOTAL_MAX_BYTES,
@@ -63,7 +64,7 @@ export function ContactForm({ account: initialAccount, tenant, digest, initialTo
   const [isPending, startTransition] = useTransition()
   const [isResizing, setIsResizing] = useState(false)
   // フォーム 1 回分の id。同じ内容の連打・送り直しを Resend が 1 通にまとめる（031 §4.5）
-  const [requestId] = useState(() => crypto.randomUUID())
+  const [requestId] = useState(randomUuid)
   const nextAttachmentId = useRef(0)
   // 選んだファイルを入力欄から消す。消さないと、外した画像をもう一度選んでも change が起きない
   const resetFileInput = useRef<() => void>(null)
@@ -89,16 +90,21 @@ export function ContactForm({ account: initialAccount, tenant, digest, initialTo
           }
         })
       )
-      let message = resized.includes(null) ? CONTACT_IMAGE_UNREADABLE_MESSAGE : undefined
+      let message = resized.includes(null)
+        ? CONTACT_IMAGE_UNREADABLE_MESSAGE
+        : files.length > room
+          ? CONTACT_IMAGES_LIMIT_MESSAGE
+          : undefined
       // サーバーと同じ上限（1 枚・合計）。超えると送信のときに断られるので、選んだ時点で外す
       const next = [...attachments]
       let total = next.reduce((sum, a) => sum + a.blob.size, 0)
       for (const r of resized) {
         if (!r) continue
-        if (
-          r.blob.size > CONTACT_IMAGE_MAX_BYTES ||
-          total + r.blob.size > CONTACT_IMAGES_TOTAL_MAX_BYTES
-        ) {
+        if (r.blob.size > CONTACT_IMAGE_MAX_BYTES) {
+          message ??= CONTACT_IMAGE_TOO_LARGE_MESSAGE
+          continue
+        }
+        if (total + r.blob.size > CONTACT_IMAGES_TOTAL_MAX_BYTES) {
           message ??= CONTACT_IMAGES_LIMIT_MESSAGE
           continue
         }
@@ -122,6 +128,7 @@ export function ContactForm({ account: initialAccount, tenant, digest, initialTo
     if (tenant) data.set('tenantId', tenant.id)
     if (digest) data.set('digest', digest)
     data.set('honeypot', honeypot)
+    if (account) data.set('asAccount', '1')
     attachments.forEach((a, i) => data.append('images', a.blob, `image-${i + 1}.jpg`))
 
     startTransition(async () => {
@@ -302,4 +309,16 @@ export function ContactForm({ account: initialAccount, tenant, digest, initialTo
       </Stack>
     </form>
   )
+}
+
+/**
+ * フォーム 1 回分の id（uuid v4 の形）。`crypto.randomUUID()` は安全なオリジン（https・localhost）でしか使えず、
+ * LAN の http（`http://192.168.x.x:3000` の開発）ではページごと落ちるので、どこでも使える `getRandomValues` で作る
+ */
+function randomUuid(): string {
+  const b = crypto.getRandomValues(new Uint8Array(16))
+  b[6] = (b[6] & 0x0f) | 0x40
+  b[8] = (b[8] & 0x3f) | 0x80
+  const hex = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }

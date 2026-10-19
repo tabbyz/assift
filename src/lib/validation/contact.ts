@@ -23,6 +23,8 @@ export const CONTACT_IMAGES_TOTAL_MAX_BYTES = 3.5 * 1024 * 1024
 export const CONTACT_IMAGE_UNREADABLE_MESSAGE =
   'この画像は添付できません。PNG・JPEG・WebP の画像を選んでください'
 export const CONTACT_IMAGES_LIMIT_MESSAGE = `画像は${CONTACT_IMAGE_MAX_COUNT}枚まで、合計${CONTACT_IMAGES_TOTAL_MAX_BYTES / 1024 / 1024}MBまで添付できます。枚数を減らしてください`
+export const CONTACT_IMAGE_TOO_LARGE_MESSAGE =
+  '画像が大きすぎて添付できません。画面の一部を切り取るなどして小さくしてください'
 
 /**
  * Next のエラー番号（`error.digest`）。英数字とハイフン・下線だけ。URL（`?digest=`）から来るので形と長さで絞る。

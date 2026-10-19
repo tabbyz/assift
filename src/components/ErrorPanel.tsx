@@ -18,12 +18,8 @@ export type ErrorPageProps = {
 type Props = ErrorPageProps & {
   /** 「戻る」の行き先。店舗の境界は枠のナビがあるので渡さない */
   home?: { href: string; label: string }
-  /**
-   * 問い合わせ先。既定はお問い合わせのフォーム（エラー番号と店舗を引き継ぐ。031 §4.8）。
-   * 管理画面のパス（`/-`）ではアドレスにする: 管理画面のホストでは `/-` の外が 404 でフォームを開けない。
-   * root の `error.tsx` が `-/layout.tsx` の例外を受けたときも、パスで判定するのでアドレスになる
-   */
-  contact?: { kind: 'form'; tenantId?: string } | { kind: 'email' }
+  /** お問い合わせのフォームに引き継ぐ店舗（店舗の境界だけ渡す。031 §4.4） */
+  contactTenantId?: string
 }
 
 /**
@@ -36,10 +32,12 @@ type Props = ErrorPageProps & {
  * `getDerivedStateFromProps`）。クライアント遷移で `/` へ行くと、redirect の先が落ちたページと同じパス（`/` → 直近の店舗）や
  * いまのパスそのもの（LP で落ちた）のときに、取り直しが成功しても境界が残り、押しても何も変わらない
  */
-export function ErrorPanel({ error, retry, home, contact: contactProp }: Props) {
+export function ErrorPanel({ error, retry, home, contactTenantId }: Props) {
   const pathname = usePathname()
-  const contact =
-    contactProp ?? (isAdminPath(pathname) ? { kind: 'email' as const } : { kind: 'form' as const })
+  // 問い合わせ先は既定でお問い合わせのフォーム（エラー番号と店舗を引き継ぐ。031 §4.8）。
+  // 管理画面のパス（`/-`）ではアドレス: 管理画面のホストでは `/-` の外が 404 でフォームを開けない。
+  // `-/error.tsx` も、root の `error.tsx` が `-/layout.tsx` の例外を受けたときも、パスで決まる
+  const contactByForm = !isAdminPath(pathname)
   // `retry()` は `router.refresh()` を transition で走らせる。描き直しが終わるまでボタンに loading を出す（連打させない）
   const [isPending, startTransition] = useTransition()
   const digest = errorDigest(error)
@@ -61,11 +59,11 @@ export function ErrorPanel({ error, retry, home, contact: contactProp }: Props) 
             </Button>
           )}
         </Group>
-        {contact.kind === 'form' ? (
+        {contactByForm ? (
           <Text size="sm" c="dimmed" ta="center">
             {ERROR_TEXT.contactFormPrefix}
             {/* 素の `<a>`（全体の読み込み）。「戻る」と同じく、クライアント遷移だと境界が残ることがある */}
-            <Anchor href={contactHref({ tenantId: contact.tenantId, digest })} inherit>
+            <Anchor href={contactHref({ tenantId: contactTenantId, digest })} inherit>
               {ERROR_TEXT.contactFormLink}
             </Anchor>
             {ERROR_TEXT.contactFormSuffix(digest)}

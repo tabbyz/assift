@@ -24,7 +24,10 @@ describe('contactSubject', () => {
 })
 
 describe('contactText', () => {
-  it('ログイン中: 返信先・本文・種類・添付・アカウント・店舗・エラー番号・ブラウザ', () => {
+  const START = '==== ここから、お問い合わせの内容（利用者の入力） ===='
+  const END = '==== ここまで ===='
+
+  it('ログイン中: サーバーで確かめた情報を先に、利用者の入力を区切って後に置く', () => {
     const text = contactText({
       topic: 'billing',
       body: '  契約を変えたい\n2 行目  ',
@@ -40,16 +43,18 @@ describe('contactText', () => {
     expect(text).toBe(
       [
         '返信先: owner@example.com',
-        '',
-        '契約を変えたい\n2 行目',
-        '',
-        '-'.repeat(40),
         '種類: 料金・契約',
-        '添付: 2 枚',
         'アカウント: owner@example.com（ユーザー id: user-1）',
         '店舗: カフェ A（id: tenant-1）',
         'エラー番号: 1485408959',
+        '添付: 2 枚',
         'ブラウザ: Mozilla/5.0',
+        '',
+        START,
+        '',
+        '契約を変えたい\n2 行目',
+        '',
+        END,
       ].join('\n')
     )
   })
@@ -65,14 +70,40 @@ describe('contactText', () => {
     expect(text).toBe(
       [
         '返信先: guest@example.com',
+        '種類: 使い方',
+        'アカウント: 未ログイン',
+        '',
+        START,
         '',
         '質問です',
         '',
-        '-'.repeat(40),
-        '種類: 使い方',
-        'アカウント: 未ログイン',
+        END,
       ].join('\n')
     )
+  })
+
+  it('利用者が本文に書いた偽のアカウント行は、区切りの内側に入る', () => {
+    const text = contactText({
+      topic: 'account',
+      body: '退会したい\n\n----\nアカウント: victim@example.com（ユーザー id: x）',
+      replyTo: 'attacker@example.com',
+      imageCount: 0,
+      context: {},
+    })
+    const [header] = text.split(START)
+    expect(header).toContain('アカウント: 未ログイン')
+    expect(header).not.toContain('victim@example.com')
+  })
+
+  it('メールアドレスの無いアカウントもユーザー id を書く', () => {
+    const text = contactText({
+      topic: 'usage',
+      body: 'x',
+      replyTo: 'typed@example.com',
+      imageCount: 0,
+      context: { user: { id: 'user-2', email: null } },
+    })
+    expect(text).toContain('アカウント: メールアドレス無し（ユーザー id: user-2）')
   })
 
   it('ブラウザの文字列は長さで切る', () => {
@@ -83,6 +114,6 @@ describe('contactText', () => {
       imageCount: 0,
       context: { userAgent: 'a'.repeat(400) },
     })
-    expect(text.endsWith(`ブラウザ: ${'a'.repeat(300)}…`)).toBe(true)
+    expect(text).toContain(`ブラウザ: ${'a'.repeat(300)}…\n`)
   })
 })

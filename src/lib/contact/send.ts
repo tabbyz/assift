@@ -1,10 +1,11 @@
 import 'server-only'
 import { createHash } from 'node:crypto'
+import { ANNOUNCEMENT_FROM } from '@/lib/announce/content'
 import type { ContactAttachment } from './attachments'
 
 const RESEND_EMAILS_URL = 'https://api.resend.com/emails'
 /** 認証メール・告知と同じ差出人（024 で検証済み） */
-const FROM = 'assift <noreply@assift.com>'
+const FROM = ANNOUNCEMENT_FROM
 const TIMEOUT_MS = 15_000
 
 export type ContactEmail = {

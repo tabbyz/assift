@@ -231,6 +231,6 @@ PR #28 のプレビュー（`9a51ab3`）が、proxy を通るすべての URL �
 
 ## 7. 追加: 問い合わせ先をフォームへ（2026-10-19。031）
 
-- `ErrorPanel` の問い合わせ先をアドレスからお問い合わせフォーム（`/contact?digest=…`）に替えた。店舗の境界（`[tenantId]/error.tsx`）は店舗の id も引き継ぐ（`useParams`）。リンクは「戻る」と同じく素の `<a>`
-- 管理画面（`-/error.tsx`）はアドレスのまま（`contact={{ kind: 'email' }}`）。管理画面のホストでは `/-` の外が 404 でフォームを開けない
+- `ErrorPanel` の問い合わせ先をアドレスからお問い合わせフォーム（`/contact?digest=…`）に替えた。店舗の境界（`[tenantId]/error.tsx`）は店舗の id も引き継ぐ（`contactTenantId`。`useParams`）。リンクは「戻る」と同じく素の `<a>`
+- 管理画面のパス（`/-`）ではアドレスのまま。`ErrorPanel` が `usePathname()` で決める（`-/error.tsx` も、root の `error.tsx` が `-/layout.tsx` の例外を受けたときも同じ）。管理画面のホストでは `/-` の外が 404 でフォームを開けない
 - global-error はアドレスのまま（root layout が落ちていてフォームも動かない。クローラーにも読まれない）

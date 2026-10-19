@@ -289,14 +289,14 @@ Missive の導入（032）はフォームが無くても成り立つ。フォー
 | --- | --- |
 | `src/lib/validation/contact.ts`（+ test） | 種類（`CONTACT_TOPICS`）・上限の定数・`contactSchema`・`parseDigest`。任意の欄の `''` は無いものとして扱い、店舗の id とエラー番号は形が違えば失敗にせず捨てる |
 | `src/lib/contact/path.ts`（+ test） | `CONTACT_PATH`・`contactHref({ tenantId, digest, topic })` |
-| `src/lib/contact/render.ts`（+ test） | 件名（改行・制御文字・U+2028/2029 を空白に、先頭 30 文字をコードポイントで切る）と本文（返信先・本文・区切り線・種類・添付・アカウント・店舗・エラー番号・ブラウザ） |
+| `src/lib/contact/render.ts`（+ test） | 件名（改行・制御文字・U+2028/2029 を空白に、先頭 30 文字をコードポイントで切る）と本文（返信先・種類・アカウント・店舗・エラー番号・添付・ブラウザを先に、利用者の入力を見出しで区切って後に。§10.4） |
 | `src/lib/contact/attachments.ts`（+ test） | 枚数・大きさ → `metadata()` の形式（jpeg / png / webp）→ `rotate` → 長い辺 1,600px → 透過を白に → JPEG（品質 85）。`limitInputPixels` 4,000 万。テストの画像は `sharp` で作る（SVG・GIF・先頭だけ JPEG のファイル・EXIF が落ちること・解凍爆弾） |
 | `src/lib/contact/send.ts` | Resend の `POST /emails`（15 秒で打ち切り）。`Idempotency-Key` は `contact/<requestId>/<本文の SHA-256>`（§10.2-1）。409 の `concurrent_idempotent_requests` は成功 |
 | `src/app/(public)/(site)/contact/` | `page.tsx`（店舗は RLS の `getTenant` で見えたときだけ画面に出す）/ `searchParams.ts` / `actions.ts`（BotID → Zod → ハニーポット → 添付 → 自動で付ける情報 → 送信）/ `_components/ContactForm.tsx`（+ `.module.css`）/ `_lib/resizeImage.ts` |
 | `next.config.ts` | `withBotId()` で包む。`experimental.serverActions.bodySizeLimit: '4mb'` |
 | `src/instrumentation-client.ts` | `initBotId({ protect: [{ path: '/contact', method: 'POST' }] })`。開発では呼ばない（§10.2-3） |
 | `src/proxy.ts` | matcher から BotID の中継のパスを外す（前方一致。§10.2-4） |
-| `ErrorPanel`・`errorText.ts`・`[tenantId]/error.tsx`・`-/error.tsx` | エラー画面の問い合わせ先をフォームへ（エラー番号と店舗を引き継ぐ）。管理画面はフォームを開けないのでアドレスのまま（`contact={{ kind: 'email' }}`）。global-error はアドレスのまま |
+| `ErrorPanel`・`errorText.ts`・`[tenantId]/error.tsx` | エラー画面の問い合わせ先をフォームへ（エラー番号と店舗（`contactTenantId`）を引き継ぐ）。管理画面のパス（`/-`）はフォームを開けないのでアドレスのまま（`usePathname()` で決める）。global-error はアドレスのまま |
 | `StaffLimitLock`・`StaffLimitModal`・`BillingClient` | `mailto:` → `contactHref({ topic: 'billing' … })`。モーダルの中のリンクは押したらモーダルを閉じる |
 | 規約・ポリシーのページの末尾 | 「assift運営（お問い合わせ：https://assift.com/contact）」。PDF でも渡すので、リンクの文字に URL を書く（`TERMS.contactUrl`） |
 | ポリシー 2. / 6. / 窓口 | お問い合わせの内容に「添付された画像」「フォームから送信した場合は、ブラウザの種類（ログイン中は、アカウントと店舗の識別子も）」、Vercel に「不正な送信の判定」、窓口をフォーム（URL を併記）に |
@@ -331,3 +331,12 @@ Missive の導入（032）はフォームが無くても成り立つ。フォー
 - **残り（merge の前に、Vercel のプレビューで）**: サーバーの判定（`checkBotId()`。Vercel の OIDC と Vercel への問い合わせ）は Vercel の上でしか動かない。
   プレビューで `/contact` から送り、(1) 送信が通って自分のアドレス（Preview の `CONTACT_INBOX`）に届く、(2) Vercel のログに「BotID の判定に失敗」が出ていない（出るなら OIDC の設定）を確かめる。
   念のため (3) `securitypolicyviolation` が 0 件も見る（ローカルで 0 件。Vercel の本物の中継でも同じはず）
+
+### 10.4 コードレビュー（2026-10-19。中以上の指摘が無くなるまで 4 回）
+
+| 回 | 主な指摘（中以上） | 直したこと |
+| --- | --- | --- |
+| 1 | 店舗の読み取りの失敗で `/contact` が落ちる（エラー画面から来て落ちると問い合わせる道が無い）/ 送るときにセッションが切れると、見えない欄のエラーで詰まる / 添付の合計の上限を選んだ時点で見ていない / 外した画像をもう一度選べない / ハニーポットを自動入力が埋めうる / root の `error.tsx` が管理画面の例外を受けるとフォームへのリンク（管理画面のホストでは 404）/ Resend の 409（処理中）を成功にしていた | 店舗の読み取りを try/catch（`lib/contact/tenant.ts`）/ `code: 'contact_email_required'` で返信先の欄を出してやり直す / 選んだ時点で 1 枚と合計を確かめる / `FileButton` の `resetRef` / ハニーポットの名前を `hp_ref_code` にし、弾いたらログ / `ErrorPanel` がパスで決める / 409 も失敗（送り直せば先の送信の応答が返る） |
+| 2 | 縮小中に外した画像が戻る / 完了の文の返信先がサーバーの使ったものと食い違いうる / `createImageBitmap` の `imageOrientation` を知らない古いブラウザで全部読めない / ハニーポットを検証の後に見ていた（ボットに検証の手がかり） | 縮小中は外すボタンを止める / Action が実際に使った返信先を返す / オプションを渡さない / ハニーポットを parse の前に |
+| 3 | **本文の末尾に区切り線と「アカウント: …」を書くと、本物の情報に見せかけられる**（他人のアカウントからの依頼に見せる）/ ハニーポットのときログイン中の完了の文が空 | サーバーで確かめた情報を先に、利用者の入力を「ここから / ここまで」で区切って後に / ログイン中はアカウントのアドレスを返す。あわせて、未ログインの画面からの欠けは「期限切れ」と言わない・アドレスの無いアカウントもユーザー id を書く・選んだ枚数が多すぎる / 1 枚が大きすぎるときの文言・`crypto.randomUUID()` が使えない http の LAN でも落ちない |
+| 4 | （§10.5） | |
