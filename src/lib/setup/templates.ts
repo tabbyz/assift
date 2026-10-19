@@ -41,7 +41,7 @@ export const INDUSTRY_LABELS: Record<Industry, string> = {
  */
 const INDUSTRY_EXAMPLES: Record<Industry, string> = {
   food: 'カフェ・居酒屋・レストラン',
-  retail: 'スーパー・アパレル・コンビニ',
+  retail: 'スーパー・コンビニ・雑貨',
   beauty: '美容室・ネイル・エステ',
   care: '施設・デイサービス・訪問',
   clinic: '医院・歯科・薬局',

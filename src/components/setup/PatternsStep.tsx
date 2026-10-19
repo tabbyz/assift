@@ -101,8 +101,8 @@ export function PatternsStep({
           <Text c="dimmed">近いものを選ぶと、よく使う勤務を用意します。</Text>
         </Stack>
         <Stack gap={8}>
-          {/* 9 つあるので、スマホでも 2 列にする（1 列 × 9 段だと縦に長い。034 §4.4） */}
-          <SimpleGrid id="setup-field-industry" cols={2} spacing="sm">
+          {/* スマホは 1 列（名前と店の例が 1 行に収まり、高さがそろう）。576px 以上は 2 列でも折り返さない（034 §8） */}
+          <SimpleGrid id="setup-field-industry" cols={{ base: 1, xs: 2 }} spacing={8}>
             {INDUSTRIES.map((value) => (
               <UnstyledButton key={value} className={classes.industry} onClick={() => pick(value)}>
                 <Text component="span" display="block" fw={700}>
