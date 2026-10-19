@@ -196,7 +196,7 @@ AI シフト作成の両方から呼ぶ。`[tenantId]/actions.ts` はシフト�
 | ファイル    | 役割                                                                                                                                            |
 | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `result.ts` | `ActionResult<T>`（client から import 可）。失敗に `code`（`'staff_limit'`）が付くことがある                                                    |
-| `run.ts`    | `runAction(fn)`: try/catch → `ActionFailure`。`unstable_rethrow` で redirect/notFound は再スロー。想定外の例外は `[action]` でログに残す（031） |
+| `run.ts`    | `runAction(fn)`: try/catch → `ActionFailure`。`unstable_rethrow` で redirect/notFound は再スロー。想定外の例外は `[action]` でログに残す（033） |
 | `error.ts`  | `ActionError` / `fail` / `toActionError`（Zod は先頭 issue の日本語）                                                                           |
 | `guards.ts` | `requireUser` / `requireAdmin` 等。失敗は `throw new ActionError(...)`                                                                          |
 

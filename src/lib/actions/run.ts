@@ -8,7 +8,7 @@ import type { ActionResult } from './result'
  * redirect() / notFound() が投げる内部例外は unstable_rethrow で再スローする。
  *
  * 想定外の例外（ActionError でも ZodError でもないもの）は画面に「処理に失敗しました」としか出ないので、
- * `[action]` を付けてログに残す（031。Axiom の監視が拾う）。業務上の失敗と入力の誤りは想定どおりなので残さない。
+ * `[action]` を付けてログに残す（033。Axiom の監視が拾う）。業務上の失敗と入力の誤りは想定どおりなので残さない。
  */
 export async function runAction<T>(fn: () => Promise<T>): Promise<ActionResult<T>> {
   try {
