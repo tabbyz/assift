@@ -311,6 +311,15 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 
 （作業のあとに、日時・確かめた結果・つまずいた点を書く。秘密の値は書かない）
 
+### 2026-10-20（034 の migration を本番へ入れた）
+
+- 034（店舗の業種）の migration `20261019150534_tenant_industry.sql` を `db push` で本番へ入れた（`tenants.industry` / `industry_note` の 2 列と制約。関数・表は足していない）。
+  `migration list` で Local と Remote が揃った。**10/29 の確認（§5）では、この 1 本も入った本数で揃っていればよい**
+- anon が実行できる `public` の関数は `rls_auto_enable` の 1 件だけだった（034 §4.6 の `has_function_privilege` の式）。
+  Supabase が入れた「新しい表に RLS を自動で付ける」イベントトリガー用の関数で、リポジトリのスキーマには無い。実行の権限は PUBLIC に付いている
+  （024 §4.2 の `role_routine_grants` の SQL は PUBLIC を数えないので、10/15 の確認では見えていなかった）。イベントトリガー専用で API から呼んでも動かないので、そのままにする
+- PR #56 は `db push` より先に merge されていた（034 §4.6 の順の逆）。そのあいだ本番の初期設定のステップ 2 は業種の書き込みで失敗しうるが、本番はインポートの前で利用者がいないので影響は無い
+
 ### 2026-10-16（§14 `scripts/migrate-v1/undo.sql` の実装とローカルでの確かめ）
 
 `scripts/migrate-v1/undo.sql` と AGENTS.md のディレクトリを足した（§14.3・§14.6）。クラウドのセッションのローカルの Supabase（Postgres 17.6。`postgres` は `rolsuper=f`・`rolbypassrls=t`）で確かめた。
