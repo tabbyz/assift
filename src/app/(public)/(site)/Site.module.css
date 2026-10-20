@@ -65,10 +65,22 @@
   font-weight: 500;
   color: var(--mantine-color-text);
   text-decoration: none;
+  white-space: nowrap;
 }
 
 @media (max-width: 52em) {
   .nav {
+    display: none;
+  }
+}
+
+/*
+ * 359px 以下（iPhone SE・mini の拡大表示の 320px など）では「無料ではじめる」を出さない。
+ * ロゴ・「ログイン」・ボタンを 1 行に並べるには約 359px 要り、足りないと「ログイン」が 2 行に折り返してボタンの文字が切れる（027）。
+ * 申し込みのボタンはヒーローの見出しのすぐ下にもある。Mantine の Button の display に勝つよう、クラスを 2 つ重ねる
+ */
+@media (max-width: 22.4375em) {
+  .header .headerCta {
     display: none;
   }
 }
@@ -249,6 +261,8 @@
 
 .card {
   display: grid;
+  /* 列を枠の幅に固定する（無いと、共有の URL の飾りの最小の幅が列を広げ、320px でカードが右へ 8px はみ出す。027） */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto auto 1fr;
   gap: 10px;
   min-width: 0;

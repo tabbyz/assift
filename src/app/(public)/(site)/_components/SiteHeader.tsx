@@ -36,7 +36,7 @@ export function SiteHeader({ loggedIn }: { loggedIn: boolean }) {
               <Link href="/login" className={classes.loginLink}>
                 ログイン
               </Link>
-              <LinkButton href="/signup" radius="xl">
+              <LinkButton href="/signup" radius="xl" className={classes.headerCta}>
                 無料ではじめる
               </LinkButton>
             </Group>
