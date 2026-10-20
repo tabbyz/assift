@@ -40,8 +40,8 @@ export function TenantList({ tenants }: { tenants: TenantListItem[] }) {
               <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="sm">
                 <Item label="作成日" value={t.createdAt} />
                 <Item label="勤務パターン" value={`${t.patternCount}`} />
-                <Item label="自動アサイン" value={`${t.assistRunCount} 回`} />
-                <Item label="最後の自動アサイン" value={t.lastAssistRunAt} />
+                <Item label="AI の作成" value={`${t.assistRunCount} 回`} />
+                <Item label="AI の作成（最後）" value={t.lastAssistRunAt} />
               </SimpleGrid>
               <Item
                 label={`在籍（${t.activeStaffs.length}）`}

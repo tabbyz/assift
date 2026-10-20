@@ -142,7 +142,7 @@ supabase/
 ルートをまたいで使う Action は、そのグループ直下に置く（`(protected)/actions.ts` の `logout` はヘッダーとアカウント画面の両方から呼ぶ。
 同じファイルの `getUpgradeOffer` / `startTrial` / `openPortal` / `setStaffCap` は上限・料金の確認のモーダル・店舗の帯・プランの画面・スタッフの設定から呼ぶ。
 `tenants/actions.ts` の `deleteTenant` は店舗情報と初期設定の両方から、`saveDefaultRequiredNums` は必要人数の設定と
-AI シフト作成の両方から呼ぶ。`[tenantId]/actions.ts` はシフト表のもの）。
+「AI で作成」のモーダルの両方から呼ぶ。`[tenantId]/actions.ts` はシフト表のもの）。
 
 初期設定（014）: 店舗は `tenants.setup_completed_at` が null のあいだ「準備中」。`[tenantId]/layout.tsx` は枠（`TenantShell`）を描かず、
 `[tenantId]/page.tsx`（シフト表）と `settings/layout.tsx` が `/setup` へ送る。完了はデータ（勤務・スタッフの有無）ではなくこの列で決める。

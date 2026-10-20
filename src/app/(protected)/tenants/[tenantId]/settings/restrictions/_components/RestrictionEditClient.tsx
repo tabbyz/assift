@@ -20,7 +20,7 @@ export function RestrictionEditClient({
 
   const confirmDelete = () =>
     modals.openConfirmModal({
-      title: '制約を削除',
+      title: 'ルールを削除',
       children: <Text size="sm">本当に削除しますか？この操作は取り消せません。</Text>,
       labels: { confirm: '削除する', cancel: 'キャンセル' },
       confirmProps: { color: 'red' },
@@ -39,7 +39,7 @@ export function RestrictionEditClient({
   return (
     <Group>
       <Button variant="subtle" color="red" onClick={confirmDelete} loading={isPending}>
-        制約を削除
+        ルールを削除
       </Button>
     </Group>
   )

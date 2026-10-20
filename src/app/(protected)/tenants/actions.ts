@@ -14,7 +14,7 @@ import { deleteTenantSchema, TENANT_NOT_FOUND_MESSAGE } from '@/lib/validation/t
 import { createClient } from '@/utils/supabase/server'
 
 // 店舗の配下でルートをまたいで使う Action（設定の店舗情報と初期設定の両方から呼ぶ。014 §5.5。
-// 基本の必要人数は `設定 > 必要人数` と AI シフト作成のモーダルの両方から呼ぶ。015 §3.5）
+// 基本の必要人数は `設定 > 必要人数` と 「AI で作成」のモーダルの両方から呼ぶ。015 §3.5）
 
 /** 店舗を削除する。配下のデータは FK の cascade で消える */
 export async function deleteTenant(input: {

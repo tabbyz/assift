@@ -51,7 +51,7 @@ describe('restrictionInputSchema', () => {
 
   it('知らない kind（v1 の残骸 max_work_month など）は日本語で弾く', () => {
     expect(message({ kind: 'max_work_month', pattern1Id: P1, days: 20 })).toBe(
-      '制約タイプを選択してください'
+      'ルールの種類を選択してください'
     )
   })
 

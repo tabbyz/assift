@@ -105,7 +105,8 @@ function toInput(kind: RestrictionKind, values: RestrictionFormValues): RawRestr
  */
 function strengthHelp(kind: RestrictionKind, hard: boolean): string {
   // 「守れなかった」の表示は結果画面プラン（013 §3.1）。それまでは画面に出るとは書かない
-  if (!hard) return '守れないときは破ります。'
+  if (!hard)
+    return 'できるだけ守ります。人が足りない日や、ほかのルールと両立しない日は守れないことがあります。'
   if (kind === 'min_work_week')
     return '必ず守ります。守ると作れないときだけ「なるべく」として扱います。'
   return '必ず守ります。そのために埋まらない枠が出たときは、結果に理由を出します。'

@@ -8,9 +8,9 @@ import { tenantIdSchema } from './tenants'
  */
 export const ASSIST_INSTRUCTIONS_MAX_LENGTH = 500
 
-export const ASSIST_RUN_NOT_FOUND_MESSAGE = '自動アサインの実行が見つかりません'
+export const ASSIST_RUN_NOT_FOUND_MESSAGE = 'AI の作成結果が見つかりません'
 export const ASSIST_UNAVAILABLE_MESSAGE = '現在利用できません'
-export const ASSIST_RUNNING_MESSAGE = '実行中の自動アサインがあります'
+export const ASSIST_RUNNING_MESSAGE = '別の AI の作成が実行中です'
 export const ASSIST_BUDGET_MESSAGE = 'AI の利用上限に達しました'
 export const ASSIST_LEVER_NOT_FOUND_MESSAGE =
   'この提案は使えなくなりました。画面を読み直してください'

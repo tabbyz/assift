@@ -10,7 +10,7 @@ import { isUuid } from '@/utils/uuid'
 import { RestrictionForm } from '../_components/RestrictionForm'
 import { loadRestrictionFormSearchParams } from '../searchParams'
 
-export const metadata: Metadata = { title: '制約の登録' }
+export const metadata: Metadata = { title: 'ルールの登録' }
 
 export default async function NewRestrictionPage({
   params,
@@ -36,10 +36,10 @@ export default async function NewRestrictionPage({
   return (
     <Stack gap="md">
       <SettingsBreadcrumbs
-        parent={{ href: `/tenants/${tenantId}/settings/restrictions`, label: '自動アサイン制約' }}
-        current="制約の登録"
+        parent={{ href: `/tenants/${tenantId}/settings/restrictions`, label: 'シフトのルール' }}
+        current="ルールの登録"
       />
-      <Title order={2}>制約の登録</Title>
+      <Title order={2}>ルールの登録</Title>
 
       <RestrictionForm
         tenantId={tenantId}
