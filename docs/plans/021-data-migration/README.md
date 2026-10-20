@@ -192,8 +192,9 @@ MIGRATION_DATABASE_URL=postgresql://... \
 
 | v1 | v2 |
 | --- | --- |
-| 入れる人（**決定。2026-10-10**） | **v1 でログインできた人だけ**: `confirmed_at IS NOT NULL OR sign_in_count > 0`。全員を**確認済み**で入れる（`email_confirmed_at = coalesce(confirmed_at, invitation_accepted_at, created_at)`）。未確認（`email_confirmed_at = null`）の行は作らない |
+| 入れる人（**決定。2026-10-10**。休眠の除外は 2026-10-20） | **v1 でログインできた人だけ**: `confirmed_at IS NOT NULL OR sign_in_count > 0`。**そのうち店舗を持たない人は、最後の利用（`coalesce(current_sign_in_at, confirmed_at, created_at)`）が `2025-10-30 00:00`（UTC。v1 の時刻は UTC）以降の人だけ**（下の「休眠」）。全員を**確認済み**で入れる（`email_confirmed_at = coalesce(confirmed_at, invitation_accepted_at, created_at)`）。未確認（`email_confirmed_at = null`）の行は作らない |
 | それ以外（招待未承認・未確認でログイン実績なし） | **移行しない**。招待未承認はパスワードが無い（001 §5.2）。未確認の人は Devise の confirmable が v1 でもログインを拒んでいる（`active_for_authentication?` が false）ので、店舗も作れていない。v2 で登録し直せば同じメールで新しく始められる。未確認の行を v2 に残すと、同じメールでの登録（GoTrue は既存の未確認ユーザーに確認メールを再送する）がパスワードを引き継ぐのか置き換えるのかが読みにくくなる |
+| 休眠（店舗を持たず、最後の利用が 1 年以上前。**決定。2026-10-20**） | **移行しない**（理由は `inactive`）。リリース後の統計のノイズと、告知（030）の不達を減らす。1 年は v1 の規約 第 7 条（1 年以上利用のないアカウントは削除できる。事前の通知は求めていない）に合わせた。90 日も考えたが、90 日〜1 年の 602 人を規約の外で消すことになり、その人たちは 1 年以内にログインしていてアドレスも生きているので、不達はほとんど減らない。店舗は `tenants` の行が 1 つでもあれば持つとみなす（空の店舗も「使おうとした人」として残す）。境目は切り替えの日（2026-10-30）の 1 年前で固定し、`now()` を使わない（リハーサル・告知の宛先・本番で同じ規則にする）。定数は `INACTIVE_CUTOFF`（`transform.ts`）。v1 の本番（2026-10-20）の店舗を持たない 3,469 人の内訳: 1 年以上 2,731（移さない）/ 90 日〜1 年 602 / 90 日以内 136。パスワードがメールのままの 3 人（下）は 3 人とも店舗を持たないので、この規則で落ちるかは最後の利用しだい |
 | 保険 | `import.ts` が、移行しないユーザーのうち**店舗（スタッフかシフトのあるもの）を持つ人**を `report.json` に出す。想定は 0 件。1 件でもあれば個別に見て、入れるなら `--overrides` の `forceMigrateUsers`（§6.1）で確認済みとして入れる（その人は v1 で使えていたはず） |
 | `encrypted_password`（Devise の bcrypt） | そのまま `encrypted_password` へ。v1 は **pepper なし・stretches 11・bcrypt 3.1.20**（`config/initializers/devise.rb`・`Gemfile.lock`）なので `$2a$11$…` の素の bcrypt で、GoTrue（Go の bcrypt）がそのまま検証できる。pepper があれば全員ログインできなくなるところだった。**リハーサルで実際にログインして確かめる**（§8.2-2・§9.1-4） |
 | `password_is_email = true`（代理承認の初期パスワード） | **Google の人でも最優先で** `encrypted_password = null`（パスワードではログインできない。「パスワードを忘れた方」で再設定してもらう）。v1 は**店舗を新しく作るときだけ**（`tenants_controller.rb` の `check_init_password!` は `only: [:new]`）`valid_password?(email)` を見て変更させていた。店舗を作る入口は `/tenants/new` だけで、このチェックは承認機能と同じコミット（`46d38b2`、2019-03-30）で入ったので、**店舗を持つ人はメールのままにならない**（承認の対象は未確認 = ログインできなかった人で、承認の前に店舗は持てない）。残るのは店舗を持たない人で、v1 では何もできないが、v2 にその仕組みは無く、残すとメールを知る人が誰でも入れる（本人が v2 で店舗を作ればその店舗も）。リハーサル（2026-10-13）では全員を照合して 3 人（代理承認 1・自分でメールにした人 2。3 人とも店舗なし）で、rake の照合を「ログインできた人のうち店舗を持たない人」に絞った（§5.1・§15）。件数を記録し（想定より多いかもしれない）、022 の案内の分量を決める。判定は今のメールと比べる。v1 にはメールを変える画面が無い（`users/registrations/edit` はメールを表示するだけ。Devise の `account_update` が `email` を受けるので手で組んだリクエストなら変えられた）ので、実質はこれで全員を拾える |
@@ -442,7 +443,7 @@ docs/plans/019-…/README.md       §8.1 の「session_replication_role = replic
 
 | # | 論点 | 状態 |
 | --- | --- | --- |
-| 1 | 未確認ユーザー（`confirmed_at IS NULL`、招待は承認済み）の扱い | **決定（2026-10-10）**: v1 でログインできた人（`confirmed_at IS NOT NULL OR sign_in_count > 0`）だけを確認済みで入れ、それ以外は入れない。未確認の行は作らない（§7.1）。devise_invitable は招待の承認で `confirmed_at` を埋め、Devise の confirmable は未確認のログインを拒むので、該当は僅少のはず。§5.2-5 の内訳と「移行しないのに店舗を持つ人」が 0 件であることをリハーサルで確かめる |
+| 1 | 未確認ユーザー（`confirmed_at IS NULL`、招待は承認済み）の扱い | **決定（2026-10-10）**: v1 でログインできた人（`confirmed_at IS NOT NULL OR sign_in_count > 0`）だけを確認済みで入れ、それ以外は入れない。未確認の行は作らない（§7.1）。**追加の決定（2026-10-20）**: そのうち店舗を持たず、最後の利用が 2025-10-30 より前の人も入れない（§7.1 の「休眠」）。devise_invitable は招待の承認で `confirmed_at` を埋め、Devise の confirmable は未確認のログインを拒むので、該当は僅少のはず。§5.2-5 の内訳と「移行しないのに店舗を持つ人」が 0 件であることをリハーサルで確かめる |
 | 2 | `V1_UUID_NAMESPACE` の管理場所と値 | **決定（2026-10-10）**: §3-6 のとおり（定数・ランダムな v4） |
 | 3 | `staffs.available_wdays` が nil のときの読み替え | **決定（2026-10-10）**: `[]`（全日「担当不可」）。v1 の `Staff` は `serialize ..., Array` で NULL を `[]` と読み、判定はすべてモデル経由なので、v1 の見え方と同じ。`available_patterns` → `[]`、`default_patterns` → `{}` も同じ理由（§5.1） |
 | 4 | 本番の `postgres` ロールで `auth.users` への INSERT と `disable trigger` ができるか | **9.3 で確かめる**。`public` の表は migration を流した `postgres` が所有者なので `disable trigger` はできるはず（できなければ 3 つとも代替が無い。`set_updated_at` は BEFORE UPDATE で毎回 `now()` にするので後から直せない）。止められることを §9.3 の必須条件にする。`auth.users` への INSERT ができなければ `supabase_auth_admin` 相当の権限を一時的に付ける |
@@ -892,3 +893,26 @@ manifest の要点（§5.2）:
 - `users` 以外の 9 ファイルは 1 回目と 1 バイトも違わない（`cmp`）
 - `users.jsonl` の差は 5 行だけで、CSV の比較のために 1 回目の後でパスワードを置き換えた 5 人（§8.2-5）。照合の結果（`password_is_email`）の差は無い
 - 当日のエクスポートの見込みは約 14 分
+
+### 2026-10-20（店舗を持たない休眠の人を移さない。§7.1）
+
+利用者の依頼。リリース後に統計・分析を積極的に行うので使っていない人を移さずにノイズを減らし、告知の不達も減らしたい。
+
+- 決定: **店舗を持たず、最後の利用（`coalesce(current_sign_in_at, confirmed_at, created_at)`）が 2025-10-30 00:00（UTC）より前の人を移さない**。店舗を持つ人は最後の利用が古くても移す（分析に要る）
+- 日数は 90 日と 1 年を比べて 1 年にした（§7.1 の「休眠」の行）。v1 の本番で数えた店舗を持たない人の内訳（読み取りだけ。利用者が流した）:
+
+  | 最後の利用 | 人数 | 扱い |
+  | --- | ---: | --- |
+  | 1 年以上前（2025-10-30 より前） | 2,731 | 移さない |
+  | 90 日〜1 年 | 602 | 移す |
+  | 90 日以内 | 136 | 移す |
+
+  移す人はリハーサル（10/13 のダンプ）の 29,010 人から約 2,700 人減って、約 2.6 万人の見込み
+- 実装: `userDropReason()`（`shouldMigrateUser()` を置き換え。移さない理由 `not_migrated` / `inactive` か null を返す）と `INACTIVE_CUTOFF`。`transformUsers()` は店舗の持ち主の集合（`tenantOwners`）を受ける。
+  `convertExport()` が `tenants` の全行（捨てる前）から集める。`report.json` の `users.dropped` に `inactive` が出る。移行しない人の Stripe の CSV の `reason` も `inactive` になる
+- 店舗を持たない人に Subscription が残っていれば、移行しない人の CSV（§6.1）に入り、026 §6 の手順で Dashboard で解約する（10/13 の時点で移行しない人の Subscription は 0 件だったが、この規則で増えうる。昼の予行で件数を見る）
+- 安全網の「移行しないのに店舗を持つ人」は `inactive` では起きない（店舗を持つ人は落とさない）ので、今までどおり `not_migrated` の人だけが出る
+- rake の `password_is_email` の照合（§15「照合を絞った」）は直さない。照合の範囲が少し広いだけで、照合しなかった人の値はインポートで使わない
+- 告知の宛先の SQL（030 §6.5）を同じ条件にそろえた。境目を固定しているので、10/29 の宛先と 10/30 のインポートのあいだに移す人が減ることは無い（増えるのは、そのあいだにログインした・店舗を作った休眠の人だけで、告知は届かないが v2 には入れる）
+- fixtures: users 3 / 7 / 8（店舗なし）の最後の利用を 2026 年にして、今までの確認（代理承認・重複 Customer・空のパスワード）を保った。休眠の users 9 `dormant` を足した
+- 確かめたこと: `npm test`・`npm run lint`・`npm run typecheck`

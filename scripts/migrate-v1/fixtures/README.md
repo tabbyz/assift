@@ -15,6 +15,7 @@
 | 個別契約（Subscription なしで 30 人）                     | users 6 `manual`。店舗 4（名前が空・スタッフ 0 人で勤務パターンあり = 準備中でデータあり）                        |
 | `stripe_customer_id` の重複                               | users 7 `dup`（users 1 と同じ Customer。Subscription あり → 持ち主は 1、7 は not-migrated）                       |
 | 空のパスワード・ロック                                    | users 8 `empty`                                                                                                   |
+| 店舗なしで 1 年以上使っていない（移行しない。`inactive`） | users 9 `dormant`。最後のログインが 2024-09。users 3 / 7 / 8 も店舗なしなので、最後の利用を 2026 年にしてある     |
 | 親が NULL                                                 | tenants 5 / patterns 50 / staffs 400 / shifts 1010 / required_nums 2008                                           |
 | ペア（正常・自分自身・他店舗）                            | patterns 12→13 / 20→20 / 22→10                                                                                    |
 | 色（`abc` → `#aabbcc`・NULL）                             | patterns 20 / 14                                                                                                  |

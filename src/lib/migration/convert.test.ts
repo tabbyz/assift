@@ -39,9 +39,9 @@ describe('convertExport（fixtures の通し）', () => {
     const c = await converted()
     expect(c.source).toEqual({
       users: {
-        read: 8,
+        read: 9,
         migrated: 6,
-        dropped: { not_migrated: 2 },
+        dropped: { not_migrated: 2, inactive: 1 },
         fixed: {
           password_is_email: 1,
           empty_password: 1,
@@ -128,7 +128,7 @@ describe('convertExport（fixtures の通し）', () => {
     expect(c.history).toHaveLength(6)
   })
 
-  it('users: 通常 / Google / 代理承認 / 空パスワード / 重複 Customer', async () => {
+  it('users: 通常 / Google / 代理承認 / 空パスワード / 重複 Customer / 休眠', async () => {
     const c = await converted()
     const byId = new Map(c.authUsers.map((row) => [row.id, row]))
     expect(byId.get(u(1))?.encrypted_password).toMatch(/^\$2a\$11\$/)
@@ -140,6 +140,8 @@ describe('convertExport（fixtures の通し）', () => {
     expect(byId.get(u(8))?.encrypted_password).toBeNull()
     expect(byId.has(u(4))).toBe(false)
     expect(byId.has(u(5))).toBe(false)
+    // 店舗を持たず 1 年以上使っていない
+    expect(byId.has(u(9))).toBe(false)
 
     const profile = new Map(c.profiles.map((row) => [row.id, row]))
     expect(profile.get(u(1))).toMatchObject({
