@@ -782,7 +782,8 @@ seed の岩本・松田の平日の早番で不足が埋まり、AI で作成の
     同じ版の `supabase/postgres:17.6.1.167` を直接起動し、GoTrue が作る auth の列と `auth.identities` を代わりに足して、migration 9 本 → seed（1 トランザクション）→ pgTAP 5 本を psql で流した。
     seed は通り、`required_nums` は 0 行・制約 9・スタッフ 8・シフト 2。pgTAP は admin_list_users 14・billing 52・required_nums_migration 7・rls_tenant_isolation 137・setup 39 がすべて ok。
     `npx supabase db reset` での確かめは、イメージが取れる環境で実装の PR の前にやり直す
-  - **PR を作る前に直したので、ブランチ DB には今の seed が流れる**（AGENTS.md「PR の流れ」）
+  - **訂正（同日）: PR（#61）は seed を直す前、プランの最初のコミットのあとに作られていた。** ブランチ DB には古い seed が入ったままで、今の seed は届かない（AGENTS.md「PR の流れ」）。
+    プレビューで今の seed を見るには PR を閉じて開き直す（ブランチ DB が作り直され、データは消える）
 
 ### 11.10 実装ログ（2026-10-20）
 
