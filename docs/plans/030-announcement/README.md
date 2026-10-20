@@ -320,9 +320,9 @@ https://assift.com
   鍵の 24 時間はまだ送っていないバッチを守らないので、待っても解決しない。作り直すしかないときは、新しい送信の識別子（`--campaign`）と新しい結果の CSV で、
   前の結果の CSV を `--exclude` に渡して送り済みの人を外す
 - 要素ごとに `tags: [{ name: 'campaign', value: 'announce-20261029' }]` を付ける（Resend のログと Metrics で告知だけを絞る。§6.3-b）
-- **速度**: チームで 1 秒に 10 回まで（API キーごとではなく、Supabase の認証メールと共有）。バッチなら約 29,010 通（021 §15 の移す人）が **291 回**で、速度の制限は問題にならない。
+- **速度**: チームで 1 秒に 10 回まで（API キーごとではなく、Supabase の認証メールと共有）。バッチなら約 2.6 万通（021 §7.1 の移す人。2026-10-20 に休眠の人を外す前は 29,010 通）が **約 270 回**で、速度の制限は問題にならない。
   ただし数分で全員に送ると受け取る側が絞ることがあるので、**1 回ごとに数秒あけ**、§6.3-b の区切りで止まって確かめる
-- **月の上限**: Pro（月 20 ドル）は月 5 万通・日の上限なし。10 月は告知の 2.9 万通 + 認証メールで収まる見込み（超えても 1,000 通 0.9 ドルの従量。5 倍で止まる）
+- **月の上限**: Pro（月 20 ドル）は月 5 万通・日の上限なし。10 月は告知の約 2.6 万通 + 認証メールで収まる見込み（超えても 1,000 通 0.9 ドルの従量。5 倍で止まる）
 - **記録**: Resend のログは **30 日で消える**。送った証拠（016-terms §7）は手元に残す: バッチの返す email id を宛先ごとに書いた結果の CSV と、送った日時・件数・PDF の URL と SHA-256（029 §3.4-5）の要約
 
 ### 6.3 注意: 送信の一時停止（認証メールも止まる）
@@ -332,7 +332,7 @@ Resend はアカウントに **バウンス率 4% 未満・迷惑メールの報
 バッチにしても、この危険は変わらない（速さではなく、届かない・報告される割合で決まる）。
 
 - 宛先は v1 の長年の登録者で、最近ログインしている人の割合は分からない（Google の人に限ると 8,707 人のうち 90 日以内のログインは 439 人。021 §15）。使われなくなったアドレスの不達で 4% を超えうる
-- 0.08% は 2.9 万通で **23 件**。assift を忘れた人が迷惑メールに入れるだけで届きうる
+- 0.08% は 2.6 万通で **21 件**。assift を忘れた人が迷惑メールに入れるだけで届きうる
 
 打てる手（§7-1 で決める）:
 
@@ -370,7 +370,7 @@ RESEND_API_KEY='<鍵>' npm run announce:send -- --input ~/announce/recipients-20
 
 - 書くファイル: 結果の CSV（`batch,v1_user_id,email,resend_id,sent_at,error`。1 回ごとに追記。`error` は 1 通ずつの段で断られた行だけ）・`<結果の CSV>.meta.json`（送信の識別子・文面の指紋・git のコミット・始めた時刻。送った版の記録。記録が 1 行でもあれば、続きで識別子か文面が違うと止まる）・
   `<結果の CSV>.raw.jsonl`（Resend の生の応答。1 回ごとに追記）
-- 1 回ごとに 3 秒あける（`--interval-ms`）。291 回で約 15 分。1 回 30 秒で時間切れ
+- 1 回ごとに 3 秒あける（`--interval-ms`）。約 270 回で約 14 分。1 回 30 秒で時間切れ
 - やり直す: 429（上限を除く）・5xx・時間切れ・通信の失敗・`409 concurrent_idempotent_requests` は同じ鍵で 5 回まで
 - 止まる: 上限（`daily_quota_exceeded` / `monthly_quota_exceeded`）・`409 invalid_idempotent_request`（文面か宛先が送り始めと違う）・400・422 など。同じコマンドで続きから流せる。
   422 がアドレスのせいなら、そのアドレスを 1 行の CSV（`email` の列）にして `--exclude` に渡す（外すと区切りがずれるのは、まだ送っていないバッチだけ。記録したバッチは変わらない）
@@ -387,22 +387,26 @@ RESEND_API_KEY='<鍵>' npm run announce:send -- --input ~/announce/recipients-20
 
 ### 6.5 宛先
 
-v2 に移す人と同じ（021 §7.1: `confirmed_at IS NOT NULL OR sign_in_count > 0`）。10/29 の送る前に v1 の本番から読み取りだけで出す（列は `id,email,current_sign_in_at`。見出しの行つき）:
+v2 に移す人と同じ（021 §7.1: v1 でログインできた人（`confirmed_at IS NOT NULL OR sign_in_count > 0`）のうち、店舗を持つか、最後の利用が 2025-10-30 以降の人）。10/29 の送る前に v1 の本番から読み取りだけで出す（列は `id,email,current_sign_in_at`。見出しの行つき）:
 
 ```sql
 select id, lower(trim(email)) as email, current_sign_in_at
-from users
-where confirmed_at is not null or sign_in_count > 0
+from users u
+where (confirmed_at is not null or sign_in_count > 0)
+  and (exists (select 1 from tenants t where t.user_id = u.id)
+       or coalesce(current_sign_in_at, confirmed_at, created_at) >= '2025-10-30')
 order by current_sign_in_at desc nulls last, id;
 ```
 
 ```bash
-heroku pg:psql -a assift -c "\copy (select id, lower(trim(email)) as email, current_sign_in_at from users where confirmed_at is not null or sign_in_count > 0 order by current_sign_in_at desc nulls last, id) to stdout with csv header" > ~/announce/recipients-20261029.csv
+heroku pg:psql -a assift -c "\copy (select id, lower(trim(email)) as email, current_sign_in_at from users u where (confirmed_at is not null or sign_in_count > 0) and (exists (select 1 from tenants t where t.user_id = u.id) or coalesce(current_sign_in_at, confirmed_at, created_at) >= '2025-10-30') order by current_sign_in_at desc nulls last, id) to stdout with csv header" > ~/announce/recipients-20261029.csv
 head -3 ~/announce/recipients-20261029.csv   # 見出しが id,email,current_sign_in_at
-wc -l < ~/announce/recipients-20261029.csv   # 約 29,000（見出しの 1 行を含む）
+wc -l < ~/announce/recipients-20261029.csv   # 約 26,000（見出しの 1 行を含む）
 ```
 
 - 移さない人（招待未承認・未確認）には送らない。v1 でもログインできず、規約に同意していない
+- 店舗を持たず 1 年以上使っていない人（2026-10-20 の 2,731 人）にも送らない。移さないので v2 の規約を知らせる相手ではなく、v1 の規約 第 7 条で事前の通知も要らない。不達・迷惑メールの報告の多くはこの人たちから出るはずだった（§6.3）
+- v1 の `users.*_at` は UTC の `timestamp` なので、`'2025-10-30'` は UTC の 0 時。`INACTIVE_CUTOFF`（`src/lib/migration/transform.ts`）と同じ境目
 - `current_sign_in_at` の新しい順は §6.3-b の順番。同じ値（ログインしていない人は null）の中は `id` の順にして、出すたびに並びが変わらないようにする
 - **出したら送り終えるまで作り直さない**（§6.2）
 
@@ -503,3 +507,7 @@ wc -l < ~/announce/recipients-20261029.csv   # 約 29,000（見出しの 1 行�
   1 通ずつの段で 400・422 なら、その行を `error` つきで記録して先へ進む（100 通のバッチの 400・422 は今までどおり止まる）
 - 確かめたこと: Vitest 26 件。`fetch` を差し替えて 155 行（RFC の形 150・外れる形 3・形でない 1・見出し）で通した: 150 通を 2 回 → 1 通ずつ 3 回。`..` の 1 通だけ 422 で `error` に記録され、残りは送られた。流し直すと何も送らない
 
+### 2026-10-20（宛先から店舗を持たない休眠の人を外す。§6.5）
+
+- 021 §7.1 の決定（店舗を持たず、最後の利用が 2025-10-30 より前の人を移さない）に合わせて、宛先の SQL に同じ条件を足した。宛先は約 2.6 万人の見込み
+- バウンス率への効き目: 外すのは何年も使われていないアドレスが多い 2,731 人で、§6.3 の不達・迷惑メールの報告のおそれがいちばん大きい層。§6.3-b（最近ログインした順に送って途中で確かめる）はそのまま

@@ -137,7 +137,9 @@ function lastEditedAtByUser(input: V1Export): Map<number, string> {
 export function convertExport(input: V1Export, options: ConvertOptions): Converted {
   const overrides = options.overrides ?? {}
 
-  const users = transformUsers(input.users, overrides)
+  const tenantOwners = new Set<number>()
+  for (const t of input.tenants) if (t.user_id !== null) tenantOwners.add(t.user_id)
+  const users = transformUsers(input.users, { tenantOwners }, overrides)
 
   const staffCountByTenant = new Map<number, number>()
   for (const s of input.staffs) {
@@ -267,6 +269,7 @@ export function convertExport(input: V1Export, options: ConvertOptions): Convert
   })
   const stripeMigrated: StripeCsvRow[] = []
   const stripeNotMigrated: (StripeCsvRow & { reason: string })[] = []
+  const userDropReasons = new Map(users.dropped.map((d) => [d.id, d.reason]))
   for (const u of input.users) {
     const sub = u.stripe_subscription_id?.trim()
     if (!sub) continue
@@ -280,7 +283,7 @@ export function convertExport(input: V1Export, options: ConvertOptions): Convert
           stripeSubscriptionId: sub,
           maxStaffsCount: u.max_staffs_count,
         }),
-        reason: 'not_migrated',
+        reason: userDropReasons.get(u.id) ?? 'not_migrated',
       })
     } else if (migrated.customerLost) {
       stripeNotMigrated.push({

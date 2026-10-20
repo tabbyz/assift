@@ -3,7 +3,7 @@
   "v1_commit": "fixture",
   "rails_env": "fixture",
   "counts": {
-    "users": 8,
+    "users": 9,
     "tenants": 5,
     "staffs": 8,
     "patterns": 11,

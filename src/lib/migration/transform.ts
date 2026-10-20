@@ -34,6 +34,7 @@ import type {
 
 export type DropReason =
   | 'not_migrated'
+  | 'inactive'
   | 'parent_missing'
   | 'parent_dropped'
   | 'unassigned'
@@ -239,13 +240,38 @@ export type UsersResult = {
   fixed: Fixed[]
 }
 
-/** v1 でログインできた人だけ（§7.1。決定 2026-10-10） */
-export function shouldMigrateUser(user: V1User, overrides: Overrides = {}): boolean {
-  if (overrides.forceMigrateUsers?.includes(user.id)) return true
-  return user.confirmed_at !== null || user.sign_in_count > 0
+/**
+ * 店舗を持たない人は、最後の利用がこれより前なら移さない（§7.1。決定 2026-10-20）。
+ * 切り替えの日（2026-10-30）の 1 年前。v1 の規約 第 7 条（1 年以上利用のないアカウントは削除できる）に合わせる。
+ * v1 の時刻は UTC なので UTC の 0 時。告知の宛先の SQL（030 §6.5）と同じ境目
+ */
+export const INACTIVE_CUTOFF = '2025-10-30T00:00:00Z'
+
+/** 最後の利用。ログインしていない人（確認しただけ）は確認した日、それも無ければ登録した日 */
+function lastUsedAt(user: V1User): string {
+  return user.current_sign_in_at ?? user.confirmed_at ?? user.created_at
 }
 
-export function transformUsers(users: V1User[], overrides: Overrides = {}): UsersResult {
+/**
+ * 移さない理由（§7.1）。移すなら null。
+ * v1 でログインできた人（決定 2026-10-10）のうち、店舗を持つ人と、最後の利用が 1 年以内の人（決定 2026-10-20）を移す
+ */
+export function userDropReason(
+  user: V1User,
+  ownsTenant: boolean,
+  overrides: Overrides = {}
+): 'not_migrated' | 'inactive' | null {
+  if (overrides.forceMigrateUsers?.includes(user.id)) return null
+  if (user.confirmed_at === null && user.sign_in_count === 0) return 'not_migrated'
+  if (ownsTenant) return null
+  return Date.parse(lastUsedAt(user)) >= Date.parse(INACTIVE_CUTOFF) ? null : 'inactive'
+}
+
+export function transformUsers(
+  users: V1User[],
+  ctx: { tenantOwners: ReadonlySet<number> },
+  overrides: Overrides = {}
+): UsersResult {
   const rec = new Recorder('users')
   const result = new Map<number, MigratedUser | null>()
   const rows: AuthUserRow[] = []
@@ -253,8 +279,9 @@ export function transformUsers(users: V1User[], overrides: Overrides = {}): User
   const seenEmails = new Map<string, number>()
 
   for (const user of users) {
-    if (!shouldMigrateUser(user, overrides)) {
-      rec.drop(user.id, 'not_migrated')
+    const dropReason = userDropReason(user, ctx.tenantOwners.has(user.id), overrides)
+    if (dropReason !== null) {
+      rec.drop(user.id, dropReason)
       result.set(user.id, null)
       continue
     }
