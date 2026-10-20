@@ -52,8 +52,7 @@ export default async function RestrictionsPage({
           </LinkButton>
         </Group>
         <Text size="sm" c="dimmed">
-          AI
-          で作成するときに守るルールです。「必須」は必ず守り、「なるべく」は守れないときは破ります。
+          AI で作成するときに守るルールです。「必須」は必ず守り、「なるべく」はできるだけ守ります。
         </Text>
       </Stack>
 
