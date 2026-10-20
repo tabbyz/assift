@@ -26,7 +26,7 @@ export function PatternEditClient({
         <Stack gap="xs">
           <Text size="sm">本当に削除しますか？この操作は取り消せません。</Text>
           <Text size="sm" c="dimmed">
-            このパターンのシフト・必要人数・制約も削除されます。
+            このパターンのシフト・必要人数・ルールも削除されます。
           </Text>
         </Stack>
       ),

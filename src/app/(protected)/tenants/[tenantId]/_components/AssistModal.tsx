@@ -434,7 +434,7 @@ function ReadyView({
         {fact(
           '対象',
           <>
-            在籍スタッフ {staffCount} 人 · 制約 {restrictionCount} 件{' '}
+            在籍スタッフ {staffCount} 人 · ルール {restrictionCount} 件{' '}
             <Anchor component={Link} href={`/tenants/${tenantId}/settings/restrictions`} size="sm">
               設定
             </Anchor>

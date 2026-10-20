@@ -322,7 +322,7 @@ function ResultBody({
 }
 
 function leverKind(lever: AssistLever): string {
-  return lever.kind === 'directive' ? 'AI への指示' : '制約'
+  return lever.kind === 'directive' ? 'AI への指示' : 'ルール'
 }
 
 /** 指示は外して作り直す。制約は今回だけ緩め、店舗の設定を変える導線は残す */
@@ -349,7 +349,7 @@ function LeverAction({
   return (
     <div className={classes.leverApply}>
       <Button size={size} className={classes.apply} onClick={onApply} loading={loading}>
-        条件を緩めて作り直す
+        ルールを緩めて作り直す
       </Button>
       <Anchor component={Link} href={`/tenants/${tenantId}/settings/restrictions`} size="sm">
         設定を表示

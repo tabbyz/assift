@@ -238,7 +238,7 @@ values
   ('55555555-5555-5555-5555-000000000005', '22222222-2222-2222-2222-222222222222', 'max_work_consecutive', 5,
    null, null, 4);
 
--- スタッフ別の制約（013）。制約ページの「スタッフ別」に出る
+-- スタッフ別の制約（013）。「シフトのルール」のページの「スタッフ別」に出る
 insert into public.restrictions (id, tenant_id, staff_id, kind, days, wdays, hard, position)
 values
   -- 川田: 週 3 日以上（なるべく）/ 土日祝は 1 か月に 2 日まで（必須）
