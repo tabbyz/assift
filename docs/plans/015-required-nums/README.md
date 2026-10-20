@@ -546,12 +546,12 @@ src/app/(protected)/tenants/[tenantId]/settings/required-nums/{page.tsx,actions.
 §7 に残した 2 つの申し送り（機能の呼び名・「デフォルト勤務パターンをセット」）を、リリース（10/30）の前に片付ける。
 文言だけの変更で、スキーマ・Action の引数・URL は変えない。
 
-- [ ] 「AI シフト作成」「自動アサイン」「自動作成」が画面に出ない。機能名は「AI で〜」（動詞）/「AI の〜」（名詞）の形で、空白の有無もそろう
+- [x] 「AI シフト作成」「自動アサイン」「自動作成」が画面に出ない。機能名は「AI で〜」（動詞）/「AI の〜」（名詞）の形で、空白の有無もそろう
   （§11.5 の LP・規約は除く。見出しの「AI でシフトを作成」などの言い回しは残す）
-- [ ] 設定の「自動アサイン制約」が「制約」になる（ナビ・見出し・パンくず・AI のモーダル・結果のパネル・削除の確認・スタッフ画面）
-- [ ] 「デフォルト勤務パターンをセット」が「曜日ごとの勤務をセット」になり、スタッフ画面の見出し「曜日ごとの勤務」と同じ語で辿れる
-- [ ] スタッフ画面の説明の「[ツール]」（いまのメニューは「操作」）が直る
-- [ ] `lint` / `typecheck` / `test` / `supabase test db` が通る（`supabase/schemas` はコメントだけで migration の差分が出ない）。変えた画面を `build && start` で見る
+- [x] 設定の「自動アサイン制約」が「制約」になる（ナビ・見出し・パンくず・AI のモーダル・結果のパネル・削除の確認・スタッフ画面）
+- [x] 「デフォルト勤務パターンをセット」が「曜日ごとの勤務をセット」になり、スタッフ画面の見出し「曜日ごとの勤務」と同じ語で辿れる
+- [x] スタッフ画面の説明の「[ツール]」（いまのメニューは「操作」）が直る
+- [x] `lint` / `typecheck` / `test` / `supabase test db` が通る（`supabase/schemas` はコメントだけで migration の差分が出ない）。変えた画面を `build && start` で見る
 
 ### 11.2 調べて分かったこと（2026-10-20 の main）
 
@@ -783,3 +783,35 @@ seed の岩本・松田の平日の早番で不足が埋まり、AI で作成の
     seed は通り、`required_nums` は 0 行・制約 9・スタッフ 8・シフト 2。pgTAP は admin_list_users 14・billing 52・required_nums_migration 7・rls_tenant_isolation 137・setup 39 がすべて ok。
     `npx supabase db reset` での確かめは、イメージが取れる環境で実装の PR の前にやり直す
   - **PR を作る前に直したので、ブランチ DB には今の seed が流れる**（AGENTS.md「PR の流れ」）
+
+### 11.10 実装ログ（2026-10-20）
+
+§11.4 の表のとおりに 27 ファイル・39 か所を直した（機能名 → 制約 → 曜日ごとの勤務 → コメント・AGENTS.md・`assist_runs.sql`）。プランから変えたことは無い。
+
+**確かめ（§11.6）**
+
+- `npm run lint`（警告 1 件は main からの `reasons.test.ts` の未使用の定数）/ `npm run typecheck` / `npm test`（108 ファイル・1041 件）が通る
+- 検索の残り（コメント行を除く）は §11.5 の行（LP・規約の「AIで作成」・モーダルの見出し「AI でシフトを作成」・LLM のプロンプト）と、内部の語（AGENTS.md・テスト名・CSS のコメント）だけ
+- `declarative sync --no-apply --name 015_naming --strict-coverage` は 50 行の migration を作ったが、**`assist_runs.sql` のコメントを main に戻して流しても同じ中身**
+  （anon の `REVOKE` / `GRANT EXECUTE` の組と、`restrictions_wdays_check` の書き直し）。今回の変更は差分を生まない。作られた migration は捨てた（下の気づき）
+- `supabase start` → seed（§11.9 で直したもの）→ `db reset` が通る。pgTAP 5 本（admin_list_users 14・billing 52・required_nums_migration 7・rls_tenant_isolation 137・setup 39）がすべて ok
+  （`supabase test db` の pg_prove のイメージが取れなかったので、DB のコンテナの中で psql から流した）。`gen types` は `src/types/database.ts` と差分なし
+- 画面（`build && start`、仮の `AI_GATEWAY_API_KEY`、Playwright・`deviceScaleFactor: 2`）。§11.6 の順で、すべて期待どおり:
+  1. AI で作成: モーダルの「対象」が「在籍スタッフ 8 人 · 制約 9 件」。指示なしで実行し、結果のパネルの一手に種類「制約」（「早番は1週間に2日まで」+1 枠）。
+     一手を選んで「条件を緩めて作り直す」→ 確認に「AI で作成した後に手動で…」。キャンセル → 元に戻す
+  2. 操作メニュー: 「曜日ごとの勤務をセット」・「この期間に個別の変更はありません」（seed の必要人数の行が消えた）。確認の見出しと本文、通知「曜日ごとの勤務をセットしました」
+  3. 制約の一覧（見出し・説明・タブのタイトル「制約 | 小石川ストア」）・登録と編集のパンくず・PC のナビ・スマホのドロワー
+  4. 勤務パターンとスタッフの削除の確認 / スタッフの編集（説明 2 つ。Select の aria-label は「月の勤務パターン」…「祝の勤務パターン」）/ 必要人数の設定の説明
+  5. 初期設定で 1 人の店舗を作り、最後の画面に「何人ずつ必要か（AI で作成するとき）」。その店舗でエラー 1 件目、「祝」だけ選んで 12 月の期間でエラー 2 件目
+  6. 390px: 制約の一覧に横スクロールなし、操作メニューが画面に収まる
+  7. 管理画面（別のコンテキスト）: 店舗の行に「AI の作成」「AI の作成（最後）」
+- 画面で出せない `ASSIST_RUNNING_MESSAGE`・`ASSIST_RUN_NOT_FOUND_MESSAGE`・`defaultPatterns` の Zod の文言は、差分とテスト（`assist.test.ts`）で確かめた
+- seed の祝日: 10/12（スポーツの日）の必要人数が 4（早番が「祝」の基本の 1）になっていることを表で見た（§11.9 の seed の修正）
+
+**気づき**
+
+- `declarative sync` は今の main でも差分を出す（上の 50 行）。anon の組は AGENTS.md の「`GRANT ... TO anon` が残る」の既知の挙動で、`restrictions_wdays_check` は式の正規化の違いと思われる。
+  次に本当にスキーマを変える人は、この 50 行が混ざることを知っておく（差分 migration に入れるかは、そのときに中身を見て決める）
+- このクラウドのセッションでは、`node_modules` の Supabase CLI が musl 版だけで起動せず（glibc の環境）、同じ版の glibc 版を scratchpad に落として使った。
+  イメージの取得はレジストリの制限（403 / 429）で何度か失敗し、時間をおくと取れた。dockerd が途中で止まり、古い PID ファイルを消して起動し直した
+

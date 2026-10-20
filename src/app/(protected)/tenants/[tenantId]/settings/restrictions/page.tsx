@@ -12,7 +12,7 @@ import { toRestrictionRowView } from '@/lib/restrictions/rowView'
 import { isUuid } from '@/utils/uuid'
 import { groupRestrictions } from './_lib/groupRestrictions'
 
-export const metadata: Metadata = { title: '自動アサイン制約' }
+export const metadata: Metadata = { title: '制約' }
 
 export default async function RestrictionsPage({
   params,
@@ -42,7 +42,7 @@ export default async function RestrictionsPage({
     <Stack gap="lg">
       <Stack gap="xs">
         <Group justify="space-between">
-          <Title order={2}>自動アサイン制約</Title>
+          <Title order={2}>制約</Title>
           <LinkButton
             href={`/tenants/${tenantId}/settings/restrictions/new`}
             size="sm"
@@ -52,7 +52,8 @@ export default async function RestrictionsPage({
           </LinkButton>
         </Group>
         <Text size="sm" c="dimmed">
-          「必須」は必ず守ります。「なるべく」は守れないときは破ります。
+          AI
+          で作成するときに守る条件です。「必須」は必ず守り、「なるべく」は守れないときは破ります。
         </Text>
       </Stack>
 

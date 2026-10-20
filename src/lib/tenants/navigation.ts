@@ -38,7 +38,7 @@ export function settingsLinks(tenantId: string): TenantLink[] {
     },
     {
       href: `/tenants/${tenantId}/settings/restrictions`,
-      label: '自動アサイン制約',
+      label: '制約',
       icon: IconListCheck,
     },
     { href: `/tenants/${tenantId}/settings/general`, label: '店舗情報', icon: IconBuilding },

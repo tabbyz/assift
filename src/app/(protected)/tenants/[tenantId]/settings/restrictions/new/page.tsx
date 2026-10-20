@@ -36,7 +36,7 @@ export default async function NewRestrictionPage({
   return (
     <Stack gap="md">
       <SettingsBreadcrumbs
-        parent={{ href: `/tenants/${tenantId}/settings/restrictions`, label: '自動アサイン制約' }}
+        parent={{ href: `/tenants/${tenantId}/settings/restrictions`, label: '制約' }}
         current="制約の登録"
       />
       <Title order={2}>制約の登録</Title>

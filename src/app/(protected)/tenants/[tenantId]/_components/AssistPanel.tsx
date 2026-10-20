@@ -322,7 +322,7 @@ function ResultBody({
 }
 
 function leverKind(lever: AssistLever): string {
-  return lever.kind === 'directive' ? 'AI への指示' : '自動アサイン制約'
+  return lever.kind === 'directive' ? 'AI への指示' : '制約'
 }
 
 /** 指示は外して作り直す。制約は今回だけ緩め、店舗の設定を変える導線は残す */

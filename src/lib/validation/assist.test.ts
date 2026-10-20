@@ -33,7 +33,7 @@ describe('startAssistSchema', () => {
       toActionError(
         startAssistSchema.safeParse({ ...base, start: '2026-10-01', retryOfRunId: 'x' }).error
       )
-    ).toBe('自動アサインの実行が見つかりません')
+    ).toBe('AI の作成結果が見つかりません')
   })
 
   it('seed のような RFC 非準拠の uuid も通す（z.guid）', () => {

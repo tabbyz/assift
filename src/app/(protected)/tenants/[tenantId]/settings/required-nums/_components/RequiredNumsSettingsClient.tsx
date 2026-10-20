@@ -48,8 +48,8 @@ export function RequiredNumsSettingsClient({ tenantId, patterns }: Props) {
       <Stack gap={4}>
         <Title order={2}>必要人数</Title>
         <Text size="sm" c="dimmed">
-          曜日ごとに、1 日に何人入ってほしいかを決めます。シフト表の下の「配置 / 必要人数」と AI
-          シフト作成がこの人数を見ます。
+          曜日ごとに、1 日に何人入ってほしいかを決めます。この人数は、シフト表の下の「配置 /
+          必要人数」に出るほか、AI で作成するときにも使います。
         </Text>
       </Stack>
 

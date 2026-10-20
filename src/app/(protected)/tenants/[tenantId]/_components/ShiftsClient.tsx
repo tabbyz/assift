@@ -255,11 +255,10 @@ export function ShiftsClient(props: Props) {
 
   const confirmSetDefaultPatterns = () =>
     modals.openConfirmModal({
-      title: 'デフォルト勤務パターンをセット',
+      title: '曜日ごとの勤務をセット',
       children: (
         <Text size="sm">
-          スタッフ毎に設定されたデフォルトの勤務パターンをセットします。
-          ※アサイン済みのシフトは上書きされません。
+          スタッフの「曜日ごとの勤務」で選んだ勤務パターンを、この期間の空いているマスに入れます。入っているシフトと必要人数は変わりません。
         </Text>
       ),
       labels: { confirm: 'セットする', cancel: 'キャンセル' },
@@ -269,14 +268,14 @@ export function ShiftsClient(props: Props) {
           ({ inserted }) =>
             outcome(
               inserted,
-              'デフォルトの勤務パターンをセットしました',
+              '曜日ごとの勤務をセットしました',
               'すべてアサイン済みのため、追加したシフトはありません'
             )
         ),
     })
 
   /**
-   * AI シフト作成の中で必要人数を聞いたとき（015 §3.5）。保存するのは**基本の人数だけ**で、
+   * 「AI で作成」のモーダルで必要人数を聞いたとき（015 §3.5）。保存するのは**基本の人数だけ**で、
    * 表示中の期間へは解決で届く（焼き付けは起きない）。設定画面と同じ Action を使う
    */
   const saveAssistRequiredNums = (nums: Record<string, RequiredNumsByDay>) =>

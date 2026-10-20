@@ -40,7 +40,7 @@ export type StaffConditionValues = {
 }
 
 export const STAFF_CONDITIONS_DESCRIPTION =
-  'AI で作成するときは、勤務できる曜日・選択可能な勤務パターン・週の最大勤務日数を必ず守ります。この人だけの規則は「自動アサイン制約」で設定します。'
+  'AI で作成するときは、勤務できる曜日・選択可能な勤務パターン・週の最大勤務日数を必ず守ります。それ以外の条件（連続勤務可能な日数・なるべく休みの曜日など）は「制約」で設定します。この人だけに付けることもできます。'
 
 export function StaffNameInput({
   value,
@@ -96,7 +96,7 @@ export function StaffConditionFields({
     <Stack gap="lg">
       <Input.Wrapper
         label="曜日ごとの勤務"
-        description="オフの曜日はシフト表では斜線で表示されます。パターンはシフト表の[ツール]で一括セットでき、AI で作成するときも優先されます"
+        description="オフの曜日はシフト表では斜線で表示されます。選んだ勤務パターンは、シフト表の「操作」→「曜日ごとの勤務をセット」で空いているマスに入れられ、AI で作成するときも優先されます"
       >
         <Table mt={4} maw={360} withRowBorders={false} verticalSpacing={4}>
           <TableTbody>
@@ -131,7 +131,7 @@ export function StaffConditionFields({
                       デフォルトのセット（planDefaultPatterns）も勤務できる曜日では絞らない
                     */}
                     <Select
-                      aria-label={`${DAY_KEY_LABELS[dayKey]}のデフォルト勤務パターン`}
+                      aria-label={`${DAY_KEY_LABELS[dayKey]}の勤務パターン`}
                       data={patternOptions}
                       value={values.defaultPatterns[dayKey] ?? null}
                       onChange={(value) => setDefaultPattern(dayKey, value)}
