@@ -586,56 +586,65 @@ src/app/(protected)/tenants/[tenantId]/settings/required-nums/{page.tsx,actions.
 
 ### 11.4 直す文言
 
-`[tenantId]` は `src/app/(protected)/tenants/[tenantId]`。
+`[tenantId]` は `src/app/(protected)/tenants/[tenantId]`。**「これから」の列はバッククォートの中が画面に出る文言そのもの**（一字一句この通りに写す）。
+その外の「（説明: …）」はプランの説明で、文言には含めない。
 
 **機能名**
 
 | 場所 | いま | これから |
 | --- | --- | --- |
-| `[tenantId]/settings/required-nums/_components/RequiredNumsSettingsClient.tsx` の説明 | 曜日ごとに、1 日に何人入ってほしいかを決めます。シフト表の下の「配置 / 必要人数」と AI シフト作成がこの人数を見ます。 | 曜日ごとに、1 日に何人入ってほしいかを決めます。この人数は、シフト表の下の「配置 / 必要人数」に出るほか、AI で作成するときにも使います。 |
-| `[tenantId]/_components/AssistModal.tsx`（作り直しの確認） | AIで作成した後に… | AI で作成した後に… |
-| `components/setup/SetupDone.tsx` | 何人ずつ必要か（AI でシフトを作るとき） | 何人ずつ必要か（AI で作成するとき） |
-| `lib/validation/assist.ts` `ASSIST_RUN_NOT_FOUND_MESSAGE` | 自動アサインの実行が見つかりません | 「AI の作成結果が見つかりません」（説明: 元に戻す・結果を閉じる・別の案・一手で出る。パネルの名前に合わせる） |
-| `lib/validation/assist.ts` `ASSIST_RUNNING_MESSAGE` | 実行中の自動アサインがあります | 別の AI の作成が実行中です |
-| `src/app/-/(console)/users/[userId]/_components/TenantList.tsx` | 自動アサイン / 最後の自動アサイン | AI の作成 / AI の作成（最後） |
+| `[tenantId]/settings/required-nums/_components/RequiredNumsSettingsClient.tsx` の説明 | `曜日ごとに、1 日に何人入ってほしいかを決めます。シフト表の下の「配置 / 必要人数」と AI シフト作成がこの人数を見ます。` | `曜日ごとに、1 日に何人入ってほしいかを決めます。この人数は、シフト表の下の「配置 / 必要人数」に出るほか、AI で作成するときにも使います。` |
+| `[tenantId]/_components/AssistModal.tsx`（作り直しの確認） | `AIで作成した後に手動で内容を変更した場合は、…` | `AI で作成した後に手動で内容を変更した場合は、…`（説明: 空白を足すだけ。後半は変えない） |
+| `components/setup/SetupDone.tsx` | `何人ずつ必要か（AI でシフトを作るとき）` | `何人ずつ必要か（AI で作成するとき）` |
+| `lib/validation/assist.ts` `ASSIST_RUN_NOT_FOUND_MESSAGE` | `自動アサインの実行が見つかりません` | `AI の作成結果が見つかりません`（説明: 元に戻す・結果を閉じる・別の案・一手で出る。パネルの名前に合わせる） |
+| `lib/validation/assist.ts` `ASSIST_RUNNING_MESSAGE` | `実行中の自動アサインがあります` | `別の AI の作成が実行中です` |
+| `src/app/-/(console)/users/[userId]/_components/TenantList.tsx` | `自動アサイン` / `最後の自動アサイン` | `AI の作成` / `AI の作成（最後）` |
 
 **制約**
 
 | 場所 | いま | これから |
 | --- | --- | --- |
-| `lib/tenants/navigation.ts`（設定のナビ） | 自動アサイン制約 | 制約 |
-| `[tenantId]/settings/restrictions/page.tsx`（`metadata.title`・見出し） | 自動アサイン制約 | 制約 |
-| 同ページの説明 | 「必須」は必ず守ります。「なるべく」は守れないときは破ります。 | AI で作成するときに守る規則です。「必須」は必ず守り、「なるべく」は守れないときは破ります。（説明: 週の最低勤務日数の例外は書かない。§11.5） |
-| `restrictions/new/page.tsx`・`restrictions/[restrictionId]/page.tsx`（パンくずの親） | 自動アサイン制約 | 制約 |
-| `[tenantId]/_components/AssistModal.tsx`（「対象」） | 在籍スタッフ n 人 · 自動アサイン制約 n 件 | 在籍スタッフ n 人 · 制約 n 件 |
-| `[tenantId]/_components/AssistPanel.tsx`（一手の種類） | 自動アサイン制約 | 制約 |
-| `settings/patterns/_components/PatternEditClient.tsx`（削除の確認） | このパターンのシフト・必要人数・自動アサイン制約も削除されます。 | このパターンのシフト・必要人数・制約も削除されます。 |
-| `settings/staffs/_components/StaffEditClient.tsx`（スタッフの削除の確認） | このスタッフのシフトと規則も削除されます。 | このスタッフのシフトと制約も削除されます。（説明: 勤務パターンの削除の確認と同じ語にする） |
-| `settings/staffs/_components/StaffFields.tsx` `STAFF_CONDITIONS_DESCRIPTION` | …この人だけの規則は「自動アサイン制約」で設定します。 | …この人だけの規則は「制約」で設定します。 |
+| `lib/tenants/navigation.ts`（設定のナビ） | `自動アサイン制約` | `制約` |
+| `[tenantId]/settings/restrictions/page.tsx`（`metadata.title`・見出し） | `自動アサイン制約` | `制約` |
+| 同ページの説明 | `「必須」は必ず守ります。「なるべく」は守れないときは破ります。` | `AI で作成するときに守る条件です。「必須」は必ず守り、「なるべく」は守れないときは破ります。`（説明: 週の最低勤務日数の例外は書かない。§11.5。「条件」は結果のパネルの「条件を緩めて作り直す」と同じ語） |
+| `restrictions/new/page.tsx`・`restrictions/[restrictionId]/page.tsx`（パンくずの親） | `自動アサイン制約` | `制約` |
+| `[tenantId]/_components/AssistModal.tsx`（「対象」） | `在籍スタッフ {n} 人 · 自動アサイン制約 {n} 件` | `在籍スタッフ {n} 人 · 制約 {n} 件` |
+| `[tenantId]/_components/AssistPanel.tsx`（一手の種類） | `自動アサイン制約` | `制約` |
+| `settings/patterns/_components/PatternEditClient.tsx`（削除の確認） | `このパターンのシフト・必要人数・自動アサイン制約も削除されます。` | `このパターンのシフト・必要人数・制約も削除されます。` |
+| `settings/staffs/_components/StaffEditClient.tsx`（スタッフの削除の確認） | `このスタッフのシフトと規則も削除されます。` | `このスタッフのシフトと制約も削除されます。`（説明: 勤務パターンの削除の確認と同じ語にする） |
+| `settings/staffs/_components/StaffFields.tsx` `STAFF_CONDITIONS_DESCRIPTION` | `…この人だけの規則は「自動アサイン制約」で設定します。` | `…この人だけの条件は「制約」で設定します。`（説明: 前半は変えない。「規則」はモーダルの「規則」の行（入っているマスは残る…）と別の意味なので、制約には使わない） |
 
 **曜日ごとの勤務**
 
 | 場所 | いま | これから |
 | --- | --- | --- |
-| `[tenantId]/_components/ToolsMenu.tsx`（操作メニュー） | デフォルト勤務パターンをセット | 曜日ごとの勤務をセット |
-| `[tenantId]/_components/ShiftsClient.tsx`（確認の見出し） | デフォルト勤務パターンをセット | 曜日ごとの勤務をセット |
-| 同（確認の本文） | スタッフ毎に設定されたデフォルトの勤務パターンをセットします。※アサイン済みのシフトは上書きされません。 | スタッフの「曜日ごとの勤務」で選んだ勤務パターンを、空いているマスに入れます（必要人数は変わりません）。※アサイン済みのシフトは上書きされません。 |
-| 同（通知） | デフォルトの勤務パターンをセットしました | 曜日ごとの勤務をセットしました |
-| `[tenantId]/actions.ts` `setDefaultPatterns` のエラー | デフォルト勤務パターンが設定されたスタッフがいません | 「「曜日ごとの勤務」で勤務パターンを選んだスタッフがいません」 |
-| 同 | この期間にセットできるデフォルト勤務パターンがありません | 「この期間にセットできる勤務パターンがありません」（説明: 選んだ曜日・祝日が期間に無いとき） |
-| `lib/validation/staffs.ts`（`defaultPatterns` の leaf） | デフォルトの勤務パターンが正しくありません | 「「曜日ごとの勤務」の勤務パターンが正しくありません」 |
-| `StaffFields.tsx`（Select の `aria-label`） | `月のデフォルト勤務パターン` | `月の勤務パターン`（説明: 同じ行のスイッチは `月曜に勤務できる`。枠の見出しが「曜日ごとの勤務」） |
-| `StaffFields.tsx`（「曜日ごとの勤務」の説明） | オフの曜日はシフト表では斜線で表示されます。パターンはシフト表の[ツール]で一括セットでき、AI で作成するときも優先されます | オフの曜日はシフト表では斜線で表示されます。選んだ勤務パターンは、シフト表の「操作」→「曜日ごとの勤務をセット」で空いているマスに入れられ、AI で作成するときも優先されます |
+| `[tenantId]/_components/ToolsMenu.tsx`（操作メニュー） | `デフォルト勤務パターンをセット` | `曜日ごとの勤務をセット` |
+| `[tenantId]/_components/ShiftsClient.tsx`（確認の見出し） | `デフォルト勤務パターンをセット` | `曜日ごとの勤務をセット` |
+| 同（確認の本文） | `スタッフ毎に設定されたデフォルトの勤務パターンをセットします。※アサイン済みのシフトは上書きされません。` | `スタッフの「曜日ごとの勤務」で選んだ勤務パターンを、空いているマスに入れます（必要人数は変わりません）。※アサイン済みのシフトは上書きされません。` |
+| 同（通知） | `デフォルトの勤務パターンをセットしました` | `曜日ごとの勤務をセットしました` |
+| `[tenantId]/actions.ts` `setDefaultPatterns` のエラー | `デフォルト勤務パターンが設定されたスタッフがいません` | `「曜日ごとの勤務」で勤務パターンを選んだスタッフがいません` |
+| 同 | `この期間にセットできるデフォルト勤務パターンがありません` | `この期間に、「曜日ごとの勤務」で選んだ曜日・祝日がありません`（説明: 例えば祝日だけ選んでいて、期間に祝日が無いとき） |
+| `lib/validation/staffs.ts`（`defaultPatterns` の leaf） | `デフォルトの勤務パターンが正しくありません` | `「曜日ごとの勤務」の勤務パターンが正しくありません` |
+| `StaffFields.tsx`（Select の `aria-label`） | `` `${DAY_KEY_LABELS[dayKey]}のデフォルト勤務パターン` `` | `` `${DAY_KEY_LABELS[dayKey]}の勤務パターン` ``（説明: 「月の勤務パターン」。同じ行のスイッチは「月曜に勤務できる」、枠の見出しが「曜日ごとの勤務」） |
+| `StaffFields.tsx`（「曜日ごとの勤務」の説明） | `オフの曜日はシフト表では斜線で表示されます。パターンはシフト表の[ツール]で一括セットでき、AI で作成するときも優先されます` | `オフの曜日はシフト表では斜線で表示されます。選んだ勤務パターンは、シフト表の「操作」→「曜日ごとの勤務をセット」で空いているマスに入れられ、AI で作成するときも優先されます` |
 
-**コメント・AGENTS.md**（画面の語を指しているものだけ。内部の「自動アサイン」は残す）
+**コメント・AGENTS.md**（画面の語を指しているものだけ。内部の「自動アサイン」は残す。§11.3 どおり、動詞は「AI で作成」、名詞は「AI の作成」か「「AI で作成」のモーダル」）
 
-- 「自動作成」2 か所（`CalendarTable.tsx`・`lib/validation/setup.ts`）→「AI で作成」
-- 「AI シフト作成」（`tenants/actions.ts`・`RequiredNumsMatrix.tsx`・`AssistRequiredNums.tsx`・`ShiftsClient.tsx`、AGENTS.md の `saveDefaultRequiredNums` の説明）→「AI で作成」
-- `Toolbar.tsx` の「操作は一括 → デフォルト → コピー」→ いまの並びに合わせて「一括 → 曜日ごとの勤務・個別の変更を戻す → コピー → 元に戻す」
-- `SortableList.tsx` の「スタッフ / 勤務パターン / 自動アサイン制約の 3 画面で使う」→「スタッフ / 勤務パターンの 2 画面で使う」（013 で制約の並べ替えをやめた）
-- `supabase/schemas/public/tables/assist_runs.sql` のコメントが引く画面の文言（「実行中の自動アサインがあります」）を新しい文言に。`--` のコメントは DB に残らないので migration の差分は出ない（直したあと `declarative sync --no-apply` で差分 0 を確かめる）
+| 場所 | いま | これから |
+| --- | --- | --- |
+| `[tenantId]/_components/CalendarTable.tsx` | `自動作成などのモーダル（200）` | `「AI で作成」などのモーダル（200）` |
+| `lib/validation/setup.ts` | `自動作成の週の区切りだけが月曜になる` | `AI の作成の週の区切りだけが月曜になる` |
+| `[tenantId]/_components/ShiftsClient.tsx` | `AI シフト作成の中で必要人数を聞いたとき` | `「AI で作成」のモーダルで必要人数を聞いたとき` |
+| `[tenantId]/_components/AssistRequiredNums.tsx` | `AI シフト作成を開いたとき` | `「AI で作成」を開いたとき` |
+| `components/requiredNums/RequiredNumsMatrix.tsx`（2 か所） | `AI シフト作成の中で` / `AI シフト作成のモーダル` | `「AI で作成」のモーダルの中で` / `「AI で作成」のモーダル` |
+| `(protected)/tenants/actions.ts` | `AI シフト作成のモーダルの両方から呼ぶ` | `「AI で作成」のモーダルの両方から呼ぶ` |
+| AGENTS.md（`saveDefaultRequiredNums` の説明） | `必要人数の設定と AI シフト作成の両方から呼ぶ` | `必要人数の設定と「AI で作成」のモーダルの両方から呼ぶ` |
+| `[tenantId]/_components/Toolbar.tsx` | `操作は一括 → デフォルト → コピー。` | `操作は一括 → 曜日ごとの勤務・個別の変更を戻す → コピー → 元に戻す。`（説明: いまの `ToolsMenu` の並び） |
+| `components/SortableList.tsx` | `スタッフ / 勤務パターン / 自動アサイン制約の 3 画面で使う。` | `スタッフ / 勤務パターンの 2 画面で使う。`（説明: 013 で制約の並べ替えをやめた） |
+| `supabase/schemas/public/tables/assist_runs.sql` | `「実行中の自動アサインがあります」に写す` | `「別の AI の作成が実行中です」に写す`（説明: `--` のコメントは DB に残らない。§11.6 で差分が出ないことを確かめる） |
 
-**テスト:** `lib/validation/assist.test.ts` の期待値（`自動アサインの実行が見つかりません`）を新しい文言（`AI の作成結果が見つかりません`）に。画面の文言を確かめているテストはこの 1 件だけ（2026-10-20 に確認）。テストの名前（`デフォルト勤務パターンを優先する` など）は内部の語なので残す。
+**テスト:** `lib/validation/assist.test.ts` の期待値 `自動アサインの実行が見つかりません` を `AI の作成結果が見つかりません` に。画面の文言を確かめているテストはこの 1 件だけ（2026-10-20 に確認）。
+テストの名前（`デフォルト勤務パターンを優先する` など）は内部の語なので残す。
 
 ### 11.5 触らないもの
 
@@ -645,32 +654,42 @@ src/app/(protected)/tenants/[tenantId]/settings/required-nums/{page.tsx,actions.
 | 告知の文（`lib/announce/content.ts`）の「デフォルト人数をセット」 | v1 の操作の名前として書いている（無くなることの説明） |
 | LLM のプロンプト（`lib/assist/llm/solveDirect.ts` の `# 自動アサイン制約` など） | 画面に出ない。変えると評価（`assist:eval`）の比較が崩れる |
 | 「AI で作成」以外の AI の言い回し（モーダルの見出し「AI でシフトを作成」・スマホの下端のバー「AI の結果」・セルの aria-label「AI の提案」・「AI への指示」） | 「AI で〜 / AI の〜」の形に収まっている。下端のバーは狭い幅のための短縮、提案と指示は作成とは別のもの |
+| AI のモーダルの「規則」の行（`入っているマスは残る · 下書きで入る · 必要人数は超えない`） | 作成そのものの決まりで、制約とは別。制約の側を「条件」と呼んで分ける（§11.4） |
 | 制約の一覧ページの説明で、必須の「週の最低勤務日数」の例外（守ると作れないときだけ「なるべく」）を書かない | 一覧は全体の規則を 1 行で言う場所。例外は登録画面の強さの説明（`RestrictionForm.tsx` の `strengthHelp`）が既に書いている |
-| コード・DB・プランの内部の語（`assist` / `restrictions` / `default_patterns`、012 / 013 のプランの文言） | 内部の名前（§3.9）。過去のプランは書き換えない |
+| コード・DB・プランの内部の語（`assist` / `restrictions` / `default_patterns`、012 / 013 のプランの文言、AGENTS.md の「自動アサイン」） | 内部の名前（§3.9）。過去のプランは書き換えない |
 
 ### 11.6 確かめ方
 
+**コード**
+
 - `npm run lint` / `npm run typecheck` / `npm test`
-- `supabase/schemas` はコメント 1 行だけ直す。AGENTS.md の「PR の流れ」どおり、`npx supabase start` → `declarative sync --no-apply` で**差分が出ない**（migration ができない）こと →
+- `supabase/schemas` はコメント 1 行だけ直す。AGENTS.md の「PR の流れ」どおり、`npx supabase start -x …`（AGENTS.md「クラウドのセッション」の形）→
+  `npx supabase db schema declarative sync --no-apply --name 015_naming --strict-coverage` で**差分が出ない**（migration ができない。できたら消して原因を見る）→
   `npx supabase db reset` → `npx supabase test db`。`gen types` は流して `src/types/database.ts` に差分が無いことだけ確かめる
-- 次の検索の残りが、§11.5 と内部のコメント・テスト名だけ（Prettier が JSX の文を改行で割るので改行をまたぐ。「デフォルト**の**勤務パターン」も拾う）:
-  `rg -n -U -e 'AI\s*シフト作成' -e '自動作成' -e 'AIで作成' -e 'デフォルトの?勤務パターン' -e 'AI ?でシフトを作' -e '自動アサイン' -e '\[ツール\]' src supabase/schemas AGENTS.md`
-  （コメントを除いて画面の文言だけを見るときは、末尾に `| rg -v '^[^:]+:[0-9]+:\s*(//|\*|/\*|--|\{/\*)'`。直す前は約 40 行で、§11.4 の表と §11.5 の行だけ）
-- `npm run build && npm run start` で、seed の店舗を開いて見る（スクリーンショットは `deviceScaleFactor: 2`）:
-  - 操作メニュー（「曜日ごとの勤務をセット」とその確認・通知）。`setDefaultPatterns` のエラー 1 件目は、どのスタッフも勤務パターンを選んでいない店舗で出す
-  - 設定のナビ（PC のサイドと、スマホのドロワー。`TenantShell` も同じ `settingsLinks` を使う）・制約の一覧・登録と編集のパンくず
-  - 勤務パターンとスタッフの削除の確認 / スタッフの編集（説明 2 つと、Select の aria-label）/ 必要人数の設定の説明 / 初期設定の最後の画面 / 管理画面のユーザー詳細
-  - AI で作成: 鍵が無いとボタンが押せずモーダルが開かない（`isAssistAvailable()` は鍵の有無だけを見る）。`.env.local` に**仮の** `AI_GATEWAY_API_KEY` を入れ、
-    **指示を空のまま**実行する（LLM を呼ぶのは指示があるときだけ。`lib/assist/run.ts`）。seed は早番が毎週少し残るので、モーダルの「対象」・結果のパネルの一手の種類「制約」・
-    作り直しの確認（「AI で作成した後に…」）まで見られる
-  - 390px でナビとメニューが折り返さないか
+- 次の検索の残りが、§11.5 と内部の語（コメント・テスト名・AGENTS.md）だけ（Prettier が JSX の文を改行で割るので改行をまたぐ。「デフォルト**の**勤務パターン」も拾う）:
+  `rg -n -U -e 'AI\s*シフト作成' -e '自動作成' -e 'AIで作成' -e 'デフォルトの?勤務パターン' -e 'AI ?でシフトを作' -e '自動アサイン' -e '\[ツール\]' -e 'シフトと規則' src supabase/schemas AGENTS.md`
+  （コメントを落とすときは、末尾に `| rg -v '^[^:]+:[0-9]+:\s*(//|\*|/\*|--|\{/\*)'`。直す前は 46 行で、§11.4・§11.5 のほかに AGENTS.md の内部の語・テスト名・CSS のブロックコメントが残る）
+- 画面で出せないもの（`setDefaultPatterns` のエラー 2 件目・`ASSIST_RUNNING_MESSAGE`・`ASSIST_RUN_NOT_FOUND_MESSAGE`）はコードの差分で確かめ、そうログに書く
+
+**画面**（`npm run build && npm run start`、seed の店舗。スクリーンショットは `deviceScaleFactor: 2`。**この順で見る**: 曜日ごとの勤務を先にセットすると、
+seed の岩本・松田の平日の早番で不足が埋まり、AI で作成の一手が出なくなる）
+
+1. AI で作成: 鍵が無いとボタンが押せずモーダルが開かない（`isAssistAvailable()` は鍵の有無だけを見る）。`.env.local` に**仮の** `AI_GATEWAY_API_KEY` を入れ、
+   **指示を空のまま**実行する（LLM を呼ぶのは指示があるときだけ。`lib/assist/run.ts`）。seed は早番が毎週少し残るので、モーダルの「対象」・結果のパネルの一手の種類「制約」・
+   作り直しの確認（「AI で作成した後に…」）まで見られる。終わったら「AI の作成を元に戻す」で下書きを消す
+2. 操作メニュー（「曜日ごとの勤務をセット」とその確認・通知）
+3. 設定のナビ（PC のサイドと、スマホのドロワー。`TenantShell` も同じ `settingsLinks` を使う）・制約の一覧・登録と編集のパンくず
+4. 勤務パターンとスタッフの削除の確認（開いてキャンセル）/ スタッフの編集（説明 2 つと、Select の aria-label）/ 必要人数の設定の説明 / 管理画面のユーザー詳細
+5. 新しい店舗を初期設定（`/tenants/new`）で 1〜2 人で作る（初期設定は曜日ごとの勤務を書かない。seed の 8 人と足して 10 人以内なら上限のモーダルが出ない）:
+   初期設定の最後の画面（「AI で作成するとき」）と、その店舗で「曜日ごとの勤務をセット」→ エラー 1 件目
+6. 390px でナビとメニューが折り返さないか
 
 ### 11.7 順序
 
 1. 機能名（§11.4 の 1 つ目の表）とテストの期待値
 2. 制約
 3. 曜日ごとの勤務
-4. コメント・AGENTS.md
+4. コメント・AGENTS.md・`assist_runs.sql`
 5. §11.6 の確かめ → 実装ログを §11.10 に追記 → PR（1 本）。10/27 の merge 停止より前に merge する
 
 ### 11.8 プランのレビュー（2026-10-20）
@@ -704,6 +723,20 @@ src/app/(protected)/tenants/[tenantId]/settings/required-nums/{page.tsx,actions.
 | 8 | 低 | 検索に `[ツール]` が無い。コメントが多く残りを目で追いにくい | `\[ツール\]` と、コメント行を落とす絞り込みを足した |
 | 9 | 低 | 「DB は触らない」と、`supabase/schemas` を直して sync で確かめる手順が食い違う | §11.6 に AGENTS.md どおりの DB の確かめ（差分なし → reset → test db）を書いた |
 | — | 参考 | 規約・プライバシーポリシー・告知が書く「制約のメモ」に当たる欄が、制約に無い（`restrictions` にメモの列が無い） | このプランの範囲外。§11.3 の理由から外し、§11.9 に記録した |
+
+#### 3 回目
+
+| # | 重大度 | 指摘 | 直したこと |
+| --- | --- | --- | --- |
+| 1 | 中 | 確かめで曜日ごとの勤務を先にセットすると、seed の平日の早番が埋まり、AI で作成の一手（「制約」）と作り直しの確認が見られない | §11.6 の画面の確かめを番号付きにし、AI で作成を先に・最後に元に戻す順にした |
+| 2 | 中 | 2 回目 #5 の「文言を「」で囲む」が一部の行だけで、説明の括弧が文言に続いて写されうる | 「これから」の列を全部バッククォートで囲み、外の「（説明: …）」は文言ではないと表の上に書いた。コメントの直しも表にした |
+| 3 | 低 | 絞り込みの件数（約 40 行）と残るものの説明が実際（46 行。AGENTS.md・テスト名・CSS のコメントも残る）と違う | 直した |
+| 4 | 低 | 「シフトと規則」が検索に掛からない | `-e 'シフトと規則'` を足した |
+| 5 | 低 | `setDefaultPatterns` のエラー 1 件目を出す店舗の作り方が無い。画面で出せない文言の扱いも無い | 初期設定で 1〜2 人の店舗を作る手順と、コードで確かめるものを書いた |
+| 6 | 低 | コメントを機械的に置き換えると「AI で作成の週の区切り」などになる | 名詞は「AI の作成」か「「AI で作成」のモーダル」にし、表で一字一句書いた |
+| 7 | 低 | 制約を「規則」と呼ぶと、モーダルの「規則」の行（入っているマスは残る…）と別の意味が並ぶ | 制約は「条件」（パネルの「条件を緩めて作り直す」と同じ）。モーダルの「規則」は残すと §11.5 に書いた |
+| 8 | 低 | エラー 2 件目「この期間にセットできる勤務パターンがありません」は、パターンが 1 つも無いとも読める | 「この期間に、「曜日ごとの勤務」で選んだ曜日・祝日がありません」 |
+| — | 参考 | sync のコマンドを AGENTS.md と同じ形（`--name … --strict-coverage`）まで書くと迷わない | 書いた |
 
 ### 11.9 気づき（範囲外）
 
