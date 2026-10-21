@@ -10,7 +10,7 @@
 - コード: `scripts/stripe/setup.ts` / `src/app/api/stripe/webhook/route.ts` / `src/app/api/cron/billing-usage/route.ts` / `src/lib/billing/{stripe,sync,report}.ts` / `.env.example`
 - 経緯: 2026-10-20 にリリース計画のタスク「Stripe 本番: stripe:setup・Webhook 登録・解約メールを一時オフ」の現状を調べ、2026-10-21 に §3 の決定（すべて推奨の案）を受けた
 
-**状態: プラン（2026-10-21。レビュー 3 回・すべて反映）。作業するのは人間（Stripe・Vercel の操作と秘密の値）。サンドボックスでの鍵の権限の確かめ（§5.3）と記録は Claude。**
+**状態: プラン（2026-10-21。レビュー 4 回・すべて反映）。作業するのは人間（Stripe・Vercel の操作と秘密の値）。サンドボックスでの鍵の権限の確かめ（§5.3）と記録は Claude。**
 
 ## 1. 目的と完了条件
 
@@ -77,7 +77,7 @@ Stripe の画面の資源の名前は表記が変わりうる。下の表の「�
 | Prices | Read | `prices.list`（`resolvePriceId()`） |
 | Billing Meter Events | Write | `billing.meterEvents.create`（`usage.ts`） |
 | Customer portal（Billing Portal の Sessions） | Write | `billingPortal.sessions.create`（`(protected)/actions.ts`） |
-| Coupons（または Discounts） | **Read（必須。外さない）** | 同期の `expand: ['data.discounts']`（`sync.ts`）。切り替え待ちのあいだ Subscription の `discounts` は空で（50% は schedule の次の phase から読む。`subscriptionRow.ts`）、中身のある割引を展開するのは phase 1 が始まった後だけ。live で初めて通るのは 11/1 0:00 の切り替え（392 件の Webhook が一斉に走る）なので、外して確かめることはしない。§5.3-9 で Read で足りることだけ確かめる |
+| Coupons（または Discounts） | **Read（必須。外さない）** | 同期の `expand: ['data.discounts']`（`sync.ts`）。切り替え待ちのあいだ Subscription の `discounts` は空で（50% は schedule の次の phase から読む。`subscriptionRow.ts`）、中身のある割引を展開するのは phase 1 が始まった後だけ。live で初めて通るのは 11/1 0:00 の切り替え（392 件の Webhook が一斉に走る）なので、外して確かめることはしない。§5.3-10 で Read で足りることだけ確かめる |
 | Invoices | 019 §4.1 は「要る」としているが、`src/` に呼び出しが無い。サンドボックスで None を試し、要らなければ外す | — |
 
 ### 4.2 移行用（`assift-v2-migration`。手元の Mac）
@@ -123,6 +123,9 @@ price が無いまま鍵が入ると、毎晩の cron が「price が見つか�
 0. 先に Dashboard で 2 つ見る:
    - 商品カタログで、v1 の Product の ID が **`assift`** か（`prod_…` なら setup は別の Product `assift` を作る。害は無いが、作られたら記録する）
    - Settings → Billing → **Customer portal** の今の設定（機能の各項目）と、顧客へのメールのリンク先（ポータルに向いているか）。§9 に控える。
+     **ポータルの設定が一度も保存されていなければ（既定の設定が無ければ）、この画面で 1 回保存して既定の設定を作ってから setup を流す。**
+     API で作った設定は既定にならない（`is_default: false`）。setup は既定が無いと毎回新しい設定を作り（`setup.ts` の `ensurePortal`）、
+     アプリの `openPortal` は設定を指定せず既定に頼るので（`(protected)/actions.ts`）、カットオーバーの後に「お支払い方法・請求書・解約」が開けなくなる。§6 では live でポータルを試さないので気付けない
      setup はアカウントの**既定の設定**の機能を上書きする（期間の終わりの解約を有効にする。`setup.ts` の `ensurePortal`）。v1 はポータルのリンクを出していないが、
      メールのリンク先がポータルなら v1 の利用者にも効く。1 回目の出力が「更新」だったら、上書きの前の値を控えてあることを確かめる。
      **リンク先がポータルでも受け入れる**（10/30 まで v1 の利用者がポータルで期間末の解約を予約できるようになるが、利用者の正当な操作）。
@@ -131,8 +134,9 @@ price が無いまま鍵が入ると、毎晩の cron が「price が見つか�
    ```
    STRIPE_SECRET_KEY='<移行用の鍵>' npm run stripe:setup
    ```
-   期待する出力: `Stripe（live）を設定します` / `Product: assift（既存）` / `Meter: mtr_…（作成）` / `Price: price_…（作成）` / `Coupon: assift_v1_legacy（作成）` / `Portal: bpc_…（作成）` か `（更新）` / `完了。Webhook の登録と…`
-2. もう 1 回流し、Product・Meter・Coupon が「既存」、Price が `（既存。lookup_key: assift_monthly）`、Portal が「更新」だけになる（冪等）
+   期待する出力: `Stripe（live）を設定します` / `Product: assift（既存）` / `Meter: mtr_…（作成）` / `Price: price_…（作成）` / `Coupon: assift_v1_legacy（作成）` / `Portal: bpc_…（更新）` / `完了。Webhook の登録と…`
+   Portal が **`（作成）`** と出たら止める（既定の設定が無かった）。Dashboard でポータルの設定を保存して既定を作り、作られた設定を Dashboard で見てから流し直す
+2. もう 1 回流し、Product・Meter・Coupon が「既存」、Price が `（既存。lookup_key: assift_monthly）`、Portal が **1 回目と同じ `bpc_…`** で「更新」になる（冪等）
 3. 権限のエラーで止まったら、エラーの本文が言う権限を Edit key で足して流し直す
 4. Dashboard で見る: Meter の集計が `last`・customer_mapping が `stripe_customer_id`、Price の `lookup_key: assift_monthly`・tiers が 10 人まで 0 円 / 以降 100 円・税込（inclusive）、
    Coupon `assift_v1_legacy` が 50%・forever・名前「旧料金（v1 からのご継続）」、ポータルが請求書・支払い方法・宛名・期間の終わりの解約・プラン変更なし（019 §9.4-1 と同じ）
@@ -154,7 +158,7 @@ price が無いまま鍵が入ると、毎晩の cron が「price が見つか�
 | --- | --- | --- | --- |
 | 0 | 準備: docker → `supabase start`（AGENTS.md「クラウドのセッション」）→ `.env.local`（Supabase の 3 つ・`STRIPE_WEBHOOK_SECRET`・`CRON_SECRET`。Stripe の鍵は書かない）/ Playwright | — | Playwright はリポジトリの依存に無いので `npm i --no-save playwright@1.56.1` で一時的に入れる（環境の Chromium（`/opt/pw-browsers` の `chromium-1194`）に合う版。版を付けないと最新が入り、起動に失敗する。`playwright install` はしない） |
 | 1 | `npm run stripe:setup` | 移行用 | 2 回とも通る（サンドボックスは既存なので、作成の権限は live の §5.2 で確かめる） |
-| 2 | 新しく作った利用者 A（seed の `dev@example.com` は使わない。5 で消すと seed の店舗ごと消える）で申し込み（Checkout）→ 戻ったときの同期 → ポータルを開いて**解約まで** | アプリ用 | 019 §9.4-2 のとおり。Playwright でテストカード |
+| 2 | 新しく作った利用者 A（8 と同じく一時スクリプトの `auth.admin.createUser` でパスワード付きで作る。画面からの登録は確認メールが要り、Mailpit を外しているので進めない。seed の `dev@example.com` は使わない。5 で消すと seed の店舗ごと消える）で申し込み（Checkout）→ 戻ったときの同期 → ポータルを開いて**解約まで** | アプリ用 | 019 §9.4-2 のとおり。Playwright でテストカード |
 | 3 | Webhook（A の Customer の `customer.subscription.created` / `updated` に署名を付けて dev サーバーへ POST） | アプリ用 | 204・`synced_at` が進む・Meter にイベントが届く（019 §9.4-3）。**イベントの取得（`stripe.events.list`）は土台のプロセス（`sk_test`）で行う**（Events の権限はアプリ用の鍵に無く、要らない。live の鍵に Events を足す結論にしない） |
 | 4 | cron（`/api/cron/billing-usage`） | アプリ用 | 200・`failed` が 0（同期と人数の送信） |
 | 5 | A の退会（019 §5.8 の解約）を画面から。前提は 2 でポータルから解約済み（解約の予定（`cancel_at`）が無いと退会は断られる。`entitlement.ts`） | アプリ用 | 019 §9.4-6 のとおり（endive のポータルは `cancel_at` だけを入れるので、退会で `subscriptions.update` が走る） |
@@ -249,7 +253,7 @@ curl -i -H "Authorization: Bearer <CRON_SECRET>" https://v2.assift.com/api/cron/
    **500** は Runtime Logs の `[billing] Webhook の同期に失敗しました` を見る（権限なら鍵に足す）。処理しない種類のイベントでも署名の検証は先に通る（204）ので、
    secret と Redeploy の確かめにはなるが、鍵の権限（`customers.retrieve`）の確かめにならない。処理する種類を選ぶ
 
-### 6.3 その夜の cron（Claude。10/22 の夜〜10/23 の朝）
+### 6.3 その夜の cron（あなた。Claude はクエリの文面と記録。10/22 の夜〜10/23 の朝）
 
 - 見るのはあなた（Vercel・Axiom の画面。このクラウドのセッションには道具が無い）。Claude は ③ のクエリの文面を用意し、結果を 033・本プラン §9・リリース計画（ops-02）に記録する
 - Vercel → Settings → Cron Jobs の履歴か Axiom で、23:20・23:50 の実行が 200
@@ -310,3 +314,10 @@ curl -i -H "Authorization: Bearer <CRON_SECRET>" https://v2.assift.com/api/cron/
 - 低: 割引は `has_schedule` が false と Stripe 側の `discounts` で確かめる（schedule が残ると phase の割引から 50 になる）/ 「用意すること」3 の番号 /
   6・7・11 の道具（`v1.ts setup` と `unpaid-setup`・`--output` を分ける・クロックの無い契約は一時スクリプト）と片付け（クロックの無い Customer を消す）/
   退会の前提（ポータルで解約済み）と seed の利用者を使わないこと / Playwright の版（1.56.1）
+
+### 2026-10-21 プランのレビュー（4 回目。収束の確認。高 0・中 1・低 3、すべて反映）
+
+- §5.3 の手順 0〜11 は、書いた順に流せて、それぞれ書いた鍵と権限を通ることを確かめた（差し戻し無し）
+- 中: live にポータルの既定の設定が無いと、setup は既定でない設定を毎回作り、v2 の `openPortal`（既定に頼る）がカットオーバーの後に失敗する
+  → §5.2-0 で既定が無ければ Dashboard で 1 回保存してから流す、出力が「作成」なら止める、2 回目は同じ `bpc_…` で「更新」
+- 低: Coupons の参照（§5.3-10）/ §6.3 の見出しの担当 / §5.3-2 の利用者の作り方
