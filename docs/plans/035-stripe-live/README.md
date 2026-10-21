@@ -10,7 +10,7 @@
 - コード: `scripts/stripe/setup.ts` / `src/app/api/stripe/webhook/route.ts` / `src/app/api/cron/billing-usage/route.ts` / `src/lib/billing/{stripe,sync,report}.ts` / `.env.example`
 - 経緯: 2026-10-20 にリリース計画のタスク「Stripe 本番: stripe:setup・Webhook 登録・解約メールを一時オフ」の現状を調べ、2026-10-21 に §3 の決定（すべて推奨の案）を受けた
 
-**状態: プラン（2026-10-21）。作業するのは人間（Stripe・Vercel の操作と秘密の値）。サンドボックスでの鍵の権限の確かめ（§5.3）と記録は Claude。**
+**状態: プラン（2026-10-21。レビュー 1 回・すべて反映）。作業するのは人間（Stripe・Vercel の操作と秘密の値）。サンドボックスでの鍵の権限の確かめ（§5.3）と記録は Claude。**
 
 ## 1. 目的と完了条件
 
@@ -38,12 +38,12 @@
 | 4 | Webhook の登録 | §5.5 |
 | 5 | Vercel の環境変数と Redeploy | §5.6 |
 | 6 | 確かめ（cron・Webhook・その夜の cron） | §6 |
-| 7 | 10/23 の dry-run の計測を、リリース計画の別のタスクにする | §3-5 |
+| 7 | 10/23 の dry-run の計測を、リリース計画の別のタスクにする | §3-6 |
 
 ### しない
 
 - 当夜の操作（Webhook の無効化 → 有効化・URL を `assift.com` へ・リトライが尽きたら「解約する」・解約後の請求書の扱い・解約メールを戻す）→ 026 §6
-- `stripe:migrate-v1` の dry-run の計測そのもの（10/23。§3-5 で別のタスクにする。鍵はこのプランで作る）
+- `stripe:migrate-v1` の dry-run の計測そのもの（10/23。§3-6 で別のタスクにする。鍵はこのプランで作る）
 - live での申し込み（Checkout）の試し。本物のカードで請求が走る。Checkout の経路はサンドボックスで確かめる（§5.3）
 - アカウントの既定の API の版（`2019-08-14`）を上げること。v1 が動いている。版を指定するのは Webhook のエンドポイントだけ（019 §12 2026-10-08）
 - 移行用の鍵の失効（11/1 の請求の突き合わせ（019 §8.3-5）が済んでから。リリース計画の「リリース後」に足す。§8）
@@ -53,7 +53,7 @@
 | # | 項目 | 決定 | 理由 |
 | --- | --- | --- | --- |
 | 1 | 鍵 | **live に制限付きキーを 2 本**: `assift-v2-app`（Vercel の `STRIPE_SECRET_KEY`。§4.1 の最小の権限）と `assift-v2-migration`（手元の Mac から `stripe:setup`・`stripe:migrate-v1`・`stripe:sync-all` を流す。§4.2）。v1（Heroku）の標準の `sk_live` は使わず、roll もしない | Vercel の鍵に setup・移行の権限を乗せない（019 §4.1「`stripe:setup` と移行スクリプトは別の鍵で流す」）。全権限の鍵を手元で使わない。移行用はカットオーバーの後に失効させられる |
-| 2 | 当夜 23:25 の `stripe:sync-all` の鍵 | **移行用の鍵**（026 §11-3 を確定。§6.3 23:25 の `'<鍵>'` を `'<移行用の鍵>'` に） | 当夜に Stripe へ流すコマンド（23:00・23:05・23:10・23:25）がすべて同じ鍵になり、取り違えが減る。アプリ用の鍵の権限は毎晩の cron（同じ `syncAllSubscriptions()`）で確かめられている。移行用は同期に要る権限（§4.1 の同期の行）を含む |
+| 2 | 当夜 23:25 の `stripe:sync-all` の鍵 | **移行用の鍵**（026 §11-3 を確定。§6.3 23:25 の `'<鍵>'` を `'<移行用の鍵>'` に） | 当夜に Stripe へ流すコマンド（23:00・23:05・23:10・23:25）がすべて同じ鍵になり、取り違えが減る。移行用は同期に要る権限（§4.1 の同期の行）を含む。なお、カットオーバーまでの毎晩の cron でアプリ用の鍵について確かめられるのは**一覧の読み取りだけ**（v1 の Customer は持ち主が引けず、`customers.update`・`subscriptions.cancel` は走らない。v1 の契約に schedule は無い）。書き込みの権限はサンドボックス（§5.3）で確かめる |
 | 3 | 権限の確かめ方 | **サンドボックス（019 の `assift-v2-dev`）に同じ権限の制限付きキーを 2 本作り、Claude がクラウドのセッションで通す**（§5.3）。live の鍵はその権限に合わせる | 019 §9.4 の確認はすべて `sk_test` で、制限付きキーは一度も試していない。cron と Webhook の確かめ（§6）は同期の経路しか通らず、申し込み・ポータル・人数の送信・退会・引き継ぎの `--apply` は当夜以降に初めて動く。Stripe の手順（Restricted API keys「Create a restricted API key in a sandbox」）もサンドボックスが先 |
 | 4 | 解約メールをオフにする時期 | **このプランで（10/21）オフにする**。026 §5 の 10/29 の確認に「オフのまま」を足す | 019 §8.3-2 の「事前」のとおり。10/30 の昼に回すと当日の作業が増える。影響は 10 日ほど v1 の退会（解約）でメールが出ないことだけ |
 | 5 | Webhook の確かめ | **既存のイベントの再送**（Dashboard の Resend。15 日以内のイベント）。v1 の実際のイベントを待たない | 処理する 7 種類のイベントは月末まで少なく、待つと 10/27 に間に合わない。live で `stripe trigger` は本物のオブジェクトを作るので使わない |
@@ -69,10 +69,10 @@ Stripe の画面の資源の名前は表記が変わりうる。下の表の「�
 
 | 資源 | 権限 | 呼び出し（コード） |
 | --- | --- | --- |
-| Customers | Write | `customers.create` / `del`（`lib/billing/customer.ts`）・`retrieve` / `update`（`sync.ts`。Webhook と同期・メールの更新） |
+| Customers | Write | `customers.retrieve` / `create` / `del`（`lib/billing/customer.ts`）・`retrieve` / `update`（`sync.ts`。Webhook と同期・メールの更新）・一覧の `expand: ['data.customer']`（`sync.ts`） |
 | Checkout Sessions | Write | `checkout.sessions.create`（`account/billing/actions.ts`） |
-| Subscriptions | Write | `subscriptions.list` / `retrieve` / `update` / `cancel`（`sync.ts` の一覧と二重契約の解約・`cancel.ts` の退会） |
-| Subscription Schedules（画面に別の行があれば） | Write | `subscriptionSchedules.retrieve` / `release` / `update`（`cancel.ts`。切り替え待ちの解約・退会） |
+| Subscriptions | Write | `subscriptions.list` / `cancel`（`sync.ts` の一覧と二重契約の解約）・`list` / `update`（`cancel.ts` の退会）・`retrieve`（`account/billing/actions.ts` の `cancelDuringMigration`） |
+| Subscription Schedules（画面に別の行があれば） | Write | `subscriptionSchedules.retrieve` / `release` / `update`（`cancel.ts`。切り替え待ちの解約・退会）・同期の `expand: ['data.schedule']`（`sync.ts`） |
 | Prices | Read | `prices.list`（`resolvePriceId()`） |
 | Billing Meter Events | Write | `billing.meterEvents.create`（`usage.ts`） |
 | Customer portal（Billing Portal の Sessions） | Write | `billingPortal.sessions.create`（`(protected)/actions.ts`） |
@@ -103,30 +103,33 @@ price が無いまま鍵が入ると、毎晩の cron が「price が見つか�
 
 | いつ | 誰 | 手順 |
 | --- | --- | --- |
-| 10/21 | あなた | §5.1 移行用の鍵（live）→ §5.2 setup → §5.4 Dashboard → §5.5 Webhook。§5.3 のサンドボックスの鍵も作って環境に入れる |
+| 10/21 | あなた | §5.1 移行用の鍵（live）→ §5.2 setup → §5.4 Dashboard。§5.3 のサンドボックスの鍵も作って環境に入れる |
 | 10/21〜22 | Claude | §5.3 サンドボックスで 2 本の鍵の権限を通す。足りない権限を見つけたら、live の 2 本に足すものを伝える |
-| 10/22（§5.3 の後） | あなた | §5.1 アプリ用の鍵（live。§5.3 で確かめた権限）→ §5.6 Vercel → §6.1・6.2 の確かめ。移行用の鍵に足す権限があれば Edit key |
+| 10/22（§5.3 の後） | あなた | §5.1 アプリ用の鍵（live。§5.3 で確かめた権限）→ §5.5 Webhook → §5.6 Vercel → §6.1・6.2 の確かめを**続けて**。移行用の鍵に足す権限があれば Edit key |
 | 10/22 の夜 | Claude | §6.3 その夜の cron と Axiom を見る → 033 の監視 ③ を有効にする |
-| 10/22 に §5.3 が終わらないとき | あなた | アプリ用の鍵を §4.1 の一覧のまま作って §5.6 へ進み、§5.3 の結果で Edit key する（Vercel の 3 つの期限は 10/27。026 §4-2） |
+| 10/22 に §5.3 が終わらないとき | あなた | アプリ用の鍵を §4.1 の一覧のまま作って §5.5・§5.6 へ進み、§5.3 の結果で Edit key する（Vercel の 3 つの期限は 10/27。026 §4-2） |
 | 10/23 | あなた | 別のタスク（§3-6）: `stripe:migrate-v1` の dry-run をリハーサルの CSV で live に流して所要を測る（移行用の鍵） |
 
 ### 5.1 live の鍵を作る（Dashboard → Developers → API keys → Create restricted key）
 
 1. 名前 `assift-v2-migration`、§4.2 の権限で作る。表示された値をすぐパスワードマネージャに入れる（**live の鍵は作ったときに 1 回しか表示されない**）。
    Note の欄に保管場所を書く
-2. `assift-v2-app` は §5.3 が済んでから、確かめた権限で作る（10/22）。同じくすぐ保管する
+2. `assift-v2-app` は §5.3 が済んでから、確かめた権限で作る（10/22）。サンドボックスの `assift-v2-app-test` の権限の画面と並べて、行ごとに見比べる。同じくすぐ保管する
 3. 既存の鍵（v1 が使っている標準の `sk_live`）には触らない。roll すると v1 が止まる
 
 ### 5.2 live で `stripe:setup`（あなたの Mac。最新の `main`）
 
-0. 先に Dashboard → 商品カタログで、v1 の Product の ID が **`assift`** かを見る（`prod_…` なら setup は別の Product `assift` を作る。害は無いが、作られたら記録する）
+0. 先に Dashboard で 2 つ見る:
+   - 商品カタログで、v1 の Product の ID が **`assift`** か（`prod_…` なら setup は別の Product `assift` を作る。害は無いが、作られたら記録する）
+   - Settings → Billing → **Customer portal** の今の設定（機能の各項目）と、顧客へのメールのリンク先（ポータルに向いているか）。§9 に控える。
+     setup はアカウントの**既定の設定**の機能を上書きする（期間の終わりの解約を有効にする。`setup.ts` の `ensurePortal`）。v1 はポータルのリンクを出していないが、
+     メールのリンク先がポータルなら v1 の利用者にも効く。1 回目の出力が「更新」だったら、上書きの前の値を控えてあることを確かめる
 1. 流す（鍵はこの行で渡す。`.env.local` に書かない）:
    ```
    STRIPE_SECRET_KEY='<移行用の鍵>' npm run stripe:setup
    ```
-   期待する出力: `Stripe（live）を設定します` / `Product: assift（既存）` / `Meter: mtr_…（作成）` / `Price: price_…（作成）` / `Coupon: assift_v1_legacy（作成）` / `Portal: bpc_…（作成）` か `（更新）`
-   （live に既定のポータルの設定が既にあれば更新する。v1 はポータルを使っていないので影響は無い）
-2. もう 1 回流し、Product・Meter・Price・Coupon が「既存」、Portal が「更新」だけになる（冪等）
+   期待する出力: `Stripe（live）を設定します` / `Product: assift（既存）` / `Meter: mtr_…（作成）` / `Price: price_…（作成）` / `Coupon: assift_v1_legacy（作成）` / `Portal: bpc_…（作成）` か `（更新）` / `完了。Webhook の登録と…`
+2. もう 1 回流し、Product・Meter・Coupon が「既存」、Price が `（既存。lookup_key: assift_monthly）`、Portal が「更新」だけになる（冪等）
 3. 権限のエラーで止まったら、エラーの本文が言う権限を Edit key で足して流し直す
 4. Dashboard で見る: Meter の集計が `last`・customer_mapping が `stripe_customer_id`、Price の `lookup_key: assift_monthly`・tiers が 10 人まで 0 円 / 以降 100 円・税込（inclusive）、
    Coupon `assift_v1_legacy` が 50%・forever・名前「旧料金（v1 からのご継続）」、ポータルが請求書・支払い方法・宛名・期間の終わりの解約・プラン変更なし（019 §9.4-1 と同じ）
@@ -145,14 +148,20 @@ price が無いまま鍵が入ると、毎晩の cron が「price が見つか�
 | # | 経路 | 鍵 | 見ること |
 | --- | --- | --- | --- |
 | 1 | `npm run stripe:setup` | 移行用 | 2 回とも通る（サンドボックスは既存なので、作成の権限は live の §5.2 で確かめる） |
-| 2 | 申し込み（Checkout）→ 戻ったときの同期 → ポータルを開く | アプリ用（`.env.local`） | 019 §9.4-2 のとおり。Playwright でテストカード |
+| 2 | 申し込み（Checkout）→ 戻ったときの同期 → ポータルを開く | アプリ用（dev サーバーの起動の行） | 019 §9.4-2 のとおり。Playwright でテストカード |
 | 3 | Webhook（署名を付けた `customer.subscription.created` / `updated`） | アプリ用 | 204・`synced_at` が進む・Meter にイベントが届く（019 §9.4-3） |
 | 4 | cron（`/api/cron/billing-usage`） | アプリ用 | 200・`failed` が 0（同期と人数の送信） |
-| 5 | 切り替え待ちの解約（`cancelDuringMigration()`）・退会（§5.8 の解約） | アプリ用 | 019 §9.4-5・6 のとおり |
+| 5 | 切り替え待ちの解約（`cancelDuringMigration()`）・退会（019 §5.8 の解約） | アプリ用（画面から） | 019 §9.4-5・6 のとおり |
 | 6 | v1 相当の契約を作り（`sk_test`）、`stripe:migrate-v1` の dry-run → `--apply --limit 1` → `--apply` | 移行用 | 019 §9.4-5 のとおり。`unpaid` の救済（下書きの確定・無効化・回収不能）を含む |
 | 7 | `npm run stripe:sync-all` | 移行用 | `failed: 0`。6 の契約の行ができる |
 
-- 土台（テストクロック・Customer・v1 相当の契約）は `sk_test`（`STRIPE_SECRET_KEY`）で作り、アプリとスクリプトの経路だけを制限付きキーで流す（`scripts/stripe/verify/` は `getStripe()` を使うので、流すときに鍵を差し替える）
+- **鍵の渡し方に注意する。** Next も tsx の `--env-file` も、既にある環境変数を `.env.local` より優先する。環境には `STRIPE_SECRET_KEY`（`sk_test_`）があるので、
+  `.env.local` に `rk_test_` を書いても `sk_test_` で動き、権限が足りなくても全部通ってしまう。制限付きキーは**起動の行で上書きする**:
+  `STRIPE_SECRET_KEY="$STRIPE_APP_TEST_KEY" npm run dev` / `STRIPE_SECRET_KEY="$STRIPE_MIGRATION_TEST_KEY" npm run stripe:migrate-v1 -- …`（`sync-all`・`setup` も同じ）
+- **土台とアプリの経路を別のプロセスに分ける。** `scripts/stripe/verify/` は `getStripe()` の 1 つのクライアントで、土台の作成（テストクロック・支払い方法・v1 の plan・請求書の支払い）と
+  `syncCustomer()` などを同じプロセスで呼ぶ。土台は `sk_test` の `verify/*` で作り、アプリの経路は HTTP（画面・署名した Webhook の POST・cron の GET）を
+  アプリ用の鍵で起動した dev サーバーに送って通す。HTTP で通せないものだけ、2 つのクライアントを持つ一時スクリプトにする
+- **本当に制限付きキーで走ったかを確かめる。** サンドボックスの鍵ごとの **View request logs** に、その経路のリクエストが出ていること（出ていなければ `sk_test` で走っている）
 - 権限が足りない呼び出しはエラーの本文で分かる。鍵の **View request logs** でも見られる。足りない権限・要らなかった権限（Invoices・Coupons）を一覧にしてあなたに伝え、
   サンドボックスの鍵を直してもらって通し直す
 - 結果は §9 に書く。確認用の一時スクリプトはコミットしない。作ったテストクロックは消す（019 §9.4-7）
@@ -164,7 +173,7 @@ price が無いまま鍵が入ると、毎晩の cron が「price が見つか�
 
 | 項目 | すること | 値 |
 | --- | --- | --- |
-| リトライ | 見るだけ | Smart Retries の推奨（2 週間で 8 回）。違えば記録してから推奨に直す |
+| リトライ | 見るだけ（変えない） | Smart Retries の推奨（2 週間で 8 回）か。違っても今は直さず記録し、当夜 23:30 の切り替えのときに直す（今直すと v1 の `past_due` が「未払い」になる時期が変わる。026 §6.3 23:30） |
 | **リトライが尽きたら** | **変えない** | 「未払いにする」のまま。今「解約する」にすると `unpaid` の 134 件が解約され、救う 47 件を失う（019 §9.4 の前提）。切り替えは当夜 23:30（026 §6.3） |
 | 確定の猶予 | 見るだけ | 既定（1 時間） |
 | 顧客へのメール | 見るだけ | 支払い成功の領収書・支払い失敗（カード更新のリンク付き）・3D セキュアの認証のリンク・カードの有効期限切れの予告がオン |
@@ -172,7 +181,7 @@ price が無いまま鍵が入ると、毎晩の cron が「price が見つか�
 | 請求書のフッター | 無ければ入れる | 「表示の金額は税込です」（019 §4.4。v1 の請求書にも載るが、v1 も税込なので問題ない） |
 | 公開の事業者名 | 見るだけ | 入っている（ポータルと Checkout に出る） |
 
-変える前の値（リトライの回数・解約のメール・フッター）を記録する（§9。戻すときに使う）。
+変える前の値（リトライの回数・解約のメール・フッター・ポータル）を記録する（§9。戻すときに使う）。
 
 ### 5.5 Webhook を登録する（Workbench → Webhooks → Create an event destination）
 
@@ -182,7 +191,8 @@ price が無いまま鍵が入ると、毎晩の cron が「price が見つか�
    `invoice.paid` / `invoice.payment_failed` / `invoice.payment_action_required`
 3. 送信先は Webhook endpoint、URL は **`https://v2.assift.com/api/stripe/webhook`**（026 §3-11。当夜に `assift.com` へ変える。署名の secret は変わらない）。説明に「assift v2」
 4. 設定の画面で signing secret（`whsec_…`）を Reveal してパスワードマネージャに入れる。エンドポイントの id（`we_…`）も控える（§6.2・当夜の操作で使う）
-5. 有効のまま残す。§5.6 の前に届いたイベントは 503 になり、Stripe が 3 日まで再送する（§5.6 が済めば 204 になる）
+5. 有効のまま残す。**§5.6 と続けて行う**（Vercel に secret が無いあいだに届いた配信は 503 で失敗する。失敗が日をまたいで続くと Stripe が通知し、エンドポイントを止めることがある（未確認）。
+   間を空けるなら登録の直後に Disabled にし、§5.6 の後に有効に戻してから §6.2 をする）
 
 **カットオーバーまでに届くイベント**: v1 の利用者の Customer のもの。本番の DB には管理用アカウントしか無いので、`syncCustomer()` は持ち主を引けず何もせずに 204 を返す
 （`findOwner()` が null。Stripe には書かない）。当夜は 22:00 に無効にし、判断点 B の直後に戻す（026 §3-12）。
@@ -211,21 +221,26 @@ curl -i -H "Authorization: Bearer <CRON_SECRET>" https://v2.assift.com/api/cron/
 - 1 つ目が **401**（鍵が無くても 401 なので、これだけでは確かめにならない）
 - 2 つ目が **200** で、本文が `{"sync":{"synced":0,"failed":0},"usage":{"sent":0,"failed":0}}`。v1 の約 1,000 件の契約を一覧で読むので 1〜2 分かかりうる（`maxDuration` は 300 秒）。
   v1 の Customer は持ち主が引けないので `synced` は 0 で、Stripe には何も書かない（`syncAllSubscriptions()`）
-- 違うとき: **503** は Redeploy していない（`STRIPE_SECRET_KEY` が無い）/ **500** は Vercel の Runtime Logs（か Axiom）の `[billing] 定期実行の同期に失敗しました` を見る。
+- 違うとき: 鍵付きで **401** は Redeploy していないか `CRON_SECRET` の値が違う（`CRON_SECRET` が無いと鍵付きでも 401）/ **503** は `CRON_SECRET` はあるのに `STRIPE_SECRET_KEY` が Production に無い（入れ忘れ・環境の選び違い）/ **500** は Vercel の Runtime Logs（か Axiom）の `[billing] 定期実行の同期に失敗しました` を見る。
   「price が見つかりません」なら §5.2 が済んでいない、権限のエラーならアプリ用の鍵に足す（Edit key。Redeploy は要らない）
 
 ### 6.2 Webhook（あなた）
 
-1. Workbench → Events で、15 日以内の処理する種類のイベント（`customer.subscription.updated` か `invoice.paid` など）を開き、**Resend** で §5.5 のエンドポイントへ送る。
-   無ければ CLI で `stripe events resend <evt_…> --webhook-endpoint=<we_…> --live`（30 日以内）
+1. Workbench → Events で、15 日以内の処理する種類のイベント（`customer.subscription.updated` か `invoice.paid` など）を開き、**Resend** で送信先に **§5.5 のエンドポイントだけ**を選んで送る
+   （v1 は Webhook を持たない（019 §2.1）ので、ほかの送信先は無いはず）。
+   無ければ CLI で `stripe events resend <evt_…> --webhook-endpoint=<we_…> --live`（30 日以内）。CLI は `stripe login` の live の鍵か `--api-key` を使う。
+   アプリ用・移行用の鍵には Events の権限が無いので使えない
 2. Webhooks → エンドポイント → Event deliveries で、その配信が **204**（v1 の Customer なので何もせずに返す）
 3. 違うとき: **400** は署名の secret が違う（`STRIPE_WEBHOOK_SECRET` を入れ直して Redeploy）/ **503** は Redeploy していない /
-   **500** は Runtime Logs の `[billing] Webhook の同期に失敗しました` を見る（権限なら鍵に足す）。処理しない種類のイベントは 204 になるので確かめにならない
+   **500** は Runtime Logs の `[billing] Webhook の同期に失敗しました` を見る（権限なら鍵に足す）。処理しない種類のイベントでも署名の検証は先に通る（204）ので、
+   secret と Redeploy の確かめにはなるが、鍵の権限（`customers.retrieve`）の確かめにならない。処理する種類を選ぶ
 
 ### 6.3 その夜の cron（Claude。10/22 の夜〜10/23 の朝）
 
 - Vercel → Settings → Cron Jobs の履歴（あなたに見てもらう）か Axiom で、23:20・23:50 の実行が 200
 - Axiom に `[billing] 定期実行`（info）が 2 行届く → 033 §3.2 の監視 ③ をクエリの形を直して有効にし、033 とリリース計画（ops-02）に記録する
+- ③ は「25 時間で 2 回未満」で鳴る。カットオーバーでは Cron Jobs を 10/30 の昼に止め、10/31 の昼に戻す（026 §3-5）ので、そのままだと 10/31 の 0:20 ごろから 10/31 の 23:50 まで鳴り続ける。
+  **10/30 の昼に Cron Jobs と一緒に ③ を止め、11/1 の朝に 10/31 の 2 回の成功を見てから戻す**（026 §5・§6.6・手順書に足した）
 
 ## 7. 気を付けること
 
@@ -241,6 +256,7 @@ curl -i -H "Authorization: Bearer <CRON_SECRET>" https://v2.assift.com/api/cron/
 | --- | --- | --- |
 | プランと一緒に（本 PR） | 026 §2・§4-2・§7.2・§11-3・§6.3 23:25・§5 10/29 | 担当のタスクを 035 に / 23:25 の鍵を `'<移行用の鍵>'` に / 10/29 の確認に「解約メールがオフのまま」 |
 | 同上 | 019 §8.3・024 §4.7・§10 | Stripe の live は 035 で行う旨の参照 |
+| 同上 | 026 §4-2・§5 10/30 昼・§6.3 23:30・§6.5-7・§6.6 11/1 朝 | 確かめ方を 035 §6 に / 監視 ③ を止める・戻す / リトライが推奨と違えば 23:30 に直す / 23:05 以降の配信が 204 |
 | 同上 | カットオーバー手順書（23:25 の鍵・10/29 の確認）/ リリース計画（このタスクのメモ・10/23 のタスクを足す・cutover-14 のメモから dry-run を外す） | §3-2・§3-4・§3-6 |
 | §5.3 の後 | `.env.example`・019 §4.1 | 確かめた権限の一覧に直す |
 | 済んだら | 本プラン §9・019 §12・026 §12・024 §4.7 | 日時・`setup` の出力（id）・Dashboard の変える前の値・確かめの結果。秘密の値は書かない |
@@ -249,3 +265,14 @@ curl -i -H "Authorization: Bearer <CRON_SECRET>" https://v2.assift.com/api/cron/
 ## 9. 実装ログ
 
 （作業のあとに、日時・確かめた結果・つまずいた点を書く。秘密の値は書かない）
+
+### 2026-10-21 プランのレビュー（1 回目。別の担当にコード・019・026・024・033 と突き合わせて読ませた。高 1・中 3・低 7、すべて反映）
+
+- 高: §5.3 のとおりに流すと制限付きキーの確かめにならなかった（環境の `STRIPE_SECRET_KEY`（`sk_test_`）が `.env.local` より優先される・`verify/` は 1 つのクライアントで土台とアプリの経路を呼ぶ）
+  → 鍵は起動の行で上書きし、土台とアプリの経路を別のプロセスに分け、鍵の request logs で確かめる
+- 中: §6.1 の「503 は Redeploy していない」は誤り（`CRON_SECRET` が無いと先に 401）→ 401 と 503 の意味を直した
+- 中: 監視 ③ を有効にすると、カットオーバーで cron を止めた夜から鳴り続ける → 10/30 の昼に止め、11/1 の朝に戻す（026 §5・§6.6・手順書）
+- 中: 026 §4-2 の確かめ方が 035 と食い違っていた → 035 §6 に合わせた
+- 低: 「アプリ用の鍵の権限は毎晩の cron で確かめられる」は言い過ぎ（一覧の読み取りだけ）→ 文言を直し、026 §6.5-7 に 23:05 以降の配信を足した /
+  Webhook の登録から環境変数まで間が空くと配信が失敗し続ける → §5.5 を §5.6 と続けて行う / ポータルの上書きは既定の設定に効く → 前の値を控える /
+  リトライを今直すと v1 に効く → 記録だけにして 23:30 に直す / Resend の送信先と CLI の鍵 / 節番号・呼び出し元・setup の出力の誤記
