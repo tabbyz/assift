@@ -47,7 +47,7 @@ export const staffInputSchema = z.object({
     }),
   defaultPatterns: z.partialRecord(
     z.enum(DAY_KEYS),
-    z.guid({ error: 'デフォルトの勤務パターンが正しくありません' })
+    z.guid({ error: '「曜日ごとの勤務」の勤務パターンが正しくありません' })
   ),
 })
 

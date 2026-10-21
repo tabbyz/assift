@@ -16,9 +16,9 @@ import {
 } from '@/lib/validation/restrictions'
 import { createClient } from '@/utils/supabase/server'
 
-const NOT_FOUND_MESSAGE = '制約が見つかりません'
+const NOT_FOUND_MESSAGE = 'ルールが見つかりません'
 const RETIRED_STAFF_MESSAGE = '退職済みのスタッフは対象にできません'
-const KIND_CHANGE_MESSAGE = '制約の種類は変えられません。削除してから登録し直してください'
+const KIND_CHANGE_MESSAGE = 'ルールの種類は変えられません。削除してから登録し直してください'
 const REFERENCE_MESSAGE =
   'スタッフか勤務パターンが見つかりません。画面を再読み込みしてからやり直してください'
 

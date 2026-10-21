@@ -220,7 +220,7 @@ export function useAssist({
         <Stack gap="xs">
           <Text size="sm">{change}</Text>
           <Text size="sm" c="dimmed">
-            AIで作成した後に手動で内容を変更した場合は、点線通りにシフトが入らないことがあります。
+            AI で作成した後に手動で内容を変更した場合は、点線通りにシフトが入らないことがあります。
           </Text>
         </Stack>
       ),
@@ -434,7 +434,7 @@ function ReadyView({
         {fact(
           '対象',
           <>
-            在籍スタッフ {staffCount} 人 · 自動アサイン制約 {restrictionCount} 件{' '}
+            在籍スタッフ {staffCount} 人 · ルール {restrictionCount} 件{' '}
             <Anchor component={Link} href={`/tenants/${tenantId}/settings/restrictions`} size="sm">
               設定
             </Anchor>

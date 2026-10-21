@@ -238,7 +238,7 @@ values
   ('55555555-5555-5555-5555-000000000005', '22222222-2222-2222-2222-222222222222', 'max_work_consecutive', 5,
    null, null, 4);
 
--- スタッフ別の規則（013）。制約ページの「スタッフ別」と、スタッフの編集画面の「この人の規則」に出る
+-- スタッフ別の制約（013）。「シフトのルール」のページの「スタッフ別」に出る
 insert into public.restrictions (id, tenant_id, staff_id, kind, days, wdays, hard, position)
 values
   -- 川田: 週 3 日以上（なるべく）/ 土日祝は 1 か月に 2 日まで（必須）
@@ -254,29 +254,12 @@ values
    '44444444-4444-4444-4444-000000000005', 'prefer_dayoff_wdays', null, '{5}', false, 8);
 
 -- ---------------------------------------------------------------------------
--- 必要人数（今月と来月）
+-- 必要人数
 --
--- 日付は手書きしない。共有リンクと同じく JST の月初から決める。
--- Postgres には祝日カレンダーが無いので、この行は曜日だけを見る。
--- 祝日の人数は default_required_nums の holiday キーに入れてある。
--- 画面の「デフォルト人数をセット」を押すと、祝日はそちらで上書きされる。
+-- 日別の行（required_nums）は入れない。required_nums は「この日だけ変えた」上書きで、無い日は
+-- 勤務パターンの default_required_nums（基本の人数。祝日は holiday キー）を読むときに解決する（015 §3.1）。
+-- 全日に行を入れると、全日が「この日だけ変更」になり、祝日に基本の人数が効かない。
 -- ---------------------------------------------------------------------------
-insert into public.required_nums (tenant_id, pattern_id, date, num)
-select
-  p.tenant_id,
-  p.id,
-  d::date,
-  (p.default_required_nums ->> extract(dow from d)::integer::text)::smallint
-from public.patterns p
-cross join (select (current_timestamp at time zone 'Asia/Tokyo')::date as jst) t
-cross join generate_series(
-  date_trunc('month', t.jst)::date,
-  (date_trunc('month', t.jst) + interval '2 months' - interval '1 day')::date,
-  interval '1 day'
-) as d
-where p.tenant_id = '22222222-2222-2222-2222-222222222222'
-  and p.kind = 'workday'
-  and (p.default_required_nums ->> extract(dow from d)::integer::text)::integer > 0;
 
 -- ---------------------------------------------------------------------------
 -- 確定シフト（今月の最初の月曜）

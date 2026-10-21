@@ -84,7 +84,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
             </>,
             <>
               <Label>assiftに入力されたデータ</Label>
-              ：店舗名、スタッフの名前と勤務条件、勤務パターン、シフト、日付のメモ、制約のメモ、AIへの指示など
+              ：店舗名、スタッフの名前と勤務条件、勤務パターン、シフト、日付のメモ、AIへの指示など
             </>,
             <>
               <Label>支払いに関する情報</Label>

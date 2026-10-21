@@ -381,12 +381,16 @@ export async function setDefaultPatterns(input: {
       requireTenant(parsed.tenantId),
       listActiveStaffsWithDefaultPatterns(parsed.tenantId),
     ])
-    if (withDefaults.length === 0) fail('デフォルト勤務パターンが設定されたスタッフがいません')
+    if (withDefaults.length === 0)
+      fail('「曜日ごとの勤務」で勤務パターンを選んだスタッフがいません')
 
     const dates = datesBetween(parsed.start, parsed.end)
     const planned = planDefaultPatterns(withDefaults, dates, new Set(holidaysIn(dates)))
     // 設定はあるが期間に当たらない（例: `holiday` キーだけ設定していて祝日が無い期間）
-    if (planned.length === 0) fail('この期間にセットできるデフォルト勤務パターンがありません')
+    if (planned.length === 0)
+      fail(
+        'この期間に、「曜日ごとの勤務」で勤務パターンを選んだ曜日に当たる日がありません（祝日は「祝」の選択を使います）'
+      )
 
     const supabase = await createClient()
     const inserted = await insertPlannedShifts(supabase, parsed.tenantId, planned)

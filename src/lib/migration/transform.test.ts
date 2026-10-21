@@ -5,7 +5,6 @@ import {
   buildProfiles,
   MigrationError,
   normalizeColorHex,
-  shouldMigrateUser,
   transformEvents,
   transformPatterns,
   transformRequiredNums,
@@ -15,10 +14,12 @@ import {
   transformStaffs,
   transformTenants,
   transformUsers,
+  userDropReason,
   type MigratedPattern,
   type MigratedStaff,
   type MigratedTenant,
   type MigratedUser,
+  type Overrides,
 } from './transform'
 import type {
   V1Event,
@@ -213,22 +214,57 @@ const reasons = (items: { reason: string }[]) => items.map((d) => d.reason)
 
 // ---------------------------------------------------------------------------
 
-describe('shouldMigrateUser（§7.1）', () => {
+describe('userDropReason（§7.1）', () => {
   it('確認済みか、ログイン実績がある人だけ', () => {
-    expect(shouldMigrateUser(user())).toBe(true)
-    expect(shouldMigrateUser(user({ confirmed_at: null, sign_in_count: 1 }))).toBe(true)
-    expect(shouldMigrateUser(user({ confirmed_at: null, sign_in_count: 0 }))).toBe(false)
+    expect(userDropReason(user(), true)).toBeNull()
+    expect(userDropReason(user({ confirmed_at: null, sign_in_count: 1 }), true)).toBeNull()
+    expect(userDropReason(user({ confirmed_at: null, sign_in_count: 0 }), true)).toBe(
+      'not_migrated'
+    )
+  })
+
+  it('店舗を持つ人は、最後の利用が古くても移す', () => {
+    expect(
+      userDropReason(user({ current_sign_in_at: '2019-01-01T00:00:00.000000Z' }), true)
+    ).toBeNull()
+  })
+
+  it('店舗を持たない人は、最後の利用が 2025-10-30（UTC）より前なら移さない', () => {
+    const at = (current_sign_in_at: string) => userDropReason(user({ current_sign_in_at }), false)
+    expect(at('2025-10-29T23:59:59.999999Z')).toBe('inactive')
+    expect(at('2025-10-30T00:00:00.000000Z')).toBeNull()
+    expect(at('2026-10-01T00:00:00.000000Z')).toBeNull()
+  })
+
+  it('最後の利用は current_sign_in_at → confirmed_at → created_at', () => {
+    const recent = '2026-01-01T00:00:00.000000Z'
+    const old = '2024-01-01T00:00:00.000000Z'
+    const reason = (over: Partial<V1User>) => userDropReason(user(over), false)
+    expect(reason({ current_sign_in_at: old, confirmed_at: recent })).toBe('inactive')
+    expect(reason({ current_sign_in_at: null, sign_in_count: 0, confirmed_at: recent })).toBeNull()
+    expect(reason({ current_sign_in_at: null, sign_in_count: 0, confirmed_at: old })).toBe(
+      'inactive'
+    )
+    expect(
+      reason({ current_sign_in_at: null, sign_in_count: 1, confirmed_at: null, created_at: recent })
+    ).toBeNull()
   })
 
   it('overrides.forceMigrateUsers で確認済みとして入れる', () => {
     const u = user({ id: 7, confirmed_at: null, sign_in_count: 0 })
-    expect(shouldMigrateUser(u, { forceMigrateUsers: [7] })).toBe(true)
+    expect(userDropReason(u, false, { forceMigrateUsers: [7] })).toBeNull()
+    const dormant = user({ id: 8 })
+    expect(userDropReason(dormant, false, { forceMigrateUsers: [8] })).toBeNull()
   })
 })
 
+/** 店舗の有無で落ちないよう、全員を店舗の持ち主として変換する */
+const transformOwners = (users: V1User[], overrides?: Overrides) =>
+  transformUsers(users, { tenantOwners: new Set(users.map((u) => u.id)) }, overrides)
+
 describe('transformUsers（§7.1）', () => {
   it('通常の人: email の identity・パスワードそのまま・確認済み', () => {
-    const r = transformUsers([user()])
+    const r = transformOwners([user()])
     expect(r.rows).toHaveLength(1)
     const row = r.rows[0]
     expect(row.id).toBe(v1Uuid('users', 1))
@@ -250,14 +286,23 @@ describe('transformUsers（§7.1）', () => {
   })
 
   it('移行しない人は not_migrated で捨て、Map には null', () => {
-    const r = transformUsers([user({ id: 2, confirmed_at: null, sign_in_count: 0 })])
+    const r = transformOwners([user({ id: 2, confirmed_at: null, sign_in_count: 0 })])
     expect(r.rows).toEqual([])
     expect(r.dropped).toEqual([{ table: 'users', id: 2, reason: 'not_migrated' }])
     expect(r.users.get(2)).toBeNull()
   })
 
+  it('店舗を持たず 1 年以上使っていない人は inactive で捨てる', () => {
+    const r = transformUsers([user({ id: 1 }), user({ id: 2, email: 'b@example.com' })], {
+      tenantOwners: new Set([1]),
+    })
+    expect(r.rows.map((row) => row.email)).toEqual(['a@example.com'])
+    expect(r.dropped).toEqual([{ table: 'users', id: 2, reason: 'inactive' }])
+    expect(r.users.get(2)).toBeNull()
+  })
+
   it('email_confirmed_at は confirmed_at → invitation_accepted_at → created_at', () => {
-    const r = transformUsers([
+    const r = transformOwners([
       user({ id: 1, confirmed_at: null, invitation_accepted_at: T1, sign_in_count: 1 }),
       user({ id: 2, email: 'b@example.com', confirmed_at: null, sign_in_count: 1 }),
     ])
@@ -266,9 +311,11 @@ describe('transformUsers（§7.1）', () => {
   })
 
   it('メールは小文字 + trim。重複は止まる', () => {
-    expect(transformUsers([user({ email: ' A@Example.com ' })]).rows[0].email).toBe('a@example.com')
+    expect(transformOwners([user({ email: ' A@Example.com ' })]).rows[0].email).toBe(
+      'a@example.com'
+    )
     expect(() =>
-      transformUsers([
+      transformOwners([
         user({ id: 1, email: 'a@example.com' }),
         user({ id: 2, email: 'A@example.com' }),
       ])
@@ -276,7 +323,7 @@ describe('transformUsers（§7.1）', () => {
   })
 
   it('password_is_email は null（Google の人でも）', () => {
-    const r = transformUsers([
+    const r = transformOwners([
       user({ password_is_email: true, provider: 'google_oauth2', uid: 'g-1' }),
     ])
     expect(r.rows[0].encrypted_password).toBeNull()
@@ -285,13 +332,13 @@ describe('transformUsers（§7.1）', () => {
   })
 
   it("encrypted_password = '' は null にして記録", () => {
-    const r = transformUsers([user({ encrypted_password: '' })])
+    const r = transformOwners([user({ encrypted_password: '' })])
     expect(r.rows[0].encrypted_password).toBeNull()
     expect(reasons(r.fixed)).toEqual(['empty_password'])
   })
 
   it('Google の人も email のアカウント（identity は email だけ・パスワードは残す）。Google は自動リンクに任せる', () => {
-    const r = transformUsers([
+    const r = transformOwners([
       user({ id: 1, provider: 'google_oauth2', uid: '1234567890' }),
       user({ id: 2, email: 'b@example.com', provider: 'google_oauth2', uid: '' }),
     ])
@@ -304,12 +351,12 @@ describe('transformUsers（§7.1）', () => {
   })
 
   it('locked_at は無視して記録', () => {
-    const r = transformUsers([user({ locked_at: T1 })])
+    const r = transformOwners([user({ locked_at: T1 })])
     expect(reasons(r.fixed)).toEqual(['unlocked'])
   })
 
   it('stripe_* の空文字は null にして記録', () => {
-    const r = transformUsers([user({ stripe_customer_id: '', stripe_subscription_id: ' ' })])
+    const r = transformOwners([user({ stripe_customer_id: '', stripe_subscription_id: ' ' })])
     const u = r.users.get(1)!
     expect(u.stripeCustomerId).toBeNull()
     expect(u.stripeSubscriptionId).toBeNull()
@@ -318,7 +365,7 @@ describe('transformUsers（§7.1）', () => {
 
   describe('stripe_customer_id の重複（§7.1.1）', () => {
     it('Subscription を持つ人を優先する', () => {
-      const r = transformUsers([
+      const r = transformOwners([
         user({ id: 1, email: 'a@example.com', stripe_customer_id: 'cus_1', created_at: T0 }),
         user({
           id: 2,
@@ -343,7 +390,7 @@ describe('transformUsers（§7.1）', () => {
     })
 
     it('決まらなければ created_at が古い人', () => {
-      const r = transformUsers([
+      const r = transformOwners([
         user({ id: 1, email: 'a@example.com', stripe_customer_id: 'cus_1', created_at: T1 }),
         user({ id: 2, email: 'b@example.com', stripe_customer_id: 'cus_1', created_at: T0 }),
       ])
@@ -352,7 +399,7 @@ describe('transformUsers（§7.1）', () => {
     })
 
     it('Subscription を失った側は customerLost で CSV の振り分けに使う', () => {
-      const r = transformUsers([
+      const r = transformOwners([
         user({
           id: 1,
           email: 'a@example.com',
@@ -379,11 +426,11 @@ describe('transformUsers（§7.1）', () => {
         user({ id: 1, email: 'a@example.com', stripe_customer_id: 'cus_1', created_at: T0 }),
         user({ id: 2, email: 'b@example.com', stripe_customer_id: 'cus_1', created_at: T1 }),
       ]
-      const r = transformUsers(rows, { customerOwner: { cus_1: 2 } })
+      const r = transformOwners(rows, { customerOwner: { cus_1: 2 } })
       expect(r.users.get(2)?.stripeCustomerId).toBe('cus_1')
       expect(r.users.get(1)?.stripeCustomerId).toBeNull()
       // その Customer を持たない人を指定したら止まる
-      expect(() => transformUsers(rows, { customerOwner: { cus_1: 3 } })).toThrow(MigrationError)
+      expect(() => transformOwners(rows, { customerOwner: { cus_1: 3 } })).toThrow(MigrationError)
     })
   })
 })

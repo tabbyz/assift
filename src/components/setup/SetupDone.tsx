@@ -32,7 +32,7 @@ export function SetupDone({ storeName, patternCount, staffCount, onOpen, heading
         <Stack gap={6}>
           <Text fw={700}>このあと、必要になったらお聞きすること</Text>
           <List size="sm">
-            <ListItem>何人ずつ必要か（AI でシフトを作るとき）</ListItem>
+            <ListItem>何人ずつ必要か（AI で作成するとき）</ListItem>
           </List>
           <Text size="sm" c="dimmed">
             働ける曜日や週に何日までかは、スタッフの画面でいつでも設定できます。

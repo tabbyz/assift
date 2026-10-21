@@ -24,7 +24,7 @@ create table public.assist_runs (
 );
 
 create index assist_runs_tenant_created_idx on public.assist_runs (tenant_id, created_at desc);
--- 同じ店舗で 2 つ同時に走らせない。INSERT の 23505 を「実行中の自動アサインがあります」に写す（012 §5.7）
+-- 同じ店舗で 2 つ同時に走らせない。INSERT の 23505 を「別の AI の作成が実行中です」に写す（012 §5.7）
 create unique index assist_runs_one_running_idx on public.assist_runs (tenant_id) where status = 'running';
 
 alter table public.assist_runs enable row level security;

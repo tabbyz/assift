@@ -11,7 +11,7 @@ import { isUuid } from '@/utils/uuid'
 import { RestrictionEditClient } from '../_components/RestrictionEditClient'
 import { RestrictionForm } from '../_components/RestrictionForm'
 
-export const metadata: Metadata = { title: '制約の編集' }
+export const metadata: Metadata = { title: 'ルールの編集' }
 
 export default async function EditRestrictionPage({
   params,
@@ -46,10 +46,10 @@ export default async function EditRestrictionPage({
   return (
     <Stack gap="md">
       <SettingsBreadcrumbs
-        parent={{ href: `/tenants/${tenantId}/settings/restrictions`, label: '自動アサイン制約' }}
-        current="制約の編集"
+        parent={{ href: `/tenants/${tenantId}/settings/restrictions`, label: 'シフトのルール' }}
+        current="ルールの編集"
       />
-      <Title order={2}>制約の編集</Title>
+      <Title order={2}>ルールの編集</Title>
 
       <RestrictionForm
         tenantId={tenantId}

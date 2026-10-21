@@ -52,7 +52,7 @@ export function ToolsMenu({
         <MenuDivider />
 
         <MenuItem leftSection={<IconSquareRoundedPlus size={16} />} onClick={onSetDefaultPatterns}>
-          デフォルト勤務パターンをセット
+          曜日ごとの勤務をセット
         </MenuItem>
         <MenuItem
           leftSection={<IconUsersGroup size={16} />}

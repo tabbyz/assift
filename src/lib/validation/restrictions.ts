@@ -9,7 +9,7 @@ import {
 } from '@/lib/restrictions/kinds'
 import { tenantIdSchema } from './tenants'
 
-export const restrictionIdSchema = z.guid({ error: '制約が見つかりません' })
+export const restrictionIdSchema = z.guid({ error: 'ルールが見つかりません' })
 
 /** 対象。null = 店舗全体（013 §3.2） */
 const staffIdSchema = z.guid({ error: 'スタッフを選択してください' }).nullable()
@@ -65,7 +65,7 @@ export const restrictionInputSchema = z.discriminatedUnion(
     z.object({ kind: z.literal('max_weekend_days'), days: weekendDaysSchema }),
     z.object({ kind: z.literal('prefer_dayoff_wdays'), wdays: wdaysSchema }),
   ],
-  { error: '制約タイプを選択してください' }
+  { error: 'ルールの種類を選択してください' }
 )
 
 export type RestrictionInput = z.infer<typeof restrictionInputSchema>
