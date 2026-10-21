@@ -358,3 +358,11 @@ curl -i -H "Authorization: Bearer <CRON_SECRET>" https://v2.assift.com/api/cron/
   カード支払いの失敗 `https://assift.com/card/edit` / 近日中の更新 `https://assift.com`。「顧客がサブスクリプションを管理するリンクを含める」はオフ
 - ポータルの `login_page.enabled` は false（ログインリンクは無効）。メールのリンクもポータルを指さないので、v1 の利用者がポータルに入る経路は無い（setup の上書きは v1 に効かない）
 - カットオーバーの後に `/card/edit` が 404 になることに気付き、§3-8・§10 を決めた（当夜 23:30 に Stripe 上のページへ・v2 に転送を足す）
+
+### 2026-10-21 §5.2-4 live の中身の確かめ（Dashboard と API）
+
+- Price `price_1UT0UoEl6wKsSkziLOUlqcSY`: 検索キー `assift_monthly`・従量課金・JPY・1 か月ごと・メーター「在籍スタッフ数（期間の最大）」・段階は 1〜10 が ¥0 / 残りが ¥100・`tax_behavior: inclusive`
+- Meter `mtr_61VcOS9pRQWZfoJSK41El6wKsSkziXge`: `default_aggregation.formula: last`・`customer_mapping: by_id / stripe_customer_id`・`value_settings.event_payload_key: value`
+- Coupon `assift_v1_legacy`: 名前「旧料金（v1 からのご継続）」・50%・無期限・有効
+- ポータル `bpc_1UT0NQEl6wKsSkziCo6hjmDP`: 顧客情報の更新は名前だけ・解約はオン・期間の終わり・理由 5 つ（`too_expensive` / `unused` / `switched_service` / `missing_features` / `other`）
+- §5.2 はこれで完了
