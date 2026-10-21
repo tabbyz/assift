@@ -327,3 +327,16 @@ curl -i -H "Authorization: Bearer <CRON_SECRET>" https://v2.assift.com/api/cron/
 - 4 回目の反映を確かめた。ポータルの既定の設定について「API で作った設定は既定にならない」「セッションは設定を指定しなければ既定を使う」は Stripe の資料で確認できた
   （「既定が無いとセッションの作成が失敗する」は資料に明記が無く未確認。手順は変えない）
 - 低: §5.2-0 の文のつながり / 「作成」で止めたあとの流し直しと照合の基準 / 利用者の作成に `email_confirm: true`
+
+### 2026-10-21 §5.1・§5.2 live の移行用の鍵と `stripe:setup`（あなたの Mac）
+
+- §5.1: 移行用の鍵 `assift-v2-migration`（制限付きキー。用途は「構築した連携を強化」。AI エージェント用にすると二者承認ルールの対象になりうるので選ばない）を作り、パスワードマネージャに保管した
+- §5.2-0: v1 の Product の ID は `assift`（setup は既存を使う）。**live にポータルの既定の設定が無かった**（`configurations.list({ is_default: true })` が空）。
+  Settings → Billing → Customer portal で何も変えずに保存し、既定の設定 `bpc_1UT0NQEl6wKsSkziCo6hjmDP`（`is_default: true`・`active: true`）ができた。
+  保存した直後の機能（setup が上書きする前の値。保存より前は既定が無く、v1 の利用者がポータルに入る経路は無かった）:
+  顧客情報の更新はオン（名前・メール・住所・電話）/ 請求書の履歴・支払い方法の更新はオン / 解約はオン・期間の終わり・日割りなし・理由あり（`too_expensive` / `switched_service` / `unused` / `other`）/
+  一時停止はオフ / プランの変更はオフ
+- §5.2-1・2: 1 回目は Product が既存、Meter `mtr_61VcOS9pRQWZfoJSK41El6wKsSkziXge`・Price `price_1UT0UoEl6wKsSkziLOUlqcSY`・Coupon `assift_v1_legacy` を作成、
+  Portal `bpc_1UT0NQEl6wKsSkziCo6hjmDP` を更新。2 回目は Meter・Price（`lookup_key: assift_monthly`）・Coupon が既存、Portal が同じ id で更新（冪等）。権限のエラーは無し
+- つまずき: 最初は v1 の書き出しのフォルダ（`package.json` が無い）で、Node v16 のまま流して npm が止まった（Stripe には何も書いていない）。v2 のリポジトリで Node 22（`.nvmrc`）に切り替えて流し直した
+- 残り（§5.2）: 顧客へのメールの「支払い方法を更新するリンク」の行き先と、ポータルのログインリンクの有無を控える / §5.2-4 の Dashboard での目視
