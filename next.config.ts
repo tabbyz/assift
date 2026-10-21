@@ -50,6 +50,13 @@ const nextConfig: NextConfig = {
        * v2 の `/releases` を作るときはこの行を消す（`redirects()` は app のページより先に走るので、残すとページに届かない）
        */
       { source: '/releases/:path*', destination: '/', permanent: false },
+      /**
+       * v1 のカードの更新画面。Stripe の顧客へのメール（カード支払いの失敗）のリンクが v1 の `/card/edit` を指していた（035 §3-8）。
+       * カットオーバーの夜に Stripe 上のページへ切り替えるが、それより前に送られたメールのリンクを後から押す人を「プランとお支払い」へ送る
+       * （未ログインなら proxy が `/login?next=…` へ送る）。配下（`:path*`）と `/card` 自身も送る。
+       * 一時的（307）にする: `/card` を v2 で使うことになったとき、ブラウザに記憶された移動が残らないように。2027-10-30 以降に消してよい
+       */
+      { source: '/card/:path*', destination: '/account/billing', permanent: false },
     ]
   },
   experimental: {
