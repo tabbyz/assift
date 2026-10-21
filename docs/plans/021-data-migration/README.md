@@ -161,7 +161,7 @@ MIGRATION_DATABASE_URL=postgresql://... \
 | 既存データ | 起動時に `auth.users` と `public.tenants` の件数を表示し、`tenants` が 0 件でなければ `--allow-existing` が無い限り止まる（本番は管理用アカウント 1 件だけの状態で流す。ローカルは seed が入っているので `--allow-existing`） |
 | 上書き | `--overrides <json>`: 規則の外で手で決めたことをスクリプトに渡す口。`customerOwner`（`stripe_customer_id` を複数人が持つ組の持ち主。§7.1）と `forceMigrateUsers`（移行しない判定だが店舗を持つ人を確認済みで入れる。§7.1）。適用した上書きは `report.json` に残す。想定は空のファイルで、空でも手順は同じ（決めた結果を次の実行で再現できる） |
 | レポート | `report.json`（`--input` と同じ場所）: テーブルごとの `BEGIN 直後の count(*) / 読んだ / 入れた / 捨てた（理由別）/ 直した（理由別）`、捨てた行の id と理由、切り詰めた行の id と前後の文字数（**値そのものは書かない**。名前・メモは 3 か月で消える JSONL から id で引ける。§10-8）、移行しないのに店舗を持つ人、適用した上書き。同じ場所に `v1-subscriptions.csv` と `v1-subscriptions-not-migrated.csv`（§5.1）。`--rollback` でも書く。メールと id を含むのでエクスポートと同じ場所に置き、暗号化して 1 年で消す（§10-8） |
-| Stripe 用の CSV | 019 §8.2 の引き継ぎスクリプトの入力 `v1-subscriptions.csv`（`v1_user_id, email, stripe_customer_id, stripe_subscription_id, max_staffs_count, last_edited_at`）を **`import.ts` が書く**（rake ではない。「移行する人」の判定 §7.1 を Ruby と TS の 2 か所に持たないため）。`last_edited_at` は `shifts.jsonl` の `updated_at` の最大を **pattern → tenant → user** でたどり、**§7.6 で捨てる前の全行**（`staff_id IS NULL` の自動アサインの一時行や、消えたスタッフの行を含む）から出す。019 §8.2.1 の集計（`Shift.joins(pattern: :tenant)`）と同じ母集合にしないと、rescue / cancel_unpaid の 90 日の境目が動く。移行しない人の Subscription は `v1-subscriptions-not-migrated.csv` に分け、引き継ぎスクリプトには渡さず Dashboard で解約する（想定 0 件。026 §6.3 23:05） |
+| Stripe 用の CSV | 019 §8.2 の引き継ぎスクリプトの入力 `v1-subscriptions.csv`（`v1_user_id, email, stripe_customer_id, stripe_subscription_id, max_staffs_count, last_edited_at`）を **`import.ts` が書く**（rake ではない。「移行する人」の判定 §7.1 を Ruby と TS の 2 か所に持たないため）。`last_edited_at` は `shifts.jsonl` の `updated_at` の最大を **pattern → tenant → user** でたどり、**§7.6 で捨てる前の全行**（`staff_id IS NULL` の自動アサインの一時行や、消えたスタッフの行を含む）から出す。019 §8.2.1 の集計（`Shift.joins(pattern: :tenant)`）と同じ母集合にしないと、rescue / cancel_unpaid の 90 日の境目が動く。移行しない人の Subscription は `v1-subscriptions-not-migrated.csv` に分け、引き継ぎスクリプトの `--apply` には渡さず Dashboard で解約する（リハーサル 2 回目で 27 件。状態は同じスクリプトの dry-run で見て、有効なものは前もって解約しておく。026 §3-15） |
 | 実行環境 | `tsx --conditions=react-server`（`stripe:*` と同じ。`server-only` の `lib/calendar/holidays.ts` を読むため） |
 
 ### 6.2 変換は純関数（`src/lib/migration/`）
@@ -965,5 +965,5 @@ manifest の要点（§5.2）:
 
 - §13-8（`COPY`）: ローカルで 10 分をわずかに超え、その 9 割近くが `shifts` の書き込み。本番の予行（§9.3。10/22）で Session pooler 越しの所要を測って決める。替えるなら `shifts` だけで足りる
 - 026 §5 の実測と §6 の目安は、本番の予行の実測で埋め直す（ローカルの値は 10 分 21 秒に直した）
-- 移行しない人の Subscription 27 件: 026 §6.3 の 23:05（判断点 B の後）に Dashboard で解約する手順のまま。件数が 0 でなくなったので、当夜の時間を食わないように扱いを決める（026 §6.2 の 22:25 の行に件数を書いた）
+- 移行しない人の Subscription 27 件: 当夜の 23:05（判断点 B の後）にすべて手で見ると時間を食うので、10/23 に引き継ぎスクリプトの dry-run（読むだけ）で状態を見て、有効なものは 10/24〜10/29 に Dashboard で即時解約しておくことにした（2026-10-21。026 §3-15）
 - 片付け: 手元の v2 の DB は seed なしのまま。画面を触るときは `npx supabase db reset` で seed を入れ直す

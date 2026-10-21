@@ -8,7 +8,8 @@
  * 入力の CSV（列: v1_user_id, email, stripe_customer_id, stripe_subscription_id, max_staffs_count, last_edited_at）は
  * **データ移行の `import.ts` が書く**（`scripts/migrate-v1/`。021 §6.1）。「移行する人」の判定を Ruby と TS の 2 か所に
  * 持たないため、rake ではなくインポートが `v1-subscriptions.csv` を出す。移行しない人の Subscription は
- * `v1-subscriptions-not-migrated.csv` に分かれ、このスクリプトには渡さず Dashboard で解約する。
+ * `v1-subscriptions-not-migrated.csv` に分かれ、`--apply` には渡さず Dashboard で解約する（状態を見るだけの dry-run には
+ * 渡してよい。区分は移す人向けなので `status` だけを見る。026 §3-15）。
  * `last_edited_at` は v1 の全 `shifts`（自動アサインの一時行を含む）の `updated_at` の最大を pattern → tenant → user でたどった値。
  *
  * 結果（区分・するはずの操作・結果）は `--output`（既定 `v1-subscriptions-result.csv`）に書く。v1 のダンプと一緒に保管する（§8.2.3）。
