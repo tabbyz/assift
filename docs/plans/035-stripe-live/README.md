@@ -10,7 +10,7 @@
 - コード: `scripts/stripe/setup.ts` / `src/app/api/stripe/webhook/route.ts` / `src/app/api/cron/billing-usage/route.ts` / `src/lib/billing/{stripe,sync,report}.ts` / `.env.example`
 - 経緯: 2026-10-20 にリリース計画のタスク「Stripe 本番: stripe:setup・Webhook 登録・解約メールを一時オフ」の現状を調べ、2026-10-21 に §3 の決定（すべて推奨の案）を受けた
 
-**状態: プラン（2026-10-21。レビュー 2 回・すべて反映）。作業するのは人間（Stripe・Vercel の操作と秘密の値）。サンドボックスでの鍵の権限の確かめ（§5.3）と記録は Claude。**
+**状態: プラン（2026-10-21。レビュー 3 回・すべて反映）。作業するのは人間（Stripe・Vercel の操作と秘密の値）。サンドボックスでの鍵の権限の確かめ（§5.3）と記録は Claude。**
 
 ## 1. 目的と完了条件
 
@@ -145,24 +145,25 @@ price が無いまま鍵が入ると、毎晩の cron が「price が見つか�
    `assift-v2-migration-test`（§4.2）
 2. クラウドの環境の環境変数に入れる: `STRIPE_APP_TEST_KEY`（`rk_test_…`）と `STRIPE_MIGRATION_TEST_KEY`（`rk_test_…`）。今ある `STRIPE_SECRET_KEY`（`sk_test_`）は残す（確かめの土台を作るのに使う）。
    チャットには貼らない。環境の変更は新しいセッションから効くので、入れたら新しいセッションで「035 §5.3 をして」と頼む
-3. Claude が頼んだら、サンドボックスの「すべての再試行が失敗したら」を一時的に**未払いにする**へ変え（7 の `unpaid` の契約を作るあいだだけ。019 §12 2026-10-08 と同じ）、
+3. Claude が頼んだら、サンドボックスの「すべての再試行が失敗したら」を一時的に**未払いにする**へ変え（6 の `verify/v1.ts unpaid-setup` を流し終えるまで。019 §12 2026-10-08 と同じ）、
    終わったら**キャンセル**に戻す。Claude は Dashboard を操作できない。**サンドボックスの設定であって live ではない**ことを画面の上で確かめる
 
 **Claude がすること**（019 §9.4 の道具を使う。鍵の値は表示しない。`rk_test_` で始まることだけ見る）
 
 | # | 経路 | 鍵 | 見ること |
 | --- | --- | --- | --- |
-| 0 | 準備: docker → `supabase start`（AGENTS.md「クラウドのセッション」）→ `.env.local`（Supabase の 3 つ・`STRIPE_WEBHOOK_SECRET`・`CRON_SECRET`。Stripe の鍵は書かない）/ Playwright | — | Playwright はリポジトリの依存に無いので `npm i --no-save playwright` で一時的に入れ、ブラウザは環境の Chromium（`/opt/pw-browsers`）を使う（`playwright install` はしない） |
+| 0 | 準備: docker → `supabase start`（AGENTS.md「クラウドのセッション」）→ `.env.local`（Supabase の 3 つ・`STRIPE_WEBHOOK_SECRET`・`CRON_SECRET`。Stripe の鍵は書かない）/ Playwright | — | Playwright はリポジトリの依存に無いので `npm i --no-save playwright@1.56.1` で一時的に入れる（環境の Chromium（`/opt/pw-browsers` の `chromium-1194`）に合う版。版を付けないと最新が入り、起動に失敗する。`playwright install` はしない） |
 | 1 | `npm run stripe:setup` | 移行用 | 2 回とも通る（サンドボックスは既存なので、作成の権限は live の §5.2 で確かめる） |
-| 2 | 申し込み（Checkout）→ 戻ったときの同期 → ポータルを開く | アプリ用 | 019 §9.4-2 のとおり。Playwright でテストカード |
-| 3 | Webhook（署名を付けた `customer.subscription.created` / `updated` を dev サーバーへ POST） | アプリ用 | 204・`synced_at` が進む・Meter にイベントが届く（019 §9.4-3）。**イベントの取得（`stripe.events.list`）は土台のプロセス（`sk_test`）で行う**（Events の権限はアプリ用の鍵に無く、要らない。live の鍵に Events を足す結論にしない） |
+| 2 | 新しく作った利用者 A（seed の `dev@example.com` は使わない。5 で消すと seed の店舗ごと消える）で申し込み（Checkout）→ 戻ったときの同期 → ポータルを開いて**解約まで** | アプリ用 | 019 §9.4-2 のとおり。Playwright でテストカード |
+| 3 | Webhook（A の Customer の `customer.subscription.created` / `updated` に署名を付けて dev サーバーへ POST） | アプリ用 | 204・`synced_at` が進む・Meter にイベントが届く（019 §9.4-3）。**イベントの取得（`stripe.events.list`）は土台のプロセス（`sk_test`）で行う**（Events の権限はアプリ用の鍵に無く、要らない。live の鍵に Events を足す結論にしない） |
 | 4 | cron（`/api/cron/billing-usage`） | アプリ用 | 200・`failed` が 0（同期と人数の送信） |
-| 5 | 退会（019 §5.8 の解約）を画面から | アプリ用 | 019 §9.4-6 のとおり |
-| 6 | v1 相当の契約（テストクロック付き。`verify/v1.ts`）を作る | `sk_test` | 019 §9.4-5 の 4 種類。`unpaid` はあなたの 3 の切り替えのあいだに作る |
-| 7 | `stripe:migrate-v1` の dry-run → `--apply --limit 1` → `--apply`（6 の契約） | 移行用 | 019 §9.4-5 のとおり。`unpaid` の救済（`invoices.list` / `update` / `finalizeInvoice` / `voidInvoice` / `markUncollectible`）を必ず通す（当夜の判断点 B の後に live で初めて使う権限） |
-| 8 | 切り替え待ちの解約（`cancelDuringMigration()`）を画面から（7 で `has_schedule` の行ができた利用者） | アプリ用 | 019 §9.4-5 のとおり。行は 7 の引き継ぎでしかできないので 7 の後 |
-| 9 | 割引の展開: 7 の契約のクロックを phase 1 の後まで進め（`sk_test`）、その Customer の Webhook を dev サーバーへ POST | アプリ用 | 204・`discount_percent` が 50（§4.1 の Coupons Read で足りること） |
-| 10 | 全員の同期: **クロックの無い** v1 相当の契約（acacia・`freemium-monthly`）を 1 件作り（`sk_test`）→ `migrate-v1 --apply`（移行用）→ `profiles.stripe_customer_id` だけ写す → `stripe:sync-all` | 移行用 | `failed: 0`・その契約の行が**一覧の経路で**できる（026 §7.3 と同じ。price で絞った一覧はクロック付きの契約を返さないので、6 の契約では当夜と同じ経路を通らない） |
+| 5 | A の退会（019 §5.8 の解約）を画面から。前提は 2 でポータルから解約済み（解約の予定（`cancel_at`）が無いと退会は断られる。`entitlement.ts`） | アプリ用 | 019 §9.4-6 のとおり（endive のポータルは `cancel_at` だけを入れるので、退会で `subscriptions.update` が走る） |
+| 6 | v1 相当の契約を作る: `verify/v1.ts setup <CSV-A>`（legacy / legacy-cancel / free）と `verify/v1.ts unpaid-setup <CSV-B>`（rescue / unpaid-old / unpaid-free。あなたの「用意すること」3 の切り替えのあいだに流す） | `sk_test` | 019 §9.4-5 のとおり。どれもテストクロック付き |
+| 7 | `stripe:migrate-v1` の dry-run → `--apply --limit 1` → `--apply`（6 の CSV ごとに。**`--output` は CSV ごとに分ける**。省くとリポジトリの直下の `v1-subscriptions-result.csv` に上書きされる） | 移行用 | 019 §9.4-5 のとおり。`unpaid` の救済（`invoices.list` / `update` / `finalizeInvoice` / `voidInvoice` / `markUncollectible`）を必ず通す（当夜の判断点 B の後に live で初めて使う権限） |
+| 8 | 結び付け: ログインできる利用者 B（legacy-cancel 用）と C（legacy 用）を新しく作り（パスワード付き。一時スクリプトで `auth.admin.createUser`）、`profiles.stripe_customer_id` と `trial_end` を psql で写す（`verify/v1.ts advance` と同じ値）→ それぞれの Customer の Webhook を dev サーバーへ POST して行を作る | アプリ用 | `billing_subscriptions` に `has_schedule = true` の行ができる。**`verify/v1.ts advance` は使わない**（`sk_test` のまま同じプロセスで同期し、legacy-cancel を解約し、クロックを進めてしまう。引き継ぎは Stripe にしか書かないので、7 だけでは行が無い） |
+| 9 | B でログインし、切り替え待ちの解約（`cancelDuringMigration()`）を画面から | アプリ用 | 019 §9.4-5 のとおり |
+| 10 | 割引の展開: C の契約のクロックを phase 1 の後まで、`verify/lib.ts` の `advance()` だけを呼ぶ一時スクリプトで進め（`sk_test`）、C の Customer の Webhook を dev サーバーへ POST | アプリ用 | 204・行の `has_schedule` が **false**（release の後）・`discount_percent` が 50・Stripe 側でその Subscription の `discounts` が空でない（`sk_test` で見る）。schedule が残っていると、展開した `discounts` を通らずに phase の割引から 50 になる（`subscriptionRow.ts`）ので、`has_schedule` で確かめる。legacy-cancel（B）は phase 0 の終わりで終わるので使わない |
+| 11 | 全員の同期: **クロックの無い** v1 相当の契約（acacia・`freemium-monthly`）を一時スクリプトで 1 件作り（`sk_test`。既存の道具は必ずテストクロックを付ける）→ `migrate-v1 --apply`（移行用）→ 利用者 D を作って `profiles.stripe_customer_id` だけ写す → `stripe:sync-all` | 移行用 | `failed: 0`・D の行が**一覧の経路で**できる（026 §7.3 と同じ。price で絞った一覧はクロック付きの契約を返さないので、6 の契約では当夜と同じ経路を通らない。取り直しのループは新しい行を作らない） |
 
 - **鍵の渡し方**（3 つの起動の仕方で違う）:
   - `npm run dev`: Next は既にある環境変数を `.env.local` より優先する。環境には `STRIPE_SECRET_KEY`（`sk_test_`）があるので、起動の行で上書きする:
@@ -176,7 +177,9 @@ price が無いまま鍵が入ると、毎晩の cron が「price が見つか�
 - **本当に制限付きキーで走ったかを確かめる。** サンドボックスの鍵ごとの **View request logs** に、その経路のリクエストが出ていること（出ていなければ `sk_test` で走っている）。
   request logs はあなたに Dashboard で見てもらう
 - 権限が足りない呼び出しはエラーの本文で分かる。足りない権限・要らなかった権限（Invoices）を一覧にしてあなたに伝え、サンドボックスの鍵を直してもらって通し直す
-- 結果は §9 に書く。確認用の一時スクリプトはコミットしない。作ったテストクロックは消す（019 §9.4-7）。3 の設定を戻してもらったことを §9 に書く
+- 結果は §9 に書く。確認用の一時スクリプトはコミットしない。片付け: 作ったテストクロックを消す（クロックの Customer と Subscription も消える。019 §9.4-7）。
+  クロックの無い 2 の Checkout の Customer と 11 の Customer は残るので消す（Subscription も一緒に消える。残すと後のローカルの同期に出る。026 §12 2026-10-16）。
+  ローカルの DB は `npx supabase db reset` で seed に戻す。「用意すること」3 の設定を戻してもらったことを §9 に書く
 
 ### 5.4 Dashboard の設定（live。019 §4.1・§4.4・§8.3-2）
 
@@ -299,3 +302,11 @@ curl -i -H "Authorization: Bearer <CRON_SECRET>" https://v2.assift.com/api/cron/
 - 低: 切り替え待ちの解約は引き継ぎの後にしか流せない（§5.3-8 に移した）/ 鍵の渡し方を起動の仕方ごとに書き分けた（`stripe:*` は `.env.local` を読まない・`sync-all` は Supabase の 2 つも渡す）/
   イベントの取得は `sk_test` のプロセスで / Playwright は依存に無い / 026 §6.4 の中止・延期で監視 ③ を戻す手順が抜けていた / 10/23 の文言を cutover-25 にそろえた /
   ポータルのリンク先がポータルだった場合の判断を決めた（受け入れる）/ Axiom の行は数ではなく時刻で見る
+
+### 2026-10-21 プランのレビュー（3 回目。2 回目の反映の確かめと全体の見直し。高 0・中 1・低 5、すべて反映）
+
+- 中: §5.3 の切り替え待ちの解約と割引の展開が、書いたとおりには流せなかった（引き継ぎは Stripe にしか書かず DB に行ができない・結び付ける既存の道具 `v1.ts advance` は `sk_test` で同期し legacy-cancel を解約してしまう）
+  → 結び付けを §5.3-8 として独立させ（新しい利用者・psql で写す・アプリ用の鍵の dev サーバーへ Webhook）、割引は legacy の契約で `lib.ts` の `advance()` だけを呼ぶ一時スクリプトで進める
+- 低: 割引は `has_schedule` が false と Stripe 側の `discounts` で確かめる（schedule が残ると phase の割引から 50 になる）/ 「用意すること」3 の番号 /
+  6・7・11 の道具（`v1.ts setup` と `unpaid-setup`・`--output` を分ける・クロックの無い契約は一時スクリプト）と片付け（クロックの無い Customer を消す）/
+  退会の前提（ポータルで解約済み）と seed の利用者を使わないこと / Playwright の版（1.56.1）
