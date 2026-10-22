@@ -413,7 +413,7 @@ curl -i -H "Authorization: Bearer <CRON_SECRET>" https://v2.assift.com/api/cron/
 - 権限の過不足（引数の無い呼び出しで、何も作らずに確かめた。権限が無ければ 403、あれば 400 の引数のエラー）:
   - アプリ用: Products・Prices・Coupons・Billing Meters の作成は 403、Invoices の読み取りは 403（**Invoices は None で全部の経路が通った**。§4.1 の Invoices の行は外す）
   - アプリ用で `POST /v1/billing_portal/configurations` が 403 にならない（ポータルの Sessions と Configurations が同じ「Customer portal」の行なので、Sessions の Write で設定も書ける）。移行用も同じ理由で `POST /v1/billing_portal/sessions` が通る。分けられないので受け入れる
-  - アプリ用で `GET /v1/products` が 200（Products の Read が付いている。鍵の画面で Products を付けたか、Prices の Read に含まれるかを見てもらう。コードは Products を読まない）
+  - アプリ用で `GET /v1/products` が 200（鍵の画面の Products の行は「なし」だった。Products を付けなくても商品は読める。コードは Products を読まない）
 - つまずき:
   - Checkout の国の既定がアメリカ合衆国で、郵便番号と（Link の保存がオンだと）電話番号が要る。国を日本にして Link の保存を外して通した
   - ポータルの解約は、理由のモーダルが先に出る（「キャンセルを続ける」→「サブスクリプションをキャンセル」）
@@ -424,4 +424,4 @@ curl -i -H "Authorization: Bearer <CRON_SECRET>" https://v2.assift.com/api/cron/
   ローカルの DB は `npx supabase db reset` で seed に戻した。サンドボックスの「リトライがすべて失敗したら」を「キャンセル」に戻してもらった
 - サンドボックスには以前の確認の `assift_monthly` の契約が残っている（cron の `synced: 4` の内訳。今回作ったものではないので消していない）
 - 反映: §4.1 の Invoices を None に、`.env.example`・019 §4.1 を確かめた権限の一覧に直した（§8）
-- live のアプリ用の鍵（§5.1-2）は §4.1 のとおり（Invoices は None、Coupons は Read）。Products の行は、サンドボックスの `assift-v2-app-test` の画面と同じにする
+- live のアプリ用の鍵（§5.1-2）は §4.1 のとおり（Invoices は None、Coupons は Read）。Products の行は「なし」（サンドボックスの `assift-v2-app-test` と同じ）
