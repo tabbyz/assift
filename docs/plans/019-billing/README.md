@@ -156,7 +156,7 @@ v1 の「プラン」のうち、v2 に残すのは料金（11 人目から 1 �
 
 - price の id は環境変数に持たず **`lookup_key` で引く**（test / live で id が違っても同じコード）。クーポンは id を固定で作る
 - これらは `scripts/stripe/setup.ts`（冪等。v1 の `stripe:create_product` / `create_plan` の置き換え）で作る。Webhook・Dashboard の設定は手で行い、手順を README に書く
-- API キーは**制限付きキー**（Customers / Checkout Sessions / Subscriptions / Subscription Schedules / Invoices / Prices（読み取り。`resolvePriceId()` が lookup_key で引く）/ Billing Meter Events / Billing Portal の必要な権限だけ。`stripe:setup` と移行スクリプトは別の鍵で流す）
+- API キーは**制限付きキー**（Customers / Checkout Sessions / Subscriptions / Subscription Schedules / Billing Meter Events / Customer portal は書き込み、Prices（`resolvePriceId()` が lookup_key で引く）/ Coupons（同期の `expand: ['data.discounts']`）は読み取り。Invoices は要らない。2026-10-22 にサンドボックスで確かめた（035 §5.3）。`stripe:setup` と移行スクリプトは別の鍵（035 §4.2）で流す）
 - SDK は `stripe`（node）を `apiVersion` 固定（実装時の最新。少なくとも `2026-06-24.dahlia`）
 
 ### 4.2 最大人数の数え方

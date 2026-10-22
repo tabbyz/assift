@@ -80,7 +80,7 @@ Stripe の画面の資源の名前は表記が変わりうる。下の表の「�
 | Billing Meter Events | Write | `billing.meterEvents.create`（`usage.ts`） |
 | Customer portal（Billing Portal の Sessions） | Write | `billingPortal.sessions.create`（`(protected)/actions.ts`） |
 | Coupons（または Discounts） | **Read（必須。外さない）** | 同期の `expand: ['data.discounts']`（`sync.ts`）。切り替え待ちのあいだ Subscription の `discounts` は空で（50% は schedule の次の phase から読む。`subscriptionRow.ts`）、中身のある割引を展開するのは phase 1 が始まった後だけ。live で初めて通るのは 11/1 0:00 の切り替え（392 件の Webhook が一斉に走る）なので、外して確かめることはしない。§5.3-10 で Read で足りることだけ確かめる |
-| Invoices | 019 §4.1 は「要る」としているが、`src/` に呼び出しが無い。サンドボックスで None を試し、要らなければ外す | — |
+| Invoices | **None**（2026-10-22 に §5.3 で、None のまま全部の経路が通った。`src/` に呼び出しが無い） | — |
 
 ### 4.2 移行用（`assift-v2-migration`。手元の Mac）
 
@@ -391,7 +391,7 @@ curl -i -H "Authorization: Bearer <CRON_SECRET>" https://v2.assift.com/api/cron/
 - §3-9: 3D セキュアの認証のリンクのメール（今はオフ）を当夜 23:30 にオン、確認待ちの決済を 15 日で「キャンセル」へ。026 §6.3 23:30・019 §8.3-4・手順書に足した
 - §5.4 はこれで完了（変えたものは無い。当夜 23:30 に変えるものは §3-8・§3-9・リトライの回数（3 週間で 4 回 → 推奨の 2 週間で 8 回））
 
-### 2026-10-22 §5.3 サンドボックスで鍵の権限を確かめる（Claude。クラウドのセッション。途中）
+### 2026-10-22 §5.3 サンドボックスで鍵の権限を確かめる（Claude。クラウドのセッション）
 
 - 環境: `STRIPE_SECRET_KEY` は `sk_test_`、`STRIPE_APP_TEST_KEY` / `STRIPE_MIGRATION_TEST_KEY` は `rk_test_`（値は表示していない）。どちらも制限付きであることを、権限の無い呼び出し（アプリ用の `GET /v1/invoices`・移行用の `GET /v1/checkout/sessions`）が 403 になることで確かめた
 - 鍵は §5.3 のとおりに渡した: dev サーバーは `STRIPE_SECRET_KEY="$STRIPE_APP_TEST_KEY" npm run dev`、`stripe:*` は起動の行で移行用、土台（`verify/*`・イベントの取得・クロック）は `sk_test`
@@ -403,8 +403,8 @@ curl -i -H "Authorization: Bearer <CRON_SECRET>" https://v2.assift.com/api/cron/
 | 3 | 署名なし・違う署名 → 400。A の `customer.subscription.updated` → 204 で `cancel_at` が写り `synced_at` が進んだ。`created` → 204、Meter に A のイベントの集計（値 0）ができた。イベントの取得は `sk_test` のプロセス |
 | 4 | cron: `Authorization` なし → 401、Bearer → 200 `{ sync: { synced: 4, failed: 0 }, usage: { sent: 3, failed: 0 } }` |
 | 5 | A の退会を画面から → `/` へ。Stripe の Subscription が `cancel_at_period_end: true`（`subscriptions.update` がアプリ用の鍵で通った）・利用者が消えた |
-| 6 | `verify/v1.ts setup`（`sk_test`）で legacy / legacy-cancel / free を作った。`unpaid-setup` は「用意すること」3 の切り替え待ち |
-| 7 | CSV-A を移行用で dry-run → `--apply --limit 1` → `--apply` → もう 1 回 `--apply`。legacy 2 件に schedule、free を解約、4 回目は「schedule 既存」と「対象外」だけ（冪等）。失敗 0 |
+| 6 | `verify/v1.ts setup`（`sk_test`）で legacy / legacy-cancel / free を作った。あなたがサンドボックスの「リトライがすべて失敗したら」を「未払いとしてマーク」に変えてから `unpaid-setup` を流し、rescue と unpaid-old が `unpaid`（期限超過の 1 件 + 下書き 2 件）、unpaid-free は 0 円で `active` のまま |
+| 7 | CSV-A を移行用で dry-run → `--apply --limit 1` → `--apply` → もう 1 回 `--apply`。legacy 2 件に schedule、free を解約、4 回目は「schedule 既存」と「対象外」だけ（冪等）。失敗 0。CSV-B も同じ順で: rescue は「下書き 1 件を無効 / 回収不能 2 件 / schedule 作成」で `active` に戻った（請求書は回収不能・無効・回収不能）、unpaid-old は「下書き 2 件を無効 / 回収不能 1 件 / 解約」、unpaid-free は解約。3・4 回目は「schedule 既存」と「対象外」だけ。**移行用の鍵で `invoices.list` / `update` / `finalizeInvoice` / `voidInvoice` / `markUncollectible` が通った**（当夜の判断点 B の後に live で初めて使う権限） |
 | 8 | 利用者 B（legacy-cancel）・C（legacy）を作り、`stripe_customer_id` と `trial_end`（`2020-01-31T14:59:59Z`）を psql で写して Webhook を POST → 204、2 人とも `freemium-monthly`・`has_schedule = true`・`discount_percent = 50` の行ができた |
 | 9 | B で「プランとお支払い」の「解約する」→「解約の手続きをしました」。schedule が `end_behavior: cancel`（phase 1 つ）、行の `cancel_at` が 10/31 14:59:59 UTC |
 | 10 | C のクロックを `lib.ts` の `advance()` だけで 11/2 03:00 UTC まで進めた（`sk_test`）→ Stripe 側は `schedule: null`・`assift_monthly`・`discounts: [assift_v1_legacy]` → Webhook 204 で行が `has_schedule = false`・`discount_percent = 50`・期間 11/1 〜 11/30。Coupons は Read で足りる |
@@ -419,4 +419,9 @@ curl -i -H "Authorization: Bearer <CRON_SECRET>" https://v2.assift.com/api/cron/
   - ポータルの解約は、理由のモーダルが先に出る（「キャンセルを続ける」→「サブスクリプションをキャンセル」）
   - 退会後に `/` を開くと、LP の Google Fonts（Zen Kaku Gothic New）が取れずにコンパイルが失敗し、dev サーバーのすべての応答が HTML の 500 になった（Webhook の 500 はこれ。コードの問題ではない）。dev サーバーを起動し直して通した
   - クロックの無い契約の usage record は、`timestamp` を作る前の時刻にすると断られる（`'now'` にした）。断られた 2 回分の Customer が残った（片付けで消す）
-- 残り: 6 の `unpaid-setup` と 7 の CSV-B（`unpaid` の救済。Invoices の Write）・鍵ごとの View request logs の確認（あなた）・片付け
+- 鍵ごとの View request logs: 2 本とも今日のリクエストが出ていた（あなたが確かめた）。制限付きキーで走っている
+- 片付け: テストクロック 6 本（CSV-A・B）を消した（Customer と Subscription も一緒に消える）。クロックの無い Customer 4 件（2 の A・11 の契約と断られた 2 回分）を消した。
+  ローカルの DB は `npx supabase db reset` で seed に戻した。サンドボックスの「リトライがすべて失敗したら」を「キャンセル」に戻すのはあなた（`unpaid-setup` の後なら戻してよい）
+- サンドボックスには以前の確認の `assift_monthly` の契約が残っている（cron の `synced: 4` の内訳。今回作ったものではないので消していない）
+- 反映: §4.1 の Invoices を None に、`.env.example`・019 §4.1 を確かめた権限の一覧に直した（§8）
+- live のアプリ用の鍵（§5.1-2）は §4.1 のとおり（Invoices は None、Coupons は Read）。Products の行は、サンドボックスの `assift-v2-app-test` の画面と同じにする
