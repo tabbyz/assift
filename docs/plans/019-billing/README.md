@@ -156,7 +156,7 @@ v1 の「プラン」のうち、v2 に残すのは料金（11 人目から 1 �
 
 - price の id は環境変数に持たず **`lookup_key` で引く**（test / live で id が違っても同じコード）。クーポンは id を固定で作る
 - これらは `scripts/stripe/setup.ts`（冪等。v1 の `stripe:create_product` / `create_plan` の置き換え）で作る。Webhook・Dashboard の設定は手で行い、手順を README に書く
-- API キーは**制限付きキー**（Customers / Checkout Sessions / Subscriptions / Subscription Schedules / Invoices / Prices（読み取り。`resolvePriceId()` が lookup_key で引く）/ Billing Meter Events / Billing Portal の必要な権限だけ。`stripe:setup` と移行スクリプトは別の鍵で流す）
+- API キーは**制限付きキー**（Customers / Checkout Sessions / Subscriptions / Subscription Schedules / Billing Meter Events / Customer portal は書き込み、Prices（`resolvePriceId()` が lookup_key で引く）/ Coupons（同期の `expand: ['data.discounts']`）は読み取り。Invoices は要らない。2026-10-22 にサンドボックスで確かめた（035 §5.3）。`stripe:setup` と移行スクリプトは別の鍵（035 §4.2）で流す）
 - SDK は `stripe`（node）を `apiVersion` 固定（実装時の最新。少なくとも `2026-06-24.dahlia`）
 
 ### 4.2 最大人数の数え方
@@ -522,13 +522,16 @@ Stripe のサブスクリプションは 有効 795 / 未払い 155 / 期日経�
 
 ### 8.3 順序
 
-> 当日の手順（時刻・コマンド・判断点）は 026 §6.3。全員の同期は `npm run stripe:sync-all`（026 §7）。
+> 当日の手順（時刻・コマンド・判断点）は 026 §6.3。全員の同期は `npm run stripe:sync-all`（026 §7）。1・2 の事前の作業（鍵・`stripe:setup`・Dashboard・Webhook・Vercel の環境変数）は 035。
 
 1. （事前）live で `scripts/stripe/setup.ts`、Webhook の登録、Dashboard の設定（§4.1。支払い失敗とカード期限切れのメールはオンになっている）
 2. （事前）**Dashboard の「サブスクリプションの解約を顧客にメールで知らせる」をオフ**にする（0 円・放置の約 590 件の即時解約で、解約メールが一斉に送られないように）
+   → 2026-10-22 に改めた: Stripe の設定画面にこのオン・オフは無く（解約の確認メールは売上回収のオートメーションで作るもの）、live にそのオートメーションは無かった。止めるものは無い（035 §3-4）
 3. **カットオーバーは月の下旬に置く**（決定。§11-11）。v1 の Subscription はほぼ全員が月末で期間が切り替わるので、schedule が付いている（ポータルで解約できない）期間が数日で済む
 4. カットオーバー: v1 停止 → データ移行（§8.1）→ `migrate-v1-subscriptions`（§8.2.3）→ 全員の同期（cron と同じく一覧でまとめて取る。§5.7）→ v1 の rake を止める →
-   **Dashboard の「リトライが尽きたら」を「未払いにする」から「解約する」に変える**（決定。§11-14）→ 解約メールの設定を戻す
+   **Dashboard の「リトライが尽きたら」を「未払いにする」から「解約する」に変える**（決定。§11-14）→
+   顧客へのメールの「決済手段の更新」を v1 のページ（`/card/edit`）から「Stripe 上のページにリンク」へ変える（035 §3-8）→
+   3D セキュアの認証のリンクのメールをオンにし、確認待ちの決済を 15 日で「キャンセル」へ（035 §3-9）
 5. 切り替え後の最初の請求日: 旧料金の利用者の請求書を Dashboard で突き合わせる（クーポンが効いて 1 人 50 円。v1 の上限での料金 ≥ v2 の請求になっているはず）。
    救った 47 件の支払い失敗の数と、カードを更新した数を見る
 

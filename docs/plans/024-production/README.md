@@ -225,7 +225,7 @@ Workspace は `sundbox.app` の 1 つだけで、`assift.com` はその追加の
 | `ADMIN_HOST` | `admin-v2.assift.com`（当日に `admin.assift.com`。§6） | 本プラン |
 | `SITE_URL` | `https://v2.assift.com`（当日に `https://assift.com`。§6） | 本プラン・028（`og:image` の URL） |
 | `ASSIST_DAILY_LIMIT` / `ASSIST_INTERPRET_MODEL` | 入れない（既定 10 回 / `openai/gpt-6.1-sol`。2026-10-15 に `gpt-6-sol` から切り替え。012 §10.9） | — |
-| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `CRON_SECRET` | **入れない**。Stripe の live のタスクで入れる | 別タスク |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `CRON_SECRET` | **入れない**。Stripe の live のタスクで入れる（035 §5.6。Production だけ・Sensitive） | 035 |
 
 - **`CRON_SECRET` を Stripe より先に入れない**: `vercel.json` の cron は Production でだけ毎晩走る。`CRON_SECRET` だけあると Stripe が無いので毎晩 503 になり、
   Vercel の実行履歴が赤くなる（害は無いが、失敗に慣れると本物の失敗を見落とす）。いまは 401 で止まっている
@@ -431,7 +431,7 @@ Workspace は `sundbox.app` の 1 つだけで、`assift.com` はその追加の
 | 先 | 内容 |
 | --- | --- |
 | 021 §9.3（予行） | 接続は Supabase → Connect → Session pooler（IPv4）+ `sslmode=verify-full`。本番は管理用アカウント 1 件・店舗 0 件の状態 |
-| Stripe の live | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `CRON_SECRET` を Vercel の Production に入れる（§4.7。`CRON_SECRET` は Stripe と同時に）。Webhook の URL は DNS の切り替え前は `assift.com` が v1 を指すことに注意 |
+| Stripe の live（035） | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `CRON_SECRET` を Vercel の Production に入れる（§4.7。`CRON_SECRET` は Stripe と同時に）。Webhook の URL は DNS の切り替え前は `assift.com` が v1 を指すことに注意 |
 | カットオーバー（→ 026 §3-8・§6.3） | §6 の差し替え。Site URL を変えたら Redeploy して値が残っているか見る（Vercel 連携が Redirect URLs を書き換える）。Deploy to production をオンにするかを決める（§4.8 の確かめ方を使う） |
 | カットオーバーの後（→ 026 §6.5・§6.6） | `assift.com` で Vercel Web Analytics のダッシュボードに閲覧が 1 件届く（025 §6.3）。Google の同意画面のリンク先（`assift.com`）が v2 になったことを見る。仮のホスト `v2` / `admin-v2` を Vercel と Gehirn から外す。v1 の SendGrid の CNAME は v1 を止めてから消す |
 | リリース後 | PITR の検討（§3-6）。共同開発者が増えたら Redirect URLs の `assift-*-sundbox.vercel.app` を見直す |
