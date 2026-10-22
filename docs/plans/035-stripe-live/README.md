@@ -421,7 +421,7 @@ curl -i -H "Authorization: Bearer <CRON_SECRET>" https://v2.assift.com/api/cron/
   - クロックの無い契約の usage record は、`timestamp` を作る前の時刻にすると断られる（`'now'` にした）。断られた 2 回分の Customer が残った（片付けで消す）
 - 鍵ごとの View request logs: 2 本とも今日のリクエストが出ていた（あなたが確かめた）。制限付きキーで走っている
 - 片付け: テストクロック 6 本（CSV-A・B）を消した（Customer と Subscription も一緒に消える）。クロックの無い Customer 4 件（2 の A・11 の契約と断られた 2 回分）を消した。
-  ローカルの DB は `npx supabase db reset` で seed に戻した。サンドボックスの「リトライがすべて失敗したら」を「キャンセル」に戻すのはあなた（`unpaid-setup` の後なら戻してよい）
+  ローカルの DB は `npx supabase db reset` で seed に戻した。サンドボックスの「リトライがすべて失敗したら」を「キャンセル」に戻してもらった
 - サンドボックスには以前の確認の `assift_monthly` の契約が残っている（cron の `synced: 4` の内訳。今回作ったものではないので消していない）
 - 反映: §4.1 の Invoices を None に、`.env.example`・019 §4.1 を確かめた権限の一覧に直した（§8）
 - live のアプリ用の鍵（§5.1-2）は §4.1 のとおり（Invoices は None、Coupons は Read）。Products の行は、サンドボックスの `assift-v2-app-test` の画面と同じにする
