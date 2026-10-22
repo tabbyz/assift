@@ -390,3 +390,33 @@ curl -i -H "Authorization: Bearer <CRON_SECRET>" https://v2.assift.com/api/cron/
 - 請求書のフッター（Settings → Billing → 請求書 → デフォルトのフッター）: 「表示の金額は税込です」が入っている（請求書と領収書の PDF に出る）
 - §3-9: 3D セキュアの認証のリンクのメール（今はオフ）を当夜 23:30 にオン、確認待ちの決済を 15 日で「キャンセル」へ。026 §6.3 23:30・019 §8.3-4・手順書に足した
 - §5.4 はこれで完了（変えたものは無い。当夜 23:30 に変えるものは §3-8・§3-9・リトライの回数（3 週間で 4 回 → 推奨の 2 週間で 8 回））
+
+### 2026-10-22 §5.3 サンドボックスで鍵の権限を確かめる（Claude。クラウドのセッション。途中）
+
+- 環境: `STRIPE_SECRET_KEY` は `sk_test_`、`STRIPE_APP_TEST_KEY` / `STRIPE_MIGRATION_TEST_KEY` は `rk_test_`（値は表示していない）。どちらも制限付きであることを、権限の無い呼び出し（アプリ用の `GET /v1/invoices`・移行用の `GET /v1/checkout/sessions`）が 403 になることで確かめた
+- 鍵は §5.3 のとおりに渡した: dev サーバーは `STRIPE_SECRET_KEY="$STRIPE_APP_TEST_KEY" npm run dev`、`stripe:*` は起動の行で移行用、土台（`verify/*`・イベントの取得・クロック）は `sk_test`
+
+| # | 結果 |
+| --- | --- |
+| 1 | `stripe:setup`（移行用）2 回とも通った。Product・Meter・Price・Coupon は既存、Portal `bpc_1UO5QLIOMWCMZkC6zwTtSPJ2` は 2 回とも同じ id で「更新」 |
+| 2 | 利用者 A（`auth.admin.createUser`・`email_confirm: true`）で確認画面 →「カード情報の入力へ」→ Checkout（4242）→ `/account/billing?checkout=success` で同期され「有料プラン」。`billing_subscriptions` は `active`・期間 10/22 〜 10/31 15:00 UTC、`profiles.trial_end` に開始時刻。ポータルを開いて解約 → Stripe の `cancel_at` が 11/1 0:00 JST |
+| 3 | 署名なし・違う署名 → 400。A の `customer.subscription.updated` → 204 で `cancel_at` が写り `synced_at` が進んだ。`created` → 204、Meter に A のイベントの集計（値 0）ができた。イベントの取得は `sk_test` のプロセス |
+| 4 | cron: `Authorization` なし → 401、Bearer → 200 `{ sync: { synced: 4, failed: 0 }, usage: { sent: 3, failed: 0 } }` |
+| 5 | A の退会を画面から → `/` へ。Stripe の Subscription が `cancel_at_period_end: true`（`subscriptions.update` がアプリ用の鍵で通った）・利用者が消えた |
+| 6 | `verify/v1.ts setup`（`sk_test`）で legacy / legacy-cancel / free を作った。`unpaid-setup` は「用意すること」3 の切り替え待ち |
+| 7 | CSV-A を移行用で dry-run → `--apply --limit 1` → `--apply` → もう 1 回 `--apply`。legacy 2 件に schedule、free を解約、4 回目は「schedule 既存」と「対象外」だけ（冪等）。失敗 0 |
+| 8 | 利用者 B（legacy-cancel）・C（legacy）を作り、`stripe_customer_id` と `trial_end`（`2020-01-31T14:59:59Z`）を psql で写して Webhook を POST → 204、2 人とも `freemium-monthly`・`has_schedule = true`・`discount_percent = 50` の行ができた |
+| 9 | B で「プランとお支払い」の「解約する」→「解約の手続きをしました」。schedule が `end_behavior: cancel`（phase 1 つ）、行の `cancel_at` が 10/31 14:59:59 UTC |
+| 10 | C のクロックを `lib.ts` の `advance()` だけで 11/2 03:00 UTC まで進めた（`sk_test`）→ Stripe 側は `schedule: null`・`assift_monthly`・`discounts: [assift_v1_legacy]` → Webhook 204 で行が `has_schedule = false`・`discount_percent = 50`・期間 11/1 〜 11/30。Coupons は Read で足りる |
+| 11 | クロックの無い v1 相当の契約（acacia・`freemium-monthly`・上限 15）を作り、移行用で `migrate-v1 --apply`（schedule 作成）→ 利用者 D に `stripe_customer_id` だけ写す → 移行用で `stripe:sync-all`: `接続先: Supabase 127.0.0.1:54321 / Stripe test`・`synced: 6, failed: 0`、D の行（`has_schedule = true`・50%）が一覧の経路でできた |
+
+- 権限の過不足（引数の無い呼び出しで、何も作らずに確かめた。権限が無ければ 403、あれば 400 の引数のエラー）:
+  - アプリ用: Products・Prices・Coupons・Billing Meters の作成は 403、Invoices の読み取りは 403（**Invoices は None で全部の経路が通った**。§4.1 の Invoices の行は外す）
+  - アプリ用で `POST /v1/billing_portal/configurations` が 403 にならない（ポータルの Sessions と Configurations が同じ「Customer portal」の行なので、Sessions の Write で設定も書ける）。移行用も同じ理由で `POST /v1/billing_portal/sessions` が通る。分けられないので受け入れる
+  - アプリ用で `GET /v1/products` が 200（Products の Read が付いている。鍵の画面で Products を付けたか、Prices の Read に含まれるかを見てもらう。コードは Products を読まない）
+- つまずき:
+  - Checkout の国の既定がアメリカ合衆国で、郵便番号と（Link の保存がオンだと）電話番号が要る。国を日本にして Link の保存を外して通した
+  - ポータルの解約は、理由のモーダルが先に出る（「キャンセルを続ける」→「サブスクリプションをキャンセル」）
+  - 退会後に `/` を開くと、LP の Google Fonts（Zen Kaku Gothic New）が取れずにコンパイルが失敗し、dev サーバーのすべての応答が HTML の 500 になった（Webhook の 500 はこれ。コードの問題ではない）。dev サーバーを起動し直して通した
+  - クロックの無い契約の usage record は、`timestamp` を作る前の時刻にすると断られる（`'now'` にした）。断られた 2 回分の Customer が残った（片付けで消す）
+- 残り: 6 の `unpaid-setup` と 7 の CSV-B（`unpaid` の救済。Invoices の Write）・鍵ごとの View request logs の確認（あなた）・片付け
