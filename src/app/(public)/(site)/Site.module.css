@@ -103,18 +103,17 @@
 /* ---- ヒーロー ---- */
 
 .hero {
-  position: relative;
   padding-block: 64px 48px;
 }
 
 /*
  * 見出しはどの画面幅でも 2 行。行の中では折り返さず、長い方の行（9 文字）が画面に収まるよう
  * 文字の大きさを画面幅から決める（016 §4.4）。左右の余白は Container の padding（md = 16px × 2 / 24px × 2）。
- * 上限の 90px は、スタンプが出る最も狭い画面（65em）でも 1 行目がスタンプに届かない大きさ
+ * 上限の 68px は、セクションの見出し（44px）の 1.5 倍ほど。90px では PC で見出しだけが大きすぎた（016 §14）
  */
 .heroTitle {
   margin: 8px 0 0;
-  font-size: min(90px, calc((100vw - 48px) / 9.4));
+  font-size: min(68px, calc((100vw - 48px) / 9.4));
   font-weight: 900;
   line-height: 1.25;
   letter-spacing: -0.01em;
@@ -123,14 +122,14 @@
 /*
  * カタカナは字形が全角の枠より小さく、太字で大きくすると後ろのすき間が目立つので 1 文字ずつ詰める
  * （letter-spacing はその文字の後ろに付く）。「シ」は少し、「フ」は右が大きく空くので多めに、「ト」は詰めない。
- * LP の書体（Zen Kaku Gothic New）は palt が効かないため手で詰める。
- * 行は短くなるだけなので、文字の大きさの計算（全角 9 文字）はそのままでよい
+ * LP の書体（Zen Kaku Gothic New）は palt が効かないため手で詰める。ヒーローと最後の CTA の見出しで使う。
+ * 行は短くなるだけなので、文字の大きさの計算（全角の文字数）はそのままでよい
  */
-.heroKern {
+.kern {
   letter-spacing: -0.1em;
 }
 
-.heroKernMore {
+.kernMore {
   letter-spacing: -0.2em;
 }
 
@@ -162,41 +161,6 @@
   color: var(--mantine-color-dimmed);
 }
 
-/* ヒーロー右のスタンプ。広い画面だけ */
-.heroStamps {
-  position: absolute;
-  top: 72px;
-  right: var(--mantine-spacing-md);
-  display: grid;
-  gap: 14px;
-  justify-items: end;
-}
-
-.heroStamps > :nth-child(1) {
-  margin-right: 64px;
-  transform: rotate(-5deg);
-}
-
-.heroStamps > :nth-child(2) {
-  transform: rotate(3deg);
-}
-
-.heroStamps > :nth-child(3) {
-  margin-right: 36px;
-  transform: rotate(-2deg);
-}
-
-.heroStamps > :nth-child(4) {
-  margin-right: 104px;
-  transform: rotate(6deg);
-}
-
-@media (max-width: 65em) {
-  .heroStamps {
-    display: none;
-  }
-}
-
 /* ---- スタンプ（シフト表のマス） ---- */
 
 .stamp {
@@ -218,13 +182,6 @@
 
 .stamp[data-fixed='true'] {
   font-weight: 700;
-}
-
-.stamp[data-size='lg'] {
-  min-width: 92px;
-  height: 52px;
-  border-radius: 6px;
-  font-size: 18px;
 }
 
 .stamp[data-floating='true'] {
@@ -639,8 +596,6 @@
 /* ---- 最後の CTA ---- */
 
 .finalBox {
-  position: relative;
-  overflow: hidden;
   padding: 80px 56px;
   border-radius: var(--site-radius-lg);
   background-color: var(--mantine-color-dark-8);
@@ -656,7 +611,6 @@
 
 /* 「来月のシフト表から、」（10 文字）が 1 行に収まる大きさ。左右の余白（Container + 箱の padding）を引いて決める */
 .finalTitle {
-  position: relative;
   font-size: clamp(24px, calc((100vw - 176px) / 10.6), 54px);
   font-weight: 900;
   line-height: 1.3;
@@ -670,44 +624,6 @@
 }
 
 .finalMicro {
-  position: relative;
   font-size: 13.5px;
   color: color-mix(in srgb, var(--mantine-color-white) 70%, transparent);
-}
-
-/* 箱の子として並べると Stack の gap が空くので、箱そのものは消して子だけを絶対配置する */
-.finalStamps {
-  display: contents;
-}
-
-.finalStamps > * {
-  position: absolute;
-  min-width: 84px;
-  height: 48px;
-  font-size: 17px;
-  box-shadow: 0 12px 28px -14px rgb(0 0 0 / 60%);
-}
-
-.finalStamps > :nth-child(1) {
-  top: 22%;
-  right: 12%;
-  transform: rotate(8deg);
-}
-
-.finalStamps > :nth-child(2) {
-  right: 22%;
-  bottom: 20%;
-  transform: rotate(-6deg);
-}
-
-.finalStamps > :nth-child(3) {
-  right: 5%;
-  bottom: 34%;
-  transform: rotate(-3deg);
-}
-
-@media (max-width: 56em) {
-  .finalStamps {
-    display: none;
-  }
 }

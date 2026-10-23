@@ -3,18 +3,17 @@ import { IconArrowRight } from '@tabler/icons-react'
 import { LinkButton } from '@/components/LinkButton'
 import { FREE_STAFF_LIMIT } from '@/lib/billing/pricing'
 import { Phrases } from './Phrases'
-import { Stamp } from './Stamp'
 import classes from '../Site.module.css'
 
-/** ヒーロー。見出しは 2 行固定（016 §4.4）。右のスタンプは広い画面だけ */
+/** ヒーロー。見出しは 2 行固定（016 §4.4） */
 export function Hero() {
   return (
     <section className={classes.hero}>
-      <Container size={1120} px={{ base: 'md', sm: 'lg' }} pos="relative">
+      <Container size={1120} px={{ base: 'md', sm: 'lg' }}>
         <Title order={1} className={classes.heroTitle}>
           <span className={classes.heroLine}>
-            毎月の<span className={classes.heroKern}>シ</span>
-            <span className={classes.heroKernMore}>フ</span>ト表を、
+            毎月の<span className={classes.kern}>シ</span>
+            <span className={classes.kernMore}>フ</span>ト表を、
           </span>
           <span className={classes.heroLine}>最短で。</span>
         </Title>
@@ -36,12 +35,6 @@ export function Hero() {
             スタッフ{FREE_STAFF_LIMIT}人まで無料・クレジットカード不要
           </Text>
         </Group>
-        <div className={classes.heroStamps} aria-hidden="true">
-          <Stamp patternId="late" size="lg" floating />
-          <Stamp patternId="early" fixed size="lg" floating />
-          <Stamp patternId="off" fixed size="lg" floating />
-          <Stamp patternId="paid" fixed size="lg" floating />
-        </div>
       </Container>
     </section>
   )
