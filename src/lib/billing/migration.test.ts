@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  afterFinalize,
   applyCallEstimate,
   migrationCategory,
   parseCsv,
@@ -67,6 +68,22 @@ describe('shouldVoidDrafts', () => {
     expect(shouldVoidDrafts('cancel_free', 'unpaid')).toBe(true)
     expect(shouldVoidDrafts('cancel_free', 'active')).toBe(false)
     expect(shouldVoidDrafts('legacy', 'past_due')).toBe(false)
+  })
+})
+
+describe('afterFinalize', () => {
+  it('確定で開いた請求書は無効にする', () => {
+    expect(afterFinalize({ status: 'open', total: 1500 })).toBe('void')
+  })
+
+  // 2026-10-23 の live の片付けで「You can only pass in open invoices」になった
+  it('0 円の下書きは確定で支払い済みになるので、無効にせずそのままにする', () => {
+    expect(afterFinalize({ status: 'paid', total: 0 })).toBe('zero')
+  })
+
+  it('お金の動く支払い済みやそれ以外の状態は想定外として止める', () => {
+    expect(afterFinalize({ status: 'paid', total: 1500 })).toBe('unexpected')
+    expect(afterFinalize({ status: 'draft', total: 0 })).toBe('unexpected')
   })
 })
 

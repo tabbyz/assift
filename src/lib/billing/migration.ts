@@ -50,13 +50,27 @@ export function shouldVoidDrafts(category: MigrationCategory, status: string): b
   return category === 'cancel_free' && status === 'unpaid'
 }
 
+/**
+ * 下書きを確定したあとにすること（`voidDraft`）。確定で `open` になれば無効にする。0 円の下書きは Stripe が確定の時点で
+ * 支払い済みにするので無効にできず、そのままにする（請求も支払いの試行も無い。2026-10-23）。それ以外（顧客の残高で
+ * 払われたなど）は想定外として止める
+ */
+export function afterFinalize(invoice: {
+  status: string | null
+  total: number
+}): 'void' | 'zero' | 'unexpected' {
+  if (invoice.status === 'open') return 'void'
+  if (invoice.status === 'paid' && invoice.total === 0) return 'zero'
+  return 'unexpected'
+}
+
 /** 一覧の取得の回数（`limit: 100` のページ送り。0 件でも 1 回） */
 const listCalls = (count: number) => Math.max(1, Math.ceil(count / 100))
 
 /**
  * `--apply` が 1 件に掛ける Stripe の呼び出しの回数の見込み（dry-run と共通の `subscriptions.retrieve` は含めない）。
  * 026 §5 の所要の見積もり用。`drafts` / `openInvoices` は dry-run の `--count-invoices` が数えた、適用の前の件数。
- * legacy の schedule は新しく作る場合（`create` + `update`）で数える
+ * legacy の schedule は新しく作る場合（`create` + `update`）で数える。0 円の下書きは無効にしない（`afterFinalize`）ので 1 回少ないが、多めに見る
  */
 export function applyCallEstimate(input: {
   category: MigrationCategory
