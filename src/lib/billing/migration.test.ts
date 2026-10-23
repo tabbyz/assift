@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { migrationCategory, parseCsv, shouldVoidDrafts, toCsv } from './migration'
+import {
+  applyCallEstimate,
+  migrationCategory,
+  parseCsv,
+  shouldVoidDrafts,
+  toCsv,
+} from './migration'
 
 const now = new Date('2026-10-25T00:00:00Z')
 const daysAgo = (days: number) => new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
@@ -61,6 +67,38 @@ describe('shouldVoidDrafts', () => {
     expect(shouldVoidDrafts('cancel_free', 'unpaid')).toBe(true)
     expect(shouldVoidDrafts('cancel_free', 'active')).toBe(false)
     expect(shouldVoidDrafts('legacy', 'past_due')).toBe(false)
+  })
+})
+
+describe('applyCallEstimate', () => {
+  const estimate = (
+    category: Parameters<typeof applyCallEstimate>[0]['category'],
+    status: string,
+    drafts = 0,
+    openInvoices = 0
+  ) => applyCallEstimate({ category, status, drafts, openInvoices })
+
+  it('旧料金は言語と schedule の 3 回、0 円の有効な契約は解約の 1 回、対象外は 0 回', () => {
+    expect(estimate('legacy', 'active')).toBe(3)
+    expect(estimate('cancel_free', 'active')).toBe(1)
+    expect(estimate('skip', 'canceled')).toBe(0)
+    expect(estimate('review', 'paused')).toBe(0)
+  })
+
+  // 2026-10-22 のサンドボックスの結果（035 §9 の手順 7）と同じ回数になる
+  it('救う契約: 下書き 2 件・未払い 1 件なら 13 回（最新の下書きは確定だけ）', () => {
+    // 下書きの一覧 1 + 無効 3 + 最新の update / finalize 2 + 未払いの一覧 1 + 回収不能 2 + 取り直し 1 + 言語と schedule 3
+    expect(estimate('rescue', 'unpaid', 2, 1)).toBe(13)
+  })
+
+  it('救わない未払い: 下書き 2 件・未払い 1 件なら 10 回', () => {
+    // 下書きの一覧 1 + 無効 6 + 未払いの一覧 1 + 回収不能 1 + 解約 1
+    expect(estimate('cancel_unpaid', 'unpaid', 2, 1)).toBe(10)
+    expect(estimate('cancel_free', 'unpaid', 2, 1)).toBe(10)
+  })
+
+  it('下書きが 100 件を超えると一覧のページが増える', () => {
+    expect(estimate('cancel_unpaid', 'unpaid', 150, 0)).toBe(2 + 450 + 1 + 0 + 1)
   })
 })
 
