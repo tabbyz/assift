@@ -1,15 +1,20 @@
 import { Container, Group, Text, Title } from '@mantine/core'
-import { IconArrowRight } from '@tabler/icons-react'
+import { IconArrowDown, IconArrowRight } from '@tabler/icons-react'
 import { LinkButton } from '@/components/LinkButton'
 import { FREE_STAFF_LIMIT } from '@/lib/billing/pricing'
+import { DEMO_ID } from '../_lib/sectionIds'
 import { Phrases } from './Phrases'
 import classes from '../Site.module.css'
 
-/** ヒーロー。見出しは 2 行固定（016 §4.4） */
+/** ヒーロー。中央寄せ（016 §15）で、すぐ下のデモまでを 1 つの塊に見せる。見出しは 2 行固定（016 §4.4） */
 export function Hero() {
   return (
     <section className={classes.hero}>
       <Container size={1120} px={{ base: 'md', sm: 'lg' }}>
+        <a href="#price" className={classes.badge}>
+          スタッフ{FREE_STAFF_LIMIT}人まで無料・カード登録不要
+          <IconArrowRight size={14} stroke={2.2} aria-hidden />
+        </a>
         <Title order={1} className={classes.heroTitle}>
           <span className={classes.heroLine}>
             毎月の<span className={classes.kern}>シ</span>
@@ -17,12 +22,12 @@ export function Hero() {
           </span>
           <span className={classes.heroLine}>最短で。</span>
         </Title>
-        <Text className={classes.lead} mt={26}>
+        <Text className={classes.lead} mt={22}>
           <Phrases>
             {'assift（アシフト）は、|シフト表を効率よく\n作成することだけを|追求したサービスです。'}
           </Phrases>
         </Text>
-        <Group gap="md" mt={36}>
+        <Group gap="sm" mt={32} justify="center">
           <LinkButton
             href="/signup"
             size="lg"
@@ -31,9 +36,16 @@ export function Hero() {
           >
             無料ではじめる
           </LinkButton>
-          <Text className={classes.micro}>
-            スタッフ{FREE_STAFF_LIMIT}人まで無料・クレジットカード不要
-          </Text>
+          <LinkButton
+            href={`#${DEMO_ID}`}
+            size="lg"
+            radius="xl"
+            variant="default"
+            className={classes.demoButton}
+            rightSection={<IconArrowDown size={18} stroke={2.4} />}
+          >
+            デモをさわる
+          </LinkButton>
         </Group>
       </Container>
     </section>

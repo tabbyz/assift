@@ -300,31 +300,42 @@ export function ShiftDemo({ dates, holidays, title, label }: Props) {
 
   return (
     <>
-      <Group className={classes.head} justify="space-between" gap={8} wrap="nowrap">
-        {label}
-        {/*
-         * 触るまでは隠す。消さずに見えなくするだけにして、出たときに行の高さが変わらないようにする（016 §11）。
-         * `visibility: hidden` の間はフォーカスも読み上げも届かない
-         */}
-        <Button
-          size="compact-sm"
-          variant="subtle"
-          color="gray"
-          fz={13}
-          px={6}
-          className={classes.restart}
-          data-hidden={pristine || undefined}
-          leftSection={<IconRefresh size={14} />}
-          onClick={restart}
-        >
-          最初からやり直す
-        </Button>
-      </Group>
       <div
         className={classes.demo}
         // 表はアプリと同じシステムフォントで描く（LP の書体を持ち込まない）
         style={{ '--mantine-font-family': theme.fontFamily } as CSSProperties}
       >
+        {/* ブラウザのウィンドウ風の枠の上辺（016 §15）。左にラベル、中央にドメイン、右に「最初からやり直す」 */}
+        <div className={classes.chrome}>
+          <Group gap={12} wrap="nowrap">
+            <span className={classes.dots} aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </span>
+            {label}
+          </Group>
+          <span className={classes.address} aria-hidden="true">
+            assift.com
+          </span>
+          {/*
+           * 触るまでは隠す。消さずに見えなくするだけにして、出たときに行の高さが変わらないようにする（016 §11）。
+           * `visibility: hidden` の間はフォーカスも読み上げも届かない
+           */}
+          <Button
+            size="compact-sm"
+            variant="subtle"
+            color="gray"
+            fz={13}
+            px={6}
+            className={classes.restart}
+            data-hidden={pristine || undefined}
+            leftSection={<IconRefresh size={14} />}
+            onClick={restart}
+          >
+            最初からやり直す
+          </Button>
+        </div>
         <Group className={classes.toolbar} justify="space-between" gap="xs">
           <div>
             <Text fz={12} c="dimmed" lh={1.4}>

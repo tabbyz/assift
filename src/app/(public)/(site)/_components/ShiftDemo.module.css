@@ -7,23 +7,72 @@
   /* 共有のカード（.shareLayer）を枠の中に重ねる */
   position: relative;
   overflow: hidden;
-  border-radius: 14px;
+  border: 1px solid var(--mantine-color-gray-2);
+  border-radius: 16px;
   background-color: var(--mantine-color-body);
   box-shadow:
-    0 1px 2px rgb(0 0 0 / 6%),
-    0 18px 40px -24px rgb(0 0 0 / 25%);
+    0 2px 6px rgb(0 0 0 / 4%),
+    0 40px 80px -40px rgb(0 0 0 / 28%);
   font-family: var(--mantine-font-family);
   font-size: var(--mantine-font-size-sm);
   line-height: var(--mantine-line-height);
 }
 
-/* 枠の上の行。左にラベル、右に「最初からやり直す」。高さはボタンに合わせて固定され、ボタンが出ても変わらない */
-.head {
-  padding: 0 2px 10px 6px;
+/*
+ * ブラウザのウィンドウ風の枠の上辺（016 §15）。左に 3 つの丸とラベル、中央にドメイン、右に「最初からやり直す」。
+ * 中央を枠の真ん中に置くため、左右の列を同じ幅（1fr）にする。高さはボタンに合わせて固定され、ボタンが出ても変わらない
+ */
+.chrome {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 4px 8px 4px 16px;
+  border-bottom: 1px solid var(--mantine-color-gray-2);
+  background-color: var(--mantine-color-gray-0);
+  /* ラベルは LP の書体（枠の中の表はアプリの書体） */
+  font-family: var(--font-site), var(--mantine-font-family);
+}
+
+.dots {
+  display: flex;
+  flex: none;
+  gap: 7px;
+}
+
+.dots > span {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background-color: var(--mantine-color-gray-3);
+}
+
+.address {
+  padding: 1px 16px;
+  border: 1px solid var(--mantine-color-gray-2);
+  border-radius: 6px;
+  background-color: var(--mantine-color-body);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--mantine-color-dimmed);
+}
+
+/* スマホ幅ではドメインと丸を出さない（ラベルと「最初からやり直す」を 1 行に収める） */
+@media (max-width: 36em) {
+  .chrome {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding-left: 12px;
+  }
+
+  .address,
+  .dots {
+    display: none;
+  }
 }
 
 .restart {
-  flex: none;
+  justify-self: end;
   transition: opacity 0.2s ease;
 }
 

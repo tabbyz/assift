@@ -103,7 +103,44 @@
 /* ---- ヒーロー ---- */
 
 .hero {
-  padding-block: 64px 48px;
+  padding-block: 72px 24px;
+  text-align: center;
+}
+
+@media (max-width: 36em) {
+  .hero {
+    padding-top: 48px;
+  }
+}
+
+/*
+ * スマホ幅では「デモをさわる」を出さない。デモはすぐ下にあり、ボタンが 2 段に折り返してデモを画面の外へ押し出す。
+ * Mantine の Button の display に勝つよう、クラスを 2 つ重ねる
+ */
+@media (max-width: 36em) {
+  .hero .demoButton {
+    display: none;
+  }
+}
+
+/* 見出しの上の小さな札。料金の節へ送る。押せると分かるよう枠線だけを付ける（塗るとボタンと並んで重くなる） */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 14px;
+  border: 1px solid var(--mantine-color-gray-3);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.6;
+  color: var(--mantine-color-gray-8);
+  text-decoration: none;
+}
+
+.badge:hover {
+  border-color: var(--mantine-color-gray-5);
+  color: var(--mantine-color-text);
 }
 
 /*
@@ -112,7 +149,7 @@
  * 上限の 68px は、セクションの見出し（44px）の 1.5 倍ほど。90px では PC で見出しだけが大きすぎた（016 §14）
  */
 .heroTitle {
-  margin: 8px 0 0;
+  margin: 24px 0 0;
   font-size: min(68px, calc((100vw - 48px) / 9.4));
   font-weight: 900;
   line-height: 1.25;
@@ -151,6 +188,7 @@
 
 .lead {
   max-width: 34em;
+  margin-inline: auto;
   font-size: 17px;
   color: var(--mantine-color-dimmed);
 }
@@ -224,14 +262,46 @@
 
 /* ---- デモ ---- */
 
-.tray {
-  padding: 20px;
+/*
+ * デモの節（016 §15）。ウィンドウ風の枠の後ろに薄い方眼を敷き、上の中央から外へ消していく。
+ * 方眼は ::before に描いてそこだけをマスクする（節ごとマスクすると枠まで薄くなる）
+ */
+.demoStage {
+  position: relative;
+  isolation: isolate;
+  padding-block: 40px var(--site-section-gap);
+}
+
+.demoStage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(var(--mantine-color-gray-2) 1px, transparent 1px),
+    linear-gradient(90deg, var(--mantine-color-gray-2) 1px, transparent 1px);
+  background-position: center top;
+  background-size: 48px 48px;
+  /* 下と左右へ消す楕円と、上端の線を消す帯を重ねる（両方が不透明なところだけ残す） */
+  mask-image:
+    radial-gradient(ellipse 70% 80% at 50% 0%, #000 30%, transparent 100%),
+    linear-gradient(transparent, #000 96px);
+  mask-composite: intersect;
 }
 
 @media (max-width: 36em) {
-  .tray {
-    padding: 10px;
+  .demoStage {
+    padding-top: 24px;
   }
+}
+
+/* 枠の上辺のラベル。押せる物に見えないよう、塗らずに小さく */
+.demoLabel {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--mantine-color-dimmed);
 }
 
 /* ---- できること ---- */
