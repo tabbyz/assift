@@ -12,12 +12,12 @@ export function Hero() {
     <section className={classes.hero}>
       <Container size={1120} px={{ base: 'md', sm: 'lg' }} pos="relative">
         <Title order={1} className={classes.heroTitle}>
-          <span className={classes.heroLine}>シフト表づくりに、</span>
-          <span className={classes.heroLine}>もう時間はかけない。</span>
+          <span className={classes.heroLine}>毎月のシフト表を、</span>
+          <span className={classes.heroLine}>最短で。</span>
         </Title>
         <Text className={classes.lead} mt={26}>
           <Phrases>
-            {'お店とスタッフの希望を|AIがシフト表に。\nスタッフには|URLを送るだけ。'}
+            {'assift（アシフト）は、|シフト表を効率よく\n作成することだけを|追求したサービスです。'}
           </Phrases>
         </Text>
         <Group gap="md" mt={36}>
