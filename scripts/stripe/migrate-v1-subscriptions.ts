@@ -5,6 +5,7 @@
  *   STRIPE_SECRET_KEY=... npm run stripe:migrate-v1 -- --input v1-subscriptions.csv --apply --limit 5 # 区分ごとに 5 件だけ
  *   STRIPE_SECRET_KEY=... npm run stripe:migrate-v1 -- --input v1-subscriptions.csv --apply           # 残り全部
  *   STRIPE_SECRET_KEY=... npm run stripe:migrate-v1 -- --input v1-subscriptions.csv --count-invoices  # dry-run + 請求書の件数
+ *   STRIPE_SECRET_KEY=... npm run stripe:migrate-v1 -- --input v1-subscriptions.csv --void-old-drafts [--limit 5] # 事前の片付け
  *
  * 入力の CSV（列: v1_user_id, email, stripe_customer_id, stripe_subscription_id, max_staffs_count, last_edited_at）は
  * **データ移行の `import.ts` が書く**（`scripts/migrate-v1/`。021 §6.1）。「移行する人」の判定を Ruby と TS の 2 か所に
@@ -16,7 +17,10 @@
  * 結果（区分・するはずの操作・結果）は `--output`（既定 `v1-subscriptions-result.csv`）に書く。v1 のダンプと一緒に保管する（§8.2.3）。
  * `--count-invoices`（dry-run だけ）は、下書きを無効にする行（未払いの契約）の下書きと未払いの請求書を数え（読むだけ）、
  * `--apply` の呼び出しの回数の見込みと一緒に結果に足す。`--apply` の所要の見積もり用（026 §5）。行ごとに一覧を読むので、
- * 所要を測る回（当夜の 23:00 と同じ条件）には付けない
+ * 所要を測る回（当夜の 23:00 と同じ条件）には付けない。
+ * `--void-old-drafts` は当夜の前に流す片付け（026 §3-16）。`unpaid` の契約ごとに、最新の 1 件を残して下書きを無効にする（区分は見ない。
+ * 最新は確定もしない）。当夜の `--apply` は残った 1 件だけを扱うので、救う契約は今までどおり最新を確定して active に戻せる。
+ * `--limit` はこのときは処理する `unpaid` の契約の数。冪等（流し直すと残りの下書きだけを無効にする）
  * 旧 metered の明細を含む Subscription を触るので、**すべての呼び出しを API `2025-02-24.acacia` で行う**（basil 以降は扱えない）
  */
 import { readFileSync, writeFileSync } from 'node:fs'
@@ -46,6 +50,7 @@ const { values } = parseArgs({
     apply: { type: 'boolean', default: false },
     limit: { type: 'string' },
     'count-invoices': { type: 'boolean', default: false },
+    'void-old-drafts': { type: 'boolean', default: false },
   },
 })
 
@@ -58,12 +63,19 @@ if (values.apply && values['count-invoices']) {
   console.error('--count-invoices は dry-run（--apply なし）でだけ使えます')
   process.exit(1)
 }
+if (values['void-old-drafts'] && (values.apply || values['count-invoices'])) {
+  console.error('--void-old-drafts は --apply・--count-invoices と一緒に使えません')
+  process.exit(1)
+}
 
 const stripe = new Stripe(key, { apiVersion: STRIPE_API_VERSION, maxNetworkRetries: 2 })
 const LEGACY = { apiVersion: LEGACY_API_VERSION }
 const apply = values.apply
 const limit = values.limit ? Number(values.limit) : Infinity
 const countInvoices = values['count-invoices']
+const voidOld = values['void-old-drafts']
+/** `--void-old-drafts` の集計（所要の見積もりに使う書き込みの実測） */
+const voidStats = { rows: 0, drafts: 0, writeMs: 0 }
 
 /** acacia の Subscription は期間を item ではなく本体に持つ */
 type LegacySubscription = Stripe.Subscription & { current_period_end?: number }
@@ -115,25 +127,47 @@ const iso = (seconds: number | undefined | null) =>
  * active に戻らない（2026-10-08 にサンドボックスで確認）
  */
 async function voidDrafts(subscriptionId: string, keepLatest: boolean): Promise<number> {
+  const drafts = await listDrafts(subscriptionId)
+  const latest = keepLatest ? drafts.pop() : undefined
+
+  for (const invoice of drafts) await voidDraft(invoice)
+  if (latest) {
+    await stripe.invoices.update(latest.id!, { auto_advance: false }, LEGACY)
+    await stripe.invoices.finalizeInvoice(latest.id!, { auto_advance: false }, LEGACY)
+  }
+  return drafts.length
+}
+
+/** 下書きを古い順に */
+async function listDrafts(subscriptionId: string): Promise<Stripe.Invoice[]> {
   const drafts: Stripe.Invoice[] = []
   for await (const invoice of stripe.invoices.list(
     { subscription: subscriptionId, status: 'draft', limit: 100 },
     LEGACY
   ))
     drafts.push(invoice)
-  drafts.sort((a, b) => a.created - b.created)
-  const latest = keepLatest ? drafts.pop() : undefined
+  return drafts.sort((a, b) => a.created - b.created)
+}
 
-  for (const invoice of drafts) {
-    await stripe.invoices.update(invoice.id!, { auto_advance: false }, LEGACY)
-    await stripe.invoices.finalizeInvoice(invoice.id!, { auto_advance: false }, LEGACY)
-    await stripe.invoices.voidInvoice(invoice.id!, {}, LEGACY)
-  }
-  if (latest) {
-    await stripe.invoices.update(latest.id!, { auto_advance: false }, LEGACY)
-    await stripe.invoices.finalizeInvoice(latest.id!, { auto_advance: false }, LEGACY)
-  }
-  return drafts.length
+async function voidDraft(invoice: Stripe.Invoice): Promise<void> {
+  await stripe.invoices.update(invoice.id!, { auto_advance: false }, LEGACY)
+  await stripe.invoices.finalizeInvoice(invoice.id!, { auto_advance: false }, LEGACY)
+  await stripe.invoices.voidInvoice(invoice.id!, {}, LEGACY)
+}
+
+/**
+ * 当夜の前の片付け（`--void-old-drafts`）: 最新の 1 件を残して下書きを無効にする。最新は確定しない（当夜の `--apply` に任せる）。
+ * 途中で止まると、確定だけされて無効になっていない請求書が `open` で残りうるが、当夜の `--apply` がどの区分でも回収不能にする
+ */
+async function voidOldDrafts(subscriptionId: string): Promise<{ before: number; voided: number }> {
+  const drafts = await listDrafts(subscriptionId)
+  const before = drafts.length
+  drafts.pop()
+  const started = Date.now()
+  for (const invoice of drafts) await voidDraft(invoice)
+  voidStats.writeMs += Date.now() - started
+  voidStats.drafts += drafts.length
+  return { before, voided: drafts.length }
 }
 
 /** 請求書を数える（読むだけ。`--count-invoices`） */
@@ -276,6 +310,26 @@ async function handle(
   if (category === 'cancel_unpaid' || category === 'cancel_free') planned.push('即時解約')
   result.actions = planned.join(' / ')
 
+  if (voidOld) {
+    if (subscription.status !== 'unpaid') {
+      result.result = '対象外（unpaid ではない）'
+      return result
+    }
+    if (voidStats.rows >= limit) {
+      result.result = '未実行（--limit）'
+      return result
+    }
+    voidStats.rows += 1
+    try {
+      const { before, voided } = await voidOldDrafts(subscription.id)
+      result.drafts = String(before)
+      result.result = `古い下書き ${voided} 件を無効（最新 ${before - voided} 件は残す）`
+    } catch (error) {
+      result.result = `失敗: ${(error as Error).message}`
+    }
+    return result
+  }
+
   if (countInvoices) {
     let drafts = 0
     let openInvoices = 0
@@ -354,7 +408,9 @@ async function main() {
     )
   await stripe.coupons.retrieve(LEGACY_COUPON_ID)
 
-  console.log(`${rows.length} 件を${apply ? '適用' : '確認（dry-run）'}します`)
+  console.log(
+    `${rows.length} 件を${apply ? '適用' : voidOld ? '片付け（unpaid の古い下書きを無効に）' : '確認（dry-run）'}します`
+  )
   const counts = new Map<MigrationCategory, number>()
   const results: Result[] = []
   // 1 件ずつ順に（Stripe のレート制限と、途中で止めたときの見通しのため）
@@ -376,6 +432,14 @@ async function main() {
   const failed = results.filter(
     (result) => result.result.startsWith('失敗') || result.result.startsWith('取得できません')
   )
+  if (voidOld) {
+    const writes = voidStats.drafts * 3
+    console.log(
+      `\n片付け: unpaid の契約 ${voidStats.rows} 件・無効にした下書き ${voidStats.drafts} 件（書き込み ${writes} 回・${Math.round(voidStats.writeMs / 1000)} 秒` +
+        (writes > 0 ? `・1 回 ${(voidStats.writeMs / writes / 1000).toFixed(2)} 秒` : '') +
+        '）'
+    )
+  }
   if (countInvoices) {
     const calls = new Map<string, { rows: number; drafts: number; open: number; calls: number }>()
     for (const result of results) {
