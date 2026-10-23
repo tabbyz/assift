@@ -329,6 +329,14 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 - 気付いたこと: Stripe の請求書の一覧は `subscription` と `status: 'uncollectible'` で絞ると、該当の請求書があっても空を返した（絞らなければ出る）。数えるのは `draft` と `open` で、`--apply` が処理するのと同じ一覧なので、見積もりには影響しない
 - 10/23 の手順（§5）: 1 回目は今までどおり（所要を測る）、2 回目に `--count-invoices`。移行しない人の CSV は最初から `--count-invoices` を付ける（27 件で数秒）。昼（T-0）と当夜の 23:00 の手順は変えない（手順書も変わらない）
 
+### 2026-10-23（§4-2 Stripe の live。035）
+
+- §4-2 の 2 は、その夜の cron（035 §6.3）を除いて済んだ。live に price・クーポン・Meter・ポータルの設定（10/21）、鍵 2 本（移行用 10/21・アプリ用 10/23）、
+  Webhook の送信先 `assift-v2`（`https://v2.assift.com/api/stripe/webhook`・Snapshot・`2026-09-30.endive`・7 種類）、Vercel の Production に `STRIPE_*` / `CRON_SECRET`
+- 確かめ: 鍵付きの cron が 200（`failed` 0）、再送した `customer.subscription.updated` の配信が 204。詳細は 035 §9
+- 当夜の 22:00（Webhook の無効化）・判断点 B の後（有効化）・URL の変更は、Workbench → Webhooks → `assift-v2` で行う。
+  手動の再送は、その送信先に配信済みのイベントなら「イベントの配信 → 再送する」、まだのものは Stripe CLI の `stripe events resend <evt> --webhook-endpoint=<we_…> --live`
+
 ### 2026-10-21（移行しない人の Subscription を前もって解約する。§3-15）
 
 - 021 §15 のリハーサル 2 回目で、移行しない人の CSV（`v1-subscriptions-not-migrated.csv`）が 27 件になった（休眠の規則で外れた、店舗を持たない人）。

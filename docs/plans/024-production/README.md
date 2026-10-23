@@ -225,10 +225,10 @@ Workspace は `sundbox.app` の 1 つだけで、`assift.com` はその追加の
 | `ADMIN_HOST` | `admin-v2.assift.com`（当日に `admin.assift.com`。§6） | 本プラン |
 | `SITE_URL` | `https://v2.assift.com`（当日に `https://assift.com`。§6） | 本プラン・028（`og:image` の URL） |
 | `ASSIST_DAILY_LIMIT` / `ASSIST_INTERPRET_MODEL` | 入れない（既定 10 回 / `openai/gpt-6.1-sol`。2026-10-15 に `gpt-6-sol` から切り替え。012 §10.9） | — |
-| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `CRON_SECRET` | **入れない**。Stripe の live のタスクで入れる（035 §5.6。Production だけ・Sensitive） | 035 |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `CRON_SECRET` | 2026-10-23 に入れた（035 §5.6。Production だけ・Sensitive。`STRIPE_SECRET_KEY` はアプリ用の制限付きキー `assift-v2-app`） | 035 |
 
 - **`CRON_SECRET` を Stripe より先に入れない**: `vercel.json` の cron は Production でだけ毎晩走る。`CRON_SECRET` だけあると Stripe が無いので毎晩 503 になり、
-  Vercel の実行履歴が赤くなる（害は無いが、失敗に慣れると本物の失敗を見落とす）。いまは 401 で止まっている
+  Vercel の実行履歴が赤くなる（害は無いが、失敗に慣れると本物の失敗を見落とす）。2026-10-23 に 3 つを同時に入れ、鍵付きの呼び出しが 200 になった（035 §9）
 - 環境変数を変えたら Production を **Redeploy**（`NEXT_PUBLIC_` はビルド時に埋め込まれ、ほかも新しいデプロイから効く）
 
 ### 4.8 migration の自動適用と `config.toml` の上書き（確かめること）

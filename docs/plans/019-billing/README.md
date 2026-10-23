@@ -989,6 +989,13 @@ cron は不正な鍵でも同期の失敗のあとに送信を試み、500 を�
 - 採らなかった案: LP のよくある質問に足す（まだ契約していない人向け）、ポータルの設定（見出し）や Product 名で直す（Product `assift` は v1 と共有で、請求書にも載る）
 - 問い合わせが来たら「Stripe の画面の表示で、実際のお支払いは請求書の金額のとおり」と答える
 
+### 2026-10-22〜23 live の準備（035）
+
+- §4.1 の制限付きキーの権限をサンドボックスで確かめた（035 §5.3）。Invoices は要らず、Coupons は Read で足りる。§4.1 と `.env.example` を直した
+- live に `stripe:setup`（10/21）、鍵 2 本（移行用 `assift-v2-migration`・アプリ用 `assift-v2-app`）、Webhook の送信先 `assift-v2`
+  （`https://v2.assift.com/api/stripe/webhook`・Snapshot・`2026-09-30.endive`・7 種類）、Vercel の Production に `STRIPE_*` / `CRON_SECRET` を入れた（10/23）
+- 鍵付きの cron が 200（`failed` 0）、再送した `customer.subscription.updated` の配信が 204。§8.3-1・2 はこれで済み（詳細は 035 §9）
+
 
 ---
 

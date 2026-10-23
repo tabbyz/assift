@@ -17,12 +17,12 @@
 カットオーバー（026。10/30）の前に、live の Stripe と v2 の本番（`v2.assift.com`）をつなぐ。当夜にするのは Webhook の無効化・有効化と URL の変更、
 リトライの設定の切り替えだけにし、鍵・price・Webhook の登録・環境変数は前もって済ませて確かめておく。
 
-- [ ] live に `assift_monthly`（price）・`assift_v1_legacy`（クーポン）・Meter・ポータルの設定がある（`stripe:setup`。**10/22 まで**）
-- [ ] 鍵が 2 本ある（アプリ用・移行用。§3-1）。どちらもパスワードマネージャにあり、権限はサンドボックスで確かめたものと同じ（§5.3）
-- [ ] Dashboard の設定が 019 §4.1 のとおりで、**解約の確認メールが送られない**（標準の設定は無く、売上回収のオートメーションも無い。§3-4）、**リトライが尽きたときは「未払いにする」のまま**（§5.4）
-- [ ] Webhook のエンドポイントが `https://v2.assift.com/api/stripe/webhook`・Snapshot・`2026-09-30.endive`・7 種類のイベントで登録され、有効
-- [ ] Vercel の Production（だけ）に `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `CRON_SECRET` があり、Redeploy した
-- [ ] 鍵付きの cron が 200、再送した Webhook の配信が 204（§6）
+- [x] live に `assift_monthly`（price）・`assift_v1_legacy`（クーポン）・Meter・ポータルの設定がある（`stripe:setup`。**10/22 まで**）
+- [x] 鍵が 2 本ある（アプリ用・移行用。§3-1）。どちらもパスワードマネージャにあり、権限はサンドボックスで確かめたものと同じ（§5.3）
+- [x] Dashboard の設定が 019 §4.1 のとおりで、**解約の確認メールが送られない**（標準の設定は無く、売上回収のオートメーションも無い。§3-4）、**リトライが尽きたときは「未払いにする」のまま**（§5.4）
+- [x] Webhook のエンドポイントが `https://v2.assift.com/api/stripe/webhook`・Snapshot・`2026-09-30.endive`・7 種類のイベントで登録され、有効
+- [x] Vercel の Production（だけ）に `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `CRON_SECRET` があり、Redeploy した
+- [x] 鍵付きの cron が 200、再送した Webhook の配信が 204（§6）
 - [ ] その夜の Vercel の cron（23:20・23:50）が 200 で、Axiom に `[billing] 定期実行` が 2 行届く（033 の監視 ③ の前提）
 - [ ] 026・019・024・`.env.example`・リリース計画・カットオーバー手順書に結果を写した（§8）
 
@@ -425,3 +425,20 @@ curl -i -H "Authorization: Bearer <CRON_SECRET>" https://v2.assift.com/api/cron/
 - サンドボックスには以前の確認の `assift_monthly` の契約が残っている（cron の `synced: 4` の内訳。今回作ったものではないので消していない）
 - 反映: §4.1 の Invoices を None に、`.env.example`・019 §4.1 を確かめた権限の一覧に直した（§8）
 - live のアプリ用の鍵（§5.1-2）は §4.1 のとおり（Invoices は None、Coupons は Read）。Products の行は「なし」（サンドボックスの `assift-v2-app-test` と同じ）
+
+### 2026-10-23 §5.1-2・§5.5・§5.6・§6.1・§6.2・§10 の確かめ（あなた。記録は Claude）
+
+- §5.1-2: live にアプリ用の鍵 `assift-v2-app` を作り、パスワードマネージャに保管した。権限はサンドボックスの `assift-v2-app-test` と同じ:
+  読み取りと書き込みが Billing Meter Events・Checkout Sessions・Customer Portal・Customers・Subscriptions、読み取りのみが Coupons・Prices（Invoices・Products はなし）。
+  **Subscription Schedules の行は Stripe の画面に無い**（検索しても出ない。Subscriptions に含まれる。§5.3-9 の切り替え待ちの解約は、この形の鍵で通っている）。移行用の鍵に足す権限は無かった
+- §5.5: 送信先 `assift-v2`（お客様のアカウント・スナップショット・`2026-09-30.endive`・7 種類・`https://v2.assift.com/api/stripe/webhook`・説明「assift v2」）を登録し、有効のまま。
+  signing secret と `we_…` を控えた。名前にホスト名を入れなかったのは、当夜に URL を `assift.com` へ変えるため
+- §5.6: Vercel の Production だけに `STRIPE_SECRET_KEY`・`STRIPE_WEBHOOK_SECRET`・`CRON_SECRET`（Sensitive）を入れ、Redeploy した
+- §6.1（10/23 09:45 JST ごろ）: 鍵なしは 401、鍵付きは 200 `{"sync":{"synced":0,"failed":0},"usage":{"sent":0,"failed":0}}`（約 50 秒。v1 の契約を全部読む）
+- §6.2: Workbench のイベントの画面に Resend のボタンが見当たらなかった（送信先に一度も配信していないイベントだったため。配信済みのものは「送信先 → イベントの配信 → 再送する」から送れる）。
+  Stripe CLI（v1.55.1。`stripe login` で本番のアカウント）で `stripe events resend evt_1UT1xiEl6wKsSkzihqMV96Z9 --webhook-endpoint=<we_…> --live` →
+  `assift-v2` への配信が **204 OK**（API の版 `2026-09-30.endive`。v1 の `unpaid` の Customer なので持ち主が引けず何もしない）。終わったあと `stripe logout` した
+- §10: `curl -sI https://v2.assift.com/card/edit` が 307・`location: /account/billing`（PR tabbyz/assift#64）
+- §8: カットオーバー手順書の 22:00（送信先 `assift-v2` を無効に）・23:05（有効に）・23:43（「送信先を編集」で URL だけ変える）・23:56（失敗した配信の再送のやり方）を直した（Artifact の version 26）。
+  019 §12・026 §12・024 §4.7 にも写した
+- 残り: §6.3 その夜（10/23）の 23:20・23:50 の cron と Axiom の `[billing] 定期実行` → 033 の監視 ③ を有効にする（ops-02）
