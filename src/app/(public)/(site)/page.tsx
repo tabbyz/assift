@@ -16,7 +16,7 @@ import { StaffView } from './_components/StaffView'
 import { demoWeekStart } from './_lib/demoWeek'
 
 export const metadata: Metadata = {
-  title: { absolute: 'assift｜シフト表づくりに、もう時間はかけない。' },
+  title: { absolute: 'assift｜毎月のシフト表を、最短で。' },
   // description は root layout（SITE_DESCRIPTION）から引き継ぐ（028 §2.3）
 }
 
