@@ -210,6 +210,17 @@
   }
 }
 
+/* 見出しが 1 行になる幅（60em 以上）では説明文も改行しない（016 §17）。1 行は約 39 文字（17px で約 660px） */
+@media (min-width: 60em) {
+  .lead {
+    max-width: none;
+  }
+
+  .lead br {
+    display: none;
+  }
+}
+
 .micro {
   font-size: 13.5px;
   color: var(--mantine-color-dimmed);
