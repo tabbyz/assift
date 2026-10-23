@@ -1,8 +1,8 @@
 /*
  * LP（016）。Mantine に無いものだけをここに書く: スタンプの傾き・面の角丸・2 行固定の見出し・文節の折り返し・
- * スマホの枠・黒い CTA の面。色は Mantine の変数から取り、パターン色は `cellStyle()` が inline で当てる。
+ * スマホの枠・最後の CTA の帯。色は Mantine の変数から取り、パターン色は `cellStyle()` が inline で当てる。
  *
- * トーン（016 §2）: 白黒が基本。色を持つのはシフト表のマスだけ。面は大きな角丸の薄いグレー、黒い面は最後の CTA だけ。
+ * トーン（016 §2）: 白黒が基本。色を持つのはシフト表のマスだけ。面は大きな角丸の薄いグレー（最後の CTA だけ全幅の帯）。黒はボタンだけ。
  */
 
 .site {
@@ -595,36 +595,42 @@
 
 /* ---- 最後の CTA ---- */
 
-.finalBox {
-  padding: 80px 56px;
+/* 全幅の帯。面の色はほかの面と同じ。下のフッターとの間は帯の外の余白で取る（フッターは上に余白を持たない） */
+.final {
+  margin-bottom: 48px;
+  padding-block: 96px;
+  background-color: var(--site-panel);
   text-align: center;
-  border-radius: var(--site-radius-lg);
-  background-color: var(--mantine-color-dark-8);
-  color: var(--mantine-color-white);
 }
 
 @media (max-width: 36em) {
-  .finalBox {
-    padding: 48px 24px;
-    border-radius: var(--site-radius-md);
+  .final {
+    padding-block: 64px;
   }
 }
 
-/* 「来月のシフト表から、」（10 文字）が 1 行に収まる大きさ。左右の余白（Container + 箱の padding）を引いて決める */
+/*
+ * 狭い画面は 2 行。「来月のシフト表から、」（10 文字）が 1 行に収まる大きさを、Container の左右の余白を引いて決める。
+ * 60em 以上は改行せず 1 行。1 行の幅は約 14.2em（54px で 766px）で、15.6 で割って少し余裕を持たせる
+ */
 .finalTitle {
-  font-size: clamp(24px, calc((100vw - 176px) / 10.6), 54px);
+  font-size: min(54px, calc((100vw - 48px) / 10.6));
   font-weight: 900;
   line-height: 1.3;
-  color: inherit;
 }
 
 @media (max-width: 36em) {
   .finalTitle {
-    font-size: calc((100vw - 96px) / 10.6);
+    font-size: calc((100vw - 32px) / 10.6);
   }
 }
 
-.finalMicro {
-  font-size: 13.5px;
-  color: color-mix(in srgb, var(--mantine-color-white) 70%, transparent);
+@media (min-width: 60em) {
+  .finalTitle {
+    font-size: min(54px, calc((100vw - 48px) / 15.6));
+  }
+
+  .finalBreak {
+    display: none;
+  }
 }
