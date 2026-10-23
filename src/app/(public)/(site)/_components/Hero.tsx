@@ -6,7 +6,7 @@ import { DEMO_ID } from '../_lib/sectionIds'
 import { Phrases } from './Phrases'
 import classes from '../Site.module.css'
 
-/** ヒーロー。中央寄せ（016 §15）で、すぐ下のデモまでを 1 つの塊に見せる。見出しは 2 行固定（016 §4.4） */
+/** ヒーロー。中央寄せ（016 §15）で、すぐ下のデモまでを 1 つの塊に見せる。見出しは狭い画面で 2 行・PC で 1 行（016 §4.4・§16） */
 export function Hero() {
   return (
     <section className={classes.hero}>
@@ -18,7 +18,8 @@ export function Hero() {
         <Title order={1} className={classes.heroTitle}>
           <span className={classes.heroLine}>
             毎月の<span className={classes.kern}>シ</span>
-            <span className={classes.kernMore}>フ</span>ト表を、
+            <span className={classes.kernMore}>フ</span>ト表を
+            <span className={classes.kernComma}>、</span>
           </span>
           <span className={classes.heroLine}>最短で。</span>
         </Title>
