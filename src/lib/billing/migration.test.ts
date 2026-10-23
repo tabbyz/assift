@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  afterFinalize,
   applyCallEstimate,
+  draftsToVoid,
   migrationCategory,
   parseCsv,
   shouldVoidDrafts,
@@ -71,19 +71,31 @@ describe('shouldVoidDrafts', () => {
   })
 })
 
-describe('afterFinalize', () => {
-  it('確定で開いた請求書は無効にする', () => {
-    expect(afterFinalize({ status: 'open', total: 1500 })).toBe('void')
+describe('draftsToVoid', () => {
+  const drafts = [
+    { id: 'a', total: 500 },
+    { id: 'b', total: 0 },
+    { id: 'c', total: 500 },
+    { id: 'd', total: 0 },
+  ]
+
+  // 2026-10-23 の live の片付けで、0 円の下書きを確定すると支払い済みになり、未払いの契約が有効に戻ることがあった
+  it('0 円の下書きには手を付けない', () => {
+    const { latest, toVoid, zero } = draftsToVoid(drafts, false)
+    expect(latest).toBeUndefined()
+    expect(toVoid.map((invoice) => invoice.id)).toEqual(['a', 'c'])
+    expect(zero).toBe(2)
   })
 
-  // 2026-10-23 の live の片付けで「You can only pass in open invoices」になった
-  it('0 円の下書きは確定で支払い済みになるので、無効にせずそのままにする', () => {
-    expect(afterFinalize({ status: 'paid', total: 0 })).toBe('zero')
+  it('最新の 1 件は 0 円でも分けて残す（救う契約は当夜にこれを確定して有効に戻す）', () => {
+    const { latest, toVoid, zero } = draftsToVoid(drafts, true)
+    expect(latest?.id).toBe('d')
+    expect(toVoid.map((invoice) => invoice.id)).toEqual(['a', 'c'])
+    expect(zero).toBe(1)
   })
 
-  it('お金の動く支払い済みやそれ以外の状態は想定外として止める', () => {
-    expect(afterFinalize({ status: 'paid', total: 1500 })).toBe('unexpected')
-    expect(afterFinalize({ status: 'draft', total: 0 })).toBe('unexpected')
+  it('下書きが無ければ何もしない', () => {
+    expect(draftsToVoid([], true)).toEqual({ latest: undefined, toVoid: [], zero: 0 })
   })
 })
 
