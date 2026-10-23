@@ -13,7 +13,8 @@ export function Hero() {
       <Container size={1120} px={{ base: 'md', sm: 'lg' }} pos="relative">
         <Title order={1} className={classes.heroTitle}>
           <span className={classes.heroLine}>
-            毎月の<span className={classes.heroKana}>シフト</span>表を、
+            毎月の<span className={classes.heroKern}>シ</span>
+            <span className={classes.heroKernMore}>フ</span>ト表を、
           </span>
           <span className={classes.heroLine}>最短で。</span>
         </Title>

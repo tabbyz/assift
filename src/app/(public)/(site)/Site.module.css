@@ -121,12 +121,17 @@
 }
 
 /*
- * カタカナは字形が全角の枠より小さく、太字で大きくすると前後のすき間が目立つので詰める。
- * LP の書体（Zen Kaku Gothic New）は palt が効かないため letter-spacing で詰める。
+ * カタカナは字形が全角の枠より小さく、太字で大きくすると後ろのすき間が目立つので 1 文字ずつ詰める
+ * （letter-spacing はその文字の後ろに付く）。「シ」は少し、「フ」は右が大きく空くので多めに、「ト」は詰めない。
+ * LP の書体（Zen Kaku Gothic New）は palt が効かないため手で詰める。
  * 行は短くなるだけなので、文字の大きさの計算（全角 9 文字）はそのままでよい
  */
-.heroKana {
+.heroKern {
   letter-spacing: -0.1em;
+}
+
+.heroKernMore {
+  letter-spacing: -0.2em;
 }
 
 @media (max-width: 36em) {
