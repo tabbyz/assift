@@ -439,4 +439,6 @@ curl -i -H "Authorization: Bearer <CRON_SECRET>" https://v2.assift.com/api/cron/
   Stripe CLI（v1.55.1。`stripe login` で本番のアカウント）で `stripe events resend evt_1UT1xiEl6wKsSkzihqMV96Z9 --webhook-endpoint=<we_…> --live` →
   `assift-v2` への配信が **204 OK**（API の版 `2026-09-30.endive`。v1 の `unpaid` の Customer なので持ち主が引けず何もしない）。終わったあと `stripe logout` した
 - §10: `curl -sI https://v2.assift.com/card/edit` が 307・`location: /account/billing`（PR tabbyz/assift#64）
-- 残り: §6.3 その夜（10/23）の 23:20・23:50 の cron と Axiom の `[billing] 定期実行` → 033 の監視 ③ を有効にする（ops-02）/ §8 の手順書への反映
+- §8: カットオーバー手順書の 22:00（送信先 `assift-v2` を無効に）・23:05（有効に）・23:43（「送信先を編集」で URL だけ変える）・23:56（失敗した配信の再送のやり方）を直した（Artifact の version 26）。
+  019 §12・026 §12・024 §4.7 にも写した
+- 残り: §6.3 その夜（10/23）の 23:20・23:50 の cron と Axiom の `[billing] 定期実行` → 033 の監視 ③ を有効にする（ops-02）
