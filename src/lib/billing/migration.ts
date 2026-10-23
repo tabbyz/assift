@@ -50,6 +50,36 @@ export function shouldVoidDrafts(category: MigrationCategory, status: string): b
   return category === 'cancel_free' && status === 'unpaid'
 }
 
+/** 一覧の取得の回数（`limit: 100` のページ送り。0 件でも 1 回） */
+const listCalls = (count: number) => Math.max(1, Math.ceil(count / 100))
+
+/**
+ * `--apply` が 1 件に掛ける Stripe の呼び出しの回数の見込み（dry-run と共通の `subscriptions.retrieve` は含めない）。
+ * 026 §5 の所要の見積もり用。`drafts` / `openInvoices` は dry-run の `--count-invoices` が数えた、適用の前の件数。
+ * legacy の schedule は新しく作る場合（`create` + `update`）で数える
+ */
+export function applyCallEstimate(input: {
+  category: MigrationCategory
+  status: string
+  drafts: number
+  openInvoices: number
+}): number {
+  const { category, drafts, openInvoices } = input
+  const schedule = 1 + 2 // customers.update + subscriptionSchedules.create / update
+  if (category === 'legacy') return schedule
+  if (category === 'rescue') {
+    // 最新の下書きは無効にせず確定だけ（update + finalize）し、未払いと一緒に回収不能にする
+    const voided = drafts > 0 ? 3 * (drafts - 1) + 2 : 0
+    const open = openInvoices + (drafts > 0 ? 1 : 0)
+    return listCalls(drafts) + voided + listCalls(open) + open + 1 + schedule
+  }
+  if (category === 'cancel_unpaid' || category === 'cancel_free') {
+    if (!shouldVoidDrafts(category, input.status)) return 1
+    return listCalls(drafts) + 3 * drafts + listCalls(openInvoices) + openInvoices + 1
+  }
+  return 0
+}
+
 /** 最小限の CSV（データ移行の `import.ts` が書いた `v1-subscriptions.csv` を読む・結果を書く。021 §6.1）。ダブルクォートと改行を扱う */
 export function parseCsv(text: string): Record<string, string>[] {
   const rows: string[][] = []

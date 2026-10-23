@@ -4,6 +4,7 @@
  *   STRIPE_SECRET_KEY=... npm run stripe:migrate-v1 -- --input v1-subscriptions.csv                  # dry-run（既定）
  *   STRIPE_SECRET_KEY=... npm run stripe:migrate-v1 -- --input v1-subscriptions.csv --apply --limit 5 # 区分ごとに 5 件だけ
  *   STRIPE_SECRET_KEY=... npm run stripe:migrate-v1 -- --input v1-subscriptions.csv --apply           # 残り全部
+ *   STRIPE_SECRET_KEY=... npm run stripe:migrate-v1 -- --input v1-subscriptions.csv --count-invoices  # dry-run + 請求書の件数
  *
  * 入力の CSV（列: v1_user_id, email, stripe_customer_id, stripe_subscription_id, max_staffs_count, last_edited_at）は
  * **データ移行の `import.ts` が書く**（`scripts/migrate-v1/`。021 §6.1）。「移行する人」の判定を Ruby と TS の 2 か所に
@@ -13,6 +14,9 @@
  * `last_edited_at` は v1 の全 `shifts`（自動アサインの一時行を含む）の `updated_at` の最大を pattern → tenant → user でたどった値。
  *
  * 結果（区分・するはずの操作・結果）は `--output`（既定 `v1-subscriptions-result.csv`）に書く。v1 のダンプと一緒に保管する（§8.2.3）。
+ * `--count-invoices`（dry-run だけ）は、下書きを無効にする行（未払いの契約）の下書きと未払いの請求書を数え（読むだけ）、
+ * `--apply` の呼び出しの回数の見込みと一緒に結果に足す。`--apply` の所要の見積もり用（026 §5）。行ごとに一覧を読むので、
+ * 所要を測る回（当夜の 23:00 と同じ条件）には付けない
  * 旧 metered の明細を含む Subscription を触るので、**すべての呼び出しを API `2025-02-24.acacia` で行う**（basil 以降は扱えない）
  */
 import { readFileSync, writeFileSync } from 'node:fs'
@@ -26,6 +30,7 @@ import {
   PRICE_LOOKUP_KEY,
 } from '@/lib/billing/constants'
 import {
+  applyCallEstimate,
   type MigrationCategory,
   migrationCategory,
   parseCsv,
@@ -40,6 +45,7 @@ const { values } = parseArgs({
     output: { type: 'string', default: 'v1-subscriptions-result.csv' },
     apply: { type: 'boolean', default: false },
     limit: { type: 'string' },
+    'count-invoices': { type: 'boolean', default: false },
   },
 })
 
@@ -48,11 +54,16 @@ if (!key || !values.input) {
   console.error('STRIPE_SECRET_KEY と --input <CSV> を指定してください')
   process.exit(1)
 }
+if (values.apply && values['count-invoices']) {
+  console.error('--count-invoices は dry-run（--apply なし）でだけ使えます')
+  process.exit(1)
+}
 
 const stripe = new Stripe(key, { apiVersion: STRIPE_API_VERSION, maxNetworkRetries: 2 })
 const LEGACY = { apiVersion: LEGACY_API_VERSION }
 const apply = values.apply
 const limit = values.limit ? Number(values.limit) : Infinity
+const countInvoices = values['count-invoices']
 
 /** acacia の Subscription は期間を item ではなく本体に持つ */
 type LegacySubscription = Stripe.Subscription & { current_period_end?: number }
@@ -69,6 +80,11 @@ type Result = {
   category: MigrationCategory | ''
   actions: string
   result: string
+  /** `--count-invoices` のときだけ。下書きを無効にする行の、適用の前の件数 */
+  drafts: string
+  open_invoices: string
+  /** `--count-invoices` のときだけ。`--apply` の呼び出しの回数の見込み（`applyCallEstimate`） */
+  apply_calls: string
 }
 
 const HEADER: (keyof Result)[] = [
@@ -83,6 +99,10 @@ const HEADER: (keyof Result)[] = [
   'category',
   'actions',
   'result',
+  // 後ろに足す（当夜の awk が 4 列目・9 列目を読む。026 §6.3）
+  'drafts',
+  'open_invoices',
+  'apply_calls',
 ]
 
 const iso = (seconds: number | undefined | null) =>
@@ -114,6 +134,20 @@ async function voidDrafts(subscriptionId: string, keepLatest: boolean): Promise<
     await stripe.invoices.finalizeInvoice(latest.id!, { auto_advance: false }, LEGACY)
   }
   return drafts.length
+}
+
+/** 請求書を数える（読むだけ。`--count-invoices`） */
+async function countSubscriptionInvoices(
+  subscriptionId: string,
+  status: 'draft' | 'open'
+): Promise<number> {
+  let count = 0
+  await stripe.invoices
+    .list({ subscription: subscriptionId, status, limit: 100 }, LEGACY)
+    .autoPagingEach(() => {
+      count += 1
+    })
+  return count
 }
 
 /** 未払いの（確定済みの）請求書を回収不能にする。最新の請求書が支払い済み扱いになり、unpaid から active に戻る（§11-10） */
@@ -199,6 +233,9 @@ async function handle(
     category: '',
     actions: '',
     result: '',
+    drafts: '',
+    open_invoices: '',
+    apply_calls: '',
   }
 
   let subscription: LegacySubscription
@@ -238,6 +275,25 @@ async function handle(
     planned.push('未払いを回収不能')
   if (category === 'cancel_unpaid' || category === 'cancel_free') planned.push('即時解約')
   result.actions = planned.join(' / ')
+
+  if (countInvoices) {
+    let drafts = 0
+    let openInvoices = 0
+    if (shouldVoidDrafts(category, subscription.status)) {
+      try {
+        drafts = await countSubscriptionInvoices(subscription.id, 'draft')
+        openInvoices = await countSubscriptionInvoices(subscription.id, 'open')
+      } catch (error) {
+        result.result = `取得できません（請求書）: ${(error as Error).message}`
+        return result
+      }
+      result.drafts = String(drafts)
+      result.open_invoices = String(openInvoices)
+    }
+    result.apply_calls = String(
+      applyCallEstimate({ category, status: subscription.status, drafts, openInvoices })
+    )
+  }
 
   if (category === 'skip' || category === 'review') {
     result.result = category === 'skip' ? '対象外' : '要確認（何もしない）'
@@ -320,6 +376,27 @@ async function main() {
   const failed = results.filter(
     (result) => result.result.startsWith('失敗') || result.result.startsWith('取得できません')
   )
+  if (countInvoices) {
+    const calls = new Map<string, { rows: number; drafts: number; open: number; calls: number }>()
+    for (const result of results) {
+      if (!result.category) continue
+      const sum = calls.get(result.category) ?? { rows: 0, drafts: 0, open: 0, calls: 0 }
+      sum.rows += 1
+      sum.drafts += Number(result.drafts || 0)
+      sum.open += Number(result.open_invoices || 0)
+      sum.calls += Number(result.apply_calls || 0)
+      calls.set(result.category, sum)
+    }
+    console.log('\n--apply の見込み（区分: 件数 / 下書き / 未払い / 呼び出し）:')
+    let total = 0
+    for (const [category, sum] of calls) {
+      console.log(`  ${category}: ${sum.rows} / ${sum.drafts} / ${sum.open} / ${sum.calls}`)
+      total += sum.calls
+    }
+    console.log(
+      `  合計の呼び出し: ${total} 回（dry-run と共通の取得 ${results.length} 回は含めない）`
+    )
+  }
   console.log(`失敗: ${failed.length} 件。結果: ${values.output}`)
 }
 
