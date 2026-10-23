@@ -34,6 +34,7 @@ import {
   PRICE_LOOKUP_KEY,
 } from '@/lib/billing/constants'
 import {
+  afterFinalize,
   applyCallEstimate,
   type MigrationCategory,
   migrationCategory,
@@ -75,7 +76,7 @@ const limit = values.limit ? Number(values.limit) : Infinity
 const countInvoices = values['count-invoices']
 const voidOld = values['void-old-drafts']
 /** `--void-old-drafts` の集計（所要の見積もりに使う書き込みの実測） */
-const voidStats = { rows: 0, drafts: 0, writeMs: 0 }
+const voidStats = { rows: 0, voided: 0, zero: 0, writes: 0, writeMs: 0 }
 
 /** acacia の Subscription は期間を item ではなく本体に持つ */
 type LegacySubscription = Stripe.Subscription & { current_period_end?: number }
@@ -124,19 +125,26 @@ const iso = (seconds: number | undefined | null) =>
  * 下書きを無効にする。下書きのまま無効にはできないので、自動の確定を止めてから確定し、すぐ無効にする（§8.2.2）。
  * `keepLatest` なら最新の 1 件だけは確定して開いたままにする（無効にしない）。救う契約は、続く `markOpenUncollectible` で
  * それを回収不能にする: Stripe は最新の請求書が支払い済み・回収不能になったときに unpaid を解くので、最新を無効にすると
- * active に戻らない（2026-10-08 にサンドボックスで確認）
+ * active に戻らない（2026-10-08 にサンドボックスで確認）。0 円の下書きは確定で支払い済みになり、無効にせずそのままにする（`voidDraft`）
  */
-async function voidDrafts(subscriptionId: string, keepLatest: boolean): Promise<number> {
+async function voidDrafts(
+  subscriptionId: string,
+  keepLatest: boolean
+): Promise<{ voided: number; zero: number }> {
   const drafts = await listDrafts(subscriptionId)
   const latest = keepLatest ? drafts.pop() : undefined
 
-  for (const invoice of drafts) await voidDraft(invoice)
+  const counts = { voided: 0, zero: 0 }
+  for (const invoice of drafts) counts[await voidDraft(invoice)] += 1
   if (latest) {
     await stripe.invoices.update(latest.id!, { auto_advance: false }, LEGACY)
     await stripe.invoices.finalizeInvoice(latest.id!, { auto_advance: false }, LEGACY)
   }
-  return drafts.length
+  return counts
 }
+
+const draftLog = ({ voided, zero }: { voided: number; zero: number }) =>
+  `${voided} 件を無効` + (zero > 0 ? `・0 円の ${zero} 件を確定（支払い済み）` : '')
 
 /** 下書きを古い順に */
 async function listDrafts(subscriptionId: string): Promise<Stripe.Invoice[]> {
@@ -149,25 +157,47 @@ async function listDrafts(subscriptionId: string): Promise<Stripe.Invoice[]> {
   return drafts.sort((a, b) => a.created - b.created)
 }
 
-async function voidDraft(invoice: Stripe.Invoice): Promise<void> {
+/**
+ * 下書きを確定して無効にする。0 円の下書きは Stripe が確定の時点で支払い済みにするので無効にできない
+ * （`You can only pass in open invoices`。2026-10-23 に live の片付けで分かった）。請求も支払いの試行も無いので、そのままにする
+ */
+async function voidDraft(invoice: Stripe.Invoice): Promise<'voided' | 'zero'> {
   await stripe.invoices.update(invoice.id!, { auto_advance: false }, LEGACY)
-  await stripe.invoices.finalizeInvoice(invoice.id!, { auto_advance: false }, LEGACY)
+  const finalized = await stripe.invoices.finalizeInvoice(
+    invoice.id!,
+    { auto_advance: false },
+    LEGACY
+  )
+  const next = afterFinalize(finalized)
+  if (next === 'zero') return 'zero'
+  if (next === 'unexpected')
+    throw new Error(
+      `確定で ${finalized.status} になり無効にできません (${invoice.id}・合計 ${finalized.total})`
+    )
   await stripe.invoices.voidInvoice(invoice.id!, {}, LEGACY)
+  return 'voided'
 }
 
 /**
  * 当夜の前の片付け（`--void-old-drafts`）: 最新の 1 件を残して下書きを無効にする。最新は確定しない（当夜の `--apply` に任せる）。
  * 途中で止まると、確定だけされて無効になっていない請求書が `open` で残りうるが、当夜の `--apply` がどの区分でも回収不能にする
  */
-async function voidOldDrafts(subscriptionId: string): Promise<{ before: number; voided: number }> {
+async function voidOldDrafts(
+  subscriptionId: string
+): Promise<{ before: number; voided: number; zero: number }> {
   const drafts = await listDrafts(subscriptionId)
   const before = drafts.length
   drafts.pop()
-  const started = Date.now()
-  for (const invoice of drafts) await voidDraft(invoice)
-  voidStats.writeMs += Date.now() - started
-  voidStats.drafts += drafts.length
-  return { before, voided: drafts.length }
+  const counts = { voided: 0, zero: 0 }
+  for (const invoice of drafts) {
+    const started = Date.now()
+    const done = await voidDraft(invoice)
+    voidStats.writeMs += Date.now() - started
+    voidStats.writes += done === 'voided' ? 3 : 2
+    voidStats[done] += 1
+    counts[done] += 1
+  }
+  return { before, ...counts }
 }
 
 /** 請求書を数える（読むだけ。`--count-invoices`） */
@@ -321,9 +351,9 @@ async function handle(
     }
     voidStats.rows += 1
     try {
-      const { before, voided } = await voidOldDrafts(subscription.id)
+      const { before, voided, zero } = await voidOldDrafts(subscription.id)
       result.drafts = String(before)
-      result.result = `古い下書き ${voided} 件を無効（最新 ${before - voided} 件は残す）`
+      result.result = `古い下書き ${draftLog({ voided, zero })}（最新 ${before - voided - zero} 件は残す）`
     } catch (error) {
       result.result = `失敗: ${(error as Error).message}`
     }
@@ -363,7 +393,7 @@ async function handle(
   try {
     const log: string[] = []
     if (shouldVoidDrafts(category, subscription.status))
-      log.push(`下書き ${await voidDrafts(subscription.id, category === 'rescue')} 件を無効`)
+      log.push(`下書き ${draftLog(await voidDrafts(subscription.id, category === 'rescue'))}`)
     if (category === 'rescue') {
       log.push(`回収不能 ${await markOpenUncollectible(subscription.id)} 件`)
       const refreshed = await stripe.subscriptions.retrieve(subscription.id, {}, LEGACY)
@@ -433,9 +463,9 @@ async function main() {
     (result) => result.result.startsWith('失敗') || result.result.startsWith('取得できません')
   )
   if (voidOld) {
-    const writes = voidStats.drafts * 3
+    const { writes } = voidStats
     console.log(
-      `\n片付け: unpaid の契約 ${voidStats.rows} 件・無効にした下書き ${voidStats.drafts} 件（書き込み ${writes} 回・${Math.round(voidStats.writeMs / 1000)} 秒` +
+      `\n片付け: unpaid の契約 ${voidStats.rows} 件・下書き ${draftLog(voidStats)}（書き込み ${writes} 回・${Math.round(voidStats.writeMs / 1000)} 秒` +
         (writes > 0 ? `・1 回 ${(voidStats.writeMs / writes / 1000).toFixed(2)} 秒` : '') +
         '）'
     )
