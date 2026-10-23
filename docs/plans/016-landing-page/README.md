@@ -392,6 +392,7 @@ Artifact の hex は Mantine の変数に置き換える（theme.ts に集約す
   重なりのための `position: relative` / `overflow: hidden` も消した
 - **最後の CTA の見出しの「シフト」も、ヒーローと同じく「シ」「フ」を詰めた。** 詰めのクラスは両方で使うので `.heroKern` → `.kern` / `.kernMore` に改名。
   見出しは `Phrases` をやめて同じ組み（行ごとの `.nb` + `<br />`）を手で書いた（`Phrases` は文字列しか受けないため）
+- **最後の CTA を中央寄せにした**（`Stack` の `align="center"` + `.finalBox` の `text-align: center`）。右のスタンプが無くなり、左寄せのままだと右半分が空いた
 
 | 項目 | 結果 |
 | --- | --- |

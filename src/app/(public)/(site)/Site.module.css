@@ -597,6 +597,7 @@
 
 .finalBox {
   padding: 80px 56px;
+  text-align: center;
   border-radius: var(--site-radius-lg);
   background-color: var(--mantine-color-dark-8);
   color: var(--mantine-color-white);

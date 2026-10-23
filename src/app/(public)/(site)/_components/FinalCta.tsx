@@ -9,7 +9,7 @@ export function FinalCta() {
   return (
     <section className={classes.section}>
       <Container size={1120} px={{ base: 'md', sm: 'lg' }}>
-        <Stack className={classes.finalBox} gap={28} align="flex-start">
+        <Stack className={classes.finalBox} gap={28} align="center">
           <Title order={2} className={classes.finalTitle}>
             {/* 文節の組みは Phrases と同じ。「シフト」はヒーローと同じく手で詰める */}
             <span className={classes.nb}>
