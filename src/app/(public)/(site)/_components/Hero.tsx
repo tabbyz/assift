@@ -12,7 +12,9 @@ export function Hero() {
     <section className={classes.hero}>
       <Container size={1120} px={{ base: 'md', sm: 'lg' }} pos="relative">
         <Title order={1} className={classes.heroTitle}>
-          <span className={classes.heroLine}>毎月のシフト表を、</span>
+          <span className={classes.heroLine}>
+            毎月の<span className={classes.heroKana}>シフト</span>表を、
+          </span>
           <span className={classes.heroLine}>最短で。</span>
         </Title>
         <Text className={classes.lead} mt={26}>

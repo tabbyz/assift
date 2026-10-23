@@ -110,16 +110,23 @@
 /*
  * 見出しはどの画面幅でも 2 行。行の中では折り返さず、長い方の行（9 文字）が画面に収まるよう
  * 文字の大きさを画面幅から決める（016 §4.4）。左右の余白は Container の padding（md = 16px × 2 / 24px × 2）。
- * palt でカナや句読点の字間を詰める。詰めると行は短くなるだけなので、大きさは全角 9 文字で計算しておけばはみ出さない。
  * 上限の 90px は、スタンプが出る最も狭い画面（65em）でも 1 行目がスタンプに届かない大きさ
  */
 .heroTitle {
   margin: 8px 0 0;
   font-size: min(90px, calc((100vw - 48px) / 9.4));
   font-weight: 900;
-  font-feature-settings: 'palt';
   line-height: 1.25;
   letter-spacing: -0.01em;
+}
+
+/*
+ * カタカナは字形が全角の枠より小さく、太字で大きくすると前後のすき間が目立つので詰める。
+ * LP の書体（Zen Kaku Gothic New）は palt が効かないため letter-spacing で詰める。
+ * 行は短くなるだけなので、文字の大きさの計算（全角 9 文字）はそのままでよい
+ */
+.heroKana {
+  letter-spacing: -0.1em;
 }
 
 @media (max-width: 36em) {
