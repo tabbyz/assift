@@ -133,6 +133,11 @@
   letter-spacing: -0.2em;
 }
 
+/* 「、」は字形が左下に寄り、右の半分が空く。1 行で続けて組む見出し（最後の CTA の PC）で後ろが開いて見えるので詰める */
+.kernComma {
+  letter-spacing: -0.3em;
+}
+
 @media (max-width: 36em) {
   .heroTitle {
     font-size: calc((100vw - 32px) / 9.4);

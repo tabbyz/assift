@@ -14,7 +14,8 @@ export function FinalCta() {
             {/* 文節の組みは Phrases と同じ。「シフト」はヒーローと同じく手で詰める。広い画面では改行しない */}
             <span className={classes.nb}>
               来月の<span className={classes.kern}>シ</span>
-              <span className={classes.kernMore}>フ</span>ト表から、
+              <span className={classes.kernMore}>フ</span>ト表から
+              <span className={classes.kernComma}>、</span>
             </span>
             <br className={classes.finalBreak} />
             <span className={classes.nb}>assiftで。</span>
