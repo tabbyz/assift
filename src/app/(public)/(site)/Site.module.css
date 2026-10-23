@@ -108,20 +108,23 @@
 }
 
 /*
- * 見出しはどの画面幅でも 2 行。行の中では折り返さず、長い方の行（10 文字）が画面に収まるよう
- * 文字の大きさを画面幅から決める（016 §4.4）。左右の余白は Container の padding（md = 16px × 2 / 24px × 2）
+ * 見出しはどの画面幅でも 2 行。行の中では折り返さず、長い方の行（9 文字）が画面に収まるよう
+ * 文字の大きさを画面幅から決める（016 §4.4）。左右の余白は Container の padding（md = 16px × 2 / 24px × 2）。
+ * palt でカナや句読点の字間を詰める。詰めると行は短くなるだけなので、大きさは全角 9 文字で計算しておけばはみ出さない。
+ * 上限の 90px は、スタンプが出る最も狭い画面（65em）でも 1 行目がスタンプに届かない大きさ
  */
 .heroTitle {
   margin: 8px 0 0;
-  font-size: min(82px, calc((100vw - 48px) / 10.4));
+  font-size: min(90px, calc((100vw - 48px) / 9.4));
   font-weight: 900;
+  font-feature-settings: 'palt';
   line-height: 1.25;
   letter-spacing: -0.01em;
 }
 
 @media (max-width: 36em) {
   .heroTitle {
-    font-size: calc((100vw - 32px) / 10.4);
+    font-size: calc((100vw - 32px) / 9.4);
   }
 }
 
