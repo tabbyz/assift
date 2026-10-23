@@ -19,7 +19,7 @@
 }
 
 /*
- * ブラウザのウィンドウ風の枠の上辺（016 §15）。左に 3 つの丸とラベル、中央にドメイン、右に「最初からやり直す」。
+ * ブラウザのウィンドウ風の枠の上辺（016 §15）。左に 3 つの丸と「最初からやり直す」、中央にドメイン、右端にラベル（016 §18）。
  * 中央を枠の真ん中に置くため、左右の列を同じ幅（1fr）にする。高さはボタンに合わせて固定され、ボタンが出ても変わらない
  */
 .chrome {
@@ -28,11 +28,15 @@
   align-items: center;
   gap: 12px;
   min-height: 44px;
-  padding: 4px 8px 4px 16px;
+  padding: 4px 16px;
   border-bottom: 1px solid var(--mantine-color-gray-2);
   background-color: var(--mantine-color-gray-0);
   /* ラベルは LP の書体（枠の中の表はアプリの書体） */
   font-family: var(--font-site), var(--mantine-font-family);
+}
+
+.chromeLabel {
+  justify-self: end;
 }
 
 .dots {
@@ -62,7 +66,7 @@
 @media (max-width: 36em) {
   .chrome {
     grid-template-columns: minmax(0, 1fr) auto;
-    padding-left: 12px;
+    padding-inline: 8px 12px;
   }
 
   .address,
@@ -72,7 +76,7 @@
 }
 
 .restart {
-  justify-self: end;
+  flex: none;
   transition: opacity 0.2s ease;
 }
 
