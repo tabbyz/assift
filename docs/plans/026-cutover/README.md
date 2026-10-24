@@ -325,6 +325,19 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 - 残っていたのは利用者が本番で作った試しのアカウントと店舗。利用者が消した。今後も本番で試すことがあるので、本番に流す前に毎回確かめる行を §5 の先頭に足した
 - 予行（所要・権限・Disk）と `undo.sql` の空振りは未実施のまま。流し直す
 
+### 2026-10-24（§4-1 本番の予行の 2 回目。ディスクが足りずに止まった）
+
+- 確認の SQL を通したうえで流した。接続・`statement_timeout` の変更・`begin`・トリガの停止・`auth.users` と `auth.identities` の INSERT・`profiles` の UPDATE は通った
+  （021 §9.3 の `postgres` ロールの権限は、ここまでは問題なし）。`shifts`（11,496,340 行）の書き込みの途中で `could not extend file "base/5/17798": No space left on device` で失敗し、スクリプトが ROLLBACK した
+- 全体 843 秒（変換まで約 150 秒、書き込み約 690 秒で `shifts` の途中）・最大 RSS 7.1 GB。ローカルは書き込みの全部が約 470 秒だったので、**本番の書き込みは数倍遅い**（どこまで進んだかは時刻を付けていないので分からない）
+- **本番のディスクは 2 GB だった**（Dashboard の Database → Settings → Disk）。前 0.27 GB、失敗の後 1.55 GB（Database 約 0.6 GB・WAL 約 1 GB。グラフの目分量）。
+  全部入れると DB だけで約 3.9 GB（§14.5 の合成データの実測 3,856 MB）に WAL（`max_wal_size` の既定 1 GB）が乗るので、2 GB では入らない。§5 の「Disk の判断」は 2 GB を前提にしていなかった
+- Supabase の仕様（2026-10-24 に `docs/guides/platform/database-size.md`・`compute-and-disk.md` を読んだ）: 自動の拡張は 90% で 50% ずつ（初回は 8 GB まで）・**4 時間に 1 回**（§5・§13 の「6 時間」は誤り）。
+  Spend Cap がオンだと 8 GB が上限。広げられるが**縮められない**（プロジェクトのアップグレードのときに DB の 1.2 倍・最小 8 GB に戻る）。gp3 は 8 GB まで込みで、超えた分は 1 GB あたり $0.125 / 月。
+  95% で読み取り専用。「今の DB の大きさの 1.5 倍を超えて一度に入れると読み取り専用になりうる」との記述もある。
+  ディスクの速さはコンピュートの大きさで決まる（Micro は基準 11 MB/s・500 IOPS、Small 22 MB/s・1,000 IOPS、Medium 39 MB/s・2,000 IOPS）
+- `--rollback` の後も、入れて戻した行の分はファイルに残る（ROLLBACK はディスクを返さない）。当日の昼の予行（T-0）の後にもそのまま残り、夜のインポートの分と重なる
+
 ### 2026-10-24（§3-15 移行しない人の Subscription 21 件を解約した）
 
 リハーサルの CSV（`D=~/v1-export/20261014-1340`）を、ロールした後の移行用の鍵で live に流した（利用者の Mac）。結果の CSV（Subscription の id と結果）は `$D` に残した（`not-migrated-cancel-{dryrun,limit1,apply}.csv`・`v1-subscriptions-not-migrated-after.csv`）。
