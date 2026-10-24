@@ -11,11 +11,7 @@ export function Pricing() {
       <Container size={1120} px={{ base: 'md', sm: 'lg' }}>
         <SimpleGrid cols={{ base: 1, md: 2 }} spacing={20}>
           <Stack gap={20} pr={{ md: 24 }}>
-            <SectionHeading
-              kicker="料金"
-              title={`${FREE_STAFF_LIMIT}人まで|無料で使える`}
-              mb={0}
-            />
+            <SectionHeading kicker="料金" title={`${FREE_STAFF_LIMIT}人まで|無料で使える`} mb={0} />
             <Group gap="6px 14px" align="baseline">
               <Text component="span" className={classes.priceBig}>
                 0<small>円</small>
