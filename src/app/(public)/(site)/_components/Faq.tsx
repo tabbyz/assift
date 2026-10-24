@@ -41,7 +41,7 @@ export function Faq() {
   return (
     <section id="faq" className={classes.section}>
       <Container size={1120} px={{ base: 'md', sm: 'lg' }}>
-        <SectionHeading kicker="よくある質問" title="使う前に|気になること" />
+        <SectionHeading kicker="FAQ" title="よくある質問" />
         <Accordion
           variant="separated"
           chevronPosition="right"
