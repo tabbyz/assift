@@ -524,78 +524,67 @@
   font-size: 10.5px;
 }
 
-/* 3 枚目の図。ノート PC の右下にスマホを重ねる。スマホは右の余白に収まるよう絶対配置 */
-.devices {
-  position: relative;
-  padding-right: 52px;
-}
-
-.laptop {
-  width: 250px;
-}
-
-.laptopScreen {
-  padding: 7px;
-  border-radius: 8px 8px 0 0;
-  background-color: var(--mantine-color-dark-8);
-}
-
-.laptopScreen .miniTable {
-  padding: 7px;
-  border-radius: 3px;
-}
-
-.laptopBase {
-  height: 8px;
-  margin-inline: -18px;
-  border-radius: 0 0 6px 6px;
-  background-color: var(--mantine-color-gray-4);
-}
-
-.phoneMini {
-  position: absolute;
-  right: 0;
-  bottom: -6px;
-  width: 72px;
-  padding: 4px;
-  border-radius: 12px;
-  background-color: var(--mantine-color-dark-8);
-  box-shadow: 0 16px 30px -16px rgb(0 0 0 / 45%);
-}
-
-.phoneMini .miniTable {
-  gap: 2px;
-  padding: 10px 3px 14px;
-  border-radius: 8px;
-}
-
-/* スマホ幅（320px では図の枠が約 210px）では小さくする */
-@media (max-width: 36em) {
-  .devices {
-    padding-right: 38px;
-  }
-
-  .laptop {
-    width: 168px;
-  }
-
-  .phoneMini {
-    width: 54px;
-  }
-}
-
-/* マスの色の帯（文字なし）。列の数は `--cols` で受ける */
-.miniTable {
+/*
+ * 3 枚目の図（016 §30）。白い枠を縦の線で左右に分け、使う場面を 1 つずつ置く。
+ * カードが 2 列のとき（768px 前後）は図の幅が 250px ほどになるので、図の幅が狭いときだけ文言を 2 行に折る（コンテナクエリ）。
+ * 左右で文言の行数が違っても端末の絵の高さをそろえるため、行は subgrid で共有する（1 行目 = 絵、2 行目 = 文言）
+ */
+.halves {
   display: grid;
-  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
-  gap: 3px;
-  background-color: var(--mantine-color-white);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-content: center;
+  align-self: stretch;
+  width: 100%;
+  container-type: inline-size;
 }
 
-.miniTable > span {
-  height: 9px;
-  border: 1px solid transparent;
-  border-radius: 2px;
+.half {
+  display: grid;
+  grid-row: span 2;
+  grid-template-rows: subgrid;
+  align-items: end;
+  justify-items: center;
+  row-gap: 14px;
+  padding: 12px 8px;
+  color: var(--mantine-color-dark-8);
+  text-align: center;
+}
+
+.half + .half {
+  border-left: 1px solid var(--mantine-color-gray-2);
+}
+
+.halfLabel {
+  align-self: start;
+  color: var(--mantine-color-black);
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.halfLabel small {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--mantine-color-dimmed);
+}
+
+@container (max-width: 240px) {
+  .half {
+    padding-inline: 4px;
+  }
+
+  .halfLabel {
+    font-size: 14px;
+  }
+}
+
+@container (min-width: 381px) {
+  .halfLabel br {
+    display: none;
+  }
 }
 
 .linkPill {

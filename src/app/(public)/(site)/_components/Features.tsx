@@ -1,6 +1,6 @@
-import { Fragment, type CSSProperties } from 'react'
+import { Fragment } from 'react'
 import { Container, Group, SimpleGrid, Text, Title } from '@mantine/core'
-import { IconSparkles } from '@tabler/icons-react'
+import { IconDeviceLaptop, IconDeviceMobile, IconSparkles } from '@tabler/icons-react'
 import { cellStyle } from '@/components/shiftTable/cellStyle'
 import { DEMO_PATTERNS } from '../_lib/demoData'
 import { Phrases } from './Phrases'
@@ -26,59 +26,7 @@ const USUAL_WEEK = ['early', 'early', 'off', 'late', 'late', 'early', 'off']
 const USUAL_WORKDAYS = USUAL_WEEK.filter((id) => patternsById.get(id)?.kind === 'workday').length
 
 /**
- * 同じシフト表を PC とスマホで（3 枚目の図）。マスは文字を入れない色の帯。
- * スマホは PC の左 4 日を写すので、同じ表に見える
- */
-const DEVICE_ROWS: [string, boolean][][] = [
-  [
-    ['early', true],
-    ['early', true],
-    ['off', true],
-    ['late', true],
-    ['late', true],
-    ['early', true],
-    ['off', true],
-  ],
-  [
-    ['late', false],
-    ['off', true],
-    ['early', false],
-    ['off', true],
-    ['early', false],
-    ['late', false],
-    ['late', true],
-  ],
-  [
-    ['off', true],
-    ['late', false],
-    ['paid', true],
-    ['early', false],
-    ['early', true],
-    ['off', true],
-    ['early', true],
-  ],
-  [
-    ['late', true],
-    ['early', true],
-    ['late', true],
-    ['off', true],
-    ['late', true],
-    ['late', false],
-    ['off', true],
-  ],
-  [
-    ['early', false],
-    ['late', true],
-    ['early', false],
-    ['late', true],
-    ['off', true],
-    ['early', true],
-    ['late', false],
-  ],
-]
-
-/**
- * できること（4 枚。016 §26）。AI は 1 枚にまとめ、ほかは「まとめて入る → どこでも作れる → 送るだけ」。
+ * できること（4 枚。016 §26）。AI は 1 枚にまとめ、ほかは「一度決めるだけ → どこでも作れる → 送るだけ」。
  * 図はアイコンではなく、アプリの中にあるもの（マス・AI の結果・共有の URL）で描く
  */
 export function Features() {
@@ -157,17 +105,35 @@ export function Features() {
 
           <FeatureCard
             title="スマホでも|PCでも作れる"
-            body="同じシフト表を、どちらからでも直せます。すき間時間はスマホで、じっくり作るときはPCで。"
+            body="同じシフト表を、スマホからでもPCからでも直せます。スマホでも使える機能はPCと同じです。"
           >
-            <div className={classes.devices}>
-              <div className={classes.laptop}>
-                <div className={classes.laptopScreen}>
-                  <MiniTable rows={DEVICE_ROWS} />
-                </div>
-                <div className={classes.laptopBase} />
+            {/* 白い枠を左右に分け、使う場面を 1 つずつ置く（016 §30）。図の幅が狭いときだけ文言を折り返す（.halves のコンテナクエリ） */}
+            <div className={classes.halves}>
+              <div className={classes.half}>
+                <IconDeviceMobile size={56} stroke={1.4} />
+                <span className={classes.halfLabel}>
+                  すき間時間は
+                  <br />
+                  スマホで
+                  <small>
+                    休憩中に
+                    <br />
+                    1マスだけ直す
+                  </small>
+                </span>
               </div>
-              <div className={classes.phoneMini}>
-                <MiniTable rows={DEVICE_ROWS.map((row) => row.slice(0, 4))} />
+              <div className={classes.half}>
+                <IconDeviceLaptop size={56} stroke={1.4} />
+                <span className={classes.halfLabel}>
+                  じっくりは
+                  <br />
+                  PCで
+                  <small>
+                    閉店後に
+                    <br />
+                    1か月分を組む
+                  </small>
+                </span>
               </div>
             </div>
           </FeatureCard>
@@ -188,19 +154,6 @@ export function Features() {
         </SimpleGrid>
       </Container>
     </section>
-  )
-}
-
-/** 3 枚目の図の表。色はアプリのセルと同じ `cellStyle()`（確定はベタ塗り、下書きは淡塗り） */
-function MiniTable({ rows }: { rows: [string, boolean][][] }) {
-  return (
-    <div className={classes.miniTable} style={{ '--cols': rows[0].length } as CSSProperties}>
-      {rows.flatMap((row, r) =>
-        row.map(([patternId, fixed], c) => (
-          <span key={`${r}-${c}`} style={cellStyle(patternsById.get(patternId), fixed)} />
-        ))
-      )}
-    </div>
   )
 }
 
