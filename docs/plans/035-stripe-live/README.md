@@ -23,7 +23,7 @@
 - [x] Webhook のエンドポイントが `https://v2.assift.com/api/stripe/webhook`・Snapshot・`2026-09-30.endive`・7 種類のイベントで登録され、有効
 - [x] Vercel の Production（だけ）に `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `CRON_SECRET` があり、Redeploy した
 - [x] 鍵付きの cron が 200、再送した Webhook の配信が 204（§6）
-- [ ] その夜の Vercel の cron（23:20・23:50）が 200 で、Axiom に `[billing] 定期実行` が 2 行届く（033 の監視 ③ の前提）
+- [x] その夜の Vercel の cron（23:20・23:50）が 200 で、Axiom に `[billing] 定期実行` が 2 行届く（033 の監視 ③ の前提）
 - [ ] 026・019・024・`.env.example`・リリース計画・カットオーバー手順書に結果を写した（§8）
 
 ## 2. 範囲
@@ -442,3 +442,9 @@ curl -i -H "Authorization: Bearer <CRON_SECRET>" https://v2.assift.com/api/cron/
 - §8: カットオーバー手順書の 22:00（送信先 `assift-v2` を無効に）・23:05（有効に）・23:43（「送信先を編集」で URL だけ変える）・23:56（失敗した配信の再送のやり方）を直した（Artifact の version 26）。
   019 §12・026 §12・024 §4.7 にも写した
 - 残り: §6.3 その夜（10/23）の 23:20・23:50 の cron と Axiom の `[billing] 定期実行` → 033 の監視 ③ を有効にする（ops-02）
+
+### 2026-10-24 §6.3 その夜の cron（あなたが Axiom で見た。記録は Claude）
+
+- Axiom（`['vercel']`・production・lambda・`level == "info"`・`message contains "[billing] 定期実行"`）に 3 行: 10/23 09:46:01（§6.1 の手動）・**23:21:18**・**23:51:11**。
+  どれも `{ sync: { synced: 0, failed: 0 }, usage: { sent: 0, failed: 0 } }`。Vercel の cron（23:20・23:50）は 1 分ほど遅れて走る
+- 033 の監視 ③ の前提（成功したときに必ず 1 行出る）が本番で確かめられた。③ を有効にするのはあなた（033 §3.2 のクエリ・Threshold below 2・1 時間 / 25 時間・データ無しで通知オン・Notifier あり）
