@@ -5,6 +5,3 @@
 
 /** 「スタッフの画面」の節（`StaffView`）。デモの共有カードの「スタッフの画面を見る」がここへ送る */
 export const STAFF_VIEW_ID = 'staff-view'
-
-/** 触れるデモの節（`DemoSection`）。ヒーローの「デモをさわる」がここへ送る */
-export const DEMO_ID = 'demo'

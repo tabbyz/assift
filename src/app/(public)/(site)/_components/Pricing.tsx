@@ -13,7 +13,7 @@ export function Pricing() {
           <Stack gap={20} pr={{ md: 24 }}>
             <SectionHeading
               kicker="料金"
-              title={`${FREE_STAFF_LIMIT}人までは、|無料で使えます`}
+              title={`${FREE_STAFF_LIMIT}人までは|無料で使えます`}
               mb={0}
             />
             <Group gap="6px 14px" align="baseline">

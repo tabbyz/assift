@@ -1,6 +1,5 @@
 import { Container, Group } from '@mantine/core'
 import { IconHandFinger } from '@tabler/icons-react'
-import { DEMO_ID } from '../_lib/sectionIds'
 import { ShiftDemo } from './ShiftDemo'
 import classes from '../Site.module.css'
 
@@ -13,13 +12,7 @@ type Props = { dates: string[]; holidays: string[]; title: string }
  */
 export function DemoSection({ dates, holidays, title }: Props) {
   return (
-    <section
-      id={DEMO_ID}
-      className={classes.demoStage}
-      aria-labelledby="demo-label"
-      // ヒーローの「デモをさわる」から送られてくる。sticky のヘッダーに枠が隠れないようにずらす
-      style={{ scrollMarginTop: 'var(--site-anchor-offset)' }}
-    >
+    <section className={classes.demoStage} aria-labelledby="demo-label">
       <Container size={1120} px={{ base: 'md', sm: 'lg' }}>
         <ShiftDemo
           dates={dates}

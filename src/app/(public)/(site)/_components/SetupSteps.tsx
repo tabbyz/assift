@@ -11,7 +11,7 @@ export function SetupSteps() {
       <Container size={1120} px={{ base: 'md', sm: 'lg' }}>
         <SectionHeading
           kicker="はじめ方"
-          title="3ステップで、|すぐ使える"
+          title="3ステップで|すぐ使える"
           description="ひな形を選んで、スタッフの名前を貼るだけ。登録したその日から、シフト表を作れます。"
         />
         <SimpleGrid cols={{ base: 1, sm: 3 }} spacing={20}>

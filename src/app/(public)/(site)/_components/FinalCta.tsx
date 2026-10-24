@@ -23,7 +23,7 @@ export function FinalCta() {
           <LinkButton
             href="/signup"
             size="lg"
-            radius="xl"
+            radius="md"
             rightSection={<IconArrowRight size={18} stroke={2.4} />}
           >
             無料ではじめる

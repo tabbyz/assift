@@ -17,7 +17,7 @@ export function SiteHeader({ loggedIn }: { loggedIn: boolean }) {
         <Group className={classes.headerInner} justify="space-between" wrap="nowrap">
           <Logo />
           {loggedIn ? (
-            <LinkButton href="/tenants" radius="xl">
+            <LinkButton href="/tenants" radius="md">
               アプリを開く
             </LinkButton>
           ) : (
@@ -36,7 +36,7 @@ export function SiteHeader({ loggedIn }: { loggedIn: boolean }) {
               <Link href="/login" className={classes.loginLink}>
                 ログイン
               </Link>
-              <LinkButton href="/signup" radius="xl" className={classes.headerCta}>
+              <LinkButton href="/signup" radius="md" className={classes.headerCta}>
                 無料ではじめる
               </LinkButton>
             </Group>

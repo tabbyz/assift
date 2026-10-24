@@ -7,8 +7,9 @@
 
 .site {
   --site-panel: var(--mantine-color-gray-1);
-  --site-radius-lg: 28px;
-  --site-radius-md: 18px;
+  /* 角丸は控えめに（016 §19。28 / 18px では丸すぎた） */
+  --site-radius-lg: 16px;
+  --site-radius-md: 12px;
   --site-section-gap: 104px;
   --site-header-height: 68px;
   /* sticky のヘッダーに見出しが隠れないよう、ページ内リンクの行き先（規約の各条など）をずらす量 */
@@ -102,24 +103,15 @@
 
 /* ---- ヒーロー ---- */
 
+/* 上下はゆったり取る（016 §19。72px / 24px では窮屈だった）。下の余白はデモの節の上の余白と合わせて、ボタンと枠の間になる */
 .hero {
-  padding-block: 72px 24px;
+  padding-block: 120px 40px;
   text-align: center;
 }
 
 @media (max-width: 36em) {
   .hero {
-    padding-top: 48px;
-  }
-}
-
-/*
- * スマホ幅では「デモをさわる」を出さない。デモはすぐ下にあり、ボタンが 2 段に折り返してデモを画面の外へ押し出す。
- * Mantine の Button の display に勝つよう、クラスを 2 つ重ねる
- */
-@media (max-width: 36em) {
-  .hero .demoButton {
-    display: none;
+    padding-block: 64px 24px;
   }
 }
 
@@ -130,7 +122,7 @@
   gap: 8px;
   padding: 4px 14px;
   border: 1px solid var(--mantine-color-gray-3);
-  border-radius: 999px;
+  border-radius: 8px;
   font-size: 13px;
   font-weight: 500;
   line-height: 1.6;
@@ -153,7 +145,7 @@
   margin: 24px 0 0;
   font-size: min(68px, calc((100vw - 48px) / 9.4));
   font-weight: 900;
-  line-height: 1.25;
+  line-height: 1.15;
   letter-spacing: -0.01em;
 }
 
@@ -268,7 +260,23 @@
 .sectionTitle {
   font-size: clamp(28px, 4vw, 44px);
   font-weight: 900;
-  line-height: 1.4;
+  /* 2 行になったとき間延びしないよう詰める（016 §19。1.4 では行の間が空きすぎた） */
+  line-height: 1.15;
+}
+
+/*
+ * PC（60em 以上）では改行（`\n`）をやめて 1 行で組む（016 §19）。収まらないとき（2 カラムの節）は文節の切れ目で折り返すので、
+ * 改行していたのと同じ位置で 2 行になる
+ */
+@media (min-width: 60em) {
+  .sectionTitle br {
+    display: none;
+  }
+}
+
+/* 文節の終わりの「、」（`Phrases` が包む）。見出しで 1 行に続けたとき後ろが開くので詰める。本文では詰めない */
+.sectionTitle .phraseComma {
+  letter-spacing: -0.3em;
 }
 
 .panel {
@@ -291,7 +299,7 @@
 .demoStage {
   position: relative;
   isolation: isolate;
-  padding-block: 40px var(--site-section-gap);
+  padding-block: 56px var(--site-section-gap);
 }
 
 .demoStage::before {
@@ -313,7 +321,7 @@
 
 @media (max-width: 36em) {
   .demoStage {
-    padding-top: 24px;
+    padding-top: 32px;
   }
 }
 
@@ -400,7 +408,7 @@
 
 .aiNote {
   padding: 10px 12px;
-  border-radius: 12px;
+  border-radius: 8px;
   background-color: var(--site-panel);
   font-size: 12.5px;
   line-height: 1.6;
@@ -413,7 +421,7 @@
   max-width: 100%;
   height: 44px;
   padding: 0 8px 0 16px;
-  border-radius: 999px;
+  border-radius: 8px;
   background-color: var(--site-panel);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 13px;
@@ -433,7 +441,7 @@
   align-items: center;
   height: 30px;
   padding: 0 12px;
-  border-radius: 999px;
+  border-radius: 6px;
   background-color: var(--mantine-color-dark-8);
   color: var(--mantine-color-white);
   font-family: var(--mantine-font-family);
@@ -600,7 +608,7 @@
 
 .tag {
   padding: 4px 12px;
-  border-radius: 999px;
+  border-radius: 6px;
   background-color: var(--mantine-color-body);
   font-size: 12.5px;
   color: var(--mantine-color-dimmed);
@@ -713,7 +721,7 @@
 .finalTitle {
   font-size: min(54px, calc((100vw - 48px) / 10.6));
   font-weight: 900;
-  line-height: 1.3;
+  line-height: 1.15;
 }
 
 @media (max-width: 36em) {

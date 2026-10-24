@@ -8,7 +8,7 @@
   position: relative;
   overflow: hidden;
   border: 1px solid var(--mantine-color-gray-2);
-  border-radius: 16px;
+  border-radius: 12px;
   background-color: var(--mantine-color-body);
   box-shadow:
     0 2px 6px rgb(0 0 0 / 4%),
@@ -228,7 +228,7 @@
   width: min(360px, 100%);
   padding: 14px 16px 16px;
   border: 1px solid var(--mantine-color-default-border);
-  border-radius: 12px;
+  border-radius: 10px;
   background-color: var(--mantine-color-body);
   box-shadow: 0 16px 40px -16px rgb(0 0 0 / 30%);
   animation: shareIn 0.18s ease-out;

@@ -57,7 +57,7 @@ export function StaffView({ dates, holidays }: Props) {
           <Stack justify="center" gap={0} pr={{ md: 24 }}>
             <SectionHeading
               kicker="スタッフの画面"
-              title={'スタッフは、\nリンクを開くだけ'}
+              title={'スタッフは\nリンクを開くだけ'}
               description="LINEのグループにURLを貼れば、全員が同じ表を見られます。"
               mb={28}
             />

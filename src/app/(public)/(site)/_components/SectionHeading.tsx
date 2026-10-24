@@ -14,13 +14,13 @@ type Props = {
 /** セクションの見出し（小さなラベル + 見出し + 説明） */
 export function SectionHeading({ kicker, title, description, mb = 52 }: Props) {
   return (
-    <Stack gap={14} maw="36em" mb={mb}>
+    <Stack gap={14} mb={mb}>
       <Text className={classes.kicker}>{kicker}</Text>
       <Title order={2} className={classes.sectionTitle}>
         <Phrases>{title}</Phrases>
       </Title>
       {description && (
-        <Text c="dimmed" fz={16}>
+        <Text c="dimmed" fz={16} maw="36em">
           {description}
         </Text>
       )}

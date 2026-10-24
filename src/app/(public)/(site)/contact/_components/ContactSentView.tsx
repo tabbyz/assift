@@ -81,10 +81,10 @@ export function ContactSentView({ replyTo, requestId, loggedIn, onAgain }: Props
         数日たっても届かない場合は、迷惑メールのフォルダをご確認ください。
       </Text>
       <Group justify="center" gap="sm" mt="xs">
-        <LinkButton href={loggedIn ? '/tenants' : '/'} size="md" radius="xl">
+        <LinkButton href={loggedIn ? '/tenants' : '/'} size="md" radius="md">
           {loggedIn ? 'アプリに戻る' : 'トップへ戻る'}
         </LinkButton>
-        <Button variant="default" size="md" radius="xl" onClick={onAgain}>
+        <Button variant="default" size="md" radius="md" onClick={onAgain}>
           別のお問い合わせを送る
         </Button>
       </Group>

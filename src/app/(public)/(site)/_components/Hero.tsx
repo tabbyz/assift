@@ -1,8 +1,7 @@
 import { Container, Group, Text, Title } from '@mantine/core'
-import { IconArrowDown, IconArrowRight } from '@tabler/icons-react'
+import { IconArrowRight } from '@tabler/icons-react'
 import { LinkButton } from '@/components/LinkButton'
 import { FREE_STAFF_LIMIT } from '@/lib/billing/pricing'
-import { DEMO_ID } from '../_lib/sectionIds'
 import { Phrases } from './Phrases'
 import classes from '../Site.module.css'
 
@@ -28,24 +27,14 @@ export function Hero() {
             {'assift（アシフト）は、|シフト表を効率よく\n作成することだけを|追求したサービスです。'}
           </Phrases>
         </Text>
-        <Group gap="sm" mt={32} justify="center">
+        <Group mt={32} justify="center">
           <LinkButton
             href="/signup"
             size="lg"
-            radius="xl"
+            radius="md"
             rightSection={<IconArrowRight size={18} stroke={2.4} />}
           >
             無料ではじめる
-          </LinkButton>
-          <LinkButton
-            href={`#${DEMO_ID}`}
-            size="lg"
-            radius="xl"
-            variant="default"
-            className={classes.demoButton}
-            rightSection={<IconArrowDown size={18} stroke={2.4} />}
-          >
-            デモをさわる
           </LinkButton>
         </Group>
       </Container>
