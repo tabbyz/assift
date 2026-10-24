@@ -1,5 +1,5 @@
 import { Fragment, type CSSProperties } from 'react'
-import { Container, Group, SimpleGrid, Stack, Text, Title } from '@mantine/core'
+import { Container, Group, SimpleGrid, Text, Title } from '@mantine/core'
 import { IconSparkles } from '@tabler/icons-react'
 import { cellStyle } from '@/components/shiftTable/cellStyle'
 import { DEMO_PATTERNS } from '../_lib/demoData'
@@ -7,6 +7,8 @@ import { Phrases } from './Phrases'
 import { SectionHeading } from './SectionHeading'
 import { Stamp } from './Stamp'
 import classes from '../Site.module.css'
+
+const patternsById = new Map(DEMO_PATTERNS.map((p) => [p.id, p]))
 
 /** AI への指示が効いた 1 週間（1 枚目の図）。AI が入れるのは下書き */
 const AI_DAYS = ['月', '火', '水', '木', '金', '土', '日']
@@ -16,13 +18,12 @@ const AI_ROWS: [string, string[]][] = [
   ['鈴木', ['late', 'late', 'early', 'paid', 'early', 'late', 'off']],
 ]
 
-/** 曜日ごとのいつもの勤務（2 枚目の図）。いつもの勤務は下書きで入る */
-const WEEK_DAYS = ['月', '火', '水', '木', '金']
-const WEEK_ROWS: [string, string[]][] = [
-  ['佐藤', ['early', 'early', 'off', 'early', 'early']],
-  ['鈴木', ['late', 'late', 'late', 'off', 'late']],
-  ['高橋', ['off', 'early', 'early', 'late', 'off']],
-]
+/**
+ * スタッフのいつもの勤務（2 枚目の図。016 §29）。シフト表の絵が続くので、ここはスタッフのカードにする。
+ * 曜日の並びは `AI_DAYS` と同じ月〜日
+ */
+const USUAL_WEEK = ['early', 'early', 'off', 'late', 'late', 'early', 'off']
+const USUAL_WORKDAYS = USUAL_WEEK.filter((id) => patternsById.get(id)?.kind === 'workday').length
 
 /**
  * 同じシフト表を PC とスマホで（3 枚目の図）。マスは文字を入れない色の帯。
@@ -76,8 +77,6 @@ const DEVICE_ROWS: [string, boolean][][] = [
   ],
 ]
 
-const patternsById = new Map(DEMO_PATTERNS.map((p) => [p.id, p]))
-
 /**
  * できること（4 枚。016 §26）。AI は 1 枚にまとめ、ほかは「まとめて入る → どこでも作れる → 送るだけ」。
  * 図はアイコンではなく、アプリの中にあるもの（マス・AI の結果・共有の URL）で描く
@@ -126,26 +125,34 @@ export function Features() {
           </FeatureCard>
 
           <FeatureCard
-            title="いつものシフトは|まとめて入る"
+            title="固定のシフトは|一度決めるだけ"
             body="スタッフごとに曜日のいつもの勤務を決めておけば、空いている日にまとめて入ります。前の期間のシフトを、そのままコピーすることもできます。"
           >
-            <Stack gap={0} align="center" w="100%">
-              <div className={classes.weekGrid}>
-                <span />
-                {WEEK_DAYS.map((day) => (
-                  <small key={day}>{day}</small>
-                ))}
-                {WEEK_ROWS.map(([name, cells]) => (
-                  <Fragment key={name}>
-                    <b>{name}</b>
-                    {cells.map((patternId, i) => (
-                      <Stamp key={i} patternId={patternId} />
-                    ))}
-                  </Fragment>
+            <div className={classes.staffCard}>
+              <div className={classes.staffCardHead}>
+                <span
+                  className={classes.avatar}
+                  style={cellStyle(patternsById.get('early'), false)}
+                >
+                  佐
+                </span>
+                <div>
+                  <b>佐藤さん</b>
+                  <small>いつもの勤務</small>
+                </div>
+                <span className={classes.staffCardDays}>週{USUAL_WORKDAYS}日</span>
+              </div>
+              <div className={classes.staffCardWeek}>
+                {USUAL_WEEK.map((patternId, i) => (
+                  <div key={i}>
+                    <small data-tone={i === 5 ? 'saturday' : i === 6 ? 'holiday' : undefined}>
+                      {AI_DAYS[i]}
+                    </small>
+                    <Stamp patternId={patternId} />
+                  </div>
                 ))}
               </div>
-              <Text className={classes.figureCaption}>曜日ごとのいつもの勤務が、まとめて入る</Text>
-            </Stack>
+            </div>
           </FeatureCard>
 
           <FeatureCard

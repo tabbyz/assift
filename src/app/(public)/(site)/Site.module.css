@@ -367,13 +367,6 @@
   background-color: var(--mantine-color-body);
 }
 
-.figureCaption {
-  margin-top: 8px;
-  font-size: 11.5px;
-  text-align: center;
-  color: var(--mantine-color-dimmed);
-}
-
 /*
  * 1 枚目の図（016 §28）。名前の列 + 7 日。指示の札は 1 行目に右寄せで置き、2 行目の札の先（.aiTagTip）を土日の 2 列の中央に置く。
  * 列の幅は枠に合わせて縮むので、札の先の位置を計算せず、グリッドの列で決める
@@ -451,34 +444,84 @@
   font-size: 11px;
 }
 
-/* 2 枚目の図。曜日 5 列のマス。スタンプは列の幅に合わせて縮める（既定の最小幅 56px だとスマホではみ出す） */
-.weekGrid {
-  display: grid;
-  grid-template-columns: 34px repeat(5, minmax(0, 1fr));
-  align-items: center;
-  gap: 3px;
+/* 2 枚目の図。スタッフのカード（016 §29）。アバター・名前・週の日数と、月〜日のいつもの勤務 */
+.staffCard {
   width: 100%;
-  max-width: 330px;
+  max-width: 300px;
+  padding: 14px 16px;
+  box-sizing: border-box;
+  border: 1px solid var(--mantine-color-gray-2);
+  border-radius: 12px;
+  background-color: var(--mantine-color-white);
+  box-shadow: 0 18px 36px -20px rgb(0 0 0 / 35%);
   font-family:
     -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Yu Gothic UI', Meiryo, sans-serif;
   line-height: 1.3;
 }
 
-.weekGrid small {
+.staffCardHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.staffCardHead b {
+  display: block;
+  font-size: 13px;
+}
+
+.staffCardHead small {
   font-size: 10.5px;
-  text-align: center;
   color: var(--mantine-color-dimmed);
 }
 
-.weekGrid b {
-  font-size: 12px;
+.avatar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 700;
 }
 
-.weekGrid .stamp {
+.staffCardDays {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--mantine-color-dimmed);
+}
+
+.staffCardWeek {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 12px;
+  text-align: center;
+}
+
+.staffCardWeek small {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 10px;
+  color: var(--mantine-color-dimmed);
+}
+
+.staffCardWeek small[data-tone='saturday'] {
+  color: var(--mantine-color-blue-8);
+}
+
+.staffCardWeek small[data-tone='holiday'] {
+  color: var(--mantine-color-red-8);
+}
+
+.staffCardWeek .stamp {
+  width: 100%;
   min-width: 0;
-  height: 30px;
+  height: 24px;
   padding: 0;
-  font-size: 12.5px;
+  font-size: 10.5px;
 }
 
 /* 3 枚目の図。ノート PC の右下にスマホを重ねる。スマホは右の余白に収まるよう絶対配置 */
