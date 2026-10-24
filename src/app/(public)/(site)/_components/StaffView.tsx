@@ -11,8 +11,11 @@ import classes from '../Site.module.css'
 
 const POINTS = [
   { title: 'アプリも登録も要りません', body: 'スマホのブラウザで開けます。' },
-  { title: 'いつ開いても最新の表', body: '直したシフトも、同じリンクにそのまま反映されます。' },
-  { title: 'リンクには公開期限があります', body: '古い表がいつまでも残りません。' },
+  {
+    title: 'いつ開いても最新のシフト表',
+    body: '直したシフトも、同じリンクにそのまま反映されます。',
+  },
+  { title: 'リンクには公開期限があります', body: '古いシフト表がいつまでも残りません。' },
 ]
 
 const ROWS: [string, string[]][] = [
@@ -46,19 +49,14 @@ function tone(date: string, holidays: Set<string>): string | undefined {
 export function StaffView({ dates, holidays }: Props) {
   const holidaySet = new Set(holidays)
   return (
-    <section
-      id={STAFF_VIEW_ID}
-      className={classes.section}
-      // デモの共有カードから送られてくる。sticky のヘッダーに見出しが隠れないようにずらす
-      style={{ scrollMarginTop: 'var(--site-anchor-offset)' }}
-    >
+    <section id={STAFF_VIEW_ID} className={classes.section}>
       <Container size={1120} px={{ base: 'md', sm: 'lg' }}>
         <SimpleGrid cols={{ base: 1, md: 2 }} spacing={20}>
           <Stack justify="center" gap={0} pr={{ md: 24 }}>
             <SectionHeading
               kicker="スタッフの画面"
-              title={'スタッフは、\nリンクを開くだけ'}
-              description="LINEのグループにURLを貼れば、全員が同じ表を見られます。"
+              title={'スタッフは\nリンクを開くだけ'}
+              description="LINEのグループにURLを貼れば、全員が同じシフト表を見られます。"
               mb={28}
             />
             <Stack gap={16}>

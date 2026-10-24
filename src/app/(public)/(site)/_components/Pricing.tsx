@@ -11,11 +11,7 @@ export function Pricing() {
       <Container size={1120} px={{ base: 'md', sm: 'lg' }}>
         <SimpleGrid cols={{ base: 1, md: 2 }} spacing={20}>
           <Stack gap={20} pr={{ md: 24 }}>
-            <SectionHeading
-              kicker="料金"
-              title={`${FREE_STAFF_LIMIT}人までは、|無料で使えます`}
-              mb={0}
-            />
+            <SectionHeading kicker="料金" title={`${FREE_STAFF_LIMIT}人まで|無料で使える`} mb={0} />
             <Group gap="6px 14px" align="baseline">
               <Text component="span" className={classes.priceBig}>
                 0<small>円</small>
@@ -32,11 +28,7 @@ export function Pricing() {
               機能はどの人数でも同じです。数えるのは在籍しているスタッフです。
             </Text>
             <Text className={classes.micro}>
-              有料プランは登録できる人数の上限を決めておけるので、それを超える請求にはなりません。
-            </Text>
-            <Text className={classes.micro}>
-              {FREE_STAFF_LIMIT + 1}
-              人目を追加するときに、2か月後の月末まで人数の制限なく無料で試せます（カードの登録は不要です）。
+              無料トライアルなら、人数の制限なく2か月後の月末まで試せます（カードの登録は不要です）。
             </Text>
           </Stack>
           <PriceCalculator />

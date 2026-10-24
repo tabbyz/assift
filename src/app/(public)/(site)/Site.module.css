@@ -1,14 +1,15 @@
 /*
  * LP（016）。Mantine に無いものだけをここに書く: スタンプの傾き・面の角丸・2 行固定の見出し・文節の折り返し・
- * スマホの枠・黒い CTA の面。色は Mantine の変数から取り、パターン色は `cellStyle()` が inline で当てる。
+ * スマホの枠・最後の CTA の帯。色は Mantine の変数から取り、パターン色は `cellStyle()` が inline で当てる。
  *
- * トーン（016 §2）: 白黒が基本。色を持つのはシフト表のマスだけ。面は大きな角丸の薄いグレー、黒い面は最後の CTA だけ。
+ * トーン（016 §2）: 白黒が基本。色を持つのはシフト表のマスだけ。面は大きな角丸の薄いグレー（最後の CTA だけ全幅の帯）。黒はボタンだけ。
  */
 
 .site {
   --site-panel: var(--mantine-color-gray-1);
-  --site-radius-lg: 28px;
-  --site-radius-md: 18px;
+  /* 角丸は控えめに（016 §19。28 / 18px では丸すぎた） */
+  --site-radius-lg: 16px;
+  --site-radius-md: 12px;
   --site-section-gap: 104px;
   --site-header-height: 68px;
   /* sticky のヘッダーに見出しが隠れないよう、ページ内リンクの行き先（規約の各条など）をずらす量 */
@@ -102,36 +103,61 @@
 
 /* ---- ヒーロー ---- */
 
+/* 上下はゆったり取る（016 §19。72px / 24px では窮屈だった）。下の余白はデモの節の上の余白と合わせて、ボタンと枠の間になる */
 .hero {
-  position: relative;
-  padding-block: 64px 48px;
+  padding-block: 120px 40px;
+  text-align: center;
+}
+
+@media (max-width: 36em) {
+  .hero {
+    padding-block: 64px 24px;
+  }
+}
+
+/* 見出しの上の小さな札。押せる物ではない（料金へはヘッダーから行ける。016 §22）。塗るとボタンと並んで重いので枠線だけ */
+.badge {
+  display: inline-block;
+  padding: 4px 14px;
+  border: 1px solid var(--mantine-color-gray-3);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.6;
+  color: var(--mantine-color-gray-8);
 }
 
 /*
- * 見出しはどの画面幅でも 2 行。行の中では折り返さず、長い方の行（9 文字）が画面に収まるよう
+ * 狭い画面では 2 行。行の中では折り返さず、長い方の行（9 文字）が画面に収まるよう
  * 文字の大きさを画面幅から決める（016 §4.4）。左右の余白は Container の padding（md = 16px × 2 / 24px × 2）。
- * 上限の 90px は、スタンプが出る最も狭い画面（65em）でも 1 行目がスタンプに届かない大きさ
+ * 60em 以上は改行せず 1 行（016 §16）。1 行の幅は約 12.3em（68px で 836px）で、13.6 で割って少し余裕を持たせる。
+ * 上限の 68px は、セクションの見出し（44px）の 1.5 倍ほど。90px では PC で見出しだけが大きすぎた（016 §14）
  */
 .heroTitle {
-  margin: 8px 0 0;
-  font-size: min(90px, calc((100vw - 48px) / 9.4));
+  margin: 24px 0 0;
+  font-size: min(68px, calc((100vw - 48px) / 9.4));
   font-weight: 900;
-  line-height: 1.25;
+  line-height: 1.15;
   letter-spacing: -0.01em;
 }
 
 /*
  * カタカナは字形が全角の枠より小さく、太字で大きくすると後ろのすき間が目立つので 1 文字ずつ詰める
  * （letter-spacing はその文字の後ろに付く）。「シ」は少し、「フ」は右が大きく空くので多めに、「ト」は詰めない。
- * LP の書体（Zen Kaku Gothic New）は palt が効かないため手で詰める。
- * 行は短くなるだけなので、文字の大きさの計算（全角 9 文字）はそのままでよい
+ * LP の書体（Zen Kaku Gothic New）は palt が効かないため手で詰める。ヒーローと最後の CTA の見出しで使う。
+ * 行は短くなるだけなので、文字の大きさの計算（全角の文字数）はそのままでよい
  */
-.heroKern {
+.kern {
   letter-spacing: -0.1em;
 }
 
-.heroKernMore {
+.kernMore {
   letter-spacing: -0.2em;
+}
+
+/* 「、」は字形が左下に寄り、右の半分が空く。1 行で続けて組む見出し（ヒーローと最後の CTA の PC）で後ろが開いて見えるので詰める */
+.kernComma {
+  letter-spacing: -0.3em;
 }
 
 @media (max-width: 36em) {
@@ -145,13 +171,46 @@
   white-space: nowrap;
 }
 
+@media (min-width: 60em) {
+  .heroTitle {
+    font-size: min(68px, calc((100vw - 48px) / 13.6));
+  }
+
+  .heroLine {
+    display: inline;
+  }
+}
+
+/*
+ * ヒーローの説明文。dimmed（#868e96。白地で約 3.3:1）と LP の書体の 400 では線が細く、見えづらかった（016 §28）。
+ * gray-7（約 8.6:1）と 500 にする。見出しより弱く、本文として読める濃さ
+ */
 .lead {
   max-width: 34em;
+  margin-inline: auto;
+  /* PC は 19px、スマホは 15px（016 §28）。間の幅は 17px */
   font-size: 17px;
-  color: var(--mantine-color-dimmed);
+  font-weight: 500;
+  color: var(--mantine-color-gray-7);
 }
 
 @media (max-width: 36em) {
+  .lead {
+    font-size: 15px;
+  }
+
+  .lead br {
+    display: none;
+  }
+}
+
+/* 見出しが 1 行になる幅（60em 以上）では説明文も改行しない（016 §17）。1 行は約 39 文字（17px で約 660px） */
+@media (min-width: 60em) {
+  .lead {
+    max-width: none;
+    font-size: 19px;
+  }
+
   .lead br {
     display: none;
   }
@@ -160,41 +219,6 @@
 .micro {
   font-size: 13.5px;
   color: var(--mantine-color-dimmed);
-}
-
-/* ヒーロー右のスタンプ。広い画面だけ */
-.heroStamps {
-  position: absolute;
-  top: 72px;
-  right: var(--mantine-spacing-md);
-  display: grid;
-  gap: 14px;
-  justify-items: end;
-}
-
-.heroStamps > :nth-child(1) {
-  margin-right: 64px;
-  transform: rotate(-5deg);
-}
-
-.heroStamps > :nth-child(2) {
-  transform: rotate(3deg);
-}
-
-.heroStamps > :nth-child(3) {
-  margin-right: 36px;
-  transform: rotate(-2deg);
-}
-
-.heroStamps > :nth-child(4) {
-  margin-right: 104px;
-  transform: rotate(6deg);
-}
-
-@media (max-width: 65em) {
-  .heroStamps {
-    display: none;
-  }
 }
 
 /* ---- スタンプ（シフト表のマス） ---- */
@@ -220,13 +244,6 @@
   font-weight: 700;
 }
 
-.stamp[data-size='lg'] {
-  min-width: 92px;
-  height: 52px;
-  border-radius: 6px;
-  font-size: 18px;
-}
-
 .stamp[data-floating='true'] {
   box-shadow: 0 10px 24px -14px rgb(0 0 0 / 35%);
 }
@@ -235,6 +252,8 @@
 
 .section {
   padding-bottom: var(--site-section-gap);
+  /* ヘッダーのページ内リンク（#features / #price / #faq）とデモの共有カード（#staff-view）の飛び先。sticky のヘッダーに隠れないようずらす（016 §27） */
+  scroll-margin-top: var(--site-anchor-offset);
 }
 
 .kicker {
@@ -246,7 +265,23 @@
 .sectionTitle {
   font-size: clamp(28px, 4vw, 44px);
   font-weight: 900;
-  line-height: 1.4;
+  /* 2 行になったとき間延びしないよう詰める（016 §19。1.4 では行の間が空きすぎた） */
+  line-height: 1.15;
+}
+
+/*
+ * PC（60em 以上）では改行（`\n`）をやめて 1 行で組む（016 §19）。収まらないとき（2 カラムの節）は文節の切れ目で折り返すので、
+ * 改行していたのと同じ位置で 2 行になる
+ */
+@media (min-width: 60em) {
+  .sectionTitle br {
+    display: none;
+  }
+}
+
+/* 文節の終わりの「、」（`Phrases` が包む）。見出しで 1 行に続けたとき後ろが開くので詰める。本文では詰めない */
+.sectionTitle .phraseComma {
+  letter-spacing: -0.3em;
 }
 
 .panel {
@@ -262,13 +297,36 @@
 
 /* ---- デモ ---- */
 
-.tray {
-  padding: 20px;
+/*
+ * デモの節（016 §15）。ウィンドウ風の枠の後ろに薄い方眼を敷き、上の中央から外へ消していく。
+ * 方眼は ::before に描いてそこだけをマスクする（節ごとマスクすると枠まで薄くなる）
+ */
+.demoStage {
+  position: relative;
+  isolation: isolate;
+  padding-block: 56px var(--site-section-gap);
+}
+
+.demoStage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(var(--mantine-color-gray-2) 1px, transparent 1px),
+    linear-gradient(90deg, var(--mantine-color-gray-2) 1px, transparent 1px);
+  background-position: center top;
+  background-size: 48px 48px;
+  /* 下と左右へ消す楕円と、上端の線を消す帯を重ねる（両方が不透明なところだけ残す） */
+  mask-image:
+    radial-gradient(ellipse 70% 80% at 50% 0%, #000 30%, transparent 100%),
+    linear-gradient(transparent, #000 96px);
+  mask-composite: intersect;
 }
 
 @media (max-width: 36em) {
-  .tray {
-    padding: 10px;
+  .demoStage {
+    padding-top: 32px;
   }
 }
 
@@ -309,47 +367,224 @@
   background-color: var(--mantine-color-body);
 }
 
-.figureCaption {
-  margin-top: 8px;
-  font-size: 11.5px;
+/*
+ * 1 枚目の図（016 §28）。名前の列 + 7 日。指示の札は 1 行目に右寄せで置き、2 行目の札の先（.aiTagTip）を土日の 2 列の中央に置く。
+ * 列の幅は枠に合わせて縮むので、札の先の位置を計算せず、グリッドの列で決める
+ */
+.aiTable {
+  display: grid;
+  grid-template-columns: 34px repeat(7, minmax(0, 1fr));
+  align-items: center;
+  gap: 3px;
+  width: 100%;
+  max-width: 310px;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Yu Gothic UI', Meiryo, sans-serif;
+  line-height: 1.3;
+}
+
+.aiTable small {
+  font-size: 10.5px;
   text-align: center;
   color: var(--mantine-color-dimmed);
 }
 
-.coverageRow {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 54px));
-  gap: 4px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
+.aiTable small[data-tone='saturday'] {
+  color: var(--mantine-color-blue-8);
 }
 
-.coverageRow small {
+.aiTable small[data-tone='holiday'] {
+  color: var(--mantine-color-red-8);
+}
+
+.aiTable b {
+  font-size: 12px;
+}
+
+.aiTag {
+  grid-column: 1 / -1;
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background-color: var(--mantine-color-dark-8);
+  font-family: var(--font-site), sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--mantine-color-white);
+}
+
+.aiTagTip {
+  grid-column: 7 / 9;
+  justify-self: center;
+  width: 10px;
+  height: 10px;
+  margin-top: -9px;
+  margin-bottom: 2px;
+  background-color: var(--mantine-color-dark-8);
+  transform: rotate(45deg);
+}
+
+.aiCell {
+  display: grid;
+  border-radius: 4px;
+}
+
+.aiCell[data-hit] {
+  box-shadow: 0 0 0 2px var(--mantine-color-dark-8);
+}
+
+.aiCell .stamp {
+  min-width: 0;
+  height: 26px;
+  padding: 0;
+  font-size: 11px;
+}
+
+/* 2 枚目の図。スタッフのカード（016 §29）。アバター・名前・週の日数と、月〜日のいつもの勤務 */
+.staffCard {
+  width: 100%;
+  max-width: 300px;
+  padding: 14px 16px;
+  box-sizing: border-box;
+  border: 1px solid var(--mantine-color-gray-2);
+  border-radius: 12px;
+  background-color: var(--mantine-color-white);
+  box-shadow: 0 18px 36px -20px rgb(0 0 0 / 35%);
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Yu Gothic UI', Meiryo, sans-serif;
+  line-height: 1.3;
+}
+
+.staffCardHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.staffCardHead b {
+  display: block;
+  font-size: 13px;
+}
+
+.staffCardHead small {
   font-size: 10.5px;
+  color: var(--mantine-color-dimmed);
+}
+
+.avatar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.staffCardDays {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--mantine-color-dimmed);
+}
+
+.staffCardWeek {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 12px;
+  text-align: center;
+}
+
+.staffCardWeek small {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 10px;
+  color: var(--mantine-color-dimmed);
+}
+
+.staffCardWeek small[data-tone='saturday'] {
+  color: var(--mantine-color-blue-8);
+}
+
+.staffCardWeek small[data-tone='holiday'] {
+  color: var(--mantine-color-red-8);
+}
+
+.staffCardWeek .stamp {
+  width: 100%;
+  min-width: 0;
+  height: 24px;
+  padding: 0;
+  font-size: 10.5px;
+}
+
+/*
+ * 3 枚目の図（016 §30）。白い枠を縦の線で左右に分け、使う場面を 1 つずつ置く。
+ * カードが 2 列のとき（768px 前後）は図の幅が 250px ほどになるので、図の幅が狭いときだけ文言を 2 行に折る（コンテナクエリ）。
+ * 左右で文言の行数が違っても端末の絵の高さをそろえるため、行は subgrid で共有する（1 行目 = 絵、2 行目 = 文言）
+ */
+.halves {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-content: center;
+  align-self: stretch;
+  width: 100%;
+  container-type: inline-size;
+}
+
+.half {
+  display: grid;
+  grid-row: span 2;
+  grid-template-rows: subgrid;
+  align-items: end;
+  justify-items: center;
+  row-gap: 14px;
+  padding: 12px 8px;
+  color: var(--mantine-color-dark-8);
+  text-align: center;
+}
+
+.half + .half {
+  border-left: 1px solid var(--mantine-color-gray-2);
+}
+
+.halfLabel {
+  align-self: start;
+  color: var(--mantine-color-black);
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.halfLabel small {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--mantine-color-dimmed);
 }
 
-.coverageCell {
-  padding: 8px 0;
-  border-radius: 4px;
-  background-color: var(--site-panel);
-  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--mantine-color-green-9);
+@container (max-width: 240px) {
+  .half {
+    padding-inline: 4px;
+  }
+
+  .halfLabel {
+    font-size: 14px;
+  }
 }
 
-.coverageCell[data-short='true'] {
-  color: var(--mantine-color-red-9);
-}
-
-.aiNote {
-  padding: 10px 12px;
-  border-radius: 12px;
-  background-color: var(--site-panel);
-  font-size: 12.5px;
-  line-height: 1.6;
+@container (min-width: 381px) {
+  .halfLabel br {
+    display: none;
+  }
 }
 
 .linkPill {
@@ -359,7 +594,7 @@
   max-width: 100%;
   height: 44px;
   padding: 0 8px 0 16px;
-  border-radius: 999px;
+  border-radius: 8px;
   background-color: var(--site-panel);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 13px;
@@ -379,7 +614,7 @@
   align-items: center;
   height: 30px;
   padding: 0 12px;
-  border-radius: 999px;
+  border-radius: 6px;
   background-color: var(--mantine-color-dark-8);
   color: var(--mantine-color-white);
   font-family: var(--mantine-font-family);
@@ -546,7 +781,7 @@
 
 .tag {
   padding: 4px 12px;
-  border-radius: 999px;
+  border-radius: 6px;
   background-color: var(--mantine-color-body);
   font-size: 12.5px;
   color: var(--mantine-color-dimmed);
@@ -560,9 +795,22 @@
 
 /* ---- 料金 ---- */
 
+/*
+ * 金額と人数の数字はアプリと同じシステムフォントで描く（016 §21）。LP の書体（Zen Kaku Gothic New）は数字が細長く、
+ * 104px の「0」では縦に伸びて見えた。ほかの数字（デモの表・充足の数字）もシステムフォントなのでそろう。
+ * 太さは 800（ヒラギノの W8）。900 は W9 になり、黒く潰れる
+ */
+.priceBig,
+.priceRuleStrong,
+.calcValue,
+.totalValue {
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Yu Gothic UI', Meiryo, sans-serif;
+  font-weight: 800;
+}
+
 .priceBig {
   font-size: clamp(64px, 9vw, 104px);
-  font-weight: 900;
   line-height: 1;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
@@ -576,7 +824,8 @@
 
 .priceRuleStrong {
   font-size: 22px;
-  font-weight: 900;
+  /* 前の「11人目からは」と詰まって見えるので少し離す */
+  margin-left: 0.2em;
 }
 
 .calc {
@@ -591,7 +840,6 @@
 
 .calcValue {
   font-size: 28px;
-  font-weight: 900;
   line-height: 1.2;
   font-variant-numeric: tabular-nums;
 }
@@ -604,7 +852,6 @@
 
 .totalValue {
   font-size: 36px;
-  font-weight: 900;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
 }
@@ -638,76 +885,42 @@
 
 /* ---- 最後の CTA ---- */
 
-.finalBox {
-  position: relative;
-  overflow: hidden;
-  padding: 80px 56px;
-  border-radius: var(--site-radius-lg);
-  background-color: var(--mantine-color-dark-8);
-  color: var(--mantine-color-white);
+/* 全幅の帯。面の色はほかの面と同じ。下のフッターとの間は帯の外の余白で取る（フッターは上に余白を持たない） */
+.final {
+  margin-bottom: 48px;
+  padding-block: 96px;
+  background-color: var(--site-panel);
+  text-align: center;
 }
 
 @media (max-width: 36em) {
-  .finalBox {
-    padding: 48px 24px;
-    border-radius: var(--site-radius-md);
+  .final {
+    padding-block: 64px;
   }
 }
 
-/* 「来月のシフト表から、」（10 文字）が 1 行に収まる大きさ。左右の余白（Container + 箱の padding）を引いて決める */
+/*
+ * 狭い画面は 2 行。「来月のシフト表から、」（10 文字）が 1 行に収まる大きさを、Container の左右の余白を引いて決める。
+ * 60em 以上は改行せず 1 行。1 行の幅は約 14.2em（54px で 766px）で、15.6 で割って少し余裕を持たせる
+ */
 .finalTitle {
-  position: relative;
-  font-size: clamp(24px, calc((100vw - 176px) / 10.6), 54px);
+  font-size: min(54px, calc((100vw - 48px) / 10.6));
   font-weight: 900;
-  line-height: 1.3;
-  color: inherit;
+  line-height: 1.15;
 }
 
 @media (max-width: 36em) {
   .finalTitle {
-    font-size: calc((100vw - 96px) / 10.6);
+    font-size: calc((100vw - 32px) / 10.6);
   }
 }
 
-.finalMicro {
-  position: relative;
-  font-size: 13.5px;
-  color: color-mix(in srgb, var(--mantine-color-white) 70%, transparent);
-}
+@media (min-width: 60em) {
+  .finalTitle {
+    font-size: min(54px, calc((100vw - 48px) / 15.6));
+  }
 
-/* 箱の子として並べると Stack の gap が空くので、箱そのものは消して子だけを絶対配置する */
-.finalStamps {
-  display: contents;
-}
-
-.finalStamps > * {
-  position: absolute;
-  min-width: 84px;
-  height: 48px;
-  font-size: 17px;
-  box-shadow: 0 12px 28px -14px rgb(0 0 0 / 60%);
-}
-
-.finalStamps > :nth-child(1) {
-  top: 22%;
-  right: 12%;
-  transform: rotate(8deg);
-}
-
-.finalStamps > :nth-child(2) {
-  right: 22%;
-  bottom: 20%;
-  transform: rotate(-6deg);
-}
-
-.finalStamps > :nth-child(3) {
-  right: 5%;
-  bottom: 34%;
-  transform: rotate(-3deg);
-}
-
-@media (max-width: 56em) {
-  .finalStamps {
+  .finalBreak {
     display: none;
   }
 }

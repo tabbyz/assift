@@ -7,37 +7,97 @@
   /* 共有のカード（.shareLayer）を枠の中に重ねる */
   position: relative;
   overflow: hidden;
-  border-radius: 14px;
+  border: 1px solid var(--mantine-color-gray-2);
+  border-radius: 12px;
   background-color: var(--mantine-color-body);
   box-shadow:
-    0 1px 2px rgb(0 0 0 / 6%),
-    0 18px 40px -24px rgb(0 0 0 / 25%);
+    0 2px 6px rgb(0 0 0 / 4%),
+    0 40px 80px -40px rgb(0 0 0 / 28%);
   font-family: var(--mantine-font-family);
   font-size: var(--mantine-font-size-sm);
   line-height: var(--mantine-line-height);
 }
 
-/* 枠の上の行。左にラベル、右に「最初からやり直す」。高さはボタンに合わせて固定され、ボタンが出ても変わらない */
-.head {
-  padding: 0 2px 10px 6px;
+/*
+ * ブラウザのウィンドウ風の枠の上辺（016 §15）。左に 3 つの丸、中央にドメイン、右端に「さわれるデモ」か「最初からやり直す」（016 §24）。
+ * 中央を枠の真ん中に置くため、左右の列を同じ幅（1fr）にする。高さはボタンに合わせて固定され、ボタンが出ても変わらない
+ */
+.chrome {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 4px 16px;
+  border-bottom: 1px solid var(--mantine-color-gray-2);
+  background-color: var(--mantine-color-gray-0);
 }
 
-.restart {
+.dots {
+  display: flex;
   flex: none;
-  transition: opacity 0.2s ease;
+  gap: 7px;
 }
 
-.restart[data-hidden] {
-  visibility: hidden;
-  opacity: 0;
+/*
+ * ウィンドウの 3 つの丸（016 §25）。赤・黄・緑で窓だと分かるようにする。macOS の原色より少し彩度を落とし、白地の上で目立ちすぎないようにした。
+ * 色は Mantine の外の、この絵のためだけの値なので hex で書く
+ */
+.dots > span {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
 }
 
-/* 枠の下の注記 */
-.note {
-  margin: 0;
-  padding: 10px 6px 0;
-  text-align: right;
-  font-size: 12.5px;
+.dots > span:nth-child(1) {
+  background-color: #ed6a5e;
+}
+
+.dots > span:nth-child(2) {
+  background-color: #f5bf4f;
+}
+
+.dots > span:nth-child(3) {
+  background-color: #61c554;
+}
+
+.address {
+  padding: 1px 16px;
+  border: 1px solid var(--mantine-color-gray-2);
+  border-radius: 6px;
+  background-color: var(--mantine-color-body);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--mantine-color-dimmed);
+}
+
+/* スマホ幅ではドメインを出さない。丸は出す（016 §23） */
+@media (max-width: 36em) {
+  .chrome {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding-inline: 12px;
+  }
+
+  .address {
+    display: none;
+  }
+}
+
+.restart,
+.chromeLabel {
+  justify-self: end;
+}
+
+/* 触る前のラベル。「最初からやり直す」と同じ位置に、文字の右端をそろえて置く（ボタンの左右の余白 6px の分だけ内側） */
+.chromeLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-inline: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
   color: var(--mantine-color-dimmed);
 }
 
@@ -175,7 +235,7 @@
   width: min(360px, 100%);
   padding: 14px 16px 16px;
   border: 1px solid var(--mantine-color-default-border);
-  border-radius: 12px;
+  border-radius: 10px;
   background-color: var(--mantine-color-body);
   box-shadow: 0 16px 40px -16px rgb(0 0 0 / 30%);
   animation: shareIn 0.18s ease-out;
