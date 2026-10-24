@@ -317,15 +317,6 @@
   }
 }
 
-/* 枠の上辺のラベル。押せる物に見えないよう、塗らずに小さく */
-.demoLabel {
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1;
-  white-space: nowrap;
-  color: var(--mantine-color-dimmed);
-}
-
 /* ---- できること ---- */
 
 .card {

@@ -1,17 +1,9 @@
 'use client'
 
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-  type ReactElement,
-  type ReactNode,
-} from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from 'react'
 import { Anchor, Button, Group, Popover, Text } from '@mantine/core'
 import { useReducedMotion } from '@mantine/hooks'
-import { IconRefresh, IconShare2, IconSparkles } from '@tabler/icons-react'
+import { IconHandFinger, IconRefresh, IconShare2, IconSparkles } from '@tabler/icons-react'
 import { formatMonthDay, wday } from '@/lib/calendar/dateString'
 import { applyAssign } from '@/lib/shifts/applyAssign'
 import { cellKey, type ShiftMap } from '@/lib/shifts/key'
@@ -45,8 +37,6 @@ type Props = {
   holidays: string[]
   /** ツールバーの期間タイトル（`formatPeriodTitle`） */
   title: string
-  /** 枠の上のラベル（「さわれるデモ」）。右端に「最初からやり直す」を並べる */
-  label: ReactNode
 }
 
 type ActiveCell = { staffId: string; date: string }
@@ -81,7 +71,7 @@ function dateLabel(date: string): string {
  * - 枠の上のラベルの右端に「最初からやり直す」（案内も初めから。触るまでは隠す）
  * - 結果は高さ固定の「状況の行」に出す。触る前は不足の枠数。元に戻すはこの行のリンク（016 §8。表とボタンをずらさない）
  */
-export function ShiftDemo({ dates, holidays, title, label }: Props) {
+export function ShiftDemo({ dates, holidays, title }: Props) {
   const holidaySet = useMemo(() => new Set(holidays), [holidays])
   const required = useMemo(() => demoRequired(dates, holidaySet), [dates, holidaySet])
   const notes = useMemo(() => demoNotes(dates), [dates])
@@ -305,20 +295,28 @@ export function ShiftDemo({ dates, holidays, title, label }: Props) {
       style={{ '--mantine-font-family': theme.fontFamily } as CSSProperties}
     >
       {/*
-       * ブラウザのウィンドウ風の枠の上辺（016 §15）。左に 3 つの丸と「最初からやり直す」、中央にドメイン、右端にラベル（016 §18）。
-       * ボタンはラベルから離す（隣に並べると、押せる物が 2 つあるように見える）
+       * ブラウザのウィンドウ風の枠の上辺（016 §15）。左に 3 つの丸、中央にドメイン。
+       * 右端は、触る前は「さわれるデモ」、触ったあとは「最初からやり直す」に入れ替わる（016 §24）
        */}
       <div className={classes.chrome}>
-        <Group gap={8} wrap="nowrap">
-          <span className={classes.dots} aria-hidden="true">
-            <span />
-            <span />
-            <span />
+        <span className={classes.dots} aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </span>
+        <span className={classes.address} aria-hidden="true">
+          assift.com
+        </span>
+        {/*
+         * 触る前は戻すものが無いので、ボタンの代わりにラベルを置く（016 §11・§24）。ラベルは押せる物に見えないよう塗らない。
+         * 読み上げでは節の名前（`DemoSection` の aria-label）と重なるので隠す。上辺の高さは `.chrome` の min-height で決まり、入れ替わっても変わらない
+         */}
+        {pristine ? (
+          <span className={classes.chromeLabel} aria-hidden="true">
+            <IconHandFinger size={16} stroke={1.8} />
+            さわれるデモ
           </span>
-          {/*
-           * 触るまでは隠す。消さずに見えなくするだけにして、出たときに行の高さが変わらないようにする（016 §11）。
-           * `visibility: hidden` の間はフォーカスも読み上げも届かない
-           */}
+        ) : (
           <Button
             size="compact-sm"
             variant="subtle"
@@ -326,17 +324,12 @@ export function ShiftDemo({ dates, holidays, title, label }: Props) {
             fz={13}
             px={6}
             className={classes.restart}
-            data-hidden={pristine || undefined}
             leftSection={<IconRefresh size={14} />}
             onClick={restart}
           >
             最初からやり直す
           </Button>
-        </Group>
-        <span className={classes.address} aria-hidden="true">
-          assift.com
-        </span>
-        <div className={classes.chromeLabel}>{label}</div>
+        )}
       </div>
       <Group className={classes.toolbar} justify="space-between" gap="xs">
         <div>
