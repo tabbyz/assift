@@ -1,11 +1,20 @@
 import { Fragment, type CSSProperties } from 'react'
 import { Container, Group, SimpleGrid, Stack, Text, Title } from '@mantine/core'
+import { IconSparkles } from '@tabler/icons-react'
 import { cellStyle } from '@/components/shiftTable/cellStyle'
 import { DEMO_PATTERNS } from '../_lib/demoData'
 import { Phrases } from './Phrases'
 import { SectionHeading } from './SectionHeading'
 import { Stamp } from './Stamp'
 import classes from '../Site.module.css'
+
+/** AI への指示が効いた 1 週間（1 枚目の図）。AI が入れるのは下書き */
+const AI_DAYS = ['月', '火', '水', '木', '金', '土', '日']
+const AI_ROWS: [string, string[]][] = [
+  ['田中', ['off', 'early', 'off', 'off', 'late', 'early', 'late']],
+  ['佐藤', ['early', 'off', 'late', 'early', 'paid', 'off', 'early']],
+  ['鈴木', ['late', 'late', 'early', 'paid', 'early', 'late', 'off']],
+]
 
 /** 曜日ごとのいつもの勤務（2 枚目の図）。いつもの勤務は下書きで入る */
 const WEEK_DAYS = ['月', '火', '水', '木', '金']
@@ -81,31 +90,39 @@ export function Features() {
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing={20}>
           <FeatureCard
             title="組み合わせは|AIが考える"
-            body="出られない曜日や、週に何日まで・何連勤までといった条件を守って、下書きを作ります。「田中さんは土日に多めに」のような指示も、日本語でそのまま書けます。"
+            body="出られない曜日や、週に何日まで・何連勤までといった条件を守って、下書きを作ります。「田中さんは土日を多めに」のような指示も、日本語でそのまま書けます。"
           >
-            <Stack gap={10} w="100%" maw={330}>
-              <div className={classes.aiPrompt}>
-                <Text fz={11} fw={700} c="dimmed" lh={1.5}>
-                  AIへの指示
-                </Text>
-                <Text fz={13} lh={1.5}>
-                  田中さんは土日に多めに。
-                </Text>
-              </div>
-              <Group gap={6} justify="center">
-                <Stamp patternId="early" />
-                <Stamp patternId="late" />
-                <Stamp patternId="early" />
-              </Group>
-              <div className={classes.aiNote}>
-                <Text fz={13} fw={700} lh={1.6}>
-                  19 / 20枠を下書きで配置しました
-                </Text>
-                <Text fz={12.5} c="dimmed" lh={1.6}>
-                  日曜の遅番1枠は、条件に合うスタッフがいません
-                </Text>
-              </div>
-            </Stack>
+            {/* 指示の札は土日の列の上に添え、札の先で土日を指す。指示が効いたマス（田中さんの土日）は枠で囲む（016 §28） */}
+            <div className={classes.aiTable}>
+              <span className={classes.aiTag}>
+                <IconSparkles size={13} stroke={2.2} />
+                田中さんは土日を多めに。
+              </span>
+              <span className={classes.aiTagTip} />
+              <span />
+              {AI_DAYS.map((day) => (
+                <small
+                  key={day}
+                  data-tone={day === '土' ? 'saturday' : day === '日' ? 'holiday' : undefined}
+                >
+                  {day}
+                </small>
+              ))}
+              {AI_ROWS.map(([name, cells]) => (
+                <Fragment key={name}>
+                  <b>{name}</b>
+                  {cells.map((patternId, i) => (
+                    <span
+                      key={i}
+                      className={classes.aiCell}
+                      data-hit={(name === '田中' && i >= 5) || undefined}
+                    >
+                      <Stamp patternId={patternId} />
+                    </span>
+                  ))}
+                </Fragment>
+              ))}
+            </div>
           </FeatureCard>
 
           <FeatureCard

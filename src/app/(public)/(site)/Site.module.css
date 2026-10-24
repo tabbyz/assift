@@ -181,14 +181,24 @@
   }
 }
 
+/*
+ * ヒーローの説明文。dimmed（#868e96。白地で約 3.3:1）と LP の書体の 400 では線が細く、見えづらかった（016 §28）。
+ * gray-7（約 8.6:1）と 500 にする。見出しより弱く、本文として読める濃さ
+ */
 .lead {
   max-width: 34em;
   margin-inline: auto;
+  /* PC は 19px、スマホは 15px（016 §28）。間の幅は 17px */
   font-size: 17px;
-  color: var(--mantine-color-dimmed);
+  font-weight: 500;
+  color: var(--mantine-color-gray-7);
 }
 
 @media (max-width: 36em) {
+  .lead {
+    font-size: 15px;
+  }
+
   .lead br {
     display: none;
   }
@@ -198,6 +208,7 @@
 @media (min-width: 60em) {
   .lead {
     max-width: none;
+    font-size: 19px;
   }
 
   .lead br {
@@ -363,10 +374,81 @@
   color: var(--mantine-color-dimmed);
 }
 
-.aiPrompt {
-  padding: 8px 12px;
-  border: 1px solid var(--mantine-color-gray-3);
+/*
+ * 1 枚目の図（016 §28）。名前の列 + 7 日。指示の札は 1 行目に右寄せで置き、2 行目の札の先（.aiTagTip）を土日の 2 列の中央に置く。
+ * 列の幅は枠に合わせて縮むので、札の先の位置を計算せず、グリッドの列で決める
+ */
+.aiTable {
+  display: grid;
+  grid-template-columns: 34px repeat(7, minmax(0, 1fr));
+  align-items: center;
+  gap: 3px;
+  width: 100%;
+  max-width: 310px;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Yu Gothic UI', Meiryo, sans-serif;
+  line-height: 1.3;
+}
+
+.aiTable small {
+  font-size: 10.5px;
+  text-align: center;
+  color: var(--mantine-color-dimmed);
+}
+
+.aiTable small[data-tone='saturday'] {
+  color: var(--mantine-color-blue-8);
+}
+
+.aiTable small[data-tone='holiday'] {
+  color: var(--mantine-color-red-8);
+}
+
+.aiTable b {
+  font-size: 12px;
+}
+
+.aiTag {
+  grid-column: 1 / -1;
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
   border-radius: 8px;
+  background-color: var(--mantine-color-dark-8);
+  font-family: var(--font-site), sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--mantine-color-white);
+}
+
+.aiTagTip {
+  grid-column: 7 / 9;
+  justify-self: center;
+  width: 10px;
+  height: 10px;
+  margin-top: -9px;
+  margin-bottom: 2px;
+  background-color: var(--mantine-color-dark-8);
+  transform: rotate(45deg);
+}
+
+.aiCell {
+  display: grid;
+  border-radius: 4px;
+}
+
+.aiCell[data-hit] {
+  box-shadow: 0 0 0 2px var(--mantine-color-dark-8);
+}
+
+.aiCell .stamp {
+  min-width: 0;
+  height: 26px;
+  padding: 0;
+  font-size: 11px;
 }
 
 /* 2 枚目の図。曜日 5 列のマス。スタンプは列の幅に合わせて縮める（既定の最小幅 56px だとスマホではみ出す） */
@@ -471,14 +553,6 @@
   height: 9px;
   border: 1px solid transparent;
   border-radius: 2px;
-}
-
-.aiNote {
-  padding: 10px 12px;
-  border-radius: 8px;
-  background-color: var(--site-panel);
-  font-size: 12.5px;
-  line-height: 1.6;
 }
 
 .linkPill {
