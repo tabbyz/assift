@@ -88,6 +88,7 @@ v1（Rails / Heroku）を止め、データと Stripe の契約を v2 に移し�
 
 | いつ | すること | メモ |
 | --- | --- | --- |
+| 本番に `migrate:v1`（`--rollback` を含む）・`undo.sql` を流す前（**毎回**。§4-1 の予行・T-0・22:25） | **本番に試しのアカウントと店舗が残っていないか**を SQL Editor で見る: `select (select count(*) from auth.users) as users, (select count(*) from public.profiles where is_admin) as admins, (select count(*) from public.tenants) as tenants, (select count(*) from public.billing_subscriptions) as subs;` が **1・1・0・0**。違えば `select email, created_at from auth.users order by created_at;` で見て、自分の試しなら 024 §5-14 の手順で消してから流す（心当たりが無い・`subs` が 1 以上なら消さずに相談） | 本番で試すことはある（2026-10-24 に決定。034 §4.6-4 の「作らない」を上書き）。試しのアカウントは v1 に無いメールで作る。残ったまま流すと、`import.ts` は店舗が 1 件でもあれば止まり（`--allow-existing` は本番で付けない）、アカウントだけなら止まらずに入り、v1 のメールと重なれば全体が ROLLBACK する。`undo.sql` も G1 か人数の確かめで止まる。10/24 の予行の 1 回目は試しのアカウントと店舗が残っていて止まった（§12） |
 | §4-1 のあと | §6 の各段の時刻と、中止の判断の時刻（§6.4）を実測で埋める | ローカルの実測: capture 52 秒 / download 1〜2 分 / restore 1 分 17 秒 / エクスポート 13 分 37 秒 / インポート 10 分 21 秒（リハーサル 2 回目。うち `shifts` の書き込み 6 分 53 秒。最大 RSS 7.2 GB。1 回目は 17 分。021 §15） |
 | 10/23 まで（**済み**。結果は §12 2026-10-23） | **前提: live で `stripe:setup` が済み（price `assift_monthly` とクーポン `assift_v1_legacy` が無いとスクリプトは最初に止まる）、移行用の鍵（§11-3）ができていること**。`stripe:migrate-v1` の dry-run をリハーサルの `v1-subscriptions.csv` で live に流し、所要を測る（読むだけで書かない。`--output ~/v1-export/<リハーサルの dir>/v1-subscriptions-dryrun.csv` を付ける。既定ではリポジトリの直下にメール入りの CSV を書く）。`--apply` の所要は、続けて同じ CSV に **`--count-invoices`** を付けてもう 1 回流し（読むだけ。`--output ~/v1-export/<リハーサルの dir>/v1-subscriptions-count.csv`。下書きを無効にする未払いの行だけ、下書きと未払いの請求書を数えて結果 CSV の `drafts` / `open_invoices` / `apply_calls` の列に書き、最後に区分ごとの「`--apply` の見込み」と呼び出しの合計を出す。行ごとに一覧を読むので、所要を測る 1 回目には付けない）、呼び出しの合計 × 1 回の秒数（1 回目の所要 ÷ 件数を目安に、書き込みは読み取りより遅いので多めに見る）で見積もり、§6.3 の時刻に入れる（`actions` 列は操作の名前だけで件数を持たない。2026-10-23）。**dry-run と `--apply` の合計が 25 分を超える見込みなら、§11-5 で開始の時刻か事前の処理を決め直す**。あわせて移行しない人の CSV も同じ鍵で dry-run する: `STRIPE_SECRET_KEY='<移行用の鍵>' npm run stripe:migrate-v1 -- --input ~/v1-export/<リハーサルの dir>/v1-subscriptions-not-migrated.csv --output ~/v1-export/<リハーサルの dir>/v1-subscriptions-not-migrated-dryrun.csv --count-invoices`（**`--apply` は付けない**。§3-15）。結果 CSV で `status` が `active` / `past_due` / `trialing` / `unpaid` の行を数える（`category` は移す人向けの区分なので見ない）。`unpaid` の行は下書きの数（`drafts` 列。10/24〜10/29 に Dashboard で無効にする数）も見る | 約 960 件（リハーサル 2 回目で 962 件。021 §15）を 1 件ずつ順に処理し、区分を絞る引数は無い。`unpaid` の 134 件は毎月の下書きが溜まっている（019 §8.2.1）。判断点 B の後に時間が足りなくなると戻せない |
 | 10/24〜10/28（**済み**。10/23〜24 に流した。結果は §12 2026-10-24） | **古い下書きの片付け**（§3-16）。`D=~/v1-export/20261014-1340` として、まず `STRIPE_SECRET_KEY='<移行用の鍵>' npm run stripe:migrate-v1 -- --input $D/v1-subscriptions.csv --output $D/v1-subscriptions-void-limit5.csv --void-old-drafts --limit 5` → Dashboard で、その 5 件の契約が `unpaid` のまま・下書きが最新の 1 件だけ残っていること、無効にした請求書のどれかの詳細に顧客へのメールの送信が出ていないことを見る → `--limit` を外して残り（`--output $D/v1-subscriptions-void.csv`。約 14,600 回の書き込みで 1.5〜2.5 時間の見込み）→ 移行しない人の CSV にも（`--input $D/v1-subscriptions-not-migrated.csv --output $D/v1-subscriptions-not-migrated-void.csv`）。最後の「片付け:」の行（書き込みの回数・秒数・1 回の秒数）を控える → 2 つの CSV に `--count-invoices` を流し直し（`--output …-count2.csv`）、`drafts` がどの行も 1 以下で、「合計の呼び出し」が約 2,700 回になったことを見る | 冪等（途中で止まっても同じコマンドで続きから）。止まった瞬間の 1 件は、確定だけされて無効になっていない請求書が `open` で残りうるが、当夜の `--apply` がどの区分でも回収不能にする。リハーサルの CSV（10/13 時点の契約）で流すので、その後に `unpaid` になった契約は残るが、下書きは 1〜2 件で当夜の所要にほぼ響かない。当夜の見込み: 約 2,700 回 × 1 回の秒数 + dry-run 3 分。10/29 の判断（§4）で使う |
@@ -316,6 +317,13 @@ DNS の切り替えの順（024 §6「Vercel にドメイン → DNS → 値の�
 ## 12. 実装ログ
 
 （作業のあとに、日時・確かめた結果・つまずいた点を書く。秘密の値は書かない）
+
+### 2026-10-24（§4-1 本番の予行の 1 回目。入口の確認で止まった）
+
+- 10/22 の期限に間に合わず、10/24 に流した（入力は `~/v1-export/20261014-1340`）。読み込みと変換は通ったが（件数はリハーサル 2 回目と同じ。ここまで 149 秒・最大 RSS 6.5 GB）、
+  `既存: auth.users 2 件 / tenants 1 件` で `tenants が 0 件ではありません` と止まった。`begin` より前の確認なので本番には何も書いていない
+- 残っていたのは利用者が本番で作った試しのアカウントと店舗。利用者が消した。今後も本番で試すことがあるので、本番に流す前に毎回確かめる行を §5 の先頭に足した
+- 予行（所要・権限・Disk）と `undo.sql` の空振りは未実施のまま。流し直す
 
 ### 2026-10-24（§3-15 移行しない人の Subscription 21 件を解約した）
 

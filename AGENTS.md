@@ -551,6 +551,11 @@ Prettier: `{ "semi": false, "singleQuote": true, "tabWidth": 2, "trailingComma":
 - `.env.local` は `npx supabase status -o env` の 3 つの値（API URL / publishable key / secret key）から作る（コミットしない）
 - 長い出力（`npm test`、`supabase` の起動ログなど）は `tail` で末尾だけ読む
 
+## 本番の DB に流すコマンド
+
+- 利用者は本番でも試しのアカウントや店舗を作ることがある（2026-10-24）。本番に `migrate:v1`（`--rollback` を含む）や `undo.sql` を流すよう案内するときは、
+  **コマンドより先に**、残っていないかを確かめる SQL（026 §5 の先頭の行）と、残っていたときの片付け（024 §5-14）を案内する
+
 ## PR の流れ
 
 - PR の前に `npm run lint` / `npm run typecheck` / `npm test` / `npx supabase test db` を通す。
