@@ -62,15 +62,24 @@
   color: var(--mantine-color-dimmed);
 }
 
-/* スマホ幅ではドメインと丸を出さない（ラベルと「最初からやり直す」を 1 行に収める） */
+/* スマホ幅ではドメインを出さない。丸は出す（016 §23。触る前の上辺の左は空いている） */
 @media (max-width: 36em) {
   .chrome {
     grid-template-columns: minmax(0, 1fr) auto;
-    padding-inline: 8px 12px;
+    padding-inline: 12px;
   }
 
-  .address,
-  .dots {
+  .address {
+    display: none;
+  }
+}
+
+/*
+ * 359px 以下では、丸・「最初からやり直す」・ラベルが 1 行に収まらない。ボタンが出ている間だけ丸を消す
+ * （ボタンは触ったあとにしか出ないので、触る前は丸が見える）
+ */
+@media (max-width: 22.4375em) {
+  .chrome:has(.restart:not([data-hidden])) .dots {
     display: none;
   }
 }
