@@ -10,10 +10,7 @@ export function Hero() {
   return (
     <section className={classes.hero}>
       <Container size={1120} px={{ base: 'md', sm: 'lg' }}>
-        <a href="#price" className={classes.badge}>
-          スタッフ{FREE_STAFF_LIMIT}人まで無料・カード登録不要
-          <IconArrowRight size={14} stroke={2.2} aria-hidden />
-        </a>
+        <span className={classes.badge}>スタッフ{FREE_STAFF_LIMIT}人まで無料・カード登録不要</span>
         <Title order={1} className={classes.heroTitle}>
           <span className={classes.heroLine}>
             毎月の<span className={classes.kern}>シ</span>

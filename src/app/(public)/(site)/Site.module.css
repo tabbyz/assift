@@ -115,11 +115,9 @@
   }
 }
 
-/* 見出しの上の小さな札。料金の節へ送る。押せると分かるよう枠線だけを付ける（塗るとボタンと並んで重くなる） */
+/* 見出しの上の小さな札。押せる物ではない（料金へはヘッダーから行ける。016 §22）。塗るとボタンと並んで重いので枠線だけ */
 .badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  display: inline-block;
   padding: 4px 14px;
   border: 1px solid var(--mantine-color-gray-3);
   border-radius: 8px;
@@ -127,12 +125,6 @@
   font-weight: 500;
   line-height: 1.6;
   color: var(--mantine-color-gray-8);
-  text-decoration: none;
-}
-
-.badge:hover {
-  border-color: var(--mantine-color-gray-5);
-  color: var(--mantine-color-text);
 }
 
 /*
@@ -651,6 +643,8 @@
 
 .priceRuleStrong {
   font-size: 22px;
+  /* 前の「11人目からは」と詰まって見えるので少し離す */
+  margin-left: 0.2em;
 }
 
 .calc {
