@@ -22,7 +22,7 @@ import { toCsv } from '@/lib/billing/migration'
 import { isHolidayDate } from '@/lib/calendar/holidays'
 import { convertExport, STRIPE_CSV_HEADER, type Converted } from '@/lib/migration/convert'
 import { readExport } from '@/lib/migration/readExport'
-import { MigrationError, type Overrides } from '@/lib/migration/transform'
+import { MigrationError, type Overrides, type ProfileUpdate } from '@/lib/migration/transform'
 import { keepDateStrings } from './pg'
 
 const { values } = parseArgs({
@@ -113,6 +113,48 @@ async function insertRows(
   if (inserted !== rows.length)
     throw new Error(`${table}: ${rows.length} 行のうち ${inserted} 行しか入らなかった`)
   return inserted
+}
+
+/** 列と型（`update ... from (values ...)` の値は型が決まらないので 1 行目から付ける） */
+const PROFILE_UPDATE_COLUMNS = [
+  ['id', 'uuid'],
+  ['stripe_customer_id', 'text'],
+  ['trial_end', 'timestamptz'],
+  ['max_staffs_count', 'integer'],
+  ['staff_cap', 'integer'],
+  ['created_at', 'timestamptz'],
+  ['updated_at', 'timestamptz'],
+] as const
+
+/**
+ * on_auth_user_created が作った profiles を 1000 行ずつ後追いで UPDATE する。
+ * 1 行 1 往復だと本番（Session pooler 越し）で 26,279 行に 5 分 42 秒かかった（§15 2026-10-24）
+ */
+async function updateProfiles(client: Client, rows: ProfileUpdate[]): Promise<void> {
+  for (let offset = 0; offset < rows.length; offset += BATCH) {
+    const chunk = rows.slice(offset, offset + BATCH)
+    const params: Value[] = []
+    const tuples = chunk.map((row) => {
+      const placeholders = PROFILE_UPDATE_COLUMNS.map(([column, type]) => {
+        params.push(row[column])
+        return `$${params.length}::${type}`
+      })
+      return `(${placeholders.join(',')})`
+    })
+    const result = await client.query(
+      `update public.profiles p
+          set stripe_customer_id = v.stripe_customer_id, trial_end = v.trial_end,
+              max_staffs_count = v.max_staffs_count, staff_cap = v.staff_cap,
+              created_at = v.created_at, updated_at = v.updated_at
+         from (values ${tuples.join(',')}) as v(${PROFILE_UPDATE_COLUMNS.map(([c]) => c).join(',')})
+        where p.id = v.id`,
+      params
+    )
+    if (result.rowCount !== chunk.length)
+      throw new Error(
+        `profiles: UPDATE が ${chunk.length} 行のうち ${result.rowCount} 行（on_auth_user_created が作っていない人がいる）`
+      )
+  }
 }
 
 async function countAll(client: Client): Promise<Record<TargetTable, number>> {
@@ -339,27 +381,7 @@ async function main() {
     )
 
     t('profiles（UPDATE）')
-    for (const p of c.profiles) {
-      const r = await client.query(
-        `update public.profiles
-            set stripe_customer_id = $2, trial_end = $3, max_staffs_count = $4, staff_cap = $5,
-                created_at = $6, updated_at = $7
-          where id = $1`,
-        [
-          p.id,
-          p.stripe_customer_id,
-          p.trial_end,
-          p.max_staffs_count,
-          p.staff_cap,
-          p.created_at,
-          p.updated_at,
-        ]
-      )
-      if (r.rowCount !== 1)
-        throw new Error(
-          `profiles: UPDATE が ${r.rowCount} 行（${p.id}。on_auth_user_created が作っていない）`
-        )
-    }
+    await updateProfiles(client, c.profiles)
 
     t('staff_patterns')
     await insertRows(
