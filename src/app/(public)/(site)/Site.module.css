@@ -241,6 +241,8 @@
 
 .section {
   padding-bottom: var(--site-section-gap);
+  /* ヘッダーのページ内リンク（#features / #price / #faq）とデモの共有カード（#staff-view）の飛び先。sticky のヘッダーに隠れないようずらす（016 §27） */
+  scroll-margin-top: var(--site-anchor-offset);
 }
 
 .kicker {

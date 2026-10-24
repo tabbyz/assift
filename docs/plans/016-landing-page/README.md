@@ -589,3 +589,16 @@ AI に寄りすぎないよう、AI は 1 枚にまとめ、残りを「作る �
 | --- | --- |
 | `npm run lint` / `npm run typecheck` / `npm test` | エラー 0（既存の警告 1）/ 通過 / 108 ファイル・1048 件通過 |
 | 画面（dev。320 / 375 / 1440px） | 4 枚の並び・文言・図を確認。どの図も枠からはみ出さない。横のはみ出し無し。コンソールエラー無し |
+
+## 27. ページ内リンクの飛び先をヘッダーの分ずらす
+
+ヘッダーの「できること」「料金」「よくある質問」を押すと、節の上端が sticky のヘッダー（68px）の下に隠れていた。
+ずらす指定（`scroll-margin-top`）は §13 で `StaffView` に inline で入れただけだった。
+
+- `.section` に `scroll-margin-top: var(--site-anchor-offset)`（ヘッダー + 16px）。`#features` / `#price` / `#faq` / `#staff-view` のどれにも効く
+- `StaffView` の inline の指定は消した（同じ値が `.section` から入る）
+
+| 項目 | 結果 |
+| --- | --- |
+| `npm run lint` / `npm run typecheck` | エラー 0（既存の警告 1）/ 通過 |
+| 画面（dev。1440px） | ヘッダーの 3 つのリンクと、デモの共有カードの「スタッフの画面を見る」で、節の上端がヘッダーの 16px 下（top = 84px）。コンソールエラー無し |

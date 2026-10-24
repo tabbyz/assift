@@ -49,12 +49,7 @@ function tone(date: string, holidays: Set<string>): string | undefined {
 export function StaffView({ dates, holidays }: Props) {
   const holidaySet = new Set(holidays)
   return (
-    <section
-      id={STAFF_VIEW_ID}
-      className={classes.section}
-      // デモの共有カードから送られてくる。sticky のヘッダーに見出しが隠れないようにずらす
-      style={{ scrollMarginTop: 'var(--site-anchor-offset)' }}
-    >
+    <section id={STAFF_VIEW_ID} className={classes.section}>
       <Container size={1120} px={{ base: 'md', sm: 'lg' }}>
         <SimpleGrid cols={{ base: 1, md: 2 }} spacing={20}>
           <Stack justify="center" gap={0} pr={{ md: 24 }}>
