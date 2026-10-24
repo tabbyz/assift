@@ -11,8 +11,11 @@ import classes from '../Site.module.css'
 
 const POINTS = [
   { title: 'アプリも登録も要りません', body: 'スマホのブラウザで開けます。' },
-  { title: 'いつ開いても最新の表', body: '直したシフトも、同じリンクにそのまま反映されます。' },
-  { title: 'リンクには公開期限があります', body: '古い表がいつまでも残りません。' },
+  {
+    title: 'いつ開いても最新のシフト表',
+    body: '直したシフトも、同じリンクにそのまま反映されます。',
+  },
+  { title: 'リンクには公開期限があります', body: '古いシフト表がいつまでも残りません。' },
 ]
 
 const ROWS: [string, string[]][] = [
@@ -58,7 +61,7 @@ export function StaffView({ dates, holidays }: Props) {
             <SectionHeading
               kicker="スタッフの画面"
               title={'スタッフは\nリンクを開くだけ'}
-              description="LINEのグループにURLを貼れば、全員が同じ表を見られます。"
+              description="LINEのグループにURLを貼れば、全員が同じシフト表を見られます。"
               mb={28}
             />
             <Stack gap={16}>

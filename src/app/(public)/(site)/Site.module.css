@@ -622,9 +622,22 @@
 
 /* ---- 料金 ---- */
 
+/*
+ * 金額と人数の数字はアプリと同じシステムフォントで描く（016 §21）。LP の書体（Zen Kaku Gothic New）は数字が細長く、
+ * 104px の「0」では縦に伸びて見えた。ほかの数字（デモの表・充足の数字）もシステムフォントなのでそろう。
+ * 太さは 800（ヒラギノの W8）。900 は W9 になり、黒く潰れる
+ */
+.priceBig,
+.priceRuleStrong,
+.calcValue,
+.totalValue {
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Yu Gothic UI', Meiryo, sans-serif;
+  font-weight: 800;
+}
+
 .priceBig {
   font-size: clamp(64px, 9vw, 104px);
-  font-weight: 900;
   line-height: 1;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
@@ -638,7 +651,6 @@
 
 .priceRuleStrong {
   font-size: 22px;
-  font-weight: 900;
 }
 
 .calc {
@@ -653,7 +665,6 @@
 
 .calcValue {
   font-size: 28px;
-  font-weight: 900;
   line-height: 1.2;
   font-variant-numeric: tabular-nums;
 }
@@ -666,7 +677,6 @@
 
 .totalValue {
   font-size: 36px;
-  font-weight: 900;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
 }

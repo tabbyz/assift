@@ -12,39 +12,6 @@ export function Features() {
         <SectionHeading kicker="できること" title={'シフト表が早く作れる、\n4つのしくみ'} />
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing={20}>
           <FeatureCard
-            title="下書きのまま|置いておける"
-            body="淡い色は下書き、濃い色は確定。迷っている日は淡い色のまま残しておき、決まったら確定にします。"
-          >
-            <Stack gap={0} align="center">
-              <Stamp patternId="early" />
-              <Text className={classes.figureCaption}>下書き</Text>
-            </Stack>
-            <Text c="dimmed" fz={20} aria-hidden="true">
-              →
-            </Text>
-            <Stack gap={0} align="center">
-              <Stamp patternId="early" fixed />
-              <Text className={classes.figureCaption}>確定</Text>
-            </Stack>
-          </FeatureCard>
-
-          <FeatureCard
-            title="足りない日が|すぐ分かる"
-            body="曜日ごとの必要人数を入れておくと、表の下に「配置 / 必要」が出ます。足りない日は数字が赤くなります。"
-          >
-            <div className={classes.coverageRow}>
-              {['水', '木', '金', '土', '日'].map((day) => (
-                <small key={day}>{day}</small>
-              ))}
-              {['4/4', '4/4', '4/4', '5/5', '4/5'].map((value, i) => (
-                <span key={i} className={classes.coverageCell} data-short={i === 4 || undefined}>
-                  {value}
-                </span>
-              ))}
-            </div>
-          </FeatureCard>
-
-          <FeatureCard
             title="組み合わせは|AIが考える"
             body="出られない曜日や、週に何日まで・何連勤までといった条件を守って、下書きを作ります。埋められなかった枠には理由が付き、ワンタップで元に戻せます。"
           >
@@ -66,8 +33,41 @@ export function Features() {
           </FeatureCard>
 
           <FeatureCard
+            title="足りない日が|すぐ分かる"
+            body="曜日ごとの必要人数を入れておくと、シフト表の下に「配置 / 必要」が出ます。足りない日は数字が赤くなります。"
+          >
+            <div className={classes.coverageRow}>
+              {['水', '木', '金', '土', '日'].map((day) => (
+                <small key={day}>{day}</small>
+              ))}
+              {['4/4', '4/4', '4/4', '5/5', '4/5'].map((value, i) => (
+                <span key={i} className={classes.coverageCell} data-short={i === 4 || undefined}>
+                  {value}
+                </span>
+              ))}
+            </div>
+          </FeatureCard>
+
+          <FeatureCard
+            title="下書きのまま|置いておける"
+            body="淡い色は下書き、濃い色は確定。迷っている日は淡い色のまま残しておき、決まったら確定にします。"
+          >
+            <Stack gap={0} align="center">
+              <Stamp patternId="early" />
+              <Text className={classes.figureCaption}>下書き</Text>
+            </Stack>
+            <Text c="dimmed" fz={20} aria-hidden="true">
+              →
+            </Text>
+            <Stack gap={0} align="center">
+              <Stamp patternId="early" fixed />
+              <Text className={classes.figureCaption}>確定</Text>
+            </Stack>
+          </FeatureCard>
+
+          <FeatureCard
             title="URLを送るだけで|共有できる"
-            body="スタッフは登録なしでスマホから見られます。壁に貼るPDF（A4横）と、給与計算に回すCSVも出せます。"
+            body="スタッフは登録なしでスマホから見られます。PDFとCSVでエクスポートもできます。"
           >
             <span className={classes.linkPill}>
               <span>https://…/share/7Kq2mWfa</span>
