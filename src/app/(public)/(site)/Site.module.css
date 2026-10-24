@@ -361,32 +361,114 @@
   color: var(--mantine-color-dimmed);
 }
 
-.coverageRow {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 54px));
-  gap: 4px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
+.aiPrompt {
+  padding: 8px 12px;
+  border: 1px solid var(--mantine-color-gray-3);
+  border-radius: 8px;
 }
 
-.coverageRow small {
+/* 2 枚目の図。曜日 5 列のマス。スタンプは列の幅に合わせて縮める（既定の最小幅 56px だとスマホではみ出す） */
+.weekGrid {
+  display: grid;
+  grid-template-columns: 34px repeat(5, minmax(0, 1fr));
+  align-items: center;
+  gap: 3px;
+  width: 100%;
+  max-width: 330px;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Yu Gothic UI', Meiryo, sans-serif;
+  line-height: 1.3;
+}
+
+.weekGrid small {
   font-size: 10.5px;
-  font-weight: 500;
+  text-align: center;
   color: var(--mantine-color-dimmed);
 }
 
-.coverageCell {
-  padding: 8px 0;
-  border-radius: 4px;
-  background-color: var(--site-panel);
-  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--mantine-color-green-9);
+.weekGrid b {
+  font-size: 12px;
 }
 
-.coverageCell[data-short='true'] {
-  color: var(--mantine-color-red-9);
+.weekGrid .stamp {
+  min-width: 0;
+  height: 30px;
+  padding: 0;
+  font-size: 12.5px;
+}
+
+/* 3 枚目の図。ノート PC の右下にスマホを重ねる。スマホは右の余白に収まるよう絶対配置 */
+.devices {
+  position: relative;
+  padding-right: 52px;
+}
+
+.laptop {
+  width: 250px;
+}
+
+.laptopScreen {
+  padding: 7px;
+  border-radius: 8px 8px 0 0;
+  background-color: var(--mantine-color-dark-8);
+}
+
+.laptopScreen .miniTable {
+  padding: 7px;
+  border-radius: 3px;
+}
+
+.laptopBase {
+  height: 8px;
+  margin-inline: -18px;
+  border-radius: 0 0 6px 6px;
+  background-color: var(--mantine-color-gray-4);
+}
+
+.phoneMini {
+  position: absolute;
+  right: 0;
+  bottom: -6px;
+  width: 72px;
+  padding: 4px;
+  border-radius: 12px;
+  background-color: var(--mantine-color-dark-8);
+  box-shadow: 0 16px 30px -16px rgb(0 0 0 / 45%);
+}
+
+.phoneMini .miniTable {
+  gap: 2px;
+  padding: 10px 3px 14px;
+  border-radius: 8px;
+}
+
+/* スマホ幅（320px では図の枠が約 210px）では小さくする */
+@media (max-width: 36em) {
+  .devices {
+    padding-right: 38px;
+  }
+
+  .laptop {
+    width: 168px;
+  }
+
+  .phoneMini {
+    width: 54px;
+  }
+}
+
+/* マスの色の帯（文字なし）。列の数は `--cols` で受ける */
+.miniTable {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  gap: 3px;
+  background-color: var(--mantine-color-white);
+}
+
+.miniTable > span {
+  height: 9px;
+  border: 1px solid transparent;
+  border-radius: 2px;
 }
 
 .aiNote {
