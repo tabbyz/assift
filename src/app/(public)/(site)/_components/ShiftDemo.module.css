@@ -39,11 +39,26 @@
   gap: 7px;
 }
 
+/*
+ * ウィンドウの 3 つの丸（016 §25）。赤・黄・緑で窓だと分かるようにする。macOS の原色より少し彩度を落とし、白地の上で目立ちすぎないようにした。
+ * 色は Mantine の外の、この絵のためだけの値なので hex で書く
+ */
 .dots > span {
   width: 11px;
   height: 11px;
   border-radius: 999px;
-  background-color: var(--mantine-color-gray-3);
+}
+
+.dots > span:nth-child(1) {
+  background-color: #ed6a5e;
+}
+
+.dots > span:nth-child(2) {
+  background-color: #f5bf4f;
+}
+
+.dots > span:nth-child(3) {
+  background-color: #61c554;
 }
 
 .address {
